@@ -40,6 +40,7 @@ class trainer(trainer_base):
             0.01,
             0,
             0,
-            f'{self.data_parm2str(data_parm)}.7z',
+            # f'{self.data_parm2str(data_parm)}.7z',
+            f'test_data.7z',
             m_deeplob(data_parm['y_n'])
         )

@@ -510,7 +510,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
         # 更新最佳数据
-        best_idx = test_losses.index(min(test_losses))
+        bset_idx = test_losses.tolist().index(min(test_losses))
         result_dict['train_loss'] = train_losses[best_idx]
         result_dict['val_loss'] = test_losses[best_idx]
         result_dict['train_acc'] = train_acc[best_idx]
