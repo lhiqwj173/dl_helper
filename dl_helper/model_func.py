@@ -779,8 +779,8 @@ class trainer:
 
         ### 训练
         ## 获取数据
-        train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True)
-        val_loader = read_data(os.path.join(params.root, 'data'), 'val')
+        train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1)
+        val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1)
 
         ## 模型
         _model = params.model.to(params.device)
