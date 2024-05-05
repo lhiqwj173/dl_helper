@@ -3,9 +3,9 @@
 import asyncio
 import hashlib
 import inspect
-import logging
 import math
-import os
+import os, time
+from .train_param import params, logger
 from collections import defaultdict
 from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, BinaryIO
 
@@ -22,12 +22,12 @@ from telethon.tl.types import (Document, InputFileLocation, InputDocumentFileLoc
                                InputPhotoFileLocation, InputPeerPhotoFileLocation, TypeInputFile,
                                InputFileBig, InputFile)
 
+from py_ext.lzma import decompress
+
 try:
     from mautrix.crypto.attachments import async_encrypt_attachment
 except ImportError:
     async_encrypt_attachment = None
-
-log: logging.Logger = logging.getLogger("telethon")
 
 TypeLocation = Union[Document, InputDocumentFileLocation, InputPeerPhotoFileLocation,
                      InputFileLocation, InputPhotoFileLocation]
@@ -90,8 +90,6 @@ class UploadSender:
 
     async def _next(self, data: bytes) -> None:
         self.request.bytes = data
-        log.debug(f"Sending file part {self.request.file_part}/{self.part_count}"
-                  f" with {len(data)} bytes")
         await self.client._call(self.sender, self.request)
         self.request.file_part += self.stride
 
@@ -178,7 +176,7 @@ class ParallelTransferrer:
                                                      loggers=self.client._log,
                                                      proxy=self.client._proxy))
         if not self.auth_key:
-            log.debug(f"Exporting auth to DC {self.dc_id}")
+            # logger.debug(f"Exporting auth to DC {self.dc_id}")
             auth = await self.client(ExportAuthorizationRequest(self.dc_id))
             self.client._init_request.query = ImportAuthorizationRequest(id=auth.id,
                                                                          bytes=auth.bytes)
@@ -209,8 +207,8 @@ class ParallelTransferrer:
         connection_count = connection_count or self._get_connection_count(file_size)
         part_size = (part_size_kb or utils.get_appropriated_part_size(file_size)) * 1024
         part_count = math.ceil(file_size / part_size)
-        log.debug("Starting parallel download: "
-                  f"{connection_count} {part_size} {part_count} {file!s}")
+        # logger.debug("Starting parallel download: "
+        #           f"{connection_count} {part_size} {part_count} {file!s}")
         await self._init_download(connection_count, file, part_count, part_size)
 
         part = 0
@@ -224,9 +222,9 @@ class ParallelTransferrer:
                     break
                 yield data
                 part += 1
-                log.debug(f"Part {part} downloaded")
+                # logger.debug(f"Part {part} downloaded")
 
-        log.debug("Parallel download finished, cleaning up connections")
+        logger.debug("Parallel download finished, cleaning up connections")
         await self._cleanup()
 
 
@@ -310,36 +308,72 @@ async def upload_file(client: TelegramClient,
     res = (await _internal_transfer_to_telegram(client, file, file_name, progress_callback))[0]
     return res
 
+t = 0
+def progress_cb(current, total):
+    global t
+    if t == 0:
+        t = time.time()
+        return
 
-async def download_dataset(session, dataset_name):
+    cur_mb = current / 1024 / 1024
+    cur_cost = time.time() - t
+    if cur_cost == 0:
+        return 
+
+    speed = cur_mb / cur_cost
+    pct = current / total
+    remain = (total/ 1024 / 1024 - cur_mb) / speed
+    print(f'done: {pct:.2%}, speed: {speed:.2f} MB/s remain: {remain:.2f}s', end='\r')
+
+    if current == total:
+        t = 0
+
+async def _download_dataset(client, dataset_name):
     # channel name
     name = 'dl_dataset'
-
     entity = None
+    
+    # 匹配channel
+    async for dialog in client.iter_dialogs():
+        if dialog.name == name:
+            # 频道文件列表
+            channel_username = dialog.id  # 替换为频道的用户名或 ID
+            entity = await client.get_entity(channel_username)  # 获取频道实体对象
+            break
 
+    messages = client.iter_messages(entity, reverse=True)
+    async for message in messages:
+        if not (message.file and message.file.name):
+            continue
+
+        if message.file.name != dataset_name:
+            continue
+
+        print(f"File Name: {message.file.name}")
+        print(f"File Size: {message.file.size}")
+
+        # 下载文件
+        os.makedirs(os.path.join(params.root, 'data'), exist_ok=True)
+        _file = os.path.join(params.root, 'data', message.file.name)
+        with open(_file, "wb") as out:
+            await download_file(client, message.document, out, progress_callback=progress_cb)
+
+        # 解压文件
+        decompress(_file)
+        return
+
+async def download_dataset_async(session, dataset_name):
     # 创建客户端
-    client = TelegramClient(StringSession(session), 1, 'api_hash')
+    client = TelegramClient(StringSession(session), 1, '1')
     async with client:
+        await _download_dataset(client, dataset_name)
 
-        # 匹配channel
-        async for dialog in client.iter_dialogs():
-            if dialog.name == name:
-                # 频道文件列表
-                channel_username = dialog.id  # 替换为频道的用户名或 ID
-                entity = await client.get_entity(channel_username)  # 获取频道实体对象
-                break
-
-        messages = client.iter_messages(entity, reverse=True)
-        count = 0
-        async for message in messages:
-            if not (message.file and message.file.name):
-                continue
-
-            print(f"[{count}] File Name: {message.file.name}")
-            print(f"[{count}] File Size: {message.file.size}")
-            count +=1
-
+def download_dataset(session, dataset_name):
+    # 创建客户端
+    client = TelegramClient(StringSession(session), 1, '1')
+    with client:
+        client.loop.run_until_complete(_download_dataset(client, dataset_name))
 
 if __name__ == '__main__':
-    ses = ''
-    asyncio.run(download_dataset(ses, '20240502_平均价格2_n15_pass100_3分类_24x3_2品种.zip'))
+    ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
+    download_dataset(ses, 'pred_5_pass_70_y_3_bd_2024_04_08_dr_8@2@2_th_72_s_2_t_samepaper.7z')
