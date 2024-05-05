@@ -347,10 +347,12 @@ async def _download_dataset(client, dataset_name):
             break
 
     messages = client.iter_messages(entity, reverse=True)
+    files = []
     async for message in messages:
         if not (message.file and message.file.name):
             continue
 
+        files.append(message.file.name)
         if message.file.name != dataset_name:
             continue
 
@@ -366,6 +368,9 @@ async def _download_dataset(client, dataset_name):
         # 解压文件
         decompress(_file)
         return
+
+    print(f"Files: {files}")
+    print(f"no match: {dataset_name}")
 
 async def download_dataset_async(session, dataset_name):
     # 创建客户端
