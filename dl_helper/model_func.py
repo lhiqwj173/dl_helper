@@ -794,7 +794,7 @@ class trainer:
         batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
         ## 测试模型
-        test_loader = read_data('test')
+        test_loader = read_data(os.path.join(params.root, 'data'), 'test')
         test_model(test_loader, self.result_dict)
 
         ## 记录结果
