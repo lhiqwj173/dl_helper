@@ -767,6 +767,20 @@ class trainer:
             'taget': p[15]
         }
 
+    def test_data(self):
+        data_parm = {
+            'predict_n': 5,
+            'pass_n': 70,
+            'y_n': 3,
+            'begin_date': '2024-04-08',
+            'data_rate': (1, 1, 1),
+            'total_hours': int(3),
+            'symbols': 1,
+            'taget': 'same paper'
+        }
+
+        return data_parm
+
     def init_param(self):
         raise NotImplementedError("must override init_param")
 
@@ -774,71 +788,77 @@ class trainer:
         await download_dataset_async(session, params.data_set)
 
     def train(self):
-        t0 = datetime.now()
-        wx.send_message(f'[{params.train_title}] 开始训练')
+        try:
 
-        ### 训练
-        ## 获取数据
-        train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1)
-        val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1)
+            t0 = datetime.now()
+            wx.send_message(f'[{params.train_title}] 开始训练')
 
-        ## 模型
-        _model = params.model.to(params.device)
-        if torch.cuda.device_count() > 1:
-            logger.debug("使用多gpu")
-            _model = nn.DataParallel(_model)
-        # 损失函数
-        criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
-        optimizer_class = torch.optim.AdamW
-        # 训练
-        batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
+            ### 训练
+            ## 获取数据
+            train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1)
+            val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1)
 
-        ## 测试模型
-        test_loader = read_data(os.path.join(params.root, 'data'), 'test')
-        test_model(test_loader, self.result_dict)
+            ## 模型
+            _model = params.model.to(params.device)
+            if torch.cuda.device_count() > 1:
+                logger.debug("使用多gpu")
+                _model = nn.DataParallel(_model)
+            # 损失函数
+            criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
+            optimizer_class = torch.optim.AdamW
+            # 训练
+            batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
-        ## 记录结果
-        result_file = os.path.join(params.root, 'result.csv')
-        if not os.path.exists(result_file):
-            # 初始化列名
+            ## 测试模型
+            test_loader = read_data(os.path.join(params.root, 'data'), 'test')
+            test_model(test_loader, self.result_dict)
+
+            ## 记录结果
+            result_file = os.path.join(params.root, 'result.csv')
+            if not os.path.exists(result_file):
+                # 初始化列名
+                with open(result_file, 'w') as f:
+                    # 训练参数
+                    f.write('time,epochs,batch_n,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_mask_row,amp,label_smoothing,weight_decay,,')
+
+                    # 数据参数
+                    data_dict =  self.data_str2parm(params.data_set)
+                    for i in data_dict:
+                        f.write(f'{i},')
+
+                    # 模型
+                    f.write('model,')
+
+                    # 训练结果
+                    for i in self.result_dict:
+                        f.write(f'{i},')
+                    f.write('folder\n')
+            
+            # 写入结果
             with open(result_file, 'w') as f:
                 # 训练参数
-                f.write('time,epochs,batch_n,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_mask_row,amp,label_smoothing,weight_decay,,')
+                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_n},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                 # 数据参数
                 data_dict =  self.data_str2parm(params.data_set)
                 for i in data_dict:
-                    f.write(f'{i},')
+                    f.write(f'{data_dict[i]},')
 
                 # 模型
-                f.write('model,')
+                f.write(f'{params.model.model_name()},')
 
                 # 训练结果
                 for i in self.result_dict:
-                    f.write(f'{i},')
-                f.write('folder\n')
-        
-        # 写入结果
-        with open(result_file, 'w') as f:
-            # 训练参数
-            f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_n},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
+                    f.write(f'{self.result_dict[i]},')
 
-            # 数据参数
-            data_dict =  self.data_str2parm(params.data_set)
-            for i in data_dict:
-                f.write(f'{data_dict[i]},')
+                # 文件夹
+                f.write(f"{root}\n")
 
-            # 模型
-            f.write(f'{params.model.model_name()},')
+            # 删除数据文件
+            shutil.rmtree(os.path.join(params.root, 'data'))
 
-            # 训练结果
-            for i in self.result_dict:
-                f.write(f'{self.result_dict[i]},')
+            wx.send_message(f'[{params.train_title}] 训练完成, 耗时 {(datetime.now()-t0).seconds/3600:.2f} h')
 
-            # 文件夹
-            f.write(f"{root}\n")
-
-        # 删除数据文件
-        shutil.rmtree(os.path.join(params.root, 'data'))
-
-        wx.send_message(f'[{params.train_title}] 训练完成, 耗时 {(datetime.now()-t0).seconds/3600:.2f} h')
+        except Exception as e:
+            wx.send_message(f'[{params.train_title}] 训练失败 {e}')
+            logger.error(e)

@@ -25,6 +25,8 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
+        data_parm = self.test_data()    
+
         init_param(
             title,
             f'./{title}',
@@ -40,7 +42,6 @@ class trainer(trainer_base):
             0.01,
             0,
             0,
-            # f'{self.data_parm2str(data_parm)}.7z',
-            f'test_data.7z',
+            f'{self.data_parm2str(data_parm)}.7z',
             m_deeplob(data_parm['y_n'])
         )
