@@ -803,7 +803,7 @@ class trainer:
         val_loader = read_data(os.path.join(params.root, 'data'), 'val')
 
         ## 模型
-        _model = params.model
+        _model = params.model.to(params.device)
         if torch.cuda.device_count() > 1:
             logger.debug("使用多gpu")
             _model = nn.DataParallel(_model)
