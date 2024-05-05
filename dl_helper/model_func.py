@@ -383,16 +383,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                     train_correct += count_correct_predictions(
                         outputs, targets)
                     train_all += len(targets)
-                    # logger.debug(f'[{count}] train_correct: {train_correct}')
-
-                count += 1
-                if count % cache_epoch == 0:
-                    logger.debug(f"[{count}] 缓存数据")
-                    pickle.dump((train_losses, test_losses, train_acc, test_acc, lrs,f1_scores,all_targets, all_predictions,  best_test_loss, best_test_epoch, it, train_loss, test_loss,
-                                train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
-                    torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-                    pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-                    ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -451,16 +441,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
                     all_targets.append(targets.cpu().numpy())
                     all_predictions.append(predictions.cpu().numpy())
-
-                    count += 1
-                    if count % cache_epoch == 0:
-                        logger.debug(f"[{count}] 缓存数据")
-                        pickle.dump((train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
-                                    train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
-                        torch.save(model, os.path.join(
-                            params.root, 'var', f'model.pkl'))
-                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-                        ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
             all_targets = np.concatenate(all_targets)
             all_predictions = np.concatenate(all_predictions)
