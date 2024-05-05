@@ -128,11 +128,11 @@ class Dataset(torch.utils.data.Dataset):
 
         # 获取切片
         # 50 -> 49
-        x = self.data[:, a:b, :].clone().to(params.device)
+        x = self.data[:, a:b, :].clone()
 
         # 获取均值方差
         mean_std = torch.tensor(
-            self.mean_std[index], dtype=torch.float).to(params.device)
+            self.mean_std[index], dtype=torch.float)
 
         # mid_price
         mid = (float(x[0, -1, 0]) + float(x[0, -1, 2])) / 2
