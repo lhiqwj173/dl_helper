@@ -797,6 +797,8 @@ class trainer:
             ## 获取数据
             train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1)
             val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1)
+            assert len(train_loader) > 0, "没有训练数据"
+            assert len(val_loader) > 0, "没有验证数据"
 
             ## 模型
             _model = params.model.to(params.device)
