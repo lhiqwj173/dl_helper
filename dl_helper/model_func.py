@@ -515,7 +515,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         result_dict['val_loss'] = test_losses[best_idx]
         result_dict['train_acc'] = train_acc[best_idx]
         result_dict['val_acc'] = test_acc[best_idx]
-        for idx, i in emumerate(f1_scores):
+        for idx, i in enumerate(f1_scores):
             result_dict[f'F1_{idx}'] = f1_scores[i][best_idx]
 
     plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores)
@@ -571,7 +571,7 @@ def test_model(test_loader, result_dict, select='best'):
     _f1_scores_dict = df.iloc[:-3, 2].to_dict()
 
     # 存入 result_dict
-    for idx, i in emumerate(_f1_scores_dict):
+    for idx, i in enumerate(_f1_scores_dict):
         result_dict[f'TEST_F1_{idx}'] = _f1_scores_dict[i]
 
 
