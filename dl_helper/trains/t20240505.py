@@ -2,6 +2,7 @@ from ..model_func import trainer as trainer_base
 from ..train_param import init_param
 from ..models.deeplob import m_deeplob
 
+
 class trainer(trainer_base):
     """
     deeplob 模型

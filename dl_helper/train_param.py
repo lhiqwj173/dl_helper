@@ -37,6 +37,10 @@ class logger:
     _logger.debug(*args)
 
   @staticmethod
+  def error(*args):
+    _logger.error(*args)
+
+  @staticmethod
   def add(*args):
     _logger.add(*args)
 
