@@ -309,10 +309,15 @@ async def upload_file(client: TelegramClient,
     return res
 
 t = 0
+count = 0
 def progress_cb(current, total):
-    global t
+    global t, count
+    count += 1
     if t == 0:
         t = time.time()
+        return
+
+    if count % 100 != 0:
         return
 
     cur_mb = current / 1024 / 1024

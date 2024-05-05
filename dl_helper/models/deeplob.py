@@ -83,8 +83,8 @@ class m_deeplob(nn.Module):
         x = x[:, :, :, :40]
 
         # h0: (number of hidden layers, batch size, hidden size)
-        h0 = torch.zeros(1, x.size(0), 64).to(device)
-        c0 = torch.zeros(1, x.size(0), 64).to(device)
+        h0 = torch.zeros(1, x.size(0), 64).to(x.device)
+        c0 = torch.zeros(1, x.size(0), 64).to(x.device)
     
         x = self.conv1(x)
         x = self.conv2(x)
