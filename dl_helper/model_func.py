@@ -821,7 +821,7 @@ class trainer:
                 # 初始化列名
                 with open(result_file, 'w') as f:
                     # 训练参数
-                    f.write('time,epochs,batch_n,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_mask_row,amp,label_smoothing,weight_decay,,')
+                    f.write('time,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_mask_row,amp,label_smoothing,weight_decay,,')
 
                     # 数据参数
                     data_dict =  self.data_str2parm(params.data_set)
@@ -839,7 +839,7 @@ class trainer:
             # 写入结果
             with open(result_file, 'w') as f:
                 # 训练参数
-                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_n},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
+                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                 # 数据参数
                 data_dict =  self.data_str2parm(params.data_set)
@@ -864,3 +864,7 @@ class trainer:
         except Exception as e:
             wx.send_message(f'[{params.train_title}] 训练失败 {e}')
             logger.error(e)
+            # 发生异常所在的文件
+            logger.error(e.__traceback__.tb_frame.f_globals["__file__"])
+            # 发生异常所在的行数
+            logger.error(e.__traceback__.tb_lineno)
