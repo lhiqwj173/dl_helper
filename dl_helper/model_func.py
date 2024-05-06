@@ -859,8 +859,9 @@ class trainer:
 
             # 删除数据文件
             shutil.rmtree(os.path.join(params.root, 'data'))
-
-            wx.send_message(f'[{params.train_title}] 训练完成, 耗时 {(datetime.now()-t0).seconds/3600:.2f} h')
+            msg = f'[{params.train_title}] 训练完成, 耗时 {(datetime.now()-t0).seconds/3600:.2f} h'
+            logger.debug(msg)
+            wx.send_message(msg)
 
         except Exception as e:
             wx.send_message(f'[{params.train_title}] 训练失败 {e}')
