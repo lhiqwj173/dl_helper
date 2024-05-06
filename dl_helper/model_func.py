@@ -221,8 +221,8 @@ def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_sc
     axs[1].legend(handles=t2_handles)
 
     plt.title(f'{params.train_title} {datetime.now().strftime("%Y%m%d_%H_%M_%S")}')
-    plt.savefig(f"{params.train_title}.png")
-    wx.send_file(f"{params.train_title}.png")
+    plt.savefig(os.path.join(params.root, f"{params.train_title}.png"))
+    wx.send_file(os.path.join(params.root,f"{params.train_title}.png"))
     # display.clear_output(wait=True)
     # plt.pause(0.00000001)
 
@@ -468,7 +468,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
         torch.cuda.empty_cache()
-        # logger.debug(f'{msg}验证完成\ntest_loss: {test_loss}')
         logger.debug(f'{msg}验证完成')
 
         # Save losses
@@ -574,6 +573,8 @@ def test_model(test_loader, result_dict, select='best'):
     # 存入 result_dict
     for idx, i in enumerate(_f1_scores_dict):
         result_dict[f'TEST_F1_{idx}'] = _f1_scores_dict[i]
+
+    dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
 
 
 def test_ps(data_loader, ps):
@@ -843,14 +844,17 @@ class trainer:
                     f.write('folder\n')
             
             # 写入结果
-            with open(result_file, 'w') as f:
+            with open(result_file, 'a') as f:
                 # 训练参数
                 f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                 # 数据参数
                 data_dict =  self.data_str2parm(params.data_set)
                 for i in data_dict:
-                    f.write(f'{data_dict[i]},')
+                    if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
+                        f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
+                    else:
+                        f.write(f'{data_dict[i]},')
 
                 # 模型
                 f.write(f'{params.model.model_name()},')

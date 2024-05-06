@@ -286,12 +286,11 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    # model = m_deeplob(y_len=2)
-    model = m_convnext(y_len=2, width_ratio=0.3)
+    model = m_convnext(y_len=2, use_trade_data=False)
     print(model.model_name())
-    # print(model)
+    print(model)
 
-    # summary(model, (1, 1, 70, 46), device=device)
+    summary(model, (1, 1, 70, 40), device=device)
 
     # model = model.to(device)
     # input = torch.randn((1, 1, 70, 46)).to(device)
