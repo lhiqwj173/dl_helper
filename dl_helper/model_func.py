@@ -760,11 +760,11 @@ class trainer:
             'predict_n': int(p[1]),
             'pass_n': int(p[3]),
             'y_n': int(p[5]),
-            'begin_date': p[7],
-            'data_rate': tuple([int(i) for i in p[9].split('@')]),
-            'total_hours': int(p[11]),
-            'symbols': int(p[13]),
-            'taget': p[15]
+            'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
+            'data_rate': tuple([int(i) for i in p[11].split('@')]),
+            'total_hours': int(p[13]),
+            'symbols': int(p[15]),
+            'taget': p[17]
         }
 
     def test_data(self):
