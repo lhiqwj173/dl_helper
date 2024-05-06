@@ -17,7 +17,7 @@ class trainer(trainer_base):
     def init_param(self):
         print('init_param')
 
-        title = f'mobilenet&convnext07_predict_n_v{self.idx}'
+        title = f'mobilenet_convnext07_predict_n_v{self.idx}'
 
         n_list = [5, 10]
 
