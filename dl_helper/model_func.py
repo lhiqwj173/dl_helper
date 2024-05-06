@@ -740,8 +740,9 @@ def predict_test_y():
 
 
 class trainer:
-    def __init__(self, idx):
+    def __init__(self, idx, debug=False):
         self.idx = idx
+        self.debug = debug
 
         # 开启CuDNN自动优化
         torch.backends.cudnn.benchmark = True
@@ -786,6 +787,10 @@ class trainer:
         raise NotImplementedError("must override init_param")
 
     async def download_dataset_async(self, session):
+        if self.debug:
+            # 测试 使用最小数据
+            params.data_set = f'{self.data_parm2str(self.test_data())}.7z'
+
         await download_dataset_async(session, params.data_set)
 
     def train(self):
@@ -796,8 +801,8 @@ class trainer:
 
             ### 训练
             ## 获取数据
-            train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1)
-            val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1)
+            train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1 if self.debug else 10000)
+            val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1 if self.debug else 10000)
             assert len(train_loader) > 0, "没有训练数据"
             assert len(val_loader) > 0, "没有验证数据"
 

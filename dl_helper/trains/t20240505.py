@@ -6,11 +6,13 @@ from ..models.deeplob import m_deeplob
 class trainer(trainer_base):
     """
     deeplob 模型
-    实验变量: predict_n
-    5, 10, 15
+    
+    实验变量: 
+        predict_n
+        5, 10, 15
     """
     def init_param(self):
-        print('_init_param')
+        print('init_param')
 
         title = f'deeplob_predict_n_v{self.idx}'
         n_list = [5, 10, 15]
@@ -25,8 +27,6 @@ class trainer(trainer_base):
             'symbols': 2,
             'taget': 'same paper'
         }
-
-        data_parm = self.test_data()    
 
         init_param(
             title,

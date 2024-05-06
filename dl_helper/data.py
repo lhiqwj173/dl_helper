@@ -187,7 +187,7 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     return ids, price_mean_std, test_x, test_y, test_raw
 
-def read_data(data_path, _type, reblance=False, shuffle=False, max_num=100, head_n=0, pct=100, need_id=False):
+def read_data(data_path, _type, reblance=False, shuffle=False, max_num=10000, head_n=0, pct=100, need_id=False):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
 
