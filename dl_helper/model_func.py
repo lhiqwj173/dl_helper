@@ -854,7 +854,7 @@ class trainer:
                     f.write(f'{self.result_dict[i]},')
 
                 # 文件夹
-                f.write(f"{root}\n")
+                f.write(f"{params.root}\n")
 
             # 删除数据文件
             shutil.rmtree(os.path.join(params.root, 'data'))
