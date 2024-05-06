@@ -46,7 +46,6 @@ class GRN(nn.Module):
         Nx = Gx / (Gx.mean(dim=-1, keepdim=True) + 1e-6)
         return self.gamma * (x * Nx) + self.beta + x
 
-
 class CBAMLayer(nn.Module):
     def __init__(self, channel, reduction=16, spatial_kernel=7):
         super(CBAMLayer, self).__init__()
@@ -164,9 +163,6 @@ class Residual(nn.Module):  # @save
         # Y = X + self.drop_path(Y)
         # return Y
 
-
-
-
 def make_block(layer_n, in_channels, out_channels, dp_rate):
     layers = []
     if out_channels > in_channels:
@@ -177,7 +173,6 @@ def make_block(layer_n, in_channels, out_channels, dp_rate):
     for i in range(layer_n):
         layers.append(Residual(out_channels, dp_rate))
     return nn.Sequential(*layers)
-
 
 class ConvNeXt_block(nn.Module):
     def __init__(self, y_len, in_channel, layer_list, channel_list, drop_path_rate=0.0):
@@ -208,6 +203,9 @@ class ConvNeXt_block(nn.Module):
 width_ratio=0.3 
 Total params: 247,965
 FLOPs: 4.71M
+
+width_ratio=0.7 
+Total params: 769,317
 """
 class m_convnext(nn.Module):
     def __init__(self, y_len, width_ratio=0.3, layer_ratio=1, use_trade_data=True):
@@ -286,7 +284,7 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_convnext(y_len=2, use_trade_data=False)
+    model = m_convnext(y_len=2, width_ratio=0.7, use_trade_data=False)
     print(model.model_name())
     print(model)
 
