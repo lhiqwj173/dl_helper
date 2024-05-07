@@ -156,9 +156,9 @@ def debug_plot():
     epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores = pickle.load(
         open(os.path.join(params.root, 'var', f'plot_datas.pkl'), 'rb'))
     
-    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores)
+    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
-def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores):
+def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour):
 
     # 计算误差最低点
     min_train_loss = min(train_losses)
@@ -220,7 +220,7 @@ def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_sc
     axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
     axs[1].legend(handles=t2_handles)
 
-    plt.title(f'{params.train_title} {datetime.now().strftime("%Y%m%d_%H_%M_%S")}')
+    plt.title(f'{params.train_title} {datetime.now().strftime("%Y%m%d_%H_%M_%S")} cost:{cost_hour:.2} hours')
     plt.savefig(os.path.join(params.root, f"{params.train_title}.png"))
     wx.send_file(os.path.join(params.root,f"{params.train_title}.png"))
     # display.clear_output(wait=True)
@@ -518,7 +518,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         for idx, i in enumerate(f1_scores):
             result_dict[f'F1_{idx}'] = f1_scores[i][best_idx]
 
-    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores)
+    cost_hour = (time.time() - t) / 3600
+    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
 
 def test_model(test_loader, result_dict, select='best'):
