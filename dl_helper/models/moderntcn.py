@@ -112,6 +112,17 @@ FLOPs: 6.15M
 D=32 M=40
 Total params: 582,691
 FLOPs: 8.90M
+
+D=16 M=46
+
+
+D=24 M=46
+Total params: 493,707
+FLOPs: 7.53M
+
+D=32 M=46
+Total params: 705,379
+FLOPs: 10.84M
 """
 class m_moderntcn(nn.Module):
     """
@@ -123,7 +134,7 @@ class m_moderntcn(nn.Module):
     # P kernel size of embedding layer
     # S stride of embedding layer
     """
-    def __init__(self, y_len, M, L, T=0, D=24, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
+    def __init__(self, y_len, M, L, T=0, D=32, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
         super().__init__()
 
         self.use_trade_data = use_trade_data
@@ -179,11 +190,11 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_moderntcn(3, 40, 70, use_trade_data=False)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
+    model = m_moderntcn(3, 46, 70, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
     print(model.model_name())
     print(model)
 
-    summary(model, (1, 1, 70, 40), device=device)
+    summary(model, (1, 1, 70, 46), device=device)
 
     model = model.to(device)
     input = torch.randn((1, 1, 70, 46)).to(device)
