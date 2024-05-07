@@ -16,7 +16,7 @@ class trainer(trainer_base):
     def init_param(self):
         print('init_param')
 
-        D_list = [16 24 32]
+        D_list = [16, 24, 32]
         assert self.idx < len(D_list)
 
         title = f'moderntcn_alpha_v{self.idx}'
