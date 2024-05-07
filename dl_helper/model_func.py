@@ -220,7 +220,7 @@ def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_sc
     axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
     axs[1].legend(handles=t2_handles)
 
-    plt.title(f'{params.train_title} {datetime.now().strftime("%Y%m%d_%H_%M_%S")} cost:{cost_hour:.2} hours')
+    plt.title(f'{params.train_title} | {params.describe} | {datetime.now().strftime("%Y%m%d")}          cost:{cost_hour:.2} hours')
     plt.savefig(os.path.join(params.root, f"{params.train_title}.png"))
     wx.send_file(os.path.join(params.root,f"{params.train_title}.png"))
     # display.clear_output(wait=True)

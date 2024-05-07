@@ -52,6 +52,8 @@ class Params:
   #############################
   train_title = ''
 
+  describe = ''
+
   # 项目路径
   root = ''
 
@@ -100,7 +102,9 @@ params = Params()
 
 def init_param(
     _train_title, _root,
-    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _model
+    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _model,
+    _describe=''
+
 ):
     global params
 
@@ -121,6 +125,7 @@ def init_param(
     params.increase_ratio = _increase_ratio
     params.data_set = _data_set
     params.model = _model
+    params.describe = _describe
 
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)

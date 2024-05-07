@@ -48,5 +48,6 @@ class trainer(trainer_base):
             0,
             0,
             f'{self.data_parm2str(data_parm)}.7z',
-            m_mobilenet_v2(data_parm['y_n'], alpha=alpha_list[self.idx], use_trade_data=False)
+            m_mobilenet_v2(data_parm['y_n'], alpha=alpha_list[self.idx], use_trade_data=False),
+            f'alpha={alpha_list[self.idx]}'
         )
