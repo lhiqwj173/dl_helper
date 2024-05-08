@@ -143,10 +143,19 @@ class m_moderntcn(nn.Module):
     # P kernel size of embedding layer
     # S stride of embedding layer
     """
-    def __init__(self, y_len, M=46, L=70, T=0, D=16, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
+    def __init__(self, y_len, M=46, L=70, T=0, D=16, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True, use_pk_data=True):
         super().__init__()
 
+        assert use_trade_data or use_pk_data
         self.use_trade_data = use_trade_data
+        self.use_pk_data = use_pk_data
+
+        if use_trade_data and use_pk_data:
+            M=46
+        elif use_trade_data:
+            M=6
+        elif use_pk_data:
+            M=40
 
         # 深度分离卷积负责捕获时域关系
         self.num_layers = num_layers
@@ -160,9 +169,12 @@ class m_moderntcn(nn.Module):
         self.head = nn.Linear(D*N, T) if T > 0 else nn.Linear(M*D*N, y_len)
 
     def forward(self, x):
-        # 不使用交易数据
         if not self.use_trade_data:
+            # 不使用交易数据
             x = x[:, :, :, :40]
+        elif not self.use_pk_data:
+            # 不使用pk数据
+            x = x[:, :, :, 40:]
 
         x = rearrange(x, 'b c l m -> b (c m) l')  # [B, C, L, M] -> [B, C*M, L] C=1
 
@@ -199,7 +211,7 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_moderntcn(3, 46, 70, num_layers=6, kernel_size=30, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
+    model = m_moderntcn(3, 46, 70, num_layers=6, kernel_size=30, use_trade_data=False, use_pk_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
     print(model.model_name())
     print(model)
 

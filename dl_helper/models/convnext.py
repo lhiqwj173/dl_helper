@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .stem import stem
+
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
@@ -208,42 +210,12 @@ width_ratio=0.7
 Total params: 769,317
 """
 class m_convnext(nn.Module):
-    def __init__(self, y_len, width_ratio=0.3, layer_ratio=1, use_trade_data=True):
+    def __init__(self, y_len, width_ratio=0.3, layer_ratio=1, use_trade_data=True, use_pk_data=True):        
         super().__init__()
+
         self.y_len = y_len
-        self.use_trade_data = use_trade_data
 
-        self.pk_stem = None
-        self.trade_stem = None
-        if use_trade_data:
-            self.pk_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=4,
-                        kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=4, out_channels=8,
-                        kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=8, out_channels=16,
-                        kernel_size=(1, 10)),
-                LayerNorm(16, eps=1e-6, data_format="channels_first")
-            )
-
-            self.trade_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=4,
-                        kernel_size=(1, 3), stride=(1, 3)),
-                nn.Conv2d(in_channels=4, out_channels=8,
-                        kernel_size=(1, 2), stride=(1, 2)),
-                LayerNorm(8, eps=1e-6, data_format="channels_first")
-            )
-
-        else:
-            self.pk_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=6,
-                        kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=6, out_channels=12,
-                        kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=12, out_channels=24,
-                        kernel_size=(1, 10)),
-                LayerNorm(24, eps=1e-6, data_format="channels_first")
-            ) 
+        self.stem = stem(use_trade_data, use_pk_data)
 
         channel_list = [24]
         for i in range(3):
@@ -258,18 +230,7 @@ class m_convnext(nn.Module):
         )
 
     def forward(self, combine_x):
-        # 盘口数据
-        x = combine_x[:, :, :, :40]  # torch.Size([1, 1, 70, 40])
-        x = self.pk_stem(x)  # torch.Size([1, 16, 70, 1])
-
-        # 成交数据
-        if self.use_trade_data:
-            x_2 = combine_x[:, :, :, 40:]  # torch.Size([1, 1, 70, 6])
-            x_2 = self.trade_stem(x_2)  # torch.Size([1, 8, 70, 1])
-
-            # 合并
-            x = torch.cat((x, x_2), dim=1)# torch.Size([1, 24, 70, 1])
-
+        x = self.stem(combine_x)
         return self.block(x)
 
     @classmethod
@@ -284,14 +245,14 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_convnext(y_len=2, width_ratio=0.7, use_trade_data=False)
+    model = m_convnext(y_len=2, width_ratio=0.7, use_trade_data=False, use_pk_data=True)
     print(model.model_name())
     print(model)
 
-    summary(model, (1, 1, 70, 40), device=device)
+    summary(model, (1, 1, 70, 46), device=device)
 
-    # model = model.to(device)
-    # input = torch.randn((1, 1, 70, 46)).to(device)
-    # flops, params = profile(model, inputs=(input,))
-    # flops, params = clever_format([flops, params])
-    # print(f"FLOPs: {flops} Params: {params}")
+    model = model.to(device)
+    input = torch.randn((1, 1, 70, 46)).to(device)
+    flops, params = profile(model, inputs=(input,))
+    flops, params = clever_format([flops, params])
+    print(f"FLOPs: {flops} Params: {params}")
