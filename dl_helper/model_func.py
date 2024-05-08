@@ -571,11 +571,16 @@ def test_model(test_loader, result_dict, select='best'):
     df = pd.DataFrame(report).transpose()
     logger.debug(f'测试结果:\n{df}')
     
-    _f1_scores_dict = df.iloc[:-3, 2].to_dict()
+    # 储存测试acc
+    result_dict['test_acc'] = df.iloc[-3, -1]
 
+    # 储存平均f1
+    result_dict['wa_f1'] = df.iloc[-1, -2]
+
+    _f1_scores_dict = df.iloc[:-3, 2].to_dict()
     # 存入 result_dict
     for idx, i in enumerate(_f1_scores_dict):
-        result_dict[f'TEST_F1_{idx}'] = _f1_scores_dict[i]
+        result_dict[f'test_f1_{idx}'] = _f1_scores_dict[i]
 
     dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
 
