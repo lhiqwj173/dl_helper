@@ -22,7 +22,7 @@ class trainer(trainer_base):
             partial(m_convnext, width_ratio=0.3), 
             m_mobilenet, 
             partial(m_mobilenet_v2, alpha=0.4), 
-            partial(m_moderntcn, M=46, L=100, D=16, num_layers=4, dropout=0)
+            partial(m_moderntcn, M=46, L=70, D=16, num_layers=4, dropout=0)
         ]
         assert self.idx < len(var_list)
 
