@@ -39,6 +39,7 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
+        model = var_list[self.idx](data_parm['y_n'], use_trade_data=True)
         init_param(
             title,
             f'./{title}',
@@ -55,6 +56,6 @@ class trainer(trainer_base):
             0,
             0,
             f'{self.data_parm2str(data_parm)}.7z',
-            var_list[self.idx](data_parm['y_n'], use_trade_data=True),
-            f'use trade model={var_list[self.idx]().model_name()}'
+            model,
+            f'use trade model={model.model_name()}'
         )
