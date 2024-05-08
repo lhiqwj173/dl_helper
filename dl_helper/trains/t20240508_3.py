@@ -10,7 +10,7 @@ from ..models.moderntcn import m_moderntcn
 class trainer(trainer_base):
     """
     使用全部数据
-    增加训练数据
+    增加训练数据 24*7
     
     实验变量: 
         m_mobilenet_v2(0.4)/m_mobilenet/m_convnext(0.3)/m_moderntcn(D=16, num_layers=4) 模型 
@@ -30,7 +30,7 @@ class trainer(trainer_base):
 
         data_parm = {
             'predict_n': 5,
-            'pass_n': 100,
+            'pass_n': 70,
             'y_n': 3,
             'begin_date': '2024-04-08',
             'data_rate': (8, 2, 2),

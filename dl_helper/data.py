@@ -95,6 +95,9 @@ class Dataset(torch.utils.data.Dataset):
         self.data = torch.from_numpy(raw_data.values)
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
+        # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
+        self.time_length = int(params.data_set.split('_')[3])
+
         # id
         self.ids = ids
 
@@ -126,8 +129,17 @@ class Dataset(torch.utils.data.Dataset):
         # 切片范围
         a, b = self.x_idx[index]
 
+        # 截断数据 b向上截取
+        # a=3, b=6
+        # 3, 4, 5
+        # self.time_length=2
+        # 4, 5
+        # a -> 4
+        ab_length = b-a
+        if ab_length > self.time_length:
+            a += (ab_length-self.time_length)
+
         # 获取切片
-        # 50 -> 49
         x = self.data[:, a:b, :].clone()
 
         # 获取均值方差

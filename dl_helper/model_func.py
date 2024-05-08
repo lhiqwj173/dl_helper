@@ -795,7 +795,13 @@ class trainer:
             # 测试 使用最小数据
             params.data_set = f'{self.data_parm2str(self.test_data())}.7z'
 
-        await download_dataset_async(session, params.data_set)
+        # params.data_set: pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
+        # 替换 pass_40 -> pass_100
+        # 都使用 pass_100 的数据, 在Dataset中按需截取
+        params_data_set = params.data_set.split('_y_')
+        real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + "100_y_" + params_data_set[1]
+
+        await download_dataset_async(session, real_data_set)
 
     def train(self):
         try:
