@@ -1,7 +1,7 @@
 from ..model_func import trainer as trainer_base
 from ..train_param import init_param
 from ..models.mobilenet import m_mobilenet_v2, m_mobilenet
-from ..models.convnet import m_convnet
+from ..models.convnext import m_convnext
 from ..models.moderntcn import m_moderntcn
 
 
@@ -11,12 +11,17 @@ class trainer(trainer_base):
     use_trade_data=True
     
     实验变量: 
-        m_mobilenet_v2(0.4)/m_mobilenet/m_convnet(0.3)/m_moderntcn(D=16) 模型 
+        m_mobilenet_v2(0.4)/m_mobilenet/m_convnext(0.3)/m_moderntcn(D=16) 模型 
     """
     def init_param(self):
         print('init_param')
 
-        var_list = [partial(m_convnet, width_ratio=0.3), m_mobilenet, partial(m_mobilenet_v2, alpha=0.4), partial(m_moderntcn, M=46, L=70, D=16)]
+        var_list = [
+            partial(m_convnext, width_ratio=0.3), 
+            m_mobilenet, 
+            partial(m_mobilenet_v2, alpha=0.4), 
+            partial(m_moderntcn, M=46, L=70, D=16)
+        ]
         assert self.idx < len(var_list)
 
         title = f'use_trade_v{self.idx}'
