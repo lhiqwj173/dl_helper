@@ -877,8 +877,4 @@ class trainer:
 
         except Exception as e:
             wx.send_message(f'[{params.train_title}] 训练失败 {e}')
-            logger.error(e)
-            # 发生异常所在的文件
-            logger.error(e.__traceback__.tb_frame.f_globals["__file__"])
-            # 发生异常所在的行数
-            logger.error(e.__traceback__.tb_lineno)
+            raise e
