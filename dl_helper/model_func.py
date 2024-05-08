@@ -799,7 +799,7 @@ class trainer:
         # 替换 pass_40 -> pass_100
         # 都使用 pass_100 的数据, 在Dataset中按需截取
         params_data_set = params.data_set.split('_y_')
-        real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + "100_y_" + params_data_set[1]
+        real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + "_100_y_" + params_data_set[1]
 
         await download_dataset_async(session, real_data_set)
 
