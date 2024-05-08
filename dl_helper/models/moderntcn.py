@@ -134,7 +134,7 @@ class m_moderntcn(nn.Module):
     # P kernel size of embedding layer
     # S stride of embedding layer
     """
-    def __init__(self, y_len, M, L, T=0, D=32, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
+    def __init__(self, y_len, M=46, L=70, T=0, D=32, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
         super().__init__()
 
         self.use_trade_data = use_trade_data

@@ -521,6 +521,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     cost_hour = (time.time() - t) / 3600
     plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
+    return cost_hour
+
 
 def test_model(test_loader, result_dict, select='best'):
     """
@@ -817,7 +819,7 @@ class trainer:
             criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
             optimizer_class = torch.optim.AdamW
             # 训练
-            batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
+            cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
             ## 测试模型
             test_loader = read_data(os.path.join(params.root, 'data'), 'test')
@@ -837,12 +839,12 @@ class trainer:
                         f.write(f'{i},')
 
                     # 模型
-                    f.write('model,')
+                    f.write('model,describe,')
 
                     # 训练结果
                     for i in self.result_dict:
                         f.write(f'{i},')
-                    f.write('folder\n')
+                    f.write('cost,folder\n')
             
             # 写入结果
             with open(result_file, 'a') as f:
@@ -858,14 +860,14 @@ class trainer:
                         f.write(f'{data_dict[i]},')
 
                 # 模型
-                f.write(f'{params.model.model_name()},')
+                f.write(f'{params.model.model_name()},{params.describe},')
 
                 # 训练结果
                 for i in self.result_dict:
                     f.write(f'{self.result_dict[i]},')
 
-                # 文件夹
-                f.write(f"{params.root}\n")
+                # 文件夹 
+                f.write(f"{cost_hour:.2f}h,{params.root}\n")
 
             # 删除数据文件
             shutil.rmtree(os.path.join(params.root, 'data'))
