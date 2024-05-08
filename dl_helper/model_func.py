@@ -886,6 +886,12 @@ class trainer:
             logger.debug(msg)
             wx.send_message(msg)
 
+            # 打包训练文件夹 zip 
+            compress_folder(folder, folder+".7z", 9)
+
+            # 发送到ex
+            wx.send_file(folder+".7z")
+
         except Exception as e:
             wx.send_message(f'[{params.train_title}] 训练失败 {e}')
             raise e
