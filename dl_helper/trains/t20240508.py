@@ -56,5 +56,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             var_list[self.idx](data_parm['y_n'], use_trade_data=True),
-            f'use trade model={var_list[self.idx].model_name()}'
+            f'use trade model={var_list[self.idx]().model_name()}'
         )
