@@ -1,3 +1,5 @@
+from functools import partial
+
 from ..model_func import trainer as trainer_base
 from ..train_param import init_param
 from ..models.mobilenet import m_mobilenet_v2, m_mobilenet
