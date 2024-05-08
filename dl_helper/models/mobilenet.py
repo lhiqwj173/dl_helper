@@ -58,7 +58,7 @@ class stem(nn.Module):
                         kernel_size=(1, 3), stride=(1, 3)),
                 nn.Conv2d(in_channels=4, out_channels=8,
                         kernel_size=(1, 2), stride=(1, 2)),
-                LayerNorm(8, eps=1e-6, data_format="channels_first")  if normal=='ln' else nn.BatchNorm2d(16),
+                LayerNorm(8, eps=1e-6, data_format="channels_first")  if normal=='ln' else nn.BatchNorm2d(8),
             )
 
         else:
@@ -288,11 +288,11 @@ if __name__ == "__main__":
     device = 'cuda'
 
     # model = m_mobilenet(y_len=3, use_trade_data=False)
-    model = m_mobilenet_v2(y_len=3, alpha=0.4, use_trade_data=False)
+    model = m_mobilenet_v2(y_len=3, alpha=0.4, use_trade_data=True)
     print(model.model_name())
     print(model)
 
-    summary(model, (1, 1, 70, 40), device=device)
+    summary(model, (1, 1, 70, 46), device=device)
 
     model = model.to(device)
     input = torch.randn((1, 1, 70, 46)).to(device)

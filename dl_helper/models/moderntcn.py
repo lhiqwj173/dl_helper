@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_moderntcn(3, 46, 70, num_layers=6, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
+    model = m_moderntcn(3, 46, 70, num_layers=6, kernel_size=30, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
     print(model.model_name())
     print(model)
 
