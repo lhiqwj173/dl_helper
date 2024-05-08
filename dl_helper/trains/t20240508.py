@@ -13,7 +13,7 @@ class trainer(trainer_base):
     use_trade_data=True
     
     实验变量: 
-        m_mobilenet_v2(0.4)/m_mobilenet/m_convnext(0.3)/m_moderntcn(D=16) 模型 
+        m_mobilenet_v2(0.4)/m_mobilenet/m_convnext(0.3)/m_moderntcn(D=16, num_layers=4) 模型 
     """
     def init_param(self):
         print('init_param')
@@ -22,7 +22,7 @@ class trainer(trainer_base):
             partial(m_convnext, width_ratio=0.3), 
             m_mobilenet, 
             partial(m_mobilenet_v2, alpha=0.4), 
-            partial(m_moderntcn, M=46, L=70, D=16)
+            partial(m_moderntcn, M=46, L=70, D=16, num_layers=4, dropout=0)
         ]
         assert self.idx < len(var_list)
 

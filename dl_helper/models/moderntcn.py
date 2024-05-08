@@ -113,8 +113,17 @@ D=32 M=40
 Total params: 582,691
 FLOPs: 8.90M
 
-D=16 M=46
+D=16 M=46 num_layers=2
+Total params: 305,587
+FLOPs: 4.62M
 
+D=16 M=46 num_layers=4
+Total params: 573,491
+FLOPs: 9.10M 
+
+D=16 M=46 num_layers=6
+Total params: 841,395
+FLOPs: 13.58M
 
 D=24 M=46
 Total params: 493,707
@@ -134,7 +143,7 @@ class m_moderntcn(nn.Module):
     # P kernel size of embedding layer
     # S stride of embedding layer
     """
-    def __init__(self, y_len, M=46, L=70, T=0, D=32, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
+    def __init__(self, y_len, M=46, L=70, T=0, D=16, P=8, S=4, kernel_size=51, r=1, num_layers=2, dropout=0.1, use_trade_data=True):
         super().__init__()
 
         self.use_trade_data = use_trade_data
@@ -190,7 +199,7 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_moderntcn(3, 46, 70, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
+    model = m_moderntcn(3, 46, 70, num_layers=6, use_trade_data=True)# 三分类, 40个变量, 过去70个时间步, 不使用交易数据
     print(model.model_name())
     print(model)
 
