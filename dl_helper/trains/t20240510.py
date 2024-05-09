@@ -9,25 +9,20 @@ class trainer(trainer_base):
     使用全部数据 24*3
 
     lr = 0.001
+    alpha = 0.5
     
     实验变量: 
-        alpha
-        [0.5, 0.6, 0.7, 0.8]
-
-    目的:
-        增加主体模型宽度
-
-    试验结果:
-        0.5最优
-        详:"D:\code\forecast_model\notebook\20240509 mobilenet_v2 调参 alpha"
+        batch size/ lr
+        [64, 128, 256, 512]
+    
     """
     def init_param(self):
         print('init_param')
 
-        var_list = [0.5, 0.6, 0.7, 0.8]
+        var_list = [64, 128, 256, 512]
         assert self.idx < len(var_list)
 
-        title = f'mobilenet_v2_alpha_v{self.idx}'
+        title = f'mobilenet_v2_batch_size_v{self.idx}'
 
         data_parm = {
             'predict_n': 5,
@@ -40,13 +35,13 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
-        model = m_mobilenet_v2(data_parm['y_n'], alpha=var_list[self.idx])
+        model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5)
         init_param(
             title,
             f'./{title}',
             100,
-            640,
-            0.001,
+            var_list[self.idx],
+            0.001*(var_list[self.idx]/640),
             3,
             15,
             0,
@@ -58,5 +53,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             model,
-            f'alpha={var_list[self.idx]}'
+            f'batch_size={var_list[self.idx]}'
         )

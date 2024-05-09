@@ -9,11 +9,11 @@ class trainer(trainer_base):
     使用全部数据 24*3
 
     lr = 0.001
-    alpha = 0.4
+    alpha = 0.5
     
     实验变量: 
         stem_alpha
-        [1.4, 1.8, 2.1, 2.5]
+        [1.2, 1.4, 1.6, 1.8, 2.0]
 
     目的:
         增加stem模型宽度
@@ -21,7 +21,7 @@ class trainer(trainer_base):
     def init_param(self):
         print('init_param')
 
-        var_list = [1.4, 1.8, 2.1, 2.5]
+        var_list = [1.2, 1.4, 2.6, 2.8]
         assert self.idx < len(var_list)
 
         title = f'mobilenet_v2_stem_alpha_v{self.idx}'
