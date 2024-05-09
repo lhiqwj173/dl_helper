@@ -11,6 +11,10 @@ class trainer(trainer_base):
     实验变量: 
         学习率 0.001
         [0.01, 0.0001]
+
+    试验结果:
+        0.001最优
+        详:"D:\code\forecast_model\notebook\20240509 mobilenet_v2 调参 学习率"
     """
     def init_param(self):
         print('init_param')
