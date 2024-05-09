@@ -38,52 +38,65 @@ class stem(nn.Module):
         'ln': LayerNorm
         'bn': BatchNorm2d
     """
-    def __init__(self, use_trade_data, use_pk_data, normal='ln'):
+    def __init__(self, use_trade_data, use_pk_data, stem_alpha=1, normal='ln'):
         assert use_trade_data or use_pk_data
 
         super().__init__()
+
+        self.out_channel = int(24*stem_alpha)
 
         self.pk_stem = None
         self.trade_stem = None
         if use_trade_data and use_pk_data:
             # 同时使用盘口数据和成交数据
+            # 24 = 16 + 8
+            # 1, 4, 8, 16
+            pk_out_channel = int(self.out_channel*(2/3))
+            pk_cs = [pk_out_channel//4, pk_out_channel//2, pk_out_channel]
             self.pk_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=4,
+                nn.Conv2d(in_channels=1, out_channels=pk_cs[0],
                         kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=4, out_channels=8,
+                nn.Conv2d(in_channels=pk_cs[0], out_channels=pk_cs[1],
                         kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=8, out_channels=16,
+                nn.Conv2d(in_channels=pk_cs[1], out_channels=pk_cs[2],
                         kernel_size=(1, 10)),
-                LayerNorm(16, eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(16),
+                LayerNorm(pk_cs[2], eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(pk_cs[2]),
             )
 
+            # 1, 4, 8
+            trade_out_channel = self.out_channel - pk_out_channel
+            trade_cs = [trade_out_channel//2, trade_out_channel]
             self.trade_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=4,
+                nn.Conv2d(in_channels=1, out_channels=trade_cs[0],
                         kernel_size=(1, 3), stride=(1, 3)),
-                nn.Conv2d(in_channels=4, out_channels=8,
+                nn.Conv2d(in_channels=trade_cs[0], out_channels=trade_cs[1],
                         kernel_size=(1, 2), stride=(1, 2)),
-                LayerNorm(8, eps=1e-6, data_format="channels_first")  if normal=='ln' else nn.BatchNorm2d(8),
+                LayerNorm(trade_cs[1], eps=1e-6, data_format="channels_first")  if normal=='ln' else nn.BatchNorm2d(trade_cs[1]),
             )
 
         elif use_pk_data:
             # 仅使用盘口数据
+            # 1, 6, 12, 24
+            cs = [self.out_channel//4, self.out_channel//2, self.out_channel]
             self.pk_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=6,
+                nn.Conv2d(in_channels=1, out_channels=cs[0],
                         kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=6, out_channels=12,
+                nn.Conv2d(in_channels=cs[0], out_channels=cs[1],
                         kernel_size=(1, 2), stride=(1, 2)),
-                nn.Conv2d(in_channels=12, out_channels=24,
+                nn.Conv2d(in_channels=cs[1], out_channels=cs[2],
                         kernel_size=(1, 10)),
-                LayerNorm(24, eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(24),
+                LayerNorm(cs[2], eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(cs[2]),
             ) 
         elif use_trade_data:
             # 仅使用交易数据
+            # 1, 12, 24
+            cs = [self.out_channel//2, self.out_channel]
             self.trade_stem = nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=12,
+                nn.Conv2d(in_channels=1, out_channels=cs[0],
                         kernel_size=(1, 3), stride=(1, 3)),
-                nn.Conv2d(in_channels=12, out_channels=24,
+                nn.Conv2d(in_channels=cs[0], out_channels=cs[1],
                         kernel_size=(1, 2), stride=(1, 2)),
-                LayerNorm(24, eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(24),
+                LayerNorm(cs[1], eps=1e-6, data_format="channels_first") if normal=='ln' else nn.BatchNorm2d(cs[1]),
             )
  
     def forward(self, combine_x):

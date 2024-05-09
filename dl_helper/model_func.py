@@ -28,6 +28,7 @@ import itertools
 import random
 
 from py_ext.wechat import wx
+from py_ext.lzma import compress_folder
 
 from .tg import download_dataset_async
 from .train_param import init_param, logger, params
@@ -295,6 +296,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
     # 检查是否有缓存文件
     if os.path.exists(os.path.join(params.root, 'var', f'datas.pkl')):
+        wx.send_message(f'[{params.train_title}] 使用缓存文件继续训练')
         logger.debug(f"使用缓存文件继续训练")
         train_losses, test_losses, train_acc, test_acc,lrs, f1_scores,all_targets, all_predictions, best_test_loss, best_test_epoch, begin, train_loss, test_loss, train_correct, test_correct, train_all, test_all, step_in_epoch, scaler = pickle.load(
             open(os.path.join(params.root, 'var', f'datas.pkl'), 'rb'))
@@ -816,7 +818,6 @@ class trainer:
 
     def train(self):
         try:
-
             t0 = datetime.now()
             wx.send_message(f'[{params.train_title}] 开始训练')
 

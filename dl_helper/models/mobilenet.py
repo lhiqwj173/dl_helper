@@ -129,15 +129,15 @@ Total params: 765,761
 FLOPs: 5.89M
 """
 class m_mobilenet_v2(nn.Module):
-    def __init__(self, y_len, alpha=1.0, round_nearest=8, use_trade_data=True, use_pk_data=True):
+    def __init__(self, y_len, alpha=0.4, stem_alpha=1.0, round_nearest=8, use_trade_data=True, use_pk_data=True):
         super().__init__()
 
         # 合并特征
-        self.stem = stem(use_trade_data,use_pk_data, normal='bn')
+        self.stem = stem(use_trade_data,use_pk_data, stem_alpha, normal='bn')
 
         block = InvertedResidual
-        input_channel = 24          # 将卷积核个数调整到最接近8的整数倍数
-        last_channel = _make_divisible(640 * alpha, round_nearest)
+        input_channel = self.stem.out_channel          
+        last_channel = _make_divisible(640 * alpha, round_nearest)# 将卷积核个数调整到最接近8的整数倍数
 
         inverted_residual_setting = [
             # t, c, n, s

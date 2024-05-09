@@ -7,10 +7,15 @@ from ..models.mobilenet import m_mobilenet_v2
 class trainer(trainer_base):
     """
     使用全部数据 24*3
+
+    lr = 0.001
     
     实验变量: 
         alpha
         [0.5, 0.6, 0.7, 0.8]
+
+    目的:
+        增加主体模型宽度
     """
     def init_param(self):
         print('init_param')
