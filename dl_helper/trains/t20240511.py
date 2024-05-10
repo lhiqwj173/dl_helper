@@ -8,24 +8,24 @@ class trainer(trainer_base):
     """
     使用全部数据 24*3
 
+    batch size = 640
     lr = 0.001
     alpha = 0.5
     
     实验变量: 
-        batch size/ lr
-        [64, 128, 256, 512]
-        
-    试验结果:
-        batch size = 1024 / lr=0.0016 最优
-        详:"D:\code\forecast_model\notebook\20240510 mobilenet_v2 调参 batch size\mobilenet_v2_batch_size2_v2"
+        stem_alpha
+        [1.6, 1.8, 2.0, 2.2]
+
+    目的:
+        增加stem模型宽度
     """
     def init_param(self):
         print('init_param')
 
-        var_list = [64, 128, 256, 512]
+        var_list = [1.6, 1.8, 2.0, 2.2]
         assert self.idx < len(var_list)
 
-        title = f'mobilenet_v2_batch_size_v{self.idx}'
+        title = f'mobilenet_v2_stem_alpha2_v{self.idx}'
 
         data_parm = {
             'predict_n': 5,
@@ -38,13 +38,13 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
-        model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5)
+        model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5, stem_alpha=var_list[self.idx])
         init_param(
             title,
             f'./{title}',
             100,
-            var_list[self.idx],
-            0.001*(var_list[self.idx]/640),
+            640,
+            0.001,
             3,
             15,
             0,
@@ -56,5 +56,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             model,
-            f'batch_size={var_list[self.idx]}'
+            f'stem_alpha={var_list[self.idx]}'
         )

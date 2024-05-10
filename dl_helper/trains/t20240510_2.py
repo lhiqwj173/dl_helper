@@ -14,6 +14,10 @@ class trainer(trainer_base):
     实验变量: 
         batch size/ lr
         [1024, 2048, 4096, 8192]
+
+    试验结果:
+        batch size = 1024 / lr=0.0016 最优
+        详:"D:\code\forecast_model\notebook\20240510 mobilenet_v2 调参 batch size\mobilenet_v2_batch_size2_v2"
     
     """
     def init_param(self):
