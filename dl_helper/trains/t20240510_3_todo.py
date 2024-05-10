@@ -8,6 +8,7 @@ class trainer(trainer_base):
     """
     使用全部数据 24*3
 
+    batch size = 640
     lr = 0.001
     alpha = 0.5
     
@@ -37,13 +38,13 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
-        model = m_mobilenet_v2(data_parm['y_n'], stem_alpha=var_list[self.idx])
+        model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5, stem_alpha=var_list[self.idx])
         init_param(
             title,
             f'./{title}',
             100,
-            640,
-            0.001,
+            640,#TODO
+            0.001,#TODO
             3,
             15,
             0,
