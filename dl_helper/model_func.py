@@ -33,6 +33,7 @@ from py_ext.lzma import compress_folder
 from .tg import download_dataset_async
 from .train_param import init_param, logger, params
 from .data import read_data
+from .data_map import DATA_MAP
 
 # 设置启动方法为'spawn'
 multiprocessing.set_start_method('spawn', force=True)
@@ -813,6 +814,10 @@ class trainer:
         # 都使用 pass_100 的数据, 在Dataset中按需截取
         params_data_set = params.data_set.split('_y_')
         real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + "_100_y_" + params_data_set[1]
+
+        # data 映射, 有些文件名太长，tg无法显示
+        if real_data_set in DATA_MAP:
+            real_data_set = DATA_MAP[real_data_set]
 
         await download_dataset_async(session, real_data_set)
 
