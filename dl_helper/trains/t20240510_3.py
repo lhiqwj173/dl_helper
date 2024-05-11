@@ -18,6 +18,10 @@ class trainer(trainer_base):
 
     目的:
         增加stem模型宽度
+
+    试验结果:
+        没有明显的提升
+        D:\code\forecast_model\notebook\20240510 mobilenet_v2 调参 stem_alpha
     """
     def init_param(self):
         print('init_param')

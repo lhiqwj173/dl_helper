@@ -8,28 +8,22 @@ class trainer(trainer_base):
     """
     使用全部数据 24*3
 
-    batch size = 640
-    lr = 0.001
+    batch size = 1024
+    lr=0.0016
     alpha = 0.5
     
     实验变量: 
-        stem_alpha
-        [1.6, 1.8, 2.0, 2.2]
+        stem_alpha/alpha
+        [(1.2, 0.6), (1.4, 0.8), (1.6, 1.0), (1.8, 1.2)]
 
-    目的:
-        增加stem模型宽度
-
-    试验结果:
-        没有明显的提升
-        D:\code\forecast_model\notebook\20240510 mobilenet_v2 调参 stem_alpha
     """
     def init_param(self):
         print('init_param')
 
-        var_list = [1.6, 1.8, 2.0, 2.2]
+        var_list = [(1.2, 0.6), (1.4, 0.8), (1.6, 1.0), (1.8, 1.2)]
         assert self.idx < len(var_list)
 
-        title = f'mobilenet_v2_stem_alpha2_v{self.idx}'
+        title = f'mobilenet_v2_2alpha_v{self.idx}'
 
         data_parm = {
             'predict_n': 5,
@@ -42,13 +36,14 @@ class trainer(trainer_base):
             'taget': 'same paper'
         }
 
-        model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5, stem_alpha=var_list[self.idx])
+        stem_alpha, alpha = var_list[self.idx]
+        model = m_mobilenet_v2(data_parm['y_n'], alpha=alpha, stem_alpha=stem_alpha)
         init_param(
             title,
             f'./{title}',
             100,
-            640,
-            0.001,
+            1024,
+            0.0016,
             3,
             15,
             0,
@@ -60,5 +55,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             model,
-            f'stem_alpha={var_list[self.idx]}'
+            f'2alpha={str(var_list[self.idx])}'
         )
