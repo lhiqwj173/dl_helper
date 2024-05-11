@@ -782,7 +782,7 @@ class trainer:
             'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
             'data_rate': tuple([int(i) for i in p[11].split('@')]),
             'total_hours': int(p[13]),
-            'symbols': int(p[15]),
+            'symbols': p[15],
             'taget': p[17]
         }
 
