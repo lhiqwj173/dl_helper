@@ -65,5 +65,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             model,
-            f'data={"/".join(var_list[self.idx])}'
+            f'data={"/".join([str(i) for i in var_list[self.idx]])}'
         )
