@@ -7,16 +7,48 @@ import random
 
 from .train_param import params, logger
 
-# 随机遮挡行
-def random_mask_row(tensor, mask_prob):
-    mask = torch.rand(tensor.size(0)) < torch.rand(1)*mask_prob
-    tensor[mask] = 0
-    return tensor
+# 随机遮挡行, 较早的数据向后平移填充
+# tensor 为原始的数据，没有切片 目前应该shape[1] == 100
+def random_mask_row(tensor, begin, end, mask_prob=0.01, max_mask_num=5):
+    need_length = end-begin
+    assert need_length+max_mask_num <= tensor.shape[1]
+
+    # 选择随机的行删除
+    mask = torch.rand(need_length) < torch.rand(1)*mask_prob
+    del_count = torch.sum(mask).item()
+    while del_count > max_mask_num:
+        mask = torch.rand(need_length) < torch.rand(1) * mask_prob
+        del_count = torch.sum(mask).item()
+
+    # print(f"删除行数: {del_count}")
+    if del_count == 0:
+        # 不需要删除
+        return tensor[:, begin:end, :].clone()
+
+    # 需要删除
+    # 在行起始位置补充
+    begin -= del_count
+
+    # 向前扩充
+    mask = torch.cat([torch.zeros(del_count, dtype=torch.bool), mask], dim=0)
+
+    # 切片
+    data = tensor[:, begin:end, :].clone()
+
+    # 删除行
+    return data[:, ~mask, :]
 
 # 定义随机遮挡函数
-def random_mask(tensor, mask_prob):
+def random_mask(tensor, mask_prob=1e-4):
     mask = torch.rand(tensor.size()) < torch.rand(1)*mask_prob
     tensor.masked_fill_(mask, 0)
+    return tensor
+
+# 定义随机缩放函数
+def random_scale(tensor, scale_prob=0.005, min_scale=0.95, max_scale=1.05):
+    mask = torch.rand(tensor.size()) < torch.rand(1)*scale_prob
+    scale = torch.rand(1)*(max_scale-min_scale)+min_scale
+    tensor.masked_fill_(mask, tensor*scale)
     return tensor
 
 class ResumeSample():
@@ -140,7 +172,11 @@ class Dataset(torch.utils.data.Dataset):
             a += (ab_length-self.time_length)
 
         # 获取切片
-        x = self.data[:, a:b, :].clone()
+        if params.random_mask_row>0:
+            # 随机删除行，保持行数不变
+            x = random_mask_row(x, a, b, params.random_mask_row)
+        else:
+            x = self.data[:, a:b, :].clone()
 
         # 获取均值方差
         mean_std = torch.tensor(
@@ -160,8 +196,9 @@ class Dataset(torch.utils.data.Dataset):
         if params.random_mask>0:
             x = random_mask(x, params.random_mask)
 
-        if params.random_mask_row>0:
-            x = random_mask_row(x, params.random_mask_row)
+        # 随机缩放
+        if params.random_scale>0:
+            x = random_scale(x, params.random_scale)
 
         # return x, (self.y[index], self.ids[index])
         return x, self.y[index]

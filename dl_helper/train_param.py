@@ -79,6 +79,7 @@ class Params:
   # 随机遮蔽
   random_mask = 0
   random_mask_row = 0
+  random_scale = 0
 
   # 是否使用混合精度
   amp = False
@@ -102,7 +103,7 @@ params = Params()
 
 def init_param(
     _train_title, _root,
-    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _model,
+    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_scale, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _model,
     _describe=''
 
 ):
@@ -117,6 +118,7 @@ def init_param(
     params.warm_up_epochs = _warm_up_epochs
     params.no_better_stop = _no_better_stop
     params.random_mask = _random_mask
+    params.random_scale = _random_scale
     params.random_mask_row = _random_mask_row
     params.amp = _amp
     params.label_smoothing = _label_smoothing

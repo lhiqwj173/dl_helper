@@ -854,7 +854,7 @@ class trainer:
                 # 初始化列名
                 with open(result_file, 'w') as f:
                     # 训练参数
-                    f.write('time,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_mask_row,amp,label_smoothing,weight_decay,,')
+                    f.write('time,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_scale,random_mask_row,amp,label_smoothing,weight_decay,,')
 
                     # 数据参数
                     data_dict =  self.data_str2parm(params.data_set)
@@ -872,7 +872,7 @@ class trainer:
             # 写入结果
             with open(result_file, 'a') as f:
                 # 训练参数
-                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
+                f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_scale},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                 # 数据参数
                 data_dict =  self.data_str2parm(params.data_set)

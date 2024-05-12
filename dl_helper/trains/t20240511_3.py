@@ -59,6 +59,7 @@ class trainer(trainer_base):
             20,
             0,
             0,
+            0,
             False,
             0.1,
             0.01,
