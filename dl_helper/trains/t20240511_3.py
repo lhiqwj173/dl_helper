@@ -35,6 +35,7 @@ class trainer(trainer_base):
         title = f'mobilenet_v2_data_v{self.idx}'
 
         day, symbols = var_list[self.idx]
+        des_str = str(day) + '/' + '@'.join(symbols)
 
         data_parm = {
             'predict_n': 5,
@@ -65,5 +66,5 @@ class trainer(trainer_base):
             0,
             f'{self.data_parm2str(data_parm)}.7z',
             model,
-            f'data={"/".join([str(i) for i in var_list[self.idx]])}'
+            f'data={des_str}'
         )
