@@ -727,51 +727,6 @@ def plot_roc(data_loader):
 
     return bests
 
-
-def predict_test_y():
-    # 载入模型
-    model = torch.load(os.path.join(params.root, f'best_val_model'))
-
-    # 读取测试数据
-    mean_std, test_x, test_y, test_raw = pickle.load(
-        open(os.path.join(data_path, f'test.pkl'), 'rb'))
-
-    # 修正标签 -1,0,1 -> 0,1,2
-    test_y = [i+1 for i in test_y]
-
-    dataset_test = Dataset(test_raw, test_x, test_y, mean_std)
-    test_loader = torch.utils.data.DataLoader(
-        dataset=dataset_test, batch_size=params.batch_size)
-
-    results = {'id': [], 'predict': [], 'target': []}
-
-    idx = 0
-    for inputs, targets in test_loader:
-        a = idx*params.batch_size
-        idx += 1
-
-        # Move to GPU
-        inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
-            params.device, dtype=torch.int64)
-
-        # Forward pass
-        outputs = model(inputs)
-
-        # 转成概率
-        p = torch.softmax(outputs, dim=1)
-
-        # Get prediction
-        # torch.max returns both max and argmax
-        _, predictions = torch.max(p, 1)
-
-        results['predict'] += predictions.tolist()
-        results['target'] += targets.tolist()
-
-    results = pd.DataFrame(results)
-    # 储存预测
-    results.to_csv(os.path.join(params.root, 'predict.csv'), index=False)
-
-
 class trainer:
     def __init__(self, idx, debug=False):
         self.idx = idx

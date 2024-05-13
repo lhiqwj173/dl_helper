@@ -36,5 +36,7 @@ ENV/
 *.sublime-workspace
 *.sublime-project
 
+mobilenet_v2_data_v6/
+20240513_001/
 *.ipynb
 *.csv

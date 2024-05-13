@@ -8,4 +8,9 @@ DATA_MAP = {
     'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_96_s_BTCUSDT@ETHUSDT_t_samepaper.7z': "20240513_003.7z",
     'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_96_s_BTCFDUSD@ETHFDUSD_t_samepaper.7z': "20240513_004.7z",
     'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_96_s_BTCFDUSD@BTCUSDT_t_samepaper.7z': "20240513_005.7z",
+    'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_96_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_samepaper.7z': "20240514_000.7z",
+    'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_72_s_BTCUSDT_t_samepaper.7z': "20240514_001.7z",
+    'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_72_s_BTCFDUSD_t_samepaper.7z': "20240514_002.7z",
+    'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_72_s_BTCUSDT@ETHUSDT_t_samepaper.7z': "20240514_003.7z",
+    'pred_5_pass_100_y_3_bd_2024_05_01_dr_7@2@3_th_72_s_BTCFDUSD@ETHFDUSD_t_samepaper.7z': "20240514_004.7z",
 }
