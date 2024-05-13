@@ -584,7 +584,7 @@ def test_model(test_loader, result_dict, select='best'):
         end = data_list[-1][0]
         with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
             f.write('timestamp,target,predict\n')
-            for timestamp, target, pre  in data_list:
+            for timestamp, target, pre,  in data_list:
                 f.write(f'{timestamp},{target},{pre}\n')
 
     logger.debug(
