@@ -8,8 +8,8 @@ class trainer(trainer_base):
     """
     使用0501新数据
 
-    batch size = 1024
-    lr=0.0016
+    batch size = 256
+    lr=0.0004
     alpha = 0.5
     
     实验变量: 
