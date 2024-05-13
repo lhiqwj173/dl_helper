@@ -565,12 +565,13 @@ def test_model(test_loader, result_dict, select='best'):
 
     all_targets = np.concatenate(all_targets)
     all_predictions = np.concatenate(all_predictions)
+    ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
 
     # 储存预测结果
     with open(os.path.join(params.root, 'test_predict.csv'), 'w') as f:
-        f.write('target,predict\n')
+        f.write('id,target,predict\n')
         for i in range(len(all_targets)):
-            f.write(f'{all_targets[i]},{all_predictions[i]}\n')
+            f.write(f'{ids[i]},{all_targets[i]},{all_predictions[i]}\n')
 
     logger.debug(
         f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
