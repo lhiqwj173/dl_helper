@@ -567,15 +567,25 @@ def test_model(test_loader, result_dict, select='best'):
     all_predictions = np.concatenate(all_predictions)
     ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
 
-    # 回测信息
-    _, end = ids[-1].split('_')
+    # 分类预测
+    datas = {}
+    for i in range(len(ids)):
+        symbol, timestamp = ids[i].split('_')
+        if symbol not in datas:
+            datas[symbol] = []
+        
+        datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
 
     # 储存预测结果
     # symbol_begin_end.csv
-    with open(os.path.join(params.root, f'{ids[0]}_{end}.csv'), 'w') as f:
-        f.write('timestamp,target,predict\n')
-        for i in range(len(all_targets)):
-            f.write(f'{ids[i].split("_")[1]},{all_targets[i]},{all_predictions[i]}\n')
+    for symbol in datas:
+        data_list = datas[symbol]
+        begin = data_list[0][0]
+        end = data_list[-1][0]
+        with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+            f.write('timestamp,target,predict\n')
+            for timestamp, target, pre  in data_list:
+                f.write(f'{timestamp},{target},{pre}\n')
 
     logger.debug(
         f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
