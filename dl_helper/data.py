@@ -119,13 +119,25 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, raw_data, x, y, mean_std, ids=[]):
+    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=0):
         """Initialization"""
 
         # 原始数据
         # self.data = torch.tensor(np.array(raw_data), dtype=torch.float)
         self.data = torch.from_numpy(raw_data.values)
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
+
+        # 针对回归数据集, y可能为一个列表
+        # regress_y_idx
+        if isinstance(y[0], list):
+            y = [i[regress_y_idx] for i in y]
+            # y 可能为nan
+            idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
+            # 过滤nan
+            y = [y[i] for i in idxs]
+            x = [x[i] for i in idxs]
+            mean_std = [mean_std[i] for i in idxs]
+            ids = [ids[i] for i in idxs]
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
@@ -288,7 +300,7 @@ def read_data(data_path, _type, reblance=False, shuffle=False, max_num=10000, he
 
     if not need_id:
         ids = []
-    dataset_test = Dataset(raw, x, y, mean_std, ids)
+    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx)
     del ids, x, y, raw
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(

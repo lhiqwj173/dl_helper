@@ -7,6 +7,7 @@ from torch.utils import data
 import torch.nn.functional as F
 from torch.cuda.amp import autocast, GradScaler
 import torch
+from torchmetrics import R2Score
 from tqdm import tqdm
 import pandas as pd
 import pickle
@@ -19,6 +20,7 @@ import time
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.metrics import roc_curve as roc
 from sklearn.metrics import roc_auc_score as auc
+from sklearn.metrics import mean_squared_error
 import multiprocessing
 from IPython import display
 import math
@@ -155,48 +157,78 @@ def last_value(data):
     raise ValueError("没有找到非nan值")
 
 def debug_plot():
-    epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores = pickle.load(
+    epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores = pickle.load(
         open(os.path.join(params.root, 'var', f'plot_datas.pkl'), 'rb'))
     
-    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour)
+    plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
-def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour):
+def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour):
+
+    # 创建图形和坐标轴
+    fig, axs = None, None
+    if params.y_n != 1:
+        fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
+    else:
+        fig, axs = plt.subplots(figsize=(15, 10))
+
+    # 1 图左侧坐标轴
+    ax1 = axs[0]
+
+    # 用于添加图例
+    ax1_handles = []
 
     # 计算误差最低点
     min_train_loss = min(train_losses)
     min_test_loss = min(test_losses)
     min_train_x = train_losses.tolist().index(min_train_loss)
     min_test_x = test_losses.tolist().index(min_test_loss)
-
-    # 计算acc最高点
-    max_train_acc = max(train_acc)
-    max_test_acc = max(test_acc)
-    max_train_acc_x = train_acc.tolist().index(max_train_acc)
-    max_test_acc_x = test_acc.tolist().index(max_test_acc)
-
-    # 创建图形和坐标轴
-    fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
-
-    # 1 图左侧坐标轴
-    ax1 = axs[0]
-
-    line_train_loss, = ax1.plot(list(range(epochs)), train_losses, label=f'train loss {last_value(train_losses)}', c='b')
-    line_test_loss, = ax1.plot(list(range(epochs)), test_losses, label=f'validation loss {last_value(test_losses)}', c='#00BFFF')
-
-    line_train_acc, = ax1.plot(list(range(epochs)), train_acc, label=f'train acc {last_value(train_acc)}', c='r')
-    line_test_acc, = ax1.plot(list(range(epochs)), test_acc, label=f'validation acc {last_value(test_acc)}', c='#FFA07A')
-        
+    # 绘制loss曲线
+    ax1_handles.append(ax1.plot(list(range(epochs)), train_losses, label=f'train loss {last_value(train_losses)}', c='b')[0])
+    # line_train_loss, = ax1.plot(list(range(epochs)), train_losses, label=f'train loss {last_value(train_losses)}', c='b')
+    ax1_handles.append(ax1.plot(list(range(epochs)), test_losses, label=f'validation loss {last_value(test_losses)}', c='#00BFFF')[0])
+    # line_test_loss, = ax1.plot(list(range(epochs)), test_losses, label=f'validation loss {last_value(test_losses)}', c='#00BFFF')
     # 标记损失最低点
-    train_loss_min = ax1.scatter(min_train_x, min_train_loss, c='b',
-                label=f'train loss min: {min_train_loss:.4f}')
-    test_loss_min = ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',
-                label=f'validation loss min: {min_test_loss:.4f}')
+    ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}')[0])
+    # train_loss_min = ax1.scatter(min_train_x, min_train_loss, c='b',
+    #             label=f'train loss min: {min_train_loss:.4f}')
+    ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}')[0])
+    # test_loss_min = ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',
+    #             label=f'validation loss min: {min_test_loss:.4f}')
 
-    # 标记准确率最高点
-    train_acc_max = ax1.scatter(max_train_acc_x, max_train_acc, c='r',
-                label=f'train acc max: {max_train_acc:.4f}')
-    train_val_max = ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',
-                label=f'validation acc max: {max_test_acc:.4f}')
+    if params.y_n != 1:
+        # 分类模型
+        # 计算acc最高点
+        max_train_acc = max(train_acc)
+        max_test_acc = max(test_acc)
+        max_train_acc_x = train_acc.tolist().index(max_train_acc)
+        max_test_acc_x = test_acc.tolist().index(max_test_acc)
+        # 绘制acc曲线
+        ax1_handles.append(ax1.plot(list(range(epochs)), train_acc, label=f'train acc {last_value(train_acc)}', c='r')[0])
+        # line_train_acc, = ax1.plot(list(range(epochs)), train_acc, label=f'train acc {last_value(train_acc)}', c='r')
+        ax1_handles.append(ax1.plot(list(range(epochs)), test_acc, label=f'validation acc {last_value(test_acc)}', c='#FFA07A')[0])
+        # line_test_acc, = ax1.plot(list(range(epochs)), test_acc, label=f'validation acc {last_value(test_acc)}', c='#FFA07A')
+        # 标记准确率最高点
+        ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='r',label=f'train acc max: {max_train_acc:.4f}'))
+        # train_acc_max = ax1.scatter(max_train_acc_x, max_train_acc, c='r',label=f'train acc max: {max_train_acc:.4f}')
+        ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}'))
+        # train_val_max = ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}')
+    else:
+        # 回归模型
+        # 计算r2最高点
+        max_train_r2 = max(train_r2s)
+        max_test_r2 = max(test_r2s)
+        max_train_r2_x = train_r2s.tolist().index(max_train_r2)
+        max_test_r2_x = test_r2s.tolist().index(max_test_r2)
+        # 绘制r2曲线
+        ax1_handles.append(ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')[0])
+        # line_train_r2, = ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')
+        ax1_handles.append(ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')[0])
+        # line_test_r2, = ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')
+        # 标记r2最高点
+        ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}'))
+        # train_r2_max = ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}')
+        ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}'))
+        # test_r2_max = ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}')
 
     # 创建右侧坐标轴
     ax2 = ax1.twinx()
@@ -205,7 +237,7 @@ def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_sc
     line_lr, = ax2.plot(list(range(epochs)), lrs, label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
 
     # 添加图例
-    ax1.legend(handles=[line_train_loss, line_test_loss, line_train_acc, line_test_acc, train_loss_min, test_loss_min, train_acc_max, train_val_max])
+    ax1.legend(handles=ax1_handles)
     # ax2.legend(handles=[line_lr], loc='upper left')
 
     # 显示横向和纵向的格线
@@ -213,14 +245,16 @@ def plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_sc
     ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
 
     # 图2
-    t2_handles = []
-    # 绘制f1曲线
-    for i in f1_scores:
-        _line, = axs[1].plot(list(range(epochs)), f1_scores[i], label=f'f1 {i} {last_value(f1_scores[i])}')
-        t2_handles.append(_line)
-    axs[1].grid(True)
-    axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
-    axs[1].legend(handles=t2_handles)
+    if params.y_n != 1:
+        # 分类模型
+        t2_handles = []
+        # 绘制f1曲线
+        for i in f1_scores:
+            _line, = axs[1].plot(list(range(epochs)), f1_scores[i], label=f'f1 {i} {last_value(f1_scores[i])}')
+            t2_handles.append(_line)
+        axs[1].grid(True)
+        axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
+        axs[1].legend(handles=t2_handles)
 
     plt.title(f'{params.train_title} | {params.describe} | {datetime.now().strftime("%Y%m%d")}          cost:{cost_hour:.2} hours')
     plt.savefig(os.path.join(params.root, f"{params.train_title}.png"))
@@ -270,6 +304,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
+    train_r2s = np.full(epochs, np.nan)
+    test_r2s = np.full(epochs, np.nan)
     train_acc = np.full(epochs, np.nan)
     test_acc = np.full(epochs, np.nan)
     lrs = np.full(epochs, np.nan)
@@ -282,6 +318,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     begin = 0
     train_loss = []
     test_loss = []
+    train_r_squared = R2Score()
+    test_r_squared = R2Score()
     train_correct = 0
     train_all = 0
     test_correct = 0
@@ -299,7 +337,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     if os.path.exists(os.path.join(params.root, 'var', f'datas.pkl')):
         wx.send_message(f'[{params.train_title}] 使用缓存文件继续训练')
         logger.debug(f"使用缓存文件继续训练")
-        train_losses, test_losses, train_acc, test_acc,lrs, f1_scores,all_targets, all_predictions, best_test_loss, best_test_epoch, begin, train_loss, test_loss, train_correct, test_correct, train_all, test_all, step_in_epoch, scaler = pickle.load(
+        train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc,lrs, f1_scores,all_targets, all_predictions, best_test_loss, best_test_epoch, begin, train_loss, test_loss, train_correct, test_correct, train_all, test_all, step_in_epoch, scaler = pickle.load(
             open(os.path.join(params.root, 'var', f'datas.pkl'), 'rb'))
 
         # logger.debug(f'train_losses: \n{train_losses}')
@@ -384,9 +422,14 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                 train_loss.append(loss.item())
 
                 with torch.no_grad():
-                    train_correct += count_correct_predictions(
-                        outputs, targets)
-                    train_all += len(targets)
+                    if params.y_n != 1:
+                        # 分类模型 统计acc
+                        train_correct += count_correct_predictions(
+                            outputs, targets)
+                        train_all += len(targets)
+                    else:
+                        # 回归模型 统计 r方
+                        train_r_squared.update(outputs, targets)
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -398,7 +441,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             train_loss = np.mean(train_loss)  # a little misleading
 
             # 缓存数据
-            pickle.dump((train_losses, test_losses, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
+            pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
@@ -432,39 +475,46 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                     test_loss.append(loss.item())
                     # logger.debug(f'test_loss: {loss.item()}')
                     
-                    test_correct += count_correct_predictions(
-                        outputs, targets)
-                    test_all += len(targets)
+                    if params.y_n != 1:
+                        # 分类模型 统计acc / f1 score
+                        test_correct += count_correct_predictions(
+                            outputs, targets)
+                        test_all += len(targets)
 
-                    # 转成概率
-                    p = torch.softmax(outputs, dim=1)
+                        # 转成概率
+                        p = torch.softmax(outputs, dim=1)
 
-                    # Get prediction
-                    # torch.max returns both max and argmax
-                    _, predictions = torch.max(p, 1)
+                        # Get prediction
+                        # torch.max returns both max and argmax
+                        _, predictions = torch.max(p, 1)
 
-                    all_targets.append(targets.cpu().numpy())
-                    all_predictions.append(predictions.cpu().numpy())
+                        all_targets.append(targets.cpu().numpy())
+                        all_predictions.append(predictions.cpu().numpy())
+                    else:
+                        # 回归模型 统计 r方
+                        test_r_squared.update(outputs, targets)
 
-            all_targets = np.concatenate(all_targets)
-            all_predictions = np.concatenate(all_predictions)
+            if params.y_n != 1:
+                # 分类模型 统计 f1 score
+                all_targets = np.concatenate(all_targets)
+                all_predictions = np.concatenate(all_predictions)
 
-            report = classification_report(
-                all_targets, all_predictions, digits=4, output_dict=True)
-            # 将分类报告转换为DataFrame
-            df_report = pd.DataFrame(report).transpose()
-            _f1_scores_dict = df_report.iloc[:-3, 2].to_dict()
-            # 存入 f1_scores
-            for i in _f1_scores_dict:
-                if i not in f1_scores:
-                    f1_scores[i] = np.full(epochs, np.nan)
-                f1_scores[i][it] = _f1_scores_dict[i]
+                report = classification_report(
+                    all_targets, all_predictions, digits=4, output_dict=True)
+                # 将分类报告转换为DataFrame
+                df_report = pd.DataFrame(report).transpose()
+                _f1_scores_dict = df_report.iloc[:-3, 2].to_dict()
+                # 存入 f1_scores
+                for i in _f1_scores_dict:
+                    if i not in f1_scores:
+                        f1_scores[i] = np.full(epochs, np.nan)
+                    f1_scores[i][it] = _f1_scores_dict[i]
 
             step_in_epoch += 1
 
             test_loss = np.mean(test_loss)
 
-            pickle.dump((train_losses, test_losses, train_acc, test_acc, lrs,f1_scores,all_targets, all_predictions,  best_test_loss, best_test_epoch, it, train_loss, test_loss,
+            pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores,all_targets, all_predictions,  best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
@@ -476,12 +526,13 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         # Save losses
         train_losses[it] = train_loss
         test_losses[it] = test_loss
-        logger.debug(
-            f'train_correct: {train_correct}, train_loader: {train_all}')
-        train_acc[it] = train_correct / train_all
 
-        logger.debug(f'test_correct: {test_correct}, test_loader: {test_all}')
-        test_acc[it] = test_correct / test_all
+        if params.y_n != 1:
+            train_acc[it] = train_correct / train_all
+            test_acc[it] = test_correct / test_all
+        else:
+            train_r2s[it] = train_r_squared.compute()
+            test_r2s[it] = test_r_squared.compute()
 
         if test_loss < best_test_loss:
             torch.save(model, os.path.join(params.root, f'best_val_model'))
@@ -505,8 +556,10 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         # 缓存数据
         train_loss = []
         test_loss = []
+        train_r_squared.reset()
+        test_r_squared.reset()
         step_in_epoch = 0
-        pickle.dump((train_losses, test_losses, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
+        pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
         pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
@@ -516,13 +569,21 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         best_idx = test_losses.tolist().index(min(test_losses))
         result_dict['train_loss'] = train_losses[best_idx]
         result_dict['val_loss'] = test_losses[best_idx]
-        result_dict['train_acc'] = train_acc[best_idx]
-        result_dict['val_acc'] = test_acc[best_idx]
-        for idx, i in enumerate(f1_scores):
-            result_dict[f'F1_{idx}'] = f1_scores[i][best_idx]
+
+        if params.y_n != 1:
+            # 分类模型 记录最佳模型的acc / f1 score
+            result_dict['train_acc'] = train_acc[best_idx]
+            result_dict['val_acc'] = test_acc[best_idx]
+
+            for idx, i in enumerate(f1_scores):
+                result_dict[f'F1_{idx}'] = f1_scores[i][best_idx]
+        else:
+            # 回归模型 记录最佳模型的 R方
+            result_dict['train_r2'] = train_r2s[best_idx]
+            result_dict['val_r2'] = test_r2s[best_idx]
 
     cost_hour = (time.time() - t) / 3600
-    plot_loss(epochs, train_losses, test_losses, train_acc, test_acc, lrs, f1_scores, cost_hour)
+    plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
     return cost_hour
 
@@ -543,6 +604,7 @@ def test_model(test_loader, result_dict, select='best'):
     # model = torch.load('best_val_model_pytorch')
     all_targets = []
     all_predictions = []
+    r2score = R2Score()
 
     with torch.no_grad():
         for inputs, targets in test_loader:
@@ -553,16 +615,22 @@ def test_model(test_loader, result_dict, select='best'):
             # Forward pass
             outputs = model(inputs)
 
-            # 转成概率
-            p = torch.softmax(outputs, dim=1)
+            if params.y_n != 1:
+                # 分类模型
+                # 转成概率
+                p = torch.softmax(outputs, dim=1)
 
-            # Get prediction
-            # torch.max returns both max and argmax
-            _, predictions = torch.max(p, 1)
+                # Get prediction
+                # torch.max returns both max and argmax
+                _, predictions = torch.max(p, 1)
+                all_predictions.append(predictions.cpu().numpy())
+            else:
+                # 回归模型 统计 r方
+                r2score.update(outputs, targets)
+                all_predictions.append(outputs.cpu().numpy())
 
             all_targets.append(targets.cpu().numpy())
-            all_predictions.append(predictions.cpu().numpy())
-
+            
     all_targets = np.concatenate(all_targets)
     all_predictions = np.concatenate(all_predictions)
     ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
@@ -587,27 +655,37 @@ def test_model(test_loader, result_dict, select='best'):
             for timestamp, target, pre,  in data_list:
                 f.write(f'{timestamp},{target},{pre}\n')
 
-    logger.debug(
-        f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
-    report = classification_report(
-        all_targets, all_predictions, digits=4, output_dict=True)
-    # 将分类报告转换为DataFrame
-    df = pd.DataFrame(report).transpose()
-    logger.debug(f'测试结果:\n{df}')
-    
-    # 储存测试acc
-    result_dict['test_acc'] = df.iloc[-3, -1]
+    if params.y_n != 1:
+        # 分类模型
+        logger.debug(
+            f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
+        report = classification_report(
+            all_targets, all_predictions, digits=4, output_dict=True)
+        # 将分类报告转换为DataFrame
+        df = pd.DataFrame(report).transpose()
+        logger.debug(f'测试结果:\n{df}')
+        
+        # 储存测试acc
+        result_dict['test_acc'] = df.iloc[-3, -1]
 
-    # 储存平均f1
-    result_dict['wa_f1'] = df.iloc[-1, -2]
+        # 储存平均f1
+        result_dict['wa_f1'] = df.iloc[-1, -2]
 
-    _f1_scores_dict = df.iloc[:-3, 2].to_dict()
-    # 存入 result_dict
-    for idx, i in enumerate(_f1_scores_dict):
-        result_dict[f'test_f1_{idx}'] = _f1_scores_dict[i]
+        _f1_scores_dict = df.iloc[:-3, 2].to_dict()
+        # 存入 result_dict
+        for idx, i in enumerate(_f1_scores_dict):
+            result_dict[f'test_f1_{idx}'] = _f1_scores_dict[i]
 
-    dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
+        dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
+    else:
+        # 回归模型 统计 R2, MSE, RMSE
+        r2 = r2score.compute()
+        mse = mean_squared_error(all_targets, all_predictions)
+        rmse = torch.sqrt(mse)
 
+        result_dict['test_r2'] = r2
+        result_dict['test_mse'] = mse
+        result_dict['test_rmse'] = rmse
 
 def test_ps(data_loader, ps):
     """
@@ -662,7 +740,6 @@ def test_ps(data_loader, ps):
     logger.debug(f'\n{df}')
     # dfi.export(df, 'pic.png', table_conversion="matplotlib")
     # wx.send_file("pic.png")
-
 
 def plot_roc(data_loader):
     """
@@ -740,7 +817,7 @@ class trainer:
 
     @classmethod
     def data_parm2str(cls, parm):
-        return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['taget'].replace(' ', '')}"
+        return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
 
     @classmethod
     def data_str2parm(cls, s):
@@ -754,7 +831,7 @@ class trainer:
             'data_rate': tuple([int(i) for i in p[11].split('@')]),
             'total_hours': int(p[13]),
             'symbols': p[15],
-            'taget': p[17]
+            'target': p[17]
         }
 
     def test_data(self):
@@ -766,7 +843,7 @@ class trainer:
             'data_rate': (1, 1, 1),
             'total_hours': int(3),
             'symbols': 1,
-            'taget': 'same paper'
+            'target': 'same paper'
         }
 
         return data_parm
@@ -791,28 +868,39 @@ class trainer:
 
         await download_dataset_async(session, real_data_set)
 
-    def train(self):
+    def train(self, only_test=False):
         try:
             t0 = datetime.now()
-            wx.send_message(f'[{params.train_title}] 开始训练')
+            if not only_test:
+                wx.send_message(f'[{params.train_title}] 开始训练')
 
-            ### 训练
-            ## 获取数据
-            train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1 if self.debug else 10000)
-            val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1 if self.debug else 10000)
-            assert len(train_loader) > 0, "没有训练数据"
-            assert len(val_loader) > 0, "没有验证数据"
+                ### 训练
+                ## 获取数据
+                train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1 if self.debug else 10000)
+                val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1 if self.debug else 10000)
+                assert len(train_loader) > 0, "没有训练数据"
+                assert len(val_loader) > 0, "没有验证数据"
 
-            ## 模型
-            _model = params.model.to(params.device)
-            if torch.cuda.device_count() > 1:
-                logger.debug("使用多gpu")
-                _model = nn.DataParallel(_model)
-            # 损失函数
-            criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
-            optimizer_class = torch.optim.AdamW
-            # 训练
-            cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
+                ## 模型
+                _model = params.model.to(params.device)
+                if torch.cuda.device_count() > 1:
+                    logger.debug("使用多gpu")
+                    _model = nn.DataParallel(_model)
+
+                # 损失函数
+                criterion = None
+                if params.y_n != 1:
+                    # 分类模型
+                    criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
+                else:
+                    # 回归模型
+                    criterion = nn.MSELoss()
+
+                # 优化器
+                optimizer_class = torch.optim.AdamW
+
+                # 训练
+                cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
             ## 测试模型
             test_loader = read_data(os.path.join(params.root, 'data'), 'test', need_id=True)

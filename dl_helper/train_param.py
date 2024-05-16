@@ -95,6 +95,8 @@ class Params:
   increase_ratio=0.2
 
   data_set = ''
+  y_n = 0
+  regress_y_idx = 0
 
   # 模型
   model = None
@@ -103,7 +105,7 @@ params = Params()
 
 def init_param(
     _train_title, _root,
-    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_scale, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _model,
+    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_scale, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _regress_y_idx, _model,
     _describe=''
 
 ):
@@ -126,8 +128,13 @@ def init_param(
     params.init_learning_ratio = _init_learning_ratio
     params.increase_ratio = _increase_ratio
     params.data_set = _data_set
+    params.regress_y_idx = _regress_y_idx
     params.model = _model
     params.describe = _describe
+
+    # y_n
+    # pred_5_pass_100_y_3_bd_2024_05
+    params.y_n = int(params.data_set.split('_')[5])
 
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)
