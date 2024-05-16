@@ -48,7 +48,7 @@ class trainer(trainer_base):
             'data_rate': (7, 2, 3),
             'total_hours': int(24*day),
             'symbols': '@'.join(symbols),
-            'taget': 'same paper'
+            'target': 'same paper'
         }
 
         model = m_mobilenet_v2(data_parm['y_n'], alpha=0.5)
