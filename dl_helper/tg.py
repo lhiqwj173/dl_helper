@@ -334,6 +334,7 @@ def progress_cb(current, total):
         t = 0
 
 async def _download_dataset(client, dataset_name):
+    """ 返回成功/失败 """
     # channel name
     name = 'dl_dataset'
     entity = None
@@ -368,16 +369,18 @@ async def _download_dataset(client, dataset_name):
 
         # 解压文件
         decompress(_file)
-        return
+        return True
 
     print(f"Files: {files}")
     print(f"no match: {dataset_name}")
+    return False
 
 async def download_dataset_async(session, dataset_name):
+    """ 返回成功/失败 """
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
-        await _download_dataset(client, dataset_name)
+        return await _download_dataset(client, dataset_name)
 
 def download_dataset(session, dataset_name):
     # 创建客户端

@@ -606,6 +606,7 @@ def test_model(test_loader, result_dict, select='best'):
     all_predictions = []
     r2score = R2Score()
 
+    logger.debug(f'测试模型')
     with torch.no_grad():
         for inputs, targets in test_loader:
             # Move to GPU
@@ -817,21 +818,29 @@ class trainer:
 
     @classmethod
     def data_parm2str(cls, parm):
-        return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
+        # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
+        parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['taget'].replace(' ', '')}"
+
+        # 新增加数据参数，为了匹配之前的数据名称，默认4h，不进行编码
+        if 'std_mode' in parm and parm['std_mode'] != '4h':
+            parmstr += f"_std_{parm['std_mode']}"
+
+        return parmstr
 
     @classmethod
     def data_str2parm(cls, s):
         s = s.split('.')[0]
         p = s.split('_')
         return {
-            'predict_n': int(p[1]),
+            'predict_n': int(p[1]) if '@' not in p[1] else [int(i) for i in p[1].split('@')],
             'pass_n': int(p[3]),
             'y_n': int(p[5]),
             'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
             'data_rate': tuple([int(i) for i in p[11].split('@')]),
             'total_hours': int(p[13]),
             'symbols': p[15],
-            'target': p[17]
+            'target': p[17],
+            'std_mode': p[18]  # 4h/1d/5d
         }
 
     def test_data(self):
@@ -858,15 +867,20 @@ class trainer:
 
         # params.data_set: pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         # 替换 pass_40 -> pass_100
-        # 都使用 pass_100 的数据, 在Dataset中按需截取
+        # 都使用 pass_100/pass_155 的数据, 在Dataset中按需截取
         params_data_set = params.data_set.split('_y_')
-        real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + "_100_y_" + params_data_set[1]
+        for i in ['100', '105','155']:
+            real_data_set = '_'.join(params_data_set[0].split('_')[:-1]) + f"_{i}_y_" + params_data_set[1]
 
-        # data 映射, 有些文件名太长，tg无法显示
-        if real_data_set in DATA_MAP:
-            real_data_set = DATA_MAP[real_data_set]
+            # data 映射, 有些文件名太长，tg无法显示
+            if real_data_set in DATA_MAP:
+                real_data_set = DATA_MAP[real_data_set]
 
-        await download_dataset_async(session, real_data_set)
+            ret = await download_dataset_async(session, real_data_set)
+            if ret:
+                return
+                
+        raise '下载数据集失败'
 
     def train(self, only_test=False):
         try:

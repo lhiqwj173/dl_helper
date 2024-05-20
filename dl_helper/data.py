@@ -7,11 +7,15 @@ import random
 
 from .train_param import params, logger
 
-# 随机遮挡行, 较早的数据向后平移填充
+# 随机选择 max_mask_num 的行数
+# 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 100
 def random_mask_row(tensor, begin, end, mask_prob=0.01, max_mask_num=5):
     need_length = end-begin
     assert need_length+max_mask_num <= tensor.shape[1]
+
+    # 随机选择 max_mask_num 行
+    
 
     # 选择随机的行删除
     mask = torch.rand(need_length) < torch.rand(1)*mask_prob
