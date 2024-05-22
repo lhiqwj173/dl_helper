@@ -447,6 +447,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
             ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
+            # 打包文件
+            pack_folder()
+
         torch.cuda.empty_cache()
         logger.debug(f'{msg}训练完成')
         # logger.debug(f'{msg}训练完成\ntrain_loss: {train_loss}')
@@ -519,6 +522,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
             ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            
+            # 打包文件
+            pack_folder()
 
         torch.cuda.empty_cache()
         logger.debug(f'{msg}验证完成')
@@ -564,6 +570,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
         pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
         ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            
+        # 打包文件
+        pack_folder()
 
         # 更新最佳数据
         best_idx = test_losses.tolist().index(min(test_losses))
@@ -816,6 +825,16 @@ def plot_roc(data_loader):
 
     return bests
 
+def pack_folder():
+    # 打包训练文件夹 zip 
+    file = params.root+".7z"
+
+    if os.path.exists(file):
+        # 删除
+        os.remove(file)
+
+    compress_folder(params.root, file, 9)
+
 class trainer:
     def __init__(self, idx, debug=False):
         self.idx = idx
@@ -875,8 +894,8 @@ class trainer:
 
                 ### 训练
                 ## 获取数据
-                train_loader = read_data(os.path.join(params.root, 'data'), 'train', max_num=1 if self.debug else 10000)
-                val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1 if self.debug else 10000)
+                train_loader = read_data('./data', 'train', max_num=1 if self.debug else 10000)
+                val_loader = read_data('./data', 'val', max_num=1 if self.debug else 10000)
                 assert len(train_loader) > 0, "没有训练数据"
                 assert len(val_loader) > 0, "没有验证数据"
 
@@ -902,7 +921,7 @@ class trainer:
                 cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
             ## 测试模型
-            test_loader = read_data(os.path.join(params.root, 'data'), 'test', need_id=True)
+            test_loader = read_data('./data', 'test', need_id=True)
             test_model(test_loader, self.result_dict)
 
             ## 记录结果
@@ -959,8 +978,8 @@ class trainer:
             logger.debug(msg)
             wx.send_message(msg)
 
-            # 打包训练文件夹 zip 
-            compress_folder(params.root, params.root+".7z", 9)
+            # 打包文件
+            pack_folder()
 
             # 发送到ex
             wx.send_file(params.root+".7z")

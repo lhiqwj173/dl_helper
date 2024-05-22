@@ -361,8 +361,8 @@ async def _download_dataset(client, dataset_name):
         print(f"File Size: {message.file.size}")
 
         # 下载文件
-        os.makedirs(os.path.join(params.root, 'data'), exist_ok=True)
-        _file = os.path.join(params.root, 'data', message.file.name)
+        os.makedirs(os.path.join('./data'), exist_ok=True)
+        _file = os.path.join('./data', message.file.name)
         print(f"download: {_file}")
         with open(_file, "wb") as out:
             await download_file(client, message.document, out, progress_callback=progress_cb)
