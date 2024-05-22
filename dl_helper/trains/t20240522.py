@@ -19,7 +19,7 @@ class trainer(trainer_base):
     试验结果作为基线性能
     predict_n = 10
     """
-    def init_param(self):
+    def init_param(self, data_folder=''):
         print('init_param')
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
@@ -32,7 +32,7 @@ class trainer(trainer_base):
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*3),
+            'total_hours': int(24*10),
             'symbols': '@'.join(symbols),
             'taget': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
@@ -48,6 +48,8 @@ class trainer(trainer_base):
 
             # 3分类
             y_n=y_n, classify_y_idx=0,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
+
+            data_folder=data_folder,
 
             describe='predict_n=10'
         )

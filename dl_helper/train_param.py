@@ -128,6 +128,8 @@ class Params:
   # 模型
   model = None
 
+  data_folder = ''
+
 params = Params()
 
 def init_param(
@@ -147,6 +149,9 @@ def init_param(
     # 使用回归数据集参数
     y_n=1,regress_y_idx=-1,classify_y_idx=-1,classify_func=None,
     
+    # 数据集路径
+    data_folder = '',
+
     describe=''
 
 ):
@@ -176,6 +181,8 @@ def init_param(
     params.model = model
     params.describe = describe
     params.y_n = y_n
+
+    params.data_folder = data_folder if data_folder else './data'
 
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)
