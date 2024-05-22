@@ -33,8 +33,8 @@ from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
 from .tg import download_dataset_async
-from .train_param import init_param, logger, params
-from .data import read_data, data_parm2str, data_str2parm
+from .train_param import init_param, logger, params, data_parm2str, data_str2parm
+from .data import read_data
 from .data_map import DATA_MAP
 
 # 设置启动方法为'spawn'

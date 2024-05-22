@@ -7,34 +7,9 @@ import torch
 import random
 import datetime
 
-from .train_param import params, logger
+from .train_param import params, logger, data_parm2str, data_str2parm
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
-
-def data_parm2str(parm):
-    # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
-    parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['taget'].replace(' ', '')}"
-
-    # 新增加数据参数，为了匹配之前的数据名称，默认4h，不进行编码
-    if 'std_mode' in parm and parm['std_mode'] != '4h':
-        parmstr += f"_std_{parm['std_mode']}"
-
-    return parmstr
-
-def data_str2parm(s):
-    s = s.split('.')[0]
-    p = s.split('_')
-    return {
-        'predict_n': int(p[1]) if '@' not in p[1] else [int(i) for i in p[1].split('@')],
-        'pass_n': int(p[3]),
-        'y_n': int(p[5]),
-        'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
-        'data_rate': tuple([int(i) for i in p[11].split('@')]),
-        'total_hours': int(p[13]),
-        'symbols': p[15],
-        'target': p[17],
-        'std_mode': p[18]  # 4h/1d/5d
-    }
 
 # 随机选择 max_mask_num 的行数
 # 按照 mask_prob 的概率进行遮盖
