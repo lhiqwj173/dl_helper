@@ -22,6 +22,8 @@ class trainer(trainer_base):
     def init_param(self):
         print('init_param')
 
+        symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
+
         y_n = 3
         title = f'base_v{self.idx}'
         data_parm = {
