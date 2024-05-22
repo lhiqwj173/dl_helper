@@ -169,7 +169,7 @@ def init_param(
     params.init_learning_ratio = init_learning_ratio
     params.increase_ratio = increase_ratio
     params.data_set = data_set
-    params.data_parm = data_str2parm(_data_set)
+    params.data_parm = data_str2parm(data_set)
     params.regress_y_idx = regress_y_idx
     params.classify_y_idx = classify_y_idx
     params.classify_func = classify_func
