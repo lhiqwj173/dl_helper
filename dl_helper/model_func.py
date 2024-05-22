@@ -34,7 +34,7 @@ from py_ext.lzma import compress_folder
 
 from .tg import download_dataset_async
 from .train_param import init_param, logger, params
-from .data import read_data
+from .data import read_data, data_parm2str, data_str2parm
 from .data_map import DATA_MAP
 
 # 设置启动方法为'spawn'
@@ -606,6 +606,9 @@ def test_model(test_loader, result_dict, select='best'):
     all_predictions = []
     r2score = R2Score()
 
+    total_times = 0
+    total_counts = 0
+
     logger.debug(f'测试模型')
     with torch.no_grad():
         for inputs, targets in test_loader:
@@ -613,8 +616,13 @@ def test_model(test_loader, result_dict, select='best'):
             inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                 params.device, dtype=torch.int64)
 
+            t0 = time.time()
             # Forward pass
             outputs = model(inputs)
+
+            # 记录耗时
+            total_times += time.time() - t0
+            total_counts += len(targets)
 
             if params.y_n != 1:
                 # 分类模型
@@ -687,6 +695,9 @@ def test_model(test_loader, result_dict, select='best'):
         result_dict['test_r2'] = r2
         result_dict['test_mse'] = mse
         result_dict['test_rmse'] = rmse
+
+    # 记录预测平均耗时 ms 
+    result_dict['predict_cost'] = (total_times / total_counts) * 1000
 
 def test_ps(data_loader, ps):
     """
@@ -816,33 +827,6 @@ class trainer:
         # 训练结果
         self.result_dict = {}
 
-    @classmethod
-    def data_parm2str(cls, parm):
-        # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
-        parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['taget'].replace(' ', '')}"
-
-        # 新增加数据参数，为了匹配之前的数据名称，默认4h，不进行编码
-        if 'std_mode' in parm and parm['std_mode'] != '4h':
-            parmstr += f"_std_{parm['std_mode']}"
-
-        return parmstr
-
-    @classmethod
-    def data_str2parm(cls, s):
-        s = s.split('.')[0]
-        p = s.split('_')
-        return {
-            'predict_n': int(p[1]) if '@' not in p[1] else [int(i) for i in p[1].split('@')],
-            'pass_n': int(p[3]),
-            'y_n': int(p[5]),
-            'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
-            'data_rate': tuple([int(i) for i in p[11].split('@')]),
-            'total_hours': int(p[13]),
-            'symbols': p[15],
-            'target': p[17],
-            'std_mode': p[18]  # 4h/1d/5d
-        }
-
     def test_data(self):
         data_parm = {
             'predict_n': 5,
@@ -852,7 +836,8 @@ class trainer:
             'data_rate': (1, 1, 1),
             'total_hours': int(3),
             'symbols': 1,
-            'target': 'same paper'
+            'target': 'same paper',
+            'std_mode': '4h'  # 4h/1d/5d
         }
 
         return data_parm
@@ -863,7 +848,7 @@ class trainer:
     async def download_dataset_async(self, session):
         if self.debug:
             # 测试 使用最小数据
-            params.data_set = f'{self.data_parm2str(self.test_data())}.7z'
+            params.data_set = f'{data_parm2str(self.test_data())}.7z'
 
         # params.data_set: pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         # 替换 pass_40 -> pass_100
@@ -890,7 +875,7 @@ class trainer:
 
                 ### 训练
                 ## 获取数据
-                train_loader = read_data(os.path.join(params.root, 'data'), 'train', shuffle=True, max_num=1 if self.debug else 10000)
+                train_loader = read_data(os.path.join(params.root, 'data'), 'train', max_num=1 if self.debug else 10000)
                 val_loader = read_data(os.path.join(params.root, 'data'), 'val', max_num=1 if self.debug else 10000)
                 assert len(train_loader) > 0, "没有训练数据"
                 assert len(val_loader) > 0, "没有验证数据"
@@ -922,6 +907,12 @@ class trainer:
 
             ## 记录结果
             result_file = os.path.join(params.root, 'result.csv')
+
+            # 数据参数
+            data_dict =  data_str2parm(params.data_set)
+            data_dict['y_n'] = params.y_n
+            data_dict['regress_y_idx'] = params.regress_y_idx
+            data_dict['classify_y_idx'] = params.classify_y_idx
             if not os.path.exists(result_file):
                 # 初始化列名
                 with open(result_file, 'w') as f:
@@ -929,7 +920,6 @@ class trainer:
                     f.write('time,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_scale,random_mask_row,amp,label_smoothing,weight_decay,,')
 
                     # 数据参数
-                    data_dict =  self.data_str2parm(params.data_set)
                     for i in data_dict:
                         f.write(f'{i},')
 
@@ -947,7 +937,6 @@ class trainer:
                 f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_scale},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                 # 数据参数
-                data_dict =  self.data_str2parm(params.data_set)
                 for i in data_dict:
                     if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
                         f.write(f'{"@".join([str(i) for i in data_dict[i]])},')

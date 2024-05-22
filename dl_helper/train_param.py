@@ -26,8 +26,7 @@ import torch
 from datetime import datetime
 import multiprocessing
 import os
-
-
+from .data import data_parm2str, data_str2parm
 
 # 日志
 from loguru import logger as _logger
@@ -95,8 +94,12 @@ class Params:
   increase_ratio=0.2
 
   data_set = ''
+  data_parm = None
   y_n = 0
-  regress_y_idx = 0
+
+  regress_y_idx = -1
+  classify_y_idx = -1
+  classify_func = None
 
   # 模型
   model = None
@@ -104,37 +107,51 @@ class Params:
 params = Params()
 
 def init_param(
-    _train_title, _root,
-    _epochs, _batch_size, _learning_rate, _warm_up_epochs, _no_better_stop, _random_mask, _random_scale, _random_mask_row, _amp, _label_smoothing, _weight_decay, _init_learning_ratio, _increase_ratio, _data_set, _regress_y_idx, _model,
-    _describe=''
+    train_title, root, model, data_set,
+
+    # 训练参数
+    learning_rate, batch_size, 
+    epochs=100, warm_up_epochs=3, 
+    no_better_stop=20,amp=False, label_smoothing=0.1, weight_decay=0.01, 
+
+    # 数据增强
+    random_mask=0, random_scale=0, random_mask_row=0, 
+
+    # 测试最优学习率
+    init_learning_ratio = 0, increase_ratio = 0.2, 
+
+    # 使用回归数据集参数
+    y_n=1,regress_y_idx=-1,classify_y_idx=-1,classify_func=None,
+    
+    describe=''
 
 ):
     global params
 
-    params.train_title = _train_title
-    params.root = _root
+    params.train_title = train_title
+    params.root = root
 
-    params.epochs = _epochs
-    params.batch_size = _batch_size
-    params.learning_rate = _learning_rate
-    params.warm_up_epochs = _warm_up_epochs
-    params.no_better_stop = _no_better_stop
-    params.random_mask = _random_mask
-    params.random_scale = _random_scale
-    params.random_mask_row = _random_mask_row
-    params.amp = _amp
-    params.label_smoothing = _label_smoothing
-    params.weight_decay = _weight_decay
-    params.init_learning_ratio = _init_learning_ratio
-    params.increase_ratio = _increase_ratio
-    params.data_set = _data_set
-    params.regress_y_idx = _regress_y_idx
-    params.model = _model
-    params.describe = _describe
-
-    # y_n
-    # pred_5_pass_100_y_3_bd_2024_05
-    params.y_n = int(params.data_set.split('_')[5])
+    params.epochs = epochs
+    params.batch_size = batch_size
+    params.learning_rate = learning_rate
+    params.warm_up_epochs = warm_up_epochs
+    params.no_better_stop = no_better_stop
+    params.random_mask = random_mask
+    params.random_scale = random_scale
+    params.random_mask_row = random_mask_row
+    params.amp = amp
+    params.label_smoothing = label_smoothing
+    params.weight_decay = weight_decay
+    params.init_learning_ratio = init_learning_ratio
+    params.increase_ratio = increase_ratio
+    params.data_set = data_set
+    params.data_parm = data_str2parm(_data_set)
+    params.regress_y_idx = regress_y_idx
+    params.classify_y_idx = classify_y_idx
+    params.classify_func = classify_func
+    params.model = model
+    params.describe = describe
+    params.y_n = y_n
 
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)

@@ -1,0 +1,51 @@
+from functools import partial
+
+from ..model_func import trainer as trainer_base
+from ..train_param import init_param
+from ..models.mobilenet import m_mobilenet_v2
+from ..data import data_parm2str
+
+class trainer(trainer_base):
+    """
+    使用0501新数据
+    启用数据增强:
+    random_scale=0.01
+    random_mask_row=0.5
+
+    batch size = 64
+    lr=0.0001
+    alpha = 0.5
+    
+    试验结果作为基线性能
+    predict_n = 10
+    """
+    def init_param(self):
+        print('init_param')
+
+        y_n = 3
+        title = f'base_v{self.idx}'
+        data_parm = {
+            'predict_n': [10, 20, 30, 40, 50, 60],
+            'pass_n': 100,
+            'y_n': 1,
+            'begin_date': '2024-04-27',
+            'data_rate': (7, 2, 3),
+            'total_hours': int(24*10),
+            'symbols': '@'.join(symbols),
+            'taget': 'same paper',
+            'std_mode': '1d'  # 4h/1d/5d
+        }
+
+        model = m_mobilenet_v2(y_n, use_trade_data=False, stem_type='stem_same_channel')
+        init_param(
+            train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
+            learning_rate=0.0001, batch_size=64, 
+
+            # 数据增强
+            random_scale=0.01, random_mask_row=0.5,
+
+            # 3分类
+            y_n=y_n, classify_y_idx=0,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
+
+            describe='predict_n=10'
+        )

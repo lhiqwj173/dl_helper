@@ -1,40 +1,67 @@
+import pytz
 import os
 import pickle
 import numpy as np
 import pandas as pd
 import torch
 import random
+import datetime
 
 from .train_param import params, logger
+
+tz_beijing = pytz.timezone('Asia/Shanghai')
+
+def data_parm2str(parm):
+    # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
+    parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['taget'].replace(' ', '')}"
+
+    # 新增加数据参数，为了匹配之前的数据名称，默认4h，不进行编码
+    if 'std_mode' in parm and parm['std_mode'] != '4h':
+        parmstr += f"_std_{parm['std_mode']}"
+
+    return parmstr
+
+def data_str2parm(s):
+    s = s.split('.')[0]
+    p = s.split('_')
+    return {
+        'predict_n': int(p[1]) if '@' not in p[1] else [int(i) for i in p[1].split('@')],
+        'pass_n': int(p[3]),
+        'y_n': int(p[5]),
+        'begin_date': f'{p[7]}-{p[8]}-{p[9]}',
+        'data_rate': tuple([int(i) for i in p[11].split('@')]),
+        'total_hours': int(p[13]),
+        'symbols': p[15],
+        'target': p[17],
+        'std_mode': p[18]  # 4h/1d/5d
+    }
 
 # 随机选择 max_mask_num 的行数
 # 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 100
-def random_mask_row(tensor, begin, end, mask_prob=0.01, max_mask_num=5):
+def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     need_length = end-begin
     assert need_length+max_mask_num <= tensor.shape[1]
 
     # 随机选择 max_mask_num 行
-    
+    rows = random.sample(range(need_length), max_mask_num)
 
     # 选择随机的行删除
-    mask = torch.rand(need_length) < torch.rand(1)*mask_prob
-    del_count = torch.sum(mask).item()
-    while del_count > max_mask_num:
-        mask = torch.rand(need_length) < torch.rand(1) * mask_prob
-        del_count = torch.sum(mask).item()
+    rows_mask = torch.rand(max_mask_num) < mask_prob
+    del_count = torch.sum(rows_mask).item()
 
     # print(f"删除行数: {del_count}")
     if del_count == 0:
         # 不需要删除
         return tensor[:, begin:end, :].clone()
 
+    print(f'del_count: {del_count}')
+    mask = torch.zeros(need_length+del_count, dtype=torch.bool)
+    mask[[i+del_count for i in rows]] = rows_mask
+
     # 需要删除
     # 在行起始位置补充
     begin -= del_count
-
-    # 向前扩充
-    mask = torch.cat([torch.zeros(del_count, dtype=torch.bool), mask], dim=0)
 
     # 切片
     data = tensor[:, begin:end, :].clone()
@@ -44,13 +71,13 @@ def random_mask_row(tensor, begin, end, mask_prob=0.01, max_mask_num=5):
 
 # 定义随机遮挡函数
 def random_mask(tensor, mask_prob=1e-4):
-    mask = torch.rand(tensor.size()) < torch.rand(1)*mask_prob
+    mask = torch.rand(tensor.size()) < mask_prob
     tensor.masked_fill_(mask, 0)
     return tensor
 
 # 定义随机缩放函数
 def random_scale(tensor, scale_prob=0.005, min_scale=0.95, max_scale=1.05):
-    mask = torch.rand(tensor.size()) < torch.rand(1)*scale_prob
+    mask = torch.rand(tensor.size()) < scale_prob
     scale = torch.rand(1)*(max_scale-min_scale)+min_scale
     tensor.masked_fill_(mask, tensor*scale)
     return tensor
@@ -123,7 +150,7 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=0):
+    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True):
         """Initialization"""
 
         # 原始数据
@@ -134,14 +161,48 @@ class Dataset(torch.utils.data.Dataset):
         # 针对回归数据集, y可能为一个列表
         # regress_y_idx
         if isinstance(y[0], list):
-            y = [i[regress_y_idx] for i in y]
-            # y 可能为nan
-            idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
-            # 过滤nan
-            y = [y[i] for i in idxs]
-            x = [x[i] for i in idxs]
-            mean_std = [mean_std[i] for i in idxs]
-            ids = [ids[i] for i in idxs]
+            if regress_y_idx != -1:
+                y = [i[regress_y_idx] for i in y]
+                # y 可能为nan
+                idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
+                # 过滤nan
+                y = [y[i] for i in idxs]
+                x = [x[i] for i in idxs]
+                mean_std = [mean_std[i] for i in idxs]
+                ids = [ids[i] for i in idxs]
+            elif classify_y_idx!=1:
+                y = [i[regress_y_idx] for i in y]
+                if None is classify_func:
+                    raise "pls set classify_func to split class"
+                y = [classify_func(i) for i in y]
+
+                # 训练集 数据平衡
+                if train:
+                    labels = set(y)
+                    sy = pd.Series(y)
+                    min_num = sy.value_counts().min()
+                    logger.debug(f'min_num: {min_num}')
+
+                    idx = []
+                    for label in labels:
+                        origin_idx = sy[sy == label].index
+
+                        if len(origin_idx) > min_num:
+                            idx += np.random.choice(origin_idx,
+                                                    min_num, replace=False).tolist()
+                        else:
+                            idx += origin_idx.tolist()
+
+                    # 排序
+                    idx.sort()
+
+                    logger.debug(f'reindex')
+                    ids = [ids[i] for i in idx]
+                    x = [x[i] for i in idx]
+                    y = [y[i] for i in idx]
+                    mean_std = [mean_std[i] for i in idx]
+            else:
+                raise "regress_y_idx/classify_y_idx no set"
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
@@ -188,7 +249,7 @@ class Dataset(torch.utils.data.Dataset):
             a += (ab_length-self.time_length)
 
         # 获取切片
-        if params.random_mask_row>0:
+        if train and params.random_mask_row>0:
             # 随机删除行，保持行数不变
             x = random_mask_row(x, a, b, params.random_mask_row)
         else:
@@ -209,11 +270,11 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] /= mean_std[:, 1]
 
         # 随机mask
-        if params.random_mask>0:
+        if train and params.random_mask>0:
             x = random_mask(x, params.random_mask)
 
         # 随机缩放
-        if params.random_scale>0:
+        if train and params.random_scale>0:
             x = random_scale(x, params.random_scale)
 
         # return x, (self.y[index], self.ids[index])
@@ -252,16 +313,45 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     return ids, price_mean_std, test_x, test_y, test_raw
 
-def read_data(data_path, _type, reblance=False, shuffle=False, max_num=10000, head_n=0, pct=100, need_id=False):
+def read_data(data_path, _type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=False):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
 
+    # 数据集参数
+    target_parm = params.data_parm
+
     # 获取数据分段
     files = []
-    for file in os.listdir(data_path):
-        if _type in file:
+    if target_parm['y_n'] > 1:
+        # 分类数据集
+        for file in os.listdir(data_path):
+            if _type in file:
+                files.append(file)
+        files.sort()
+    else:
+        # 回归数据集
+        # 起始时间
+        date = target_parm['begin_date']
+        dt = tz_beijing.localize(
+            datetime.datetime.strptime(date, '%Y-%m-%d'))
+
+        # 初始化个部分的 begin end
+        _rate_sum = sum(target_parm['data_rate'])
+        idx = 0 if _type=='train' else 1 if _type=='val' else 2
+
+        begin_hour = 0
+        for i in range(idx):
+            begin_hour = int(target_parm['total_hours'] * (target_parm['data_rate'][i] / _rate_sum))
+        begin_dt = dt + datetime.timedelta(hours=begin_hour)
+
+        rate = target_parm['data_rate'][idx] / _rate_sum
+        hours = int(target_parm['total_hours'] * rate)# 使用时长
+
+        for i in range(hours // 2):
+            _dt = begin_dt + datetime.timedelta(hours=i*2)
+            file = f'{datetime.datetime.strftime(_dt, "%Y%m%d_%H")}.pkl'
             files.append(file)
-    files.sort()
+
     logger.debug(f'{files}')
 
     # 读取分段合并
@@ -304,11 +394,11 @@ def read_data(data_path, _type, reblance=False, shuffle=False, max_num=10000, he
 
     if not need_id:
         ids = []
-    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx)
+    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train')
     del ids, x, y, raw
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
-        params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=shuffle), num_workers=params.workers, pin_memory=True if params.workers>0 else False)
+        params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False)
     del dataset_test
 
     return data_loader

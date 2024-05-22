@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .stem import stem
+from .stem import stem, stem_same_channel
 
 """
 Total params: 605,456
@@ -129,11 +129,21 @@ Total params: 765,761
 FLOPs: 5.89M
 """
 class m_mobilenet_v2(nn.Module):
-    def __init__(self, y_len, alpha=0.4, stem_alpha=1.0, round_nearest=8, use_trade_data=True, use_pk_data=True):
+    """
+    stem_type :
+        stem / stem_same_channel
+    """
+    def __init__(self, y_len, alpha=0.4, stem_alpha=1.0, round_nearest=8, use_trade_data=True, use_pk_data=True, stem_type='stem'):
         super().__init__()
 
         # 合并特征
-        self.stem = stem(use_trade_data,use_pk_data, stem_alpha, normal='bn')
+        self.stem =None
+        if stem_type == 'stem':
+            self.stem = stem(use_trade_data,use_pk_data, stem_alpha, normal='bn')
+        elif stem_type == 'stem_same_channel':
+            self.stem = stem_same_channel(use_trade_data,use_pk_data, stem_alpha, normal='bn')
+        else:
+            raise 'unknow stem_type'
 
         block = InvertedResidual
         input_channel = self.stem.out_channel          
@@ -205,7 +215,7 @@ if __name__ == "__main__":
     device = 'cuda'
 
     # model = m_mobilenet(y_len=3, use_trade_data=False)
-    model = m_mobilenet_v2(y_len=3, alpha=0.4, use_trade_data=True)
+    model = m_mobilenet_v2(y_len=3, use_trade_data=False, stem_type='stem_same_channel')
     print(model.model_name())
     print(model)
 
