@@ -894,8 +894,8 @@ class trainer:
 
                 ### 训练
                 ## 获取数据
-                train_loader = read_data('./data', 'train', max_num=1 if self.debug else 10000)
-                val_loader = read_data('./data', 'val', max_num=1 if self.debug else 10000)
+                train_loader = read_data('train', max_num=1 if self.debug else 10000)
+                val_loader = read_data('val', max_num=1 if self.debug else 10000)
                 assert len(train_loader) > 0, "没有训练数据"
                 assert len(val_loader) > 0, "没有验证数据"
 
@@ -921,7 +921,7 @@ class trainer:
                 cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
             ## 测试模型
-            test_loader = read_data('./data', 'test', need_id=True)
+            test_loader = read_data('test', need_id=True)
             test_model(test_loader, self.result_dict)
 
             ## 记录结果

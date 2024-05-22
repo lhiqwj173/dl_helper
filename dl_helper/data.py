@@ -292,6 +292,8 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
 
+    logger.debug(f'读取 {_type} 数据')
+
     data_path = params.data_folder
 
     # 数据集参数
