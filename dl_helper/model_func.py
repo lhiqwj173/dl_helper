@@ -394,7 +394,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                 train_all = 0
 
             idx = 0
-            t0 = time.time()
+            train_last = time.time()
             for inputs, targets in tqdm(train_loader, initial=int(train_loader.sampler.idx / params.batch_size), total=len(train_loader)):
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
@@ -438,8 +438,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
                 if idx%100 == 0:
                     t1 = time.time()
-                    if t1 - t0 >= 15*60:
-                        t0 = t1
+                    if t1 - train_last >= 15*60:
+                        train_last = t1
                         
                         # 15min，缓存数据
                         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
