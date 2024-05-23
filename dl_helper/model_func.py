@@ -1007,7 +1007,6 @@ class trainer:
                 f.write(f"{cost_hour:.2f}h,{params.root}\n")
 
             # 删除数据文件
-            shutil.rmtree(os.path.join(params.root, 'data'))
             msg = f'[{params.train_title}] 训练完成, 耗时 {(datetime.now()-t0).seconds/3600:.2f} h'
             logger.debug(msg)
             wx.send_message(msg)
