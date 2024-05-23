@@ -262,7 +262,6 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
     # display.clear_output(wait=True)
     # plt.pause(0.00000001)
 
-
 def log_grad(model):
     '''Print the grad of each layer'''
     max_grad = 0
@@ -394,6 +393,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                 train_correct = 0
                 train_all = 0
 
+            idx = 0
+            t0 = time.time()
             for inputs, targets in tqdm(train_loader, initial=int(train_loader.sampler.idx / params.batch_size), total=len(train_loader)):
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
@@ -434,6 +435,23 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
                     scheduler.warn_up()
+
+                if idx%100 == 0:
+                    t1 = time.time()
+                    if t1 - t0 >= 15*60:
+                        t0 = t1
+                        
+                        # 15min，缓存数据
+                        pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
+                                    train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
+                        torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
+                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
+                        ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+
+                        # 打包文件
+                        pack_folder()
+
+                idx += 1
 
             step_in_epoch += 1
 
