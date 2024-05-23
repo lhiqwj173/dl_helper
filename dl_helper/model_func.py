@@ -887,6 +887,13 @@ class trainer:
         raise '下载数据集失败'
 
     def train(self, only_test=False):
+        if self.debug:
+            # 使用最小数据进行测试
+            params.data_parm['data_rate'] = (1,1,1)
+            params.data_parm['total_hours'] = 6
+            params.data_set = f'{data_parm2str(params.data_parm)}.7z'
+            params.epochs = 5
+
         try:
             t0 = datetime.now()
             if not only_test:
