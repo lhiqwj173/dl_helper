@@ -16,8 +16,8 @@ def reduce_mem_usage(df):
     """ iterate through all the columns of a dataframe and modify the data type
         to reduce memory usage.        
     """
-    #start_mem = df.memory_usage().sum() / 1024**2
-    #print('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
+    start_mem = df.memory_usage().sum() / 1024**2
+    logger.debug('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
 
     for col in df.columns:
         col_type = df[col].dtype
@@ -42,9 +42,9 @@ def reduce_mem_usage(df):
                 else:
                     df[col] = df[col].astype(np.float64)
 
-    #end_mem = df.memory_usage().sum() / 1024**2
-    #print('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
-    #print('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+    end_mem = df.memory_usage().sum() / 1024**2
+    logger.debug('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
+    logger.debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
 
     return df
 
@@ -392,10 +392,9 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         mean_std += _mean_std
         y += _y
         x += [(i[0] + diff_length, i[1] + diff_length) for i in _x]
+        _raw = reduce_mem_usage(_raw)
         raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         diff_length += len(_raw)
-
-    raw = reduce_mem_usage(raw)
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
