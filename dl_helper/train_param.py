@@ -49,7 +49,7 @@ def data_str2parm(s):
         'total_hours': int(p[13]),
         'symbols': p[15],
         'target': p[17],
-        'std_mode': p[18]  # 4h/1d/5d
+        'std_mode': p[19]  # 4h/1d/5d
     }
 
 # 日志

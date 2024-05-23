@@ -28,9 +28,9 @@ def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     # print(f"删除行数: {del_count}")
     if del_count == 0:
         # 不需要删除
-        return tensor[:, begin:end, :].clone()
+        return tensor[:, begin:end, :]
 
-    print(f'del_count: {del_count}')
+    # print(f'del_count: {del_count}')
     mask = torch.zeros(need_length+del_count, dtype=torch.bool)
     mask[[i+del_count for i in rows]] = rows_mask
 
@@ -39,7 +39,7 @@ def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     begin -= del_count
 
     # 切片
-    data = tensor[:, begin:end, :].clone()
+    data = tensor[:, begin:end, :]
 
     # 删除行
     return data[:, ~mask, :]
@@ -53,8 +53,13 @@ def random_mask(tensor, mask_prob=1e-4):
 # 定义随机缩放函数
 def random_scale(tensor, scale_prob=0.005, min_scale=0.95, max_scale=1.05):
     mask = torch.rand(tensor.size()) < scale_prob
-    scale = torch.rand(1)*(max_scale-min_scale)+min_scale
-    tensor.masked_fill_(mask, tensor*scale)
+    
+    scale_num = mask.sum().item()
+    if scale_num == 0:
+        return tensor
+
+    scale = torch.rand(scale_num)*(max_scale-min_scale)+min_scale
+    tensor[mask] *= scale
     return tensor
 
 class ResumeSample():
@@ -133,6 +138,9 @@ class Dataset(torch.utils.data.Dataset):
         self.data = torch.from_numpy(raw_data.values)
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
+        # 训练数据集
+        self.train = train
+
         # 针对回归数据集, y可能为一个列表
         # regress_y_idx
         if isinstance(y[0], list):
@@ -144,7 +152,7 @@ class Dataset(torch.utils.data.Dataset):
                 y = [y[i] for i in idxs]
                 x = [x[i] for i in idxs]
                 mean_std = [mean_std[i] for i in idxs]
-                ids = [ids[i] for i in idxs]
+                ids = [ids[i] for i in idxs] if ids else ids
             elif classify_y_idx!=1:
                 y = [i[regress_y_idx] for i in y]
                 if None is classify_func:
@@ -172,7 +180,7 @@ class Dataset(torch.utils.data.Dataset):
                     idx.sort()
 
                     logger.debug(f'reindex')
-                    ids = [ids[i] for i in idx]
+                    ids = [ids[i] for i in idx] if ids else ids
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
                     mean_std = [mean_std[i] for i in idx]
@@ -224,9 +232,9 @@ class Dataset(torch.utils.data.Dataset):
             a += (ab_length-self.time_length)
 
         # 获取切片
-        if train and params.random_mask_row>0:
+        if self.train and params.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(x, a, b, params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
         else:
             x = self.data[:, a:b, :].clone()
 
@@ -245,11 +253,11 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] /= mean_std[:, 1]
 
         # 随机mask
-        if train and params.random_mask>0:
+        if self.train and params.random_mask>0:
             x = random_mask(x, params.random_mask)
 
         # 随机缩放
-        if train and params.random_scale>0:
+        if self.train and params.random_scale>0:
             x = random_scale(x, params.random_scale)
 
         # return x, (self.y[index], self.ids[index])
@@ -369,12 +377,13 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         ids, mean_std, x, y, raw = re_blance_sample(ids, mean_std, x, y, raw)
 
     logger.debug(f"nan值样本数量 {raw.isna().sum().sum()}")
-    logger.debug(f'\n标签分布\n{pd.Series(y).value_counts()}')
 
     if not need_id:
         ids = []
     dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train')
     del ids, x, y, raw
+
+    logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
         params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False)

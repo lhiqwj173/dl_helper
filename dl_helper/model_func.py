@@ -188,10 +188,10 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
     ax1_handles.append(ax1.plot(list(range(epochs)), test_losses, label=f'validation loss {last_value(test_losses)}', c='#00BFFF')[0])
     # line_test_loss, = ax1.plot(list(range(epochs)), test_losses, label=f'validation loss {last_value(test_losses)}', c='#00BFFF')
     # 标记损失最低点
-    ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}')[0])
+    ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}'))
     # train_loss_min = ax1.scatter(min_train_x, min_train_loss, c='b',
     #             label=f'train loss min: {min_train_loss:.4f}')
-    ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}')[0])
+    ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}'))
     # test_loss_min = ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',
     #             label=f'validation loss min: {min_test_loss:.4f}')
 
@@ -706,7 +706,7 @@ def test_model(test_loader, result_dict, select='best'):
         result_dict['test_rmse'] = rmse
 
     # 记录预测平均耗时 ms 
-    result_dict['predict_cost'] = (total_times / total_counts) * 1000
+    result_dict['predict_ms'] = (total_times / total_counts) * 1000
 
 def test_ps(data_loader, ps):
     """
@@ -833,7 +833,7 @@ def pack_folder():
         # 删除
         os.remove(file)
 
-    compress_folder(params.root, file, 9)
+    compress_folder(params.root, file, 9, inplace=False)
 
 class trainer:
     def __init__(self, idx, debug=False):

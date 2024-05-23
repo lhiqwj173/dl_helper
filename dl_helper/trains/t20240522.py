@@ -19,7 +19,7 @@ class trainer(trainer_base):
     试验结果作为基线性能
     predict_n = 10
     """
-    def init_param(self, data_folder=''):
+    def init_param(self, data_folder='', debug=False):
         print('init_param')
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
@@ -38,10 +38,15 @@ class trainer(trainer_base):
             'std_mode': '1d'  # 4h/1d/5d
         }
 
+        #测试
+        if debug:
+            data_parm['data_rate'] = (1,1,1)
+            data_parm['total_hours'] = 6
+
         model = m_mobilenet_v2(y_n, use_trade_data=False, stem_type='stem_same_channel')
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.0001, batch_size=64, 
+            learning_rate=0.0002, batch_size=128, epochs=5 if debug else 100,
 
             # 数据增强
             random_scale=0.01, random_mask_row=0.5,
