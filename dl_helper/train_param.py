@@ -187,9 +187,6 @@ def init_param(
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)
 
-    # 储存数据
-    os.makedirs(os.path.join(params.root, 'data'), exist_ok=True)
-
     # log
     os.makedirs(os.path.join(params.root, 'log'), exist_ok=True)
     logger.add(os.path.join(params.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
