@@ -31,8 +31,8 @@ class trainer(trainer_base):
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
-            'data_rate': (8, 2, 2),
-            'total_hours': int(24*9),
+            'data_rate': (9, 1, 2),
+            'total_hours': int(24*10),
             'symbols': '@'.join(symbols),
             'taget': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d

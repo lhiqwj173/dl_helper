@@ -331,7 +331,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     scheduler = None
 
     # Automatic Mixed Precision
-    scaler = GradScaler()
+    scaler = None if not params.amp else GradScaler()
 
     # 检查是否有缓存文件
     if os.path.exists(os.path.join(params.root, 'var', f'datas.pkl')):
