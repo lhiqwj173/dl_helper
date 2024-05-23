@@ -27,7 +27,7 @@ import math
 import dataframe_image as dfi
 import dill
 import itertools
-import random
+import random, psutil
 
 from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
@@ -835,6 +835,13 @@ def pack_folder():
 
     compress_folder(params.root, file, 9, inplace=False)
 
+def report_memory_usage():
+    # 获取设备的总内存（以GB为单位）
+    total_memory = psutil.virtual_memory().total / (1024 ** 3)
+
+    pct = psutil.virtual_memory().percent
+    logger.debug(f'memory usage: {pct}% of {total_memory:.2f}GB')
+
 class trainer:
     def __init__(self, idx, debug=False):
         self.idx = idx
@@ -905,6 +912,8 @@ class trainer:
                 val_loader = read_data('val', max_num=1 if self.debug else 10000)
                 assert len(train_loader) > 0, "没有训练数据"
                 assert len(val_loader) > 0, "没有验证数据"
+
+                report_memory_usage()
 
                 ## 模型
                 _model = params.model.to(params.device)
