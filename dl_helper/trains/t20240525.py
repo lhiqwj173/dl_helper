@@ -41,7 +41,7 @@ class trainer(trainer_base):
             'std_mode': '1d'  # 4h/1d/5d
         }
 
-        model = m_ctabl(60, 40, 100, 40, 120, 12, 3, 1)
+        model = m_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
             learning_rate=0.0001, batch_size=64, 
