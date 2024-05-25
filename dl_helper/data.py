@@ -183,6 +183,9 @@ class Dataset(torch.utils.data.Dataset):
         # 中间价
         self.mid = []
 
+        # 区分价量列
+        self.price_cols = [i*2 for i in range(20)] + [42, 45]
+
         # 使用部分截取
         if params.use_pk and params.use_trade:
             # 全部使用
@@ -191,6 +194,7 @@ class Dataset(torch.utils.data.Dataset):
             logger.debug("只使用盘口数据")
             self.data = self.data[:, :40]
             mean_std = [i[:40] for i in mean_std]
+            self.price_cols = [i*2 for i in range(20)]
         elif params.use_trade:
             logger.debug("只使用交易数据")
 
@@ -203,6 +207,7 @@ class Dataset(torch.utils.data.Dataset):
 
             self.data = self.data[:, 40:]
             mean_std = [i[40:] for i in mean_std]
+            self.price_cols = [2, 5]
 
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
@@ -277,10 +282,6 @@ class Dataset(torch.utils.data.Dataset):
 
         # 标准化数据
         self.mean_std = mean_std
-
-        # 区分价量列
-        self.price_cols = [i*2 for i in range(20)] + [42, 45]
-        # self.vol_cols = [i*2+1 for i in range(20)]
 
     def __len__(self):
         """Denotes the total number of samples"""
