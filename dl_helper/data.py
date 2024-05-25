@@ -52,6 +52,8 @@ def reduce_mem_usage(df):
 # 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 100
 def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
+    raw_parm = begin, end
+
     need_length = end-begin
     assert need_length+max_mask_num <= tensor.shape[1]
 
@@ -78,8 +80,15 @@ def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     # 切片
     data = tensor[:, begin:end, :]
 
-    # 删除行
-    return data[:, ~mask, :]
+    try:
+        # 删除行
+        return data[:, ~mask, :]
+    except Exception as e:
+        logger.debug(f'parm: {raw_parm}')
+        logger.debug(f'tensor: {tensor}')
+        logger.debug(f'tensor shape: {tensor.shape}')
+
+        raise e
 
 # 定义随机遮挡函数
 def random_mask(tensor, mask_prob=1e-4):
