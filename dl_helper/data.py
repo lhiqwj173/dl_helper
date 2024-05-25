@@ -177,21 +177,26 @@ class Dataset(torch.utils.data.Dataset):
         self.data = torch.from_numpy(raw_data.values)
 
         # 中间价
-        mid = ((raw_data['卖1价'] + raw_data['买1价']) / 2).to_list()
         self.mid = []
-        for i in range(len(x)):
-            _, idx = x[i]
-            idx -= 1
-            self.mid.append(mid[idx])
 
         # 使用部分截取
         if params.use_pk and params.use_trade:
             # 全部使用
-            pass
+            logger.debug("使用全部数据")
         elif params.use_pk:
+            logger.debug("只使用盘口数据")
             self.data = self.data[:, :40]
             mean_std = [i[:40] for i in mean_std]
         elif params.use_trade:
+            logger.debug("只使用交易数据")
+
+            # 需要记录中交价格
+            mid = ((raw_data['卖1价'] + raw_data['买1价']) / 2).to_list()
+            for i in range(len(x)):
+                _, idx = x[i]
+                idx -= 1
+                self.mid.append(mid[idx])
+
             self.data = self.data[:, 40:]
             mean_std = [i[40:] for i in mean_std]
 
@@ -212,7 +217,7 @@ class Dataset(torch.utils.data.Dataset):
                 x = [x[i] for i in idxs]
                 mean_std = [mean_std[i] for i in idxs]
                 ids = [ids[i] for i in idxs] if ids else ids
-                self.mid = [self.mid[i] for i in idxs]
+                self.mid = [self.mid[i] for i in idxs] if self.mid else []
             elif classify_y_idx!=1:
                 y = [i[regress_y_idx] for i in y]
                 if None is classify_func:
@@ -244,7 +249,7 @@ class Dataset(torch.utils.data.Dataset):
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
                     mean_std = [mean_std[i] for i in idx]
-                    self.mid = [self.mid[i] for i in idx]
+                    self.mid = [self.mid[i] for i in idx] if self.mid else []
             else:
                 raise "regress_y_idx/classify_y_idx no set"
 
@@ -304,7 +309,7 @@ class Dataset(torch.utils.data.Dataset):
             self.mean_std[index], dtype=torch.float)
 
         # mid_price
-        mid = self.mid[index]
+        mid = self.mid[index] if self.mid else (float(x[0, -1, 0]) + float(x[0, -1, 2])) / 2
 
         # 价格标准化
         x[0, :, self.price_cols] /= mid
