@@ -167,12 +167,34 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True):
+    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
+
+        self.cnn = cnn
 
         # 原始数据
         # self.data = torch.tensor(np.array(raw_data), dtype=torch.float)
         self.data = torch.from_numpy(raw_data.values)
+
+        # 中间价
+        mid = ((raw_data['卖1价'] + raw_data['买1价']) / 2).to_list()
+        self.mid = []
+        for i in range(len(x)):
+            _, idx = x[i]
+            idx -= 1
+            self.mid.append(mid[idx])
+
+        # 使用部分截取
+        if params.use_pk and params.use_trade:
+            # 全部使用
+            pass
+        elif params.use_pk:
+            self.data = self.data[:, :40]
+            mean_std = [i[:40] for i in mean_std]
+        elif params.use_trade:
+            self.data = self.data[:, 40:]
+            mean_std = [i[40:] for i in mean_std]
+
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
         # 训练数据集
@@ -190,6 +212,7 @@ class Dataset(torch.utils.data.Dataset):
                 x = [x[i] for i in idxs]
                 mean_std = [mean_std[i] for i in idxs]
                 ids = [ids[i] for i in idxs] if ids else ids
+                self.mid = [self.mid[i] for i in idxs]
             elif classify_y_idx!=1:
                 y = [i[regress_y_idx] for i in y]
                 if None is classify_func:
@@ -221,6 +244,7 @@ class Dataset(torch.utils.data.Dataset):
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
                     mean_std = [mean_std[i] for i in idx]
+                    self.mid = [self.mid[i] for i in idxs]
             else:
                 raise "regress_y_idx/classify_y_idx no set"
 
@@ -280,12 +304,10 @@ class Dataset(torch.utils.data.Dataset):
             self.mean_std[index], dtype=torch.float)
 
         # mid_price
-        mid = (float(x[0, -1, 0]) + float(x[0, -1, 2])) / 2
+        mid = self.mid[index]
 
         # 价格标准化
         x[0, :, self.price_cols] /= mid
-        # x[0, :, self.price_cols] -= mean_std[:, 0]
-        # x[0, :, self.price_cols] /= mean_std[:, 1]
         x[0, :, :] -= mean_std[:, 0]
         x[0, :, :] /= mean_std[:, 1]
 
@@ -298,7 +320,12 @@ class Dataset(torch.utils.data.Dataset):
             x = random_scale(x, params.random_scale)
 
         # return x, (self.y[index], self.ids[index])
-        return x, self.y[index]
+        if self.cnn:
+            # x:[channel, pass_n, feature] -> [1, 100, 40/6/46]
+            return x, self.y[index]
+        else:
+            # x:[feature, pass_n] -> [40/6/46, 100]
+            return x[0].permute(1, 0), self.y[index]
 
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
@@ -333,7 +360,7 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     return ids, price_mean_std, test_x, test_y, test_raw
 
-def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=False):
+def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
 
@@ -418,7 +445,8 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
 
     if not need_id:
         ids = []
-    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train')
+    
+    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     del ids, x, y, raw
 
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')

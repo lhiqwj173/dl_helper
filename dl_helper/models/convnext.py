@@ -199,7 +199,6 @@ class ConvNeXt_block(nn.Module):
         X = self.global_avg_pool(X)
         return self.l(self.ln(X.mean([-2, -1])))
 
-
 """
 1, 1, 70, 46
 width_ratio=0.3 

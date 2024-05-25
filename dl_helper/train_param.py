@@ -120,6 +120,8 @@ class Params:
   data_set = ''
   data_parm = None
   y_n = 0
+  use_trade = False
+  use_pk = True
 
   regress_y_idx = -1
   classify_y_idx = -1
@@ -152,6 +154,9 @@ def init_param(
     # 数据集路径
     data_folder = '',
 
+    # 数据使用部分
+    use_pk = True, use_trade = False,
+
     describe=''
 
 ):
@@ -181,6 +186,8 @@ def init_param(
     params.model = model
     params.describe = describe
     params.y_n = y_n
+    params.use_pk = use_pk
+    params.use_trade = use_trade
 
     params.data_folder = data_folder if data_folder else './data'
 

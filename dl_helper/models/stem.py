@@ -120,7 +120,6 @@ class stem(nn.Module):
             # 合并
             return torch.cat((x_1, x_2), dim=1)# torch.Size([1, 24, 70, 1])
 
-
 class stem_same_channel(nn.Module):
     """
     全部使用 24*stem_alpha 相同的通道数

@@ -861,9 +861,10 @@ def report_memory_usage():
     logger.debug(f'memory usage: {pct}% of {total_memory:.2f}GB')
 
 class trainer:
-    def __init__(self, idx, debug=False):
+    def __init__(self, idx, debug=False, cnn=True):
         self.idx = idx
         self.debug = debug
+        self.cnn = cnn
 
         # 开启CuDNN自动优化
         torch.backends.cudnn.benchmark = True
@@ -926,8 +927,8 @@ class trainer:
 
                 ### 训练
                 ## 获取数据
-                train_loader = read_data('train', max_num=1 if self.debug else 10000)
-                val_loader = read_data('val', max_num=1 if self.debug else 10000)
+                train_loader = read_data('train', max_num=1 if self.debug else 10000, cnn=self.cnn)
+                val_loader = read_data('val', max_num=1 if self.debug else 10000, cnn=self.cnn)
                 assert len(train_loader) > 0, "没有训练数据"
                 assert len(val_loader) > 0, "没有验证数据"
 
@@ -955,7 +956,7 @@ class trainer:
                 cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
 
             ## 测试模型
-            test_loader = read_data('test', need_id=True)
+            test_loader = read_data('test', need_id=True, cnn=self.cnn)
             test_model(test_loader, self.result_dict)
 
             ## 记录结果

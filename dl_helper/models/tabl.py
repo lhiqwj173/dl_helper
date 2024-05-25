@@ -45,7 +45,7 @@ class TABL_layer(nn.Module):
         X = self.W1 @ X
 
         #enforcing constant (1) on the diagonal
-        W = self.W -self.W *torch.eye(self.t1,dtype=torch.float32).to(device)+torch.eye(self.t1,dtype=torch.float32).to(device)/self.t1
+        W = self.W -self.W *torch.eye(self.t1,dtype=torch.float32).to(X.device)+torch.eye(self.t1,dtype=torch.float32).to(X.device)/self.t1
 
         #attention, the aim of the second step is to learn how important the temporal instances are to each other (8)
         E = X @ W
@@ -84,8 +84,7 @@ class BL_layer(nn.Module):
 
     return x
 
-
-class BTABL(nn.Module):
+class m_btabl(nn.Module):
   def __init__(self, d2=120, d1=40, t1=10, t2=5, d3=3, t3=1):
     super().__init__()
 
@@ -115,9 +114,7 @@ class BTABL(nn.Module):
     x = torch.softmax(x, 1)
     return x
 
-
-
-class CTABL(nn.Module):
+class m_ctabl(nn.Module):
   def __init__(self, d2=60, d1=40, t1=10, t2=10, d3=120, t3=5, d4=3, t4=1):
     super().__init__()
     
@@ -162,14 +159,17 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    #model = BTABL(120, 40, 10, 5, 3, 1)
-    model = CTABL(60, 40, 10, 10, 120, 5, 3, 1)
+    #model = m_btabl(120, 40, 10, 5, 3, 1)
+    model = m_ctabl(60, 40, 100, 40, 120, 12, 3, 1)
     print(model)
 
-    summary(model, (10, 40, 70), device=device)
+    summary(model, (10, 40, 100), device=device)
 
     model = model.to(device)
-    input = torch.randn((10, 40, 70)).to(device)
+    input = torch.randn((2, 40, 100)).to(device)
     flops, params = profile(model, inputs=(input,))
     flops, params = clever_format([flops, params])
     print(f"FLOPs: {flops} Params: {params}")
+
+    out = model(input)
+    print(out.shape)# torch.Size([2, 3])
