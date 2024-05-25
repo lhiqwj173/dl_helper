@@ -82,6 +82,7 @@ class Params:
 
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   workers = int(multiprocessing.cpu_count())
+  workers = 0
 
   #############################
   # 训练超参数
