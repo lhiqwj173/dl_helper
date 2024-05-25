@@ -276,7 +276,7 @@ class Dataset(torch.utils.data.Dataset):
 
         # 区分价量列
         self.price_cols = [i*2 for i in range(20)] + [42, 45]
-        self.vol_cols = [i*2+1 for i in range(20)]
+        # self.vol_cols = [i*2+1 for i in range(20)]
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -427,6 +427,9 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         _raw = reduce_mem_usage(_raw)
         raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         diff_length += len(_raw)
+
+    # 清理 临时变量
+    del _id, _mean_std, _x, _y, _raw
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
