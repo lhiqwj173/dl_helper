@@ -244,7 +244,7 @@ class Dataset(torch.utils.data.Dataset):
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
                     mean_std = [mean_std[i] for i in idx]
-                    self.mid = [self.mid[i] for i in idxs]
+                    self.mid = [self.mid[i] for i in idx]
             else:
                 raise "regress_y_idx/classify_y_idx no set"
 
