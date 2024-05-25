@@ -398,10 +398,15 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         begin_hour = 0
         for i in range(idx):
             begin_hour = int(target_parm['total_hours'] * (target_parm['data_rate'][i] / _rate_sum))
-        begin_dt = dt + datetime.timedelta(hours=begin_hour)
 
         rate = target_parm['data_rate'][idx] / _rate_sum
         hours = int(target_parm['total_hours'] * rate)# 使用时长
+
+        # begin_hour 必须整除2
+        if begin_hour % 2 != 0:
+            begin_hour += 1
+            hours -= 1
+        begin_dt = dt + datetime.timedelta(hours=begin_hour)
 
         for i in range(hours // 2):
             _dt = begin_dt + datetime.timedelta(hours=i*2)
