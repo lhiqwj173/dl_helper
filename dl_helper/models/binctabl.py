@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from tabl import BL_layer, TABL_layer
+from .tabl import BL_layer, TABL_layer
 
 class BiN(nn.Module):
   def __init__(self, d1, t1):
