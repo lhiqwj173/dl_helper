@@ -25,14 +25,14 @@ class trainer(trainer_base):
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         y_n = 3
-        title = f'deeplob_base_v{self.idx}'
+        title = f'deeplob_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (9, 1, 2),
-            'total_hours': int(24*5),
+            'total_hours': int(24*10),
             'symbols': '@'.join(symbols),
             'taget': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
@@ -51,5 +51,5 @@ class trainer(trainer_base):
 
             data_folder=data_folder,
 
-            describe='predict_n=10'
+            describe='deeplob'
         )

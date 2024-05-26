@@ -2,7 +2,7 @@ from functools import partial
 
 from ..model_func import trainer as trainer_base
 from ..train_param import init_param
-from ..models.binctabl import m_bin_ctabl
+from ..models.convnext import m_convnext
 from ..data import data_parm2str
 
 class trainer(trainer_base):
@@ -19,16 +19,13 @@ class trainer(trainer_base):
     试验结果作为基线性能
     predict_n = 10
     """
-    def __init__(self, idx, debug=False):
-        super().__init__(idx, debug, False)
-
     def init_param(self, data_folder=''):
         print('init_param')
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         y_n = 3
-        title = f'binctabl_v{self.idx}'
+        title = f'convnext_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 100,
@@ -41,7 +38,7 @@ class trainer(trainer_base):
             'std_mode': '1d'  # 4h/1d/5d
         }
 
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        model = m_convnext(y_n, use_trade_data=False)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
             learning_rate=0.0001, batch_size=64, 
@@ -54,5 +51,5 @@ class trainer(trainer_base):
 
             data_folder=data_folder,
 
-            describe='binctabl'
+            describe='convnext'
         )
