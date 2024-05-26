@@ -372,6 +372,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
         scheduler.warn_up(init=True)
 
+    train_loader_sampler_state_dict = {}
+
     t = time.time()
     for it in range(begin, epochs):
         # 早停检查
@@ -387,6 +389,10 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
             model.train()
 
+            # 读取缓存
+            if os.path.exists(f'./train_loader.pkl'):
+                train_loader = pickle.load(open(f'./train_loader.pkl', 'rb'))
+
             count = 0
             if train_loader.sampler.idx==0:
                 logger.debug("重置训练记录")
@@ -395,7 +401,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
             idx = 0
             train_last = time.time()
-            for inputs, targets in tqdm(train_loader, initial=int(train_loader.sampler.idx / params.batch_size), total=len(train_loader)):
+            # for inputs, targets in tqdm(train_loader, initial=int(train_loader.sampler.idx / params.batch_size), total=len(train_loader)):
+            for inputs, targets in train_loader:
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                     params.device, dtype=torch.int64)
@@ -442,11 +449,11 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                         train_last = t1
                         
                         # 15min，缓存数据
+                        train_loader_sampler_state_dict = train_loader.sampler.state_dict()
                         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
                                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
                         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-                        ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
                         # 打包文件
                         pack_folder()
@@ -459,14 +466,18 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             train_loss = np.mean(train_loss)  # a little misleading
 
             # 缓存数据
+            train_loader_sampler_state_dict = train_loader.sampler.state_dict()
             pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-            ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
             # 打包文件
             pack_folder()
+
+            # 缓存 train_loader 
+            pickle.dump(train_loader, open(f'./train_loader.pkl', 'wb'))
+            del train_loader
 
         torch.cuda.empty_cache()
         logger.debug(f'{msg}训练完成')
@@ -486,7 +497,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                 test_all = 0
             with torch.no_grad():
                 count = 0
-                for inputs, targets in tqdm(test_loader, initial=int(test_loader.sampler.idx / params.batch_size), total=len(test_loader)):
+                # for inputs, targets in tqdm(test_loader, initial=int(test_loader.sampler.idx / params.batch_size), total=len(test_loader)):
+                for inputs, targets in test_loader:
                     inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                         params.device, dtype=torch.int64)
 
@@ -538,8 +550,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores,all_targets, all_predictions,  best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-            ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
             
             # 打包文件
             pack_folder()
@@ -586,8 +597,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader.sampler.state_dict(
-        ), test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
             
         # 打包文件
         pack_folder()
