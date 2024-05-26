@@ -89,6 +89,10 @@ class BiN(nn.Module):
     return x
 
 class m_bin_btabl(nn.Module):
+  @classmethod
+  def model_name(cls):
+      return "binbtabl"
+
   def __init__(self, d2, d1, t1, t2, d3, t3):
     super().__init__()
 
@@ -124,6 +128,10 @@ class m_bin_btabl(nn.Module):
         w *= (desired / (1e-8 + norm))
 
 class m_bin_ctabl(nn.Module):
+  @classmethod
+  def model_name(cls):
+      return "binctabl"
+
   def __init__(self, d2, d1, t1, t2, d3, t3, d4, t4):
     super().__init__()
 

@@ -1,4 +1,4 @@
-import pytz
+import pytz, time
 import os
 import pickle
 import numpy as np
@@ -370,6 +370,22 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     return ids, price_mean_std, test_x, test_y, test_raw
 
+class cache():
+    def __init__(self, obj, name):
+        self.file = f'cache_{name}.pkl'
+        self.data = obj
+        self.cost = 0
+    def cache(self):
+        t0 = time.time()
+        pickle.dump(self.data, open(self.file, 'wb'))
+        del self.data
+        self.data = None
+        self.cost = time.time() - t0
+    def load(self):
+        t0 = time.time()
+        self.data = pickle.load(open(self.file, 'rb'))
+        self.cost = time.time() - t0
+
 def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
@@ -473,7 +489,10 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False)
     del dataset_test
 
-    return data_loader
+    data_loader_cache = cache(data_loader, _type)
+    del data_loader
+
+    return data_loader_cache
 
 if __name__ == "__main__":
     data = read_data(r'D:\code\featrue_data\notebook\20240413_滚动标准化', 'test')

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 class TABL_layer(nn.Module):
+
     def __init__(self, d2, d1, t1, t2):
         super().__init__()
         self.t1 = t1
@@ -85,6 +86,10 @@ class BL_layer(nn.Module):
     return x
 
 class m_btabl(nn.Module):
+  @classmethod
+  def model_name(cls):
+      return "btabl"
+
   def __init__(self, d2=120, d1=40, t1=10, t2=5, d3=3, t3=1):
     super().__init__()
 
@@ -115,6 +120,10 @@ class m_btabl(nn.Module):
     return x
 
 class m_ctabl(nn.Module):
+  @classmethod
+  def model_name(cls):
+      return "ctabl"
+
   def __init__(self, d2=60, d1=40, t1=10, t2=10, d3=120, t3=5, d4=3, t4=1):
     super().__init__()
     

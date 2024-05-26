@@ -34,7 +34,7 @@ class trainer(trainer_base):
             'data_rate': (9, 1, 2),
             'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
-            'taget': 'same paper',
+            'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
         }
 

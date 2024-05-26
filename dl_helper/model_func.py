@@ -299,7 +299,13 @@ def count_correct_predictions(predictions, labels):
 # A function to encapsulate the training loop
 
 
-def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_loader, epochs, result_dict):
+def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
+
+    # 获取数据
+    train_loader_cache = read_data('train', max_num=1 if debug else 10000, cnn=cnn)
+    val_loader_cache = read_data('val', max_num=1 if debug else 10000, cnn=cnn)
+    assert len(train_loader_cache.data) > 0, "没有训练数据"
+    assert len(val_loader_cache.data) > 0, "没有验证数据"
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
@@ -354,7 +360,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         if params.init_learning_ratio > 0:
             scheduler = Increase_ReduceLROnPlateau(optimizer)
         else:
-            scheduler = warm_up_ReduceLROnPlateau(optimizer, warm_up_epoch=params.warm_up_epochs, iter_num_each_epoch=len(train_loader))
+            scheduler = warm_up_ReduceLROnPlateau(optimizer, warm_up_epoch=params.warm_up_epochs, iter_num_each_epoch=len(train_loader_cache.data))
     else:
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lr_lambda=lr_lambda)
@@ -365,14 +371,23 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             open(os.path.join(params.root, 'var', f'helper.pkl'), 'rb'))
         scheduler.load_state_dict(sd_scheduler)
         optimizer.load_state_dict(sd_optimizer)
-        train_loader.sampler.load_state_dict(sd_train_loader)
-        test_loader.sampler.load_state_dict(sd_test_loader)
+        train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
+        val_loader_cache.data.sampler.load_state_dict(sd_test_loader)
+
+    report_memory_usage()
+    train_loader_cache.cache()
+    logger.debug(f'缓存 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
+    val_loader_cache.cache()
+    logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
+    report_memory_usage()
 
     # 初始化warnup
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
         scheduler.warn_up(init=True)
 
+    # 储存loader状态
     train_loader_sampler_state_dict = {}
+    val_loader_sampler_state_dict = {}
 
     t = time.time()
     for it in range(begin, epochs):
@@ -389,20 +404,19 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
             model.train()
 
-            # 读取缓存
-            if os.path.exists(f'./train_loader.pkl'):
-                train_loader = pickle.load(open(f'./train_loader.pkl', 'rb'))
+            train_loader_cache.load()
+            logger.debug(f'载入 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
 
             count = 0
-            if train_loader.sampler.idx==0:
+            if train_loader_cache.data.sampler.idx==0:
                 logger.debug("重置训练记录")
                 train_correct = 0
                 train_all = 0
 
             idx = 0
             train_last = time.time()
-            # for inputs, targets in tqdm(train_loader, initial=int(train_loader.sampler.idx / params.batch_size), total=len(train_loader)):
-            for inputs, targets in train_loader:
+            for inputs, targets in tqdm(train_loader_cache.data, initial=int(train_loader_cache.data.sampler.idx / params.batch_size), total=len(train_loader_cache.data)):
+            # for inputs, targets in train_loader_cache.data:
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                     params.device, dtype=torch.int64)
@@ -449,11 +463,11 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                         train_last = t1
                         
                         # 15min，缓存数据
-                        train_loader_sampler_state_dict = train_loader.sampler.state_dict()
+                        train_loader_sampler_state_dict = train_loader_cache.data.sampler.state_dict()
                         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
                                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
                         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+                        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
 
                         # 打包文件
                         pack_folder()
@@ -466,18 +480,19 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             train_loss = np.mean(train_loss)  # a little misleading
 
             # 缓存数据
-            train_loader_sampler_state_dict = train_loader.sampler.state_dict()
+            train_loader_sampler_state_dict = train_loader_cache.data.sampler.state_dict()
             pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+
+            report_memory_usage()
+            train_loader_cache.cache()
+            logger.debug(f'缓存 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
+            report_memory_usage()
 
             # 打包文件
             pack_folder()
-
-            # 缓存 train_loader 
-            pickle.dump(train_loader, open(f'./train_loader.pkl', 'wb'))
-            del train_loader
 
         torch.cuda.empty_cache()
         logger.debug(f'{msg}训练完成')
@@ -488,17 +503,22 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
             logger.debug(f'{msg}开始验证')
             model.eval()
 
-            if test_loader.sampler.idx==0:
+            val_loader_cache.load()
+            logger.debug(f'载入 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
+
+            if val_loader_cache.data.sampler.idx==0:
                 logger.debug("重置验证记录")
                 all_targets = []
                 all_predictions = []
 
                 test_correct = 0
                 test_all = 0
+
             with torch.no_grad():
-                count = 0
-                # for inputs, targets in tqdm(test_loader, initial=int(test_loader.sampler.idx / params.batch_size), total=len(test_loader)):
-                for inputs, targets in test_loader:
+                idx = 0
+                val_last = time.time()
+                for inputs, targets in tqdm(val_loader_cache.data, initial=int(val_loader_cache.data.sampler.idx / params.batch_size), total=len(val_loader_cache.data)):
+                # for inputs, targets in val_loader_cache.data:
                     inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                         params.device, dtype=torch.int64)
 
@@ -527,6 +547,23 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
                         # 回归模型 统计 r方
                         test_r_squared.update(outputs, targets)
 
+                    if idx%100 == 0:
+                        t1 = time.time()
+                        if t1 - val_last >= 15*60:
+                            val_last = t1
+                            
+                            # 15min，缓存数据
+                            val_loader_sampler_state_dict = val_loader_cache.data.sampler.state_dict()
+                            pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it, train_loss, test_loss,
+                                        train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
+                            torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
+                            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+
+                            # 打包文件
+                            pack_folder()
+
+                    idx += 1
+
             if params.y_n != 1:
                 # 分类模型 统计 f1 score
                 all_targets = np.concatenate(all_targets)
@@ -547,11 +584,17 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
 
             test_loss = np.mean(test_loss)
 
+            val_loader_sampler_state_dict = val_loader_cache.data.sampler.state_dict()
             pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores,all_targets, all_predictions,  best_test_loss, best_test_epoch, it, train_loss, test_loss,
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
             
+            report_memory_usage()
+            val_loader_cache.cache()
+            logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
+            report_memory_usage()
+
             # 打包文件
             pack_folder()
 
@@ -597,7 +640,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
-        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, test_loader.sampler.state_dict()), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+        pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
             
         # 打包文件
         pack_folder()
@@ -625,7 +668,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, train_loader, test_lo
     return cost_hour
 
 
-def test_model(test_loader, result_dict, select='best'):
+def test_model(result_dict, debug, cnn, select='best'):
     """
     模型可选 最优/最终 best/final
     """
@@ -638,6 +681,9 @@ def test_model(test_loader, result_dict, select='best'):
     else:
         return
 
+    # 读取数据
+    test_loader_cache = read_data('test', max_num=1 if debug else 10000, need_id=True, cnn=cnn)
+
     # model = torch.load('best_val_model_pytorch')
     all_targets = []
     all_predictions = []
@@ -648,7 +694,7 @@ def test_model(test_loader, result_dict, select='best'):
 
     logger.debug(f'测试模型')
     with torch.no_grad():
-        for inputs, targets in test_loader:
+        for inputs, targets in test_loader_cache.data:
             # Move to GPU
             inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                 params.device, dtype=torch.int64)
@@ -679,7 +725,9 @@ def test_model(test_loader, result_dict, select='best'):
             
     all_targets = np.concatenate(all_targets)
     all_predictions = np.concatenate(all_predictions)
-    ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
+    ids = test_loader_cache.data.dataset.ids# code_timestamp: btcusdt_1710289478588
+
+    del test_loader_cache
 
     # 分类预测
     datas = {}
@@ -928,7 +976,7 @@ class trainer:
             params.data_parm['data_rate'] = (1,1,1)
             params.data_parm['total_hours'] = 6
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
-            params.epochs = 5
+            params.epochs = 2
 
         try:
             t0 = datetime.now()
@@ -936,14 +984,6 @@ class trainer:
                 wx.send_message(f'[{params.train_title}] 开始训练')
 
                 ### 训练
-                ## 获取数据
-                train_loader = read_data('train', max_num=1 if self.debug else 10000, cnn=self.cnn)
-                val_loader = read_data('val', max_num=1 if self.debug else 10000, cnn=self.cnn)
-                assert len(train_loader) > 0, "没有训练数据"
-                assert len(val_loader) > 0, "没有验证数据"
-
-                report_memory_usage()
-
                 ## 模型
                 _model = params.model.to(params.device)
                 if torch.cuda.device_count() > 1:
@@ -963,11 +1003,13 @@ class trainer:
                 optimizer_class = torch.optim.AdamW
 
                 # 训练
-                cost_hour = batch_gd(_model, criterion, optimizer_class, None, train_loader, val_loader, epochs=params.epochs, result_dict=self.result_dict)
+                cost_hour = batch_gd(_model, criterion, optimizer_class, None, epochs=params.epochs, result_dict=self.result_dict, debug=self.debug, cnn=self.cnn)
 
             ## 测试模型
-            test_loader = read_data('test', need_id=True, cnn=self.cnn)
-            test_model(test_loader, self.result_dict)
+            test_model(self.result_dict, self.debug, self.cnn)
+
+            logger.debug('数据集相关运行结束')
+            report_memory_usage()
 
             ## 记录结果
             result_file = os.path.join(params.root, 'result.csv')
