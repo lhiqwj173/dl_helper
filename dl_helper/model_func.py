@@ -36,6 +36,7 @@ from .tg import download_dataset_async
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
+from .tool import report_memory_usage
 
 # 设置启动方法为'spawn'
 multiprocessing.set_start_method('spawn', force=True)
@@ -910,13 +911,6 @@ def pack_folder():
         os.remove(file)
 
     compress_folder(params.root, file, 9, inplace=False)
-
-def report_memory_usage():
-    # 获取设备的总内存（以GB为单位）
-    total_memory = psutil.virtual_memory().total / (1024 ** 3)
-
-    pct = psutil.virtual_memory().percent
-    logger.debug(f'memory usage: {pct}% of {total_memory:.2f}GB')
 
 class trainer:
     def __init__(self, idx, debug=False, cnn=True):

@@ -9,6 +9,7 @@ import datetime
 from tqdm import tqdm
 
 from .train_param import params, logger, data_parm2str, data_str2parm
+from .tool import report_memory_usage
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -18,7 +19,7 @@ def reduce_mem_usage(df):
         to reduce memory usage.        
     """
     start_mem = df.memory_usage().sum() / 1024**2
-    logger.debug('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
+    # logger.debug('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
 
     for col in df.columns:
         col_type = df[col].dtype
@@ -44,8 +45,8 @@ def reduce_mem_usage(df):
                     df[col] = df[col].astype(np.float64)
 
     end_mem = df.memory_usage().sum() / 1024**2
-    logger.debug('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
-    logger.debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+    # logger.debug('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
+    # logger.debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
 
     return df
 
@@ -242,6 +243,8 @@ class Dataset(torch.utils.data.Dataset):
                     sy = pd.Series(y)
                     min_num = sy.value_counts().min()
                     logger.debug(f'min_num: {min_num}')
+
+                    report_memory_usage()
 
                     idx = []
                     for label in labels:
@@ -456,6 +459,8 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
         _raw = reduce_mem_usage(_raw)
         raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         diff_length += len(_raw)
+
+        report_memory_usage()
 
     # 清理 临时变量
     del _id, _mean_std, _x, _y, _raw
