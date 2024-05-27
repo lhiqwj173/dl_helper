@@ -13,7 +13,7 @@ from .tool import report_memory_usage
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
-ids, mean_std, x, y, raw, mid_price = [], [], [], [], pd.DataFrame(), []
+ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -177,7 +177,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
-        global ids, mean_std, x, y, raw, mid_price
+        global ids, mean_std, x, y, raw
 
         self.cnn = cnn
 
@@ -186,9 +186,6 @@ class Dataset(torch.utils.data.Dataset):
         self.data = None
 
         report_memory_usage()
-
-        # 中间价
-        self.mid = []
 
         # 区分价量列
         self.price_cols = [i*2 for i in range(20)] + [42, 45]
@@ -223,6 +220,7 @@ class Dataset(torch.utils.data.Dataset):
             if regress_y_idx != -1:
                 logger.debug(f"回归标签列表处理 使用标签idx:{regress_y_idx}")
                 y = [i[regress_y_idx] for i in y]
+
                 # y 可能为nan
                 idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
                 # 过滤nan
@@ -230,7 +228,6 @@ class Dataset(torch.utils.data.Dataset):
                 x = [x[i] for i in idxs]
                 self.mean_std = [self.mean_std[i] for i in idxs]
                 ids = [ids[i] for i in idxs] if ids else ids
-                self.mid = [self.mid[i] for i in idxs] if self.mid else []
             elif classify_y_idx!=1:
                 logger.debug(f"分类标签列表处理 使用标签idx:{classify_y_idx}")
                 y = [i[classify_y_idx] for i in y]
@@ -265,7 +262,6 @@ class Dataset(torch.utils.data.Dataset):
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
                     self.mean_std = [self.mean_std[i] for i in idx]
-                    self.mid = [self.mid[i] for i in idx] if self.mid else []
             else:
                 raise "regress_y_idx/classify_y_idx no set"
 
@@ -303,6 +299,9 @@ class Dataset(torch.utils.data.Dataset):
         """Generates samples of data"""
         # 切片范围
         a, b = self.x_idx[index]
+        
+        # mid_price
+        mid = (float(self.data[0, b-1, 0]) + float(self.data[0, b-1, 2])) / 2
 
         # 截断数据 b向上截取
         # a=3, b=6
@@ -314,19 +313,26 @@ class Dataset(torch.utils.data.Dataset):
         if ab_length > self.time_length:
             a += (ab_length-self.time_length)
 
-        # 获取切片
+        # 获取均值方差
+        xa, xb = 0, 46
+
+        # 使用部分截取 xa, xb
+        if params.use_pk and params.use_trade:
+            pass
+        elif params.use_pk:
+            xb = 40
+        elif params.use_trade:
+            xa = 40
+
+        # 获取切片x
         if self.train and params.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
         else:
-            x = self.data[:, a:b, :].clone()
+            x = self.data[:, a:b, xa:xb].clone()
 
-        # 获取均值方差
-        mean_std = torch.tensor(
-            self.mean_std[index], dtype=torch.float)
-
-        # mid_price
-        mid = self.mid[index] if self.mid else (float(x[0, -1, 0]) + float(x[0, -1, 2])) / 2
+        # 截取mean_std
+        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
 
         # 价格标准化
         x[0, :, self.price_cols] /= mid
@@ -449,8 +455,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     logger.debug(f'{files}')
 
     # 读取分段合并
-    global ids, mean_std, x, y, raw, mid_price
-    ids, mean_std, x, y, raw, mid_price = [], [], [], [], pd.DataFrame(), []
+    global ids, mean_std, x, y, raw
+    ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     diff_length = 0
     count = 0
     for file in tqdm(files):
@@ -462,27 +468,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
             open(os.path.join(data_path, file), 'rb'))
         _raw = reduce_mem_usage(_raw)
 
-        # 使用部分截取
-        if params.use_pk and params.use_trade:
-            mean_std += _mean_std
-            raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
-        elif params.use_pk:
-            for i in _mean_std:
-                mean_std.append(i[:40])
-
-            raw = pd.concat([raw, _raw.iloc[:, :40]], axis=0, ignore_index=True)
-        elif params.use_trade:
-            # 需要记录中交价格
-            mid = ((_raw['卖1价'] + _raw['买1价']) / 2).to_list()
-            for i in range(len(_x)):
-                _, idx = _x[i]
-                idx -= 1
-                mid_price.append(mid[idx])
-
-            for i in _mean_std:
-                mean_std.append(i[40:])
-
-            raw = pd.concat([raw, _raw.iloc[:, 40:]], axis=0, ignore_index=True)
+        mean_std += _mean_std
+        raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
 
         ids += _id
         y += _y
@@ -506,7 +493,6 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         y = [y[i] for i in range(len(y)) if i not in to_del_idx]
         mean_std = [mean_std[i] for i in range(len(mean_std)) if i not in to_del_idx]
         ids = [ids[i] for i in range(len(ids)) if i not in to_del_idx]
-        mid_price = [mid_price[i] for i in range(len(mid_price)) if i not in to_del_idx] 
 
     logger.debug(f"nan值样本数量 {raw.isna().sum().sum()}")
 
