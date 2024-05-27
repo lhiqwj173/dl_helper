@@ -6,6 +6,7 @@ import pandas as pd
 import torch
 import random
 import datetime
+from tqdm import tqdm
 
 from .train_param import params, logger, data_parm2str, data_str2parm
 
@@ -209,15 +210,16 @@ class Dataset(torch.utils.data.Dataset):
             mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
 
+        logger.debug("增加一个通道维度")
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
         # 训练数据集
         self.train = train
 
         # 针对回归数据集, y可能为一个列表
-        # regress_y_idx
         if isinstance(y[0], list):
             if regress_y_idx != -1:
+                logger.debug(f"回归标签列表处理 使用标签idx:{regress_y_idx}")
                 y = [i[regress_y_idx] for i in y]
                 # y 可能为nan
                 idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
@@ -228,7 +230,8 @@ class Dataset(torch.utils.data.Dataset):
                 ids = [ids[i] for i in idxs] if ids else ids
                 self.mid = [self.mid[i] for i in idxs] if self.mid else []
             elif classify_y_idx!=1:
-                y = [i[regress_y_idx] for i in y]
+                logger.debug(f"分类标签列表处理 使用标签idx:{classify_y_idx}")
+                y = [i[classify_y_idx] for i in y]
                 if None is classify_func:
                     raise "pls set classify_func to split class"
                 y = [classify_func(i) for i in y]
