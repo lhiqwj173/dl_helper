@@ -81,7 +81,7 @@ class Params:
   root = ''
 
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  workers = int(multiprocessing.cpu_count())
+  # workers = int(multiprocessing.cpu_count())
   workers = 3
 
   #############################
@@ -141,7 +141,7 @@ def init_param(
     # 训练参数
     learning_rate, batch_size, 
     epochs=100, warm_up_epochs=3, 
-    no_better_stop=15,amp=False, label_smoothing=0.1, weight_decay=0.01, 
+    no_better_stop=15,amp=False, label_smoothing=0.1, weight_decay=0.01, workers=3,
 
     # 数据增强
     random_mask=0, random_scale=0, random_mask_row=0, 
@@ -189,6 +189,7 @@ def init_param(
     params.y_n = y_n
     params.use_pk = use_pk
     params.use_trade = use_trade
+    params.workers = workers
 
     params.data_folder = data_folder if data_folder else './data'
 
