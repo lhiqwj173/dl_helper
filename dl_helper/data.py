@@ -13,6 +13,8 @@ from .tool import report_memory_usage
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
+ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
     """ iterate through all the columns of a dataframe and modify the data type
@@ -173,14 +175,15 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, raw_data, x, y, mean_std, ids=[], regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
+    def __init__(self, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
+        global ids, mean_std, x, y, raw
 
         self.cnn = cnn
 
         # 原始数据
-        # self.data = torch.tensor(np.array(raw_data), dtype=torch.float)
-        self.data = torch.from_numpy(raw_data.values)
+        # self.data = torch.from_numpy(raw.values)
+        self.data = None
 
         report_memory_usage()
 
@@ -192,26 +195,32 @@ class Dataset(torch.utils.data.Dataset):
 
         # 使用部分截取
         if params.use_pk and params.use_trade:
-            # 全部使用
             logger.debug("使用全部数据")
+            self.data = torch.from_numpy(raw.values)
+            self.mean_std = mean_std
+
         elif params.use_pk:
             logger.debug("只使用盘口数据")
-            self.data = self.data[:, :40].clone()
-            mean_std = [i[:40] for i in mean_std]
+            self.data = torch.from_numpy(raw.iloc[:, :40].values)
+            self.mean_std = [i[:40] for i in mean_std]
             self.price_cols = [i*2 for i in range(20)]
+
         elif params.use_trade:
             logger.debug("只使用交易数据")
 
             # 需要记录中交价格
-            mid = ((raw_data['卖1价'] + raw_data['买1价']) / 2).to_list()
+            mid = ((raw['卖1价'] + raw['买1价']) / 2).to_list()
             for i in range(len(x)):
                 _, idx = x[i]
                 idx -= 1
                 self.mid.append(mid[idx])
 
-            self.data = self.data[:, 40:]
-            mean_std = [i[40:] for i in mean_std]
+            self.data = torch.from_numpy(raw.iloc[:, 40:].values)
+            self.mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
+
+        del raw, mean_std
+        report_memory_usage()
 
         logger.debug("增加一个通道维度")
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
@@ -230,7 +239,7 @@ class Dataset(torch.utils.data.Dataset):
                 # 过滤nan
                 y = [y[i] for i in idxs]
                 x = [x[i] for i in idxs]
-                mean_std = [mean_std[i] for i in idxs]
+                self.mean_std = [self.mean_std[i] for i in idxs]
                 ids = [ids[i] for i in idxs] if ids else ids
                 self.mid = [self.mid[i] for i in idxs] if self.mid else []
             elif classify_y_idx!=1:
@@ -266,31 +275,36 @@ class Dataset(torch.utils.data.Dataset):
                     ids = [ids[i] for i in idx] if ids else ids
                     x = [x[i] for i in idx]
                     y = [y[i] for i in idx]
-                    mean_std = [mean_std[i] for i in idx]
+                    self.mean_std = [self.mean_std[i] for i in idx]
                     self.mid = [self.mid[i] for i in idx] if self.mid else []
             else:
                 raise "regress_y_idx/classify_y_idx no set"
+
+        report_memory_usage()
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
 
         # id
         self.ids = ids
+        del ids
 
         # 数据长度
         self.length = len(x)
 
         # x 切片索引
         self.x_idx = x
+        del x
         # x = torch.tensor(np.array(x), dtype=torch.float)
 
         # y
         # 标签onehot 编码
         # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
         self.y = torch.tensor(np.array(y), dtype=torch.int64)
+        del y
 
-        # 标准化数据
-        self.mean_std = mean_std
+        logger.debug(f'数据集初始化完毕')
+        report_memory_usage()
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -446,6 +460,7 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
     logger.debug(f'{files}')
 
     # 读取分段合并
+    global ids, mean_std, x, y, raw
     ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     diff_length = 0
     count = 0
@@ -491,9 +506,7 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
     if not need_id:
         ids = []
     
-    dataset_test = Dataset(raw, x, y, mean_std, ids, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
-    del ids, x, y, raw
-
+    dataset_test = Dataset(params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
