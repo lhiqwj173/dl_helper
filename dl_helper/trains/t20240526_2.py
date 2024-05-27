@@ -19,10 +19,8 @@ class trainer(trainer_base):
     试验结果作为基线性能
     predict_n = 10
     """
-    def __init__(self, idx, d, debug=False):
+    def __init__(self, idx, debug=False):
         super().__init__(idx, debug, False)
-
-        self.d = d
 
     def init_param(self, data_folder=''):
         print('init_param')
@@ -37,7 +35,7 @@ class trainer(trainer_base):
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (9, 1, 2),
-            'total_hours': int(24*self.d),
+            'total_hours': int(24*10),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
