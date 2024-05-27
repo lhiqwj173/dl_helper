@@ -197,11 +197,13 @@ class Dataset(torch.utils.data.Dataset):
         if params.use_pk and params.use_trade:
             logger.debug("使用全部数据")
             self.data = torch.from_numpy(raw.values)
+            del raw
             self.mean_std = mean_std
 
         elif params.use_pk:
             logger.debug("只使用盘口数据")
             self.data = torch.from_numpy(raw.iloc[:, :40].values)
+            del raw
             self.mean_std = [i[:40] for i in mean_std]
             self.price_cols = [i*2 for i in range(20)]
 
@@ -216,15 +218,14 @@ class Dataset(torch.utils.data.Dataset):
                 self.mid.append(mid[idx])
 
             self.data = torch.from_numpy(raw.iloc[:, 40:].values)
+            del raw
             self.mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
 
-        del raw, mean_std
+        del mean_std
         report_memory_usage()
 
-        logger.debug("增加一个通道维度")
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
-        report_memory_usage()
 
         # 训练数据集
         self.train = train
