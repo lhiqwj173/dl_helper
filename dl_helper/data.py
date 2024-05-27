@@ -196,7 +196,7 @@ class Dataset(torch.utils.data.Dataset):
             logger.debug("使用全部数据")
         elif params.use_pk:
             logger.debug("只使用盘口数据")
-            self.data = self.data[:, :40]
+            self.data = self.data[:, :40].clone()
             mean_std = [i[:40] for i in mean_std]
             self.price_cols = [i*2 for i in range(20)]
         elif params.use_trade:
@@ -213,7 +213,6 @@ class Dataset(torch.utils.data.Dataset):
             mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
 
-        report_memory_usage()
         logger.debug("增加一个通道维度")
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
         report_memory_usage()
