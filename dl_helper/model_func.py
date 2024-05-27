@@ -408,6 +408,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             train_loader_cache.load()
             logger.debug(f'载入 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
 
+            report_memory_usage()
+
             count = 0
             if train_loader_cache.data.sampler.idx==0:
                 logger.debug("重置训练记录")
@@ -506,6 +508,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
 
             val_loader_cache.load()
             logger.debug(f'载入 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
+            report_memory_usage()
 
             if val_loader_cache.data.sampler.idx==0:
                 logger.debug("重置验证记录")
