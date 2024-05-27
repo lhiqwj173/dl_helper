@@ -182,6 +182,8 @@ class Dataset(torch.utils.data.Dataset):
         # self.data = torch.tensor(np.array(raw_data), dtype=torch.float)
         self.data = torch.from_numpy(raw_data.values)
 
+        report_memory_usage()
+
         # 中间价
         self.mid = []
 
@@ -211,8 +213,10 @@ class Dataset(torch.utils.data.Dataset):
             mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
 
+        report_memory_usage()
         logger.debug("增加一个通道维度")
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
+        report_memory_usage()
 
         # 训练数据集
         self.train = train
@@ -446,7 +450,7 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
     ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     diff_length = 0
     count = 0
-    for file in files:
+    for file in tqdm(files):
         count += 1
         if count > max_num:
             break
