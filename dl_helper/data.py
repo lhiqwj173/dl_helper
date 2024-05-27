@@ -313,10 +313,8 @@ class Dataset(torch.utils.data.Dataset):
         if ab_length > self.time_length:
             a += (ab_length-self.time_length)
 
-        # 获取均值方差
-        xa, xb = 0, 46
-
         # 使用部分截取 xa, xb
+        xa, xb = 0, 46
         if params.use_pk and params.use_trade:
             pass
         elif params.use_pk:
@@ -325,6 +323,7 @@ class Dataset(torch.utils.data.Dataset):
             xa = 40
 
         # 获取切片x
+        x = None
         if self.train and params.random_mask_row>0:
             # 随机删除行，保持行数不变
             x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
@@ -333,6 +332,10 @@ class Dataset(torch.utils.data.Dataset):
 
         # 截取mean_std
         mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+        
+        # 随机缩放
+        if self.train and params.random_scale>0:
+            x = random_scale(x, params.random_scale)
 
         # 价格标准化
         x[0, :, self.price_cols] /= mid
@@ -342,10 +345,6 @@ class Dataset(torch.utils.data.Dataset):
         # 随机mask
         if self.train and params.random_mask>0:
             x = random_mask(x, params.random_mask)
-
-        # 随机缩放
-        if self.train and params.random_scale>0:
-            x = random_scale(x, params.random_scale)
 
         # return x, (self.y[index], self.ids[index])
         if self.cnn:
