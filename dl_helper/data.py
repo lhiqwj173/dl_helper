@@ -13,7 +13,7 @@ from .tool import report_memory_usage
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
-ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+ids, mean_std, x, y, raw, mid_price = [], [], [], [], pd.DataFrame(), []
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -177,7 +177,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
-        global ids, mean_std, x, y, raw
+        global ids, mean_std, x, y, raw, mid_price
 
         self.cnn = cnn
 
@@ -196,33 +196,21 @@ class Dataset(torch.utils.data.Dataset):
         # 使用部分截取
         if params.use_pk and params.use_trade:
             logger.debug("使用全部数据")
-            self.data = torch.from_numpy(raw.values)
-            del raw
-            self.mean_std = mean_std
 
         elif params.use_pk:
             logger.debug("只使用盘口数据")
-            self.data = torch.from_numpy(raw.iloc[:, :40].values)
-            del raw
-            self.mean_std = [i[:40] for i in mean_std]
             self.price_cols = [i*2 for i in range(20)]
 
         elif params.use_trade:
             logger.debug("只使用交易数据")
-
-            # 需要记录中交价格
-            mid = ((raw['卖1价'] + raw['买1价']) / 2).to_list()
-            for i in range(len(x)):
-                _, idx = x[i]
-                idx -= 1
-                self.mid.append(mid[idx])
-
-            self.data = torch.from_numpy(raw.iloc[:, 40:].values)
-            del raw
-            self.mean_std = [i[40:] for i in mean_std]
             self.price_cols = [2, 5]
 
+        self.data = torch.from_numpy(raw.values)
+        del raw
+
+        self.mean_std = mean_std
         del mean_std
+
         report_memory_usage()
 
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
@@ -410,7 +398,7 @@ class cache():
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
 
-def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
+def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
 
@@ -461,16 +449,35 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
     logger.debug(f'{files}')
 
     # 读取分段合并
-    global ids, mean_std, x, y, raw
-    ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+    global ids, mean_std, x, y, raw, mid_price
+    ids, mean_std, x, y, raw, mid_price = [], [], [], [], pd.DataFrame(), []
     diff_length = 0
     count = 0
     for file in tqdm(files):
         count += 1
         if count > max_num:
             break
+
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
+
+        # 使用部分截取
+        if params.use_pk and params.use_trade:
+            pass
+        elif params.use_pk:
+            _mean_std = [i[:40] for i in _mean_std]
+            _raw = _raw.iloc[:, :40]
+        elif params.use_trade:
+            # 需要记录中交价格
+            mid = ((_raw['卖1价'] + _raw['买1价']) / 2).to_list()
+            for i in range(len(_x)):
+                _, idx = _x[i]
+                idx -= 1
+                mid_price.append(mid[idx])
+
+            _mean_std = [i[40:] for i in _mean_std]
+            _raw = _raw.iloc[:, 40:]
+
         ids += _id
         mean_std += _mean_std
         y += _y
@@ -494,13 +501,9 @@ def read_data(_type, reblance=False, max_num=10000, head_n=0, pct=100, need_id=F
 
         x = [x[i] for i in range(len(x)) if i not in to_del_idx]
         y = [y[i] for i in range(len(y)) if i not in to_del_idx]
-        mean_std = [mean_std[i]
-                    for i in range(len(mean_std)) if i not in to_del_idx]
+        mean_std = [mean_std[i] for i in range(len(mean_std)) if i not in to_del_idx]
         ids = [ids[i] for i in range(len(ids)) if i not in to_del_idx]
-
-    if reblance:
-        logger.debug(f"样本均衡")
-        ids, mean_std, x, y, raw = re_blance_sample(ids, mean_std, x, y, raw)
+        mid_price = [mid_price[i] for i in range(len(mid_price)) if i not in to_del_idx] 
 
     logger.debug(f"nan值样本数量 {raw.isna().sum().sum()}")
 
