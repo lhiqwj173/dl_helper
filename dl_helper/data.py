@@ -460,13 +460,17 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
+        _raw = reduce_mem_usage(_raw)
 
         # 使用部分截取
         if params.use_pk and params.use_trade:
-            pass
+            mean_std += _mean_std
+            raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         elif params.use_pk:
-            _mean_std = [i[:40] for i in _mean_std]
-            _raw = _raw.iloc[:, :40]
+            for i in _mean_std:
+                mean_std.append(i[:40])
+
+            raw = pd.concat([raw, _raw.iloc[:, :40]], axis=0, ignore_index=True)
         elif params.use_trade:
             # 需要记录中交价格
             mid = ((_raw['卖1价'] + _raw['买1价']) / 2).to_list()
@@ -475,15 +479,14 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
                 idx -= 1
                 mid_price.append(mid[idx])
 
-            _mean_std = [i[40:] for i in _mean_std]
-            _raw = _raw.iloc[:, 40:]
+            for i in _mean_std:
+                mean_std.append(i[40:])
+
+            raw = pd.concat([raw, _raw.iloc[:, 40:]], axis=0, ignore_index=True)
 
         ids += _id
-        mean_std += _mean_std
         y += _y
         x += [(i[0] + diff_length, i[1] + diff_length) for i in _x]
-        _raw = reduce_mem_usage(_raw)
-        raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         diff_length += len(_raw)
 
         report_memory_usage()
