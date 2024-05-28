@@ -3,9 +3,9 @@ from py_ext.wechat import wx
 from .train_param import logger
 from .train_param import params
 
-def check_nan(loss, **kwargs):
-    if torch.isnan(loss).any().item():
-        pickle.dump((loss, kwargs), open(f'train_data.pkl', 'wb'))
+def check_nan(data, **kwargs):
+    if torch.isnan(data).any().item() or torch.isinf(data).any().item():
+        pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))
         wx.send_message(f'{params.train_title} 训练异常')
         raise Exception("error train data")
 
