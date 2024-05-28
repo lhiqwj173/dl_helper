@@ -342,7 +342,7 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] -= mean_std[:, 0]
         x[0, :, :] /= mean_std[:, 1]
 
-        check_nan(x, {"mid": mid, "mean_std": mean_std})
+        check_nan(x, mid=mid, mean_std=mean_std)
 
         # 随机mask
         if self.train and params.random_mask>0:

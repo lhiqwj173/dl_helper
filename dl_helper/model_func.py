@@ -445,7 +445,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     optimizer.step()
 
                 # 检查loss 是否nan
-                check_nan(loss, {"inputs": inputs, "targets": targets, "outputs": outputs})
+                check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                 train_loss.append(loss.item())
 
@@ -533,7 +533,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     loss = criterion(outputs, targets)
 
                     # 检查loss 是否nan
-                    check_nan(loss, {"inputs": inputs, "targets": targets, "outputs": outputs})
+                    check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                     test_loss.append(loss.item())
                     # logger.debug(f'test_loss: {loss.item()}')
