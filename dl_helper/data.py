@@ -331,12 +331,13 @@ class Dataset(torch.utils.data.Dataset):
         else:
             x = self.data[:, a:b, xa:xb].clone()
         # check_nan(x, raw=self.data, index=index, a=a, b=b, xa=xa, xb=xb, random_mask_row = params.random_mask_row)
-        x2 = x.clone()
+        # x2 = x.clone()
 
         # 随机缩放
         if self.train and params.random_scale>0:
             x = random_scale(x, params.random_scale)
-        check_nan(x, x0 = x2)
+        # check_nan(x, x0 = x2)
+        check_nan(x)
 
         # 截取mean_std
         mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
@@ -471,7 +472,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
-        _raw = reduce_mem_usage(_raw)
+        # _raw = reduce_mem_usage(_raw)
 
         mean_std += _mean_std
         raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
