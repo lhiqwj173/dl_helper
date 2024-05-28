@@ -36,7 +36,7 @@ from .tg import download_dataset_async
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
-from .tool import report_memory_usage
+from .tool import report_memory_usage, check_nan
 
 # 设置启动方法为'spawn'
 multiprocessing.set_start_method('spawn', force=True)
@@ -297,12 +297,6 @@ def count_correct_predictions(predictions, labels):
     # logger.debug(f'correct: {correct_count} / {len(labels)}')
     return correct_count
 
-def check_loss(x, y, predict, loss):
-    if torch.isnan(loss):
-        pickle.dump((x, y, predict, loss), open(f'train_data.pkl', 'wb'))
-        wx.send_message(f'{params.train_title} 训练异常')
-        raise "error train data"
-
 # A function to encapsulate the training loop
 
 
@@ -451,7 +445,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     optimizer.step()
 
                 # 检查loss 是否nan
-                check_loss(inputs, targets, outputs, loss)
+                check_nan(loss, {"inputs": inputs, "targets": targets, "outputs": outputs})
 
                 train_loss.append(loss.item())
 
@@ -539,7 +533,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     loss = criterion(outputs, targets)
 
                     # 检查loss 是否nan
-                    check_loss(inputs, targets, outputs, loss)  
+                    check_nan(loss, {"inputs": inputs, "targets": targets, "outputs": outputs})
 
                     test_loss.append(loss.item())
                     # logger.debug(f'test_loss: {loss.item()}')

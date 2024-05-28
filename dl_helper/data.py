@@ -9,7 +9,7 @@ import datetime
 from tqdm import tqdm
 
 from .train_param import params, logger, data_parm2str, data_str2parm
-from .tool import report_memory_usage
+from .tool import report_memory_usage, check_nan
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -341,6 +341,8 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, self.price_cols] /= mid
         x[0, :, :] -= mean_std[:, 0]
         x[0, :, :] /= mean_std[:, 1]
+
+        check_nan(x, {"mid": mid, "mean_std": mean_std})
 
         # 随机mask
         if self.train and params.random_mask>0:
