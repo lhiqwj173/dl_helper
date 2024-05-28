@@ -297,6 +297,12 @@ def count_correct_predictions(predictions, labels):
     # logger.debug(f'correct: {correct_count} / {len(labels)}')
     return correct_count
 
+def check_loss(x, y, predict, loss):
+    if torch.isnan(loss):
+        pickle.dump((x, y, predict, loss), open(f'train_data.pkl', 'wb'))
+        wx.send_message(f'{params.train_title} 训练异常')
+        raise "error train data"
+
 # A function to encapsulate the training loop
 
 
@@ -444,6 +450,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     # log_grad(model)
                     optimizer.step()
 
+                # 检查loss 是否nan
+                check_loss(inputs, targets, outputs, loss)
+
                 train_loss.append(loss.item())
 
                 with torch.no_grad():
@@ -528,6 +537,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
 
                     outputs = model(inputs)
                     loss = criterion(outputs, targets)
+
+                    # 检查loss 是否nan
+                    check_loss(inputs, targets, outputs, loss)  
 
                     test_loss.append(loss.item())
                     # logger.debug(f'test_loss: {loss.item()}')
