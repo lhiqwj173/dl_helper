@@ -105,6 +105,7 @@ def random_scale(tensor, scale_prob=0.005, min_scale=0.95, max_scale=1.05):
 
     scale = torch.rand(scale_num)*(max_scale-min_scale)+min_scale
     tensor[mask] *= scale
+
     return tensor
 
 class ResumeSample():
@@ -329,12 +330,13 @@ class Dataset(torch.utils.data.Dataset):
             x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
         else:
             x = self.data[:, a:b, xa:xb].clone()
-        check_nan(x, raw=self.data, index=index, a=a, b=b, xa=xa, xb=xb, random_mask_row = params.random_mask_row)
+        # check_nan(x, raw=self.data, index=index, a=a, b=b, xa=xa, xb=xb, random_mask_row = params.random_mask_row)
+        x2 = x.clone()
 
         # 随机缩放
         if self.train and params.random_scale>0:
             x = random_scale(x, params.random_scale)
-        check_nan(x)
+        check_nan(x, x0 = x2)
 
         # 截取mean_std
         mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
