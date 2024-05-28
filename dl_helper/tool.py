@@ -1,4 +1,4 @@
-import psutil, pickle
+import psutil, pickle, torch
 from py_ext.wechat import wx
 from .train_param import logger
 
