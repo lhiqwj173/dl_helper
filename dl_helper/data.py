@@ -329,13 +329,15 @@ class Dataset(torch.utils.data.Dataset):
             x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
         else:
             x = self.data[:, a:b, xa:xb].clone()
+        check_nan(x, raw=self.data, index=index, a=a, b=b, xa=xa, xb=xb, random_mask_row = params.random_mask_row)
 
-        # 截取mean_std
-        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-        
         # 随机缩放
         if self.train and params.random_scale>0:
             x = random_scale(x, params.random_scale)
+        check_nan(x)
+
+        # 截取mean_std
+        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
 
         # 价格标准化
         x[0, :, self.price_cols] /= mid
