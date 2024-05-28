@@ -1,6 +1,7 @@
 import psutil, pickle, torch
 from py_ext.wechat import wx
 from .train_param import logger
+from .train_param import params
 
 def check_nan(loss, **kwargs):
     if torch.isnan(loss).any().item():
