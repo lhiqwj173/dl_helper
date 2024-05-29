@@ -508,12 +508,12 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         mean_std = [mean_std[i] for i in range(len(mean_std)) if i not in to_del_idx]
         ids = [ids[i] for i in range(len(ids)) if i not in to_del_idx]
 
-    logger.debug(f"nan值样本数量 {raw.isna().sum().sum()}")
-
     if not need_id:
         ids = []
 
+    logger.debug(f"恢复成 float32")
     raw = convert_float16_2_32(raw)
+    report_memory_usage()
 
     # 检查数值异常
     assert raw.isna().any().any()==False and np.isinf(raw).any().any()==False, '数值异常'
