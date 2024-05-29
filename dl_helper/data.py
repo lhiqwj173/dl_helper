@@ -7,6 +7,7 @@ import torch
 import random
 import datetime
 from tqdm import tqdm
+import gc
 
 from .train_param import params, logger, data_parm2str, data_str2parm
 from .tool import report_memory_usage, check_nan
@@ -549,6 +550,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         x += [(i[0] + diff_length, i[1] + diff_length) for i in _x]
         diff_length += length
 
+        gc.collect()
         report_memory_usage()
 
     # 清理 临时变量
