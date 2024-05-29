@@ -328,40 +328,40 @@ class Dataset(torch.utils.data.Dataset):
         #############################
         # 1. 部分截取
         #############################
-        # # 使用部分截取 xa, xb
-        # xa, xb = 0, 46
-        # if params.use_pk and params.use_trade:
-        #     pass
-        # elif params.use_pk:
-        #     xb = 40
-        # elif params.use_trade:
-        #     xa = 40
-
-        # # 获取切片x
-        # x = None
-        # if self.train and params.random_mask_row>0:
-        #     # 随机删除行，保持行数不变
-        #     x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
-        # else:
-        #     x = self.data[:, a:b, xa:xb].clone()
-
-        # # 截取mean_std
-        # mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-
-        #############################
-        # 2. 全部使用，在读取数据的部分作截取操作
-        #############################
+        # 使用部分截取 xa, xb
+        xa, xb = 0, 46
+        if params.use_pk and params.use_trade:
+            pass
+        elif params.use_pk:
+            xb = 40
+        elif params.use_trade:
+            xa = 40
 
         # 获取切片x
         x = None
         if self.train and params.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
         else:
-            x = self.data[:, a:b, :].clone()
+            x = self.data[:, a:b, xa:xb].clone()
 
         # 截取mean_std
-        mean_std = torch.tensor(self.mean_std[index][:], dtype=torch.float)
+        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+
+        #############################
+        # 2. 全部使用，在读取数据的部分作截取操作
+        #############################
+
+        # # 获取切片x
+        # x = None
+        # if self.train and params.random_mask_row>0:
+        #     # 随机删除行，保持行数不变
+        #     x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
+        # else:
+        #     x = self.data[:, a:b, :].clone()
+
+        # # 截取mean_std
+        # mean_std = torch.tensor(self.mean_std[index][:], dtype=torch.float)
 
         #############################
         #############################
@@ -504,29 +504,29 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         ###################################################
         # 1. 不做截取操作 在dataset中截取
         ###################################################
-        # _raw = reduce_mem_usage(_raw)
+        _raw = reduce_mem_usage(_raw)
 
         ###################################################
         # 2. 截取操作
         ###################################################
-        xa, xb = 0, 46
-        if params.use_pk and params.use_trade:
-            pass
-        elif params.use_pk:
-            xb = 40
-        elif params.use_trade:
-            xa = 40
+        # xa, xb = 0, 46
+        # if params.use_pk and params.use_trade:
+        #     pass
+        # elif params.use_pk:
+        #     xb = 40
+        # elif params.use_trade:
+        #     xa = 40
 
-        _raw = _raw.iloc[:, xa:xb]
-        _raw = reduce_mem_usage(_raw)
-        _mean_std = [i[xa:xb] for i in _mean_std]
+        # _raw = _raw.iloc[:, xa:xb]
+        # _raw = reduce_mem_usage(_raw)
+        # _mean_std = [i[xa:xb] for i in _mean_std]
 
-        # 作一次序列化
-        pickle.dump((_raw, _mean_std), open(f'temp.pkl', 'wb'))
-        del _raw
-        del _mean_std
-        _raw, _mean_std = None, None
-        _raw, _mean_std = pickle.load(open(f'temp.pkl', 'rb'))
+        # # 作一次序列化
+        # pickle.dump((_raw, _mean_std), open(f'temp.pkl', 'wb'))
+        # del _raw
+        # del _mean_std
+        # _raw, _mean_std = None, None
+        # _raw, _mean_std = pickle.load(open(f'temp.pkl', 'rb'))
         
         ###################################################
         ###################################################
