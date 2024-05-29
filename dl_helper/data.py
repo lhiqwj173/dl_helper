@@ -197,8 +197,6 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
-        global ids, mean_std, x, y, raw
-
         self.cnn = cnn
 
         # 原始数据
@@ -222,12 +220,13 @@ class Dataset(torch.utils.data.Dataset):
             self.price_cols = [2, 5]
             self.vol_cols = [0, 1, 3, 4]
 
-        self.data = torch.from_numpy(raw.values)
-        del raw
+        self.data = torch.from_numpy(data_map['raw'].values)
+        del data_map['raw']
 
-        self.mean_std = mean_std
-        del mean_std
+        self.mean_std = data_map['mean_std']
+        del data_map['mean_std']
 
+        logger.debug('del data_map > raw / mean_std')
         report_memory_usage()
 
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
@@ -239,26 +238,26 @@ class Dataset(torch.utils.data.Dataset):
         if isinstance(y[0], list):
             if regress_y_idx != -1:
                 logger.debug(f"回归标签列表处理 使用标签idx:{regress_y_idx}")
-                y = [i[regress_y_idx] for i in y]
+                data_map['y'] = [i[regress_y_idx] for i in data_map['y']]
 
                 # y 可能为nan
-                idxs = [i for i in range(len(y)) if not np.isnan(y[i])]
+                idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
                 # 过滤nan
-                y = [y[i] for i in idxs]
-                x = [x[i] for i in idxs]
+                data_map['y'] = [data_map['y'][i] for i in idxs]
+                data_map['x'] = [data_map['x'][i] for i in idxs]
                 self.mean_std = [self.mean_std[i] for i in idxs]
-                ids = [ids[i] for i in idxs] if ids else ids
+                data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
             elif classify_y_idx!=1:
                 logger.debug(f"分类标签列表处理 使用标签idx:{classify_y_idx}")
-                y = [i[classify_y_idx] for i in y]
+                data_map['y'] = [i[classify_y_idx] for i in data_map['y']]
                 if None is classify_func:
-                    raise "pls set classify_func to split class"
-                y = [classify_func(i) for i in y]
+                    raise Exception('"pls set classify_func to split class"')
+                data_map['y'] = [classify_func(i) for i in data_map['y']]
 
                 # 训练集 数据平衡
                 if train:
-                    labels = set(y)
-                    sy = pd.Series(y)
+                    labels = set(data_map['y'])
+                    sy = pd.Series(data_map['y'])
                     min_num = sy.value_counts().min()
                     logger.debug(f'min_num: {min_num}')
 
@@ -278,9 +277,9 @@ class Dataset(torch.utils.data.Dataset):
                     idx.sort()
 
                     logger.debug(f'reindex')
-                    ids = [ids[i] for i in idx] if ids else ids
-                    x = [x[i] for i in idx]
-                    y = [y[i] for i in idx]
+                    data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
+                    data_map['x'] = [data_map['x'][i] for i in idx]
+                    data_map['y'] = [data_map['y'][i] for i in idx]
                     self.mean_std = [self.mean_std[i] for i in idx]
             else:
                 raise "regress_y_idx/classify_y_idx no set"
@@ -291,22 +290,23 @@ class Dataset(torch.utils.data.Dataset):
         self.time_length = int(params.data_set.split('_')[3])
 
         # id
-        self.ids = ids
-        del ids
+        self.ids = data_map['ids']
+        del data_map['ids']
 
         # 数据长度
         self.length = len(x)
 
         # x 切片索引
-        self.x_idx = x
-        del x
+        self.x_idx = data_map['x']
+        del data_map['x']
         # x = torch.tensor(np.array(x), dtype=torch.float)
 
         # y
         # 标签onehot 编码
         # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
-        self.y = torch.tensor(np.array(y), dtype=torch.int64)
-        del y
+        self.y = torch.tensor(np.array(data_map['y']), dtype=torch.int64)
+        
+        data_map.clear()
 
         logger.debug(f'数据集初始化完毕')
         report_memory_usage()
@@ -564,23 +564,23 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
     if head_n > 0:
         logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
-        raw = raw.iloc[:head_n, :]
-        to_del_idx = [i for i in range(len(x)) if x[i][-1] > head_n]
+        data_map['raw'] = data_map['raw'].iloc[:head_n, :]
+        to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
 
-        x = [x[i] for i in range(len(x)) if i not in to_del_idx]
-        y = [y[i] for i in range(len(y)) if i not in to_del_idx]
-        mean_std = [mean_std[i] for i in range(len(mean_std)) if i not in to_del_idx]
-        ids = [ids[i] for i in range(len(ids)) if i not in to_del_idx]
+        data_map['x'] = [data_map['x'][i] for i in range(len(data_map['x'])) if i not in to_del_idx]
+        data_map['y'] = [data_map['y'][i] for i in range(len(data_map['y'])) if i not in to_del_idx]
+        data_map['mean_std'] = [data_map['mean_std'][i] for i in range(len(data_map['mean_std'])) if i not in to_del_idx]
+        data_map['ids'] = [data_map['ids'][i] for i in range(len(data_map['ids'])) if i not in to_del_idx]
 
     if not need_id:
-        ids = []
+        data_map['ids'].clear()
 
     logger.debug(f"恢复成 float32")
-    raw = convert_float16_2_32(raw)
+    data_map['raw'] = convert_float16_2_32(data_map['raw'])
     report_memory_usage()
 
     # 检查数值异常
-    assert raw.isna().any().any()==False and np.isinf(raw).any().any()==False, '数值异常'
+    assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
     dataset_test = Dataset(params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
