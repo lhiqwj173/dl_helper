@@ -15,13 +15,7 @@ from .tool import report_memory_usage, check_nan
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
 # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
-data_map = {
-    'ids': [],
-    'mean_std': [],
-    'x': [],
-    'y': [],
-    'raw': pd.DataFrame()
-}
+data_map = {}
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -116,7 +110,7 @@ def random_mask(tensor, mask_prob=1e-4):
 def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
-    mask[:, vol_cols] = torch.rand(tensor.size()[0], len(vol_cols)) < scale_prob
+    mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
     
     scale_num = mask.sum().item()
     if scale_num == 0:
@@ -235,7 +229,7 @@ class Dataset(torch.utils.data.Dataset):
         self.train = train
 
         # 针对回归数据集, y可能为一个列表
-        if isinstance(y[0], list):
+        if isinstance(data_map['y'][0], list):
             if regress_y_idx != -1:
                 logger.debug(f"回归标签列表处理 使用标签idx:{regress_y_idx}")
                 data_map['y'] = [i[regress_y_idx] for i in data_map['y']]
@@ -294,7 +288,7 @@ class Dataset(torch.utils.data.Dataset):
         del data_map['ids']
 
         # 数据长度
-        self.length = len(x)
+        self.length = len(data_map['x'])
 
         # x 切片索引
         self.x_idx = data_map['x']
@@ -451,7 +445,6 @@ class cache():
 def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
-
     logger.debug(f'读取 {_type} 数据')
 
     data_path = params.data_folder
@@ -502,7 +495,15 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     diff_length = 0
     count = 0
 
+    # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+    data_map['ids'] = []
+    data_map['mean_std'] = []
+    data_map['x'] = []
+    data_map['y'] = []
+    data_map['raw'] = pd.DataFrame()
+
     temp_data_map = {}
+
     keys = ['id', 'mean_std', 'x', 'y', 'raw']
     for file in tqdm(files):
         count += 1
