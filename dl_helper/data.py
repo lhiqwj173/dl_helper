@@ -520,7 +520,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _raw2 = _raw.iloc[:, xa:xb].copy()
         del _raw
-        _raw = reduce_mem_usage(_raw)
+        _raw2 = reduce_mem_usage(_raw2)
 
         _mean_std2 = [i[xa:xb] for i in _mean_std]
         del _mean_std
@@ -537,7 +537,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         report_memory_usage()
 
     # 清理 临时变量
-    del _id, _mean_std, _x, _y, _raw
+    del _id, _x, _y
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
