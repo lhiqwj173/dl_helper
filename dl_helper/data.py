@@ -96,8 +96,11 @@ def random_mask(tensor, mask_prob=1e-4):
     return tensor
 
 # 定义随机缩放函数
-def random_scale(tensor, scale_prob=0.005, min_scale=0.95, max_scale=1.05):
-    mask = torch.rand(tensor.size()) < scale_prob
+# 只对vol作用
+def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+    mask = torch.zeros(tensor.size(), dtype=torch.bool)
+    # 只用vol_cols
+    mask[:, vol_cols] = torch.rand(tensor.size()[0], len(vol_cols)) < scale_prob
     
     scale_num = mask.sum().item()
     if scale_num == 0:
@@ -183,13 +186,11 @@ class Dataset(torch.utils.data.Dataset):
         self.cnn = cnn
 
         # 原始数据
-        # self.data = torch.from_numpy(raw.values)
-        self.data = None
-
         report_memory_usage()
 
         # 区分价量列
         self.price_cols = [i*2 for i in range(20)] + [42, 45]
+        self.vol_cols = [i*2+1 for i in range(20)] + [40, 41, 43, 44]
 
         # 使用部分截取
         if params.use_pk and params.use_trade:
@@ -198,10 +199,12 @@ class Dataset(torch.utils.data.Dataset):
         elif params.use_pk:
             logger.debug("只使用盘口数据")
             self.price_cols = [i*2 for i in range(20)]
+            self.vol_cols = [i*2+1 for i in range(20)]
 
         elif params.use_trade:
             logger.debug("只使用交易数据")
             self.price_cols = [2, 5]
+            self.vol_cols = [0, 1, 3, 4]
 
         self.data = torch.from_numpy(raw.values)
         del raw
@@ -330,14 +333,6 @@ class Dataset(torch.utils.data.Dataset):
             x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
         else:
             x = self.data[:, a:b, xa:xb].clone()
-        # check_nan(x, raw=self.data, index=index, a=a, b=b, xa=xa, xb=xb, random_mask_row = params.random_mask_row)
-        # x2 = x.clone()
-
-        # 随机缩放
-        if self.train and params.random_scale>0:
-            x = random_scale(x, params.random_scale)
-        # check_nan(x, x0 = x2)
-        check_nan(x)
 
         # 截取mean_std
         mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
@@ -347,11 +342,15 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] -= mean_std[:, 0]
         x[0, :, :] /= mean_std[:, 1]
 
-        check_nan(x, mid=mid, mean_std=mean_std)
+        # 随机缩放
+        if self.train and params.random_scale>0:
+            x = random_scale(x, self.vol_cols, params.random_scale)
 
         # 随机mask
         if self.train and params.random_mask>0:
             x = random_mask(x, params.random_mask)
+
+        check_nan(x)
 
         # return x, (self.y[index], self.ids[index])
         if self.cnn:
