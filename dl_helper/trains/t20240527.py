@@ -54,5 +54,5 @@ class trainer(trainer_base):
 
             data_folder=data_folder,
 
-            describe='binctabl predict_n=50'
+            describe='binctabl predict_n=60'
         )
