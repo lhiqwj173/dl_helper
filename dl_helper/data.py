@@ -523,6 +523,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         # 作一次序列化
         pickle.dump((_raw, _mean_std), open(f'temp.pkl', 'wb'))
+        del _raw
+        del _mean_std
         _raw, _mean_std = None, None
         _raw, _mean_std = pickle.load(open(f'temp.pkl', 'rb'))
         
