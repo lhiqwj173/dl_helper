@@ -494,16 +494,21 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     diff_length = 0
     count = 0
+
+    temp_data_map = {}
     for file in tqdm(files):
         count += 1
         if count > max_num:
             break
 
+        report_memory_usage()
+        logger.debug(f"load data")
+            
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
 
         report_memory_usage()
-        
+
         ###################################################
         # 1. 不做截取操作 在dataset中截取
         ###################################################
@@ -524,17 +529,28 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         elif params.use_trade:
             xa = 40
 
+        logger.debug(f"_raw: {_raw.memory_usage().sum() / 1024**2} MB")
         _raw2 = _raw.iloc[:, xa:xb].copy()
+        logger.debug(f"_raw2: {_raw2.memory_usage().sum() / 1024**2} MB")
+
+        logger.debug('copy _raw2')
+        report_memory_usage()
+
         del _raw
 
         logger.debug('del _raw')
         report_memory_usage()
 
         _raw2 = reduce_mem_usage(_raw2)
+        logger.debug('reduce_mem _raw2')
+        report_memory_usage()
 
         _mean_std2 = [i[xa:xb] for i in _mean_std]
-        del _mean_std
+        
+        logger.debug('copy _mean_std2')
+        report_memory_usage()
 
+        del _mean_std
         logger.debug('del _mean_std')
         report_memory_usage()
 
