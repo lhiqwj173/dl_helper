@@ -52,6 +52,14 @@ def reduce_mem_usage(df):
 
     return df
 
+
+def convert_float16_2_32(df):
+    for col in df.columns:
+        if df[col].dtype == 'float16':
+            df[col] = df[col].astype('float32')
+
+    return df
+
 # 随机选择 max_mask_num 的行数
 # 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 105
@@ -471,10 +479,10 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
-        # _raw = reduce_mem_usage(_raw)
+        _raw = reduce_mem_usage(_raw)
 
         mean_std += _mean_std
-        raw = pd.concat([raw, _raw], axis=0, ignore_index=True, copy=False)
+        raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
         # raw = raw.append(_raw)
 
         ids += _id
@@ -504,6 +512,11 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
     if not need_id:
         ids = []
+
+    raw = convert_float16_2_32(raw)
+
+    # 检查数值异常
+    check_nan(raw)
     
     dataset_test = Dataset(params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
