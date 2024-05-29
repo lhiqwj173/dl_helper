@@ -507,6 +507,9 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         # _raw = reduce_mem_usage(_raw)
         # mean_std += _mean_std
         # raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
+        # length = len(_raw)
+        # del _raw
+        # del _mean_std
         ###################################################
         # 2. 截取操作
         ###################################################
@@ -527,12 +530,15 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         mean_std += _mean_std2
         raw = pd.concat([raw, _raw2], axis=0, ignore_index=True)
+        length = len(_raw2)
+        del _raw2
+        del _mean_std2
         ###################################################
         ###################################################
         ids += _id
         y += _y
         x += [(i[0] + diff_length, i[1] + diff_length) for i in _x]
-        diff_length += len(_raw)
+        diff_length += length
 
         report_memory_usage()
 
