@@ -474,7 +474,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         # _raw = reduce_mem_usage(_raw)
 
         mean_std += _mean_std
-        raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
+        # raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
+        raw = raw.append(_raw)
 
         ids += _id
         y += _y
