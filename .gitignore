@@ -41,3 +41,4 @@ mobilenet_v2_data_v6/
 *.ipynb
 *.pkl
 *.csv
+temp

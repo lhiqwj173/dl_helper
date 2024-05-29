@@ -500,6 +500,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _id, _mean_std, _x, _y, _raw = pickle.load(
             open(os.path.join(data_path, file), 'rb'))
+
+        report_memory_usage()
         
         ###################################################
         # 1. 不做截取操作 在dataset中截取
@@ -523,10 +525,17 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         _raw2 = _raw.iloc[:, xa:xb].copy()
         del _raw
+
+        logger.debug('del _raw')
+        report_memory_usage()
+
         _raw2 = reduce_mem_usage(_raw2)
 
         _mean_std2 = [i[xa:xb] for i in _mean_std]
         del _mean_std
+
+        logger.debug('del _mean_std')
+        report_memory_usage()
 
         mean_std += _mean_std2
         raw = pd.concat([raw, _raw2], axis=0, ignore_index=True)
