@@ -303,7 +303,7 @@ def count_correct_predictions(predictions, labels):
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
 
     # 获取数据
-    train_loader_cache = read_data('train', max_num=1 if debug else 10000, cnn=cnn)
+    train_loader_cache = read_data('train', max_num=3 if debug else 10000, cnn=cnn)
     val_loader_cache = read_data('val', max_num=1 if debug else 10000, cnn=cnn)
     assert len(train_loader_cache.data) > 0, "没有训练数据"
     assert len(val_loader_cache.data) > 0, "没有验证数据"
@@ -976,8 +976,8 @@ class trainer:
     def train(self, only_test=False):
         if self.debug:
             # 使用最小数据进行测试
-            params.data_parm['data_rate'] = (1,1,1)
-            params.data_parm['total_hours'] = 6
+            params.data_parm['data_rate'] = (10,1,1)
+            params.data_parm['total_hours'] = 12
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
             params.epochs = 2
 

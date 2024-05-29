@@ -14,7 +14,14 @@ from .tool import report_memory_usage, check_nan
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
-ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+# ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
+data_map = {
+    'ids': [],
+    'mean_std': [],
+    'x': [],
+    'y': [],
+    'raw': pd.DataFrame()
+}
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -439,6 +446,8 @@ class cache():
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
 
+
+
 def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
@@ -490,34 +499,31 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     logger.debug(f'{files}')
 
     # 读取分段合并
-    global ids, mean_std, x, y, raw
-    ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     diff_length = 0
     count = 0
 
     temp_data_map = {}
+    keys = ['id', 'mean_std', 'x', 'y', 'raw']
     for file in tqdm(files):
         count += 1
         if count > max_num:
             break
 
-        report_memory_usage()
-        logger.debug(f"load data")
+        # report_memory_usage()
+        # logger.debug(f"load data")
             
-        _id, _mean_std, _x, _y, _raw = pickle.load(
-            open(os.path.join(data_path, file), 'rb'))
+        temp_data_map = dict(zip(keys, pickle.load(
+            open(os.path.join(data_path, file), 'rb'))))
 
-        report_memory_usage()
+        # report_memory_usage()
 
         ###################################################
         # 1. 不做截取操作 在dataset中截取
         ###################################################
-        # _raw = reduce_mem_usage(_raw)
-        # mean_std += _mean_std
-        # raw = pd.concat([raw, _raw], axis=0, ignore_index=True)
-        # length = len(_raw)
-        # del _raw
-        # del _mean_std
+        # temp_data_map['raw'] = reduce_mem_usage(temp_data_map['raw'])
+        # data_map['mean_std'] += temp_data_map['mean_std']
+        # data_map['raw'] = pd.concat([data_map['raw'], temp_data_map['raw']], axis=0, ignore_index=True)
+        # length = len(temp_data_map['raw'])
         ###################################################
         # 2. 截取操作
         ###################################################
@@ -529,48 +535,29 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         elif params.use_trade:
             xa = 40
 
-        logger.debug(f"_raw: {_raw.memory_usage().sum() / 1024**2} MB")
-        _raw2 = _raw.iloc[:, xa:xb].copy()
-        logger.debug(f"_raw2: {_raw2.memory_usage().sum() / 1024**2} MB")
+        temp_data_map['raw2'] = temp_data_map['raw'].iloc[:, xa:xb].copy()
 
-        logger.debug('copy _raw2')
-        report_memory_usage()
+        temp_data_map['raw2'] = reduce_mem_usage(temp_data_map['raw2'])
+        temp_data_map['mean_std2'] = [i[xa:xb] for i in temp_data_map['mean_std']]
 
-        del _raw
-
-        logger.debug('del _raw')
-        report_memory_usage()
-
-        _raw2 = reduce_mem_usage(_raw2)
-        logger.debug('reduce_mem _raw2')
-        report_memory_usage()
-
-        _mean_std2 = [i[xa:xb] for i in _mean_std]
-        
-        logger.debug('copy _mean_std2')
-        report_memory_usage()
-
-        del _mean_std
-        logger.debug('del _mean_std')
-        report_memory_usage()
-
-        mean_std += _mean_std2
-        raw = pd.concat([raw, _raw2], axis=0, ignore_index=True)
-        length = len(_raw2)
-        del _raw2
-        del _mean_std2
+        data_map['mean_std'] += temp_data_map['mean_std2']
+        data_map['raw']  = pd.concat([data_map['raw'], temp_data_map['raw2']], axis=0, ignore_index=True)
+        length = len(temp_data_map['raw2'])
         ###################################################
         ###################################################
-        ids += _id
-        y += _y
-        x += [(i[0] + diff_length, i[1] + diff_length) for i in _x]
+        data_map['ids'] += temp_data_map['id']
+        data_map['y'] += temp_data_map['y']
+        data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in temp_data_map['x']]
         diff_length += length
+
+        temp_data_map.clear()
 
         gc.collect()
         report_memory_usage()
 
-    # 清理 临时变量
-    del _id, _x, _y
+        logger.debug(f"raw: {data_map['raw'].memory_usage().sum() / 1024**2} MB")
+
+    report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
