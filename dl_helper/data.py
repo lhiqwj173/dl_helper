@@ -516,7 +516,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     raw = convert_float16_2_32(raw)
 
     # 检查数值异常
-    check_nan(raw)
+    assert raw.isna().any().any()==False and np.isinf(raw).any().any()==False, '数值异常'
     
     dataset_test = Dataset(params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
