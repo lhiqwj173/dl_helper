@@ -28,14 +28,14 @@ class trainer(trainer_base):
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         y_n = 3
-        title = f'binctabl_p50_v{self.idx}'
+        title = f'binctabl_p60_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (9, 1, 2),
-            'total_hours': int(24*10),
+            'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
@@ -50,7 +50,7 @@ class trainer(trainer_base):
             random_scale=0.01, random_mask_row=0.5,
 
             # 3分类
-            y_n=y_n, classify_y_idx=4,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
+            y_n=y_n, classify_y_idx=5,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
 
             data_folder=data_folder,
 
