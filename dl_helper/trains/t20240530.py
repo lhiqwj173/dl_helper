@@ -19,10 +19,11 @@ class trainer(trainer_base):
     试验结果作为基线性能
     predict_n = 10
     """
-    def __init__(self, idx, debug=False):
+    def __init__(self, idx, workers=2, debug=False):
         super().__init__(idx, debug, False)
+        self.workers = workers
 
-    def init_param(self, workers=2, data_folder=''):
+    def init_param(self, data_folder=''):
         print('init_param')
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
@@ -54,7 +55,7 @@ class trainer(trainer_base):
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.0001, batch_size=64, workers=workers,
+            learning_rate=0.0001, batch_size=64, workers=self.workers,
 
             # 数据增强
             random_scale=0.01, random_mask_row=0.5,
