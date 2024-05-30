@@ -931,10 +931,11 @@ def pack_folder():
     compress_folder(params.root, file, 9, inplace=False)
 
 class trainer:
-    def __init__(self, idx, debug=False, cnn=True):
+    def __init__(self, idx, debug=False, cnn=True, workers=3):
         self.idx = idx
         self.debug = debug
         self.cnn = cnn
+        self.workers = workers
 
         # 开启CuDNN自动优化
         torch.backends.cudnn.benchmark = True

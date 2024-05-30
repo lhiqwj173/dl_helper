@@ -51,7 +51,7 @@ class trainer(trainer_base):
         model = m_deeplob(y_n)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.0001, batch_size=64, 
+            learning_rate=0.0001, batch_size=64, workers=self.workers,
 
             # 数据增强
             random_scale=0.01, random_mask_row=0.5,

@@ -20,8 +20,7 @@ class trainer(trainer_base):
     predict_n = 10
     """
     def __init__(self, idx, workers=2, debug=False):
-        super().__init__(idx, debug, False)
-        self.workers = workers
+        super().__init__(idx, debug, False, workers)
 
     def init_param(self, data_folder=''):
         print('init_param')
