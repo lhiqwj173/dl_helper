@@ -30,7 +30,7 @@ class trainer(trainer_base):
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         y_n = 3
-        title = f'binctabl_p60_v{self.idx}'
+        title = f'binctabl_p60_{self.days}_{self.workers}'
         data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 100,
