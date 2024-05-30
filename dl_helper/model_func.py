@@ -302,11 +302,17 @@ def count_correct_predictions(predictions, labels):
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
 
-    # 获取数据
-    train_loader_cache = read_data('train', max_num=1 if debug else 10000, cnn=cnn)
-    val_loader_cache = read_data('val', max_num=1 if debug else 10000, cnn=cnn)
+    # 恢复 scheduler/optmizer
+    sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
+    if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
+        sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = pickle.load(
+            open(os.path.join(params.root, 'var', f'helper.pkl'), 'rb'))
+
+    # 获取训练数据
+    train_loader_cache = read_data('train', cnn=cnn)
+    if not None is sd_train_loader:
+        train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
     assert len(train_loader_cache.data) > 0, "没有训练数据"
-    assert len(val_loader_cache.data) > 0, "没有验证数据"
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
@@ -366,21 +372,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lr_lambda=lr_lambda)
 
-    # 恢复 scheduler/optmizer
-    if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
-        sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = pickle.load(
-            open(os.path.join(params.root, 'var', f'helper.pkl'), 'rb'))
+    if not None is sd_scheduler:
         scheduler.load_state_dict(sd_scheduler)
         optimizer.load_state_dict(sd_optimizer)
-        train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
-        val_loader_cache.data.sampler.load_state_dict(sd_test_loader)
-
-    report_memory_usage()
-    train_loader_cache.cache()
-    logger.debug(f'缓存 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
-    val_loader_cache.cache()
-    logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
-    report_memory_usage()
 
     # 初始化warnup
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -389,6 +383,21 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     # 储存loader状态
     train_loader_sampler_state_dict = {}
     val_loader_sampler_state_dict = {}
+
+    # 缓存训练数据
+    report_memory_usage()
+    train_loader_cache.cache()
+    logger.debug(f'缓存 train_loader_cache 耗时{train_loader_cache.cost:.3f}s')
+
+    # 获取验证数据
+    val_loader_cache = read_data('val', cnn=cnn)
+    if not None is sd_test_loader:
+        val_loader_cache.data.sampler.load_state_dict(sd_test_loader)
+    assert len(val_loader_cache.data) > 0, "没有验证数据"
+    # 缓存验证数据
+    val_loader_cache.cache()
+    logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
+    report_memory_usage()
 
     t = time.time()
     for it in range(begin, epochs):
@@ -692,7 +701,7 @@ def test_model(result_dict, debug, cnn, select='best'):
         return
 
     # 读取数据
-    test_loader_cache = read_data('test', max_num=1 if debug else 10000, need_id=True, cnn=cnn)
+    test_loader_cache = read_data('test', need_id=True, cnn=cnn)
 
     # model = torch.load('best_val_model_pytorch')
     all_targets = []
@@ -976,8 +985,12 @@ class trainer:
     def train(self, only_test=False):
         if self.debug:
             # 使用最小数据进行测试
+            params.data_parm['data_rate'] = (44,2,2)
+            params.data_parm['total_hours'] = 48
+
             params.data_parm['data_rate'] = (2,2,2)
             params.data_parm['total_hours'] = 6
+
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
             params.epochs = 2
 

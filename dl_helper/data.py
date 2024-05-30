@@ -7,7 +7,6 @@ import torch
 import random
 import datetime
 from tqdm import tqdm
-import gc
 
 from .train_param import params, logger, data_parm2str, data_str2parm
 from .tool import report_memory_usage, check_nan
@@ -15,7 +14,7 @@ from .tool import report_memory_usage, check_nan
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
 # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
-data_map = {}
+# data_map = {}
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -189,7 +188,7 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
+    def __init__(self, data_map, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
         """Initialization"""
         self.cnn = cnn
 
@@ -330,14 +329,14 @@ class Dataset(torch.utils.data.Dataset):
         #############################
         # 1. 部分截取
         #############################
-        # # 使用部分截取 xa, xb
-        # xa, xb = 0, 46
-        # if params.use_pk and params.use_trade:
-        #     pass
-        # elif params.use_pk:
-        #     xb = 40
-        # elif params.use_trade:
-        #     xa = 40
+        # 使用部分截取 xa, xb
+        xa, xb = 0, 46
+        if params.use_pk and params.use_trade:
+            pass
+        elif params.use_pk:
+            xb = 40
+        elif params.use_trade:
+            xa = 40
 
         # # 获取切片x
         # x = None
@@ -347,8 +346,8 @@ class Dataset(torch.utils.data.Dataset):
         # else:
         #     x = self.data[:, a:b, xa:xb].clone()
 
-        # # 截取mean_std
-        # mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+        # 截取mean_std
+        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
 
         #############################
         # 2. 全部使用，在读取数据的部分作截取操作
@@ -362,8 +361,8 @@ class Dataset(torch.utils.data.Dataset):
         else:
             x = self.data[:, a:b, :].clone()
 
-        # 截取mean_std
-        mean_std = torch.tensor(self.mean_std[index][:], dtype=torch.float)
+        # # 截取mean_std
+        # mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
         #############################
         #############################
@@ -441,6 +440,55 @@ class cache():
         self.cost = time.time() - t0
 
 
+def load_data(file, diff_length, data_map):
+
+    ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
+    # report_memory_usage()
+
+    ###################################################
+    # 1. 不做截取操作 在dataset中截取
+    ###################################################
+    # raw = reduce_mem_usage(raw)
+    # data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+    # length = len(raw)
+
+    data_map['mean_std'] += mean_std
+    ###################################################
+    # 2. 截取操作
+    ###################################################
+    xa, xb = 0, 46
+    if params.use_pk and params.use_trade:
+        pass
+    elif params.use_pk:
+        xb = 40
+    elif params.use_trade:
+        xa = 40
+
+    raw2 = raw.iloc[:, xa:xb].copy()
+    raw2 = reduce_mem_usage(raw2)
+    data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
+    length = len(raw2)
+
+    # for i in mean_std:
+    #     data_map['mean_std'].append(tuple(i[xa:xb]))
+    #     for idx in range(len(i), 0, -1):
+    #         del i[idx - 1]
+    #     # i.clear()
+
+    # for i in mean_std:
+    #     for idx in range(len(i), 0, -1):
+    #         del i[idx - 1]
+    #     i.clear()
+    # mean_std.clear()
+
+    ###################################################
+    ###################################################
+    data_map['ids'] += ids
+    data_map['y'] += y
+    data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in x]
+    diff_length += length
+
+    return diff_length
 
 def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # # 读取测试数据
@@ -496,69 +544,27 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     count = 0
 
     # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
-    data_map['ids'] = []
-    data_map['mean_std'] = []
-    data_map['x'] = []
-    data_map['y'] = []
-    data_map['raw'] = pd.DataFrame()
+    # data_map['ids'] = []
+    # data_map['mean_std'] = []
+    # data_map['x'] = []
+    # data_map['y'] = []
+    # data_map['raw'] = pd.DataFrame()
+    # 最终数据
+    data_map = {
+        'ids': [],
+        'mean_std': [],
+        'x': [],
+        'y': [],
+        'raw': pd.DataFrame()
+    }
 
-    temp_data_map = {}
-
-    keys = ['id', 'mean_std', 'x', 'y', 'raw']
     for file in tqdm(files):
         count += 1
         if count > max_num:
             break
 
-        # report_memory_usage()
-        # logger.debug(f"load data")
-            
-        temp_data_map = dict(zip(keys, pickle.load(
-            open(os.path.join(data_path, file), 'rb'))))
-
-        # report_memory_usage()
-
-        ###################################################
-        # 1. 不做截取操作 在dataset中截取
-        ###################################################
-        # temp_data_map['raw'] = reduce_mem_usage(temp_data_map['raw'])
-        # data_map['mean_std'] += temp_data_map['mean_std']
-        # data_map['raw'] = pd.concat([data_map['raw'], temp_data_map['raw']], axis=0, ignore_index=True)
-        # length = len(temp_data_map['raw'])
-        ###################################################
-        # 2. 截取操作
-        ###################################################
-        xa, xb = 0, 46
-        if params.use_pk and params.use_trade:
-            pass
-        elif params.use_pk:
-            xb = 40
-        elif params.use_trade:
-            xa = 40
-
-        temp_data_map['raw2'] = temp_data_map['raw'].iloc[:, xa:xb].copy()
-
-        temp_data_map['raw2'] = reduce_mem_usage(temp_data_map['raw2'])
-        temp_data_map['mean_std2'] = [i[xa:xb] for i in temp_data_map['mean_std']]
-
-        data_map['mean_std'] += temp_data_map['mean_std2']
-        data_map['raw']  = pd.concat([data_map['raw'], temp_data_map['raw2']], axis=0, ignore_index=True)
-        length = len(temp_data_map['raw2'])
-        ###################################################
-        ###################################################
-        data_map['ids'] += temp_data_map['id']
-        data_map['y'] += temp_data_map['y']
-        data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in temp_data_map['x']]
-        diff_length += length
-
-        temp_data_map.clear()
-
-        gc.collect()
+        diff_length = load_data(os.path.join(data_path, file), diff_length, data_map)
         report_memory_usage()
-
-        logger.debug(f"raw: {data_map['raw'].memory_usage().sum() / 1024**2} MB")
-
-    report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
@@ -583,7 +589,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    dataset_test = Dataset(params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
+    dataset_test = Dataset(data_map, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
