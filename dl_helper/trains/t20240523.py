@@ -24,15 +24,25 @@ class trainer(trainer_base):
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
+        vars = []
+        for predict_n in [10, 30, 60]:
+            for idx in range(3):
+                vars.append((predict_n, idx))
+
+        assert self.idx < len(vars)
+        predict_n, idx = vars[self.idx]
+        predict_ns = [10, 20, 30, 40, 50, 60]
+        predict_idx = predict_ns.index(predict_n)
+
         y_n = 3
-        title = f'deeplob_v{self.idx}'
+        title = f'deeplob_p{predict_n}_v{idx}'
         data_parm = {
-            'predict_n': [10, 20, 30, 40, 50, 60],
+            'predict_n': predict_ns,
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (9, 1, 2),
-            'total_hours': int(24*10),
+            'total_hours': int(24*9),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
@@ -47,7 +57,7 @@ class trainer(trainer_base):
             random_scale=0.01, random_mask_row=0.5,
 
             # 3分类
-            y_n=y_n, classify_y_idx=0,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
+            y_n=y_n, classify_y_idx=predict_idx,classify_func=lambda x:0 if x>0 else 1 if x<0 else 2,
 
             data_folder=data_folder,
 
