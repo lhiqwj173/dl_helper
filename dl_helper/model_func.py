@@ -32,11 +32,13 @@ import random, psutil
 from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
-from .tg import download_dataset_async
+from .tg import download_dataset_async, tg_download, tg_upload, tg_del_file
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
 from .tool import report_memory_usage, check_nan
+
+ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
 
 # 设置启动方法为'spawn'
 multiprocessing.set_start_method('spawn', force=True)
@@ -301,6 +303,12 @@ def count_correct_predictions(predictions, labels):
 
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
+    # 检查下载tg上的保持训练数据
+    tg_download(
+        ses,
+        f'{params.train_title}.7z',
+        '/kaggle/working/'
+    )
 
     # 恢复 scheduler/optmizer
     sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
@@ -929,6 +937,11 @@ def pack_folder():
         os.remove(file)
 
     compress_folder(params.root, file, 9, inplace=False)
+
+    # 删除当前的训练文件，如果存在
+    tg_del_file(ses, f'{params.train_title}.7z')
+    # 上传到tg
+    tg_upload(ses, file)
 
 class trainer:
     def __init__(self, idx, debug=False, cnn=True, workers=3):

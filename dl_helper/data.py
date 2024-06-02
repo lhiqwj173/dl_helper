@@ -13,8 +13,7 @@ from .tool import report_memory_usage, check_nan
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
-# ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
-# data_map = {}
+need_split_data_set = None
 
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
@@ -196,22 +195,27 @@ class Dataset(torch.utils.data.Dataset):
         report_memory_usage()
 
         # 区分价量列
-        self.price_cols = [i*2 for i in range(20)] + [42, 45]
-        self.vol_cols = [i*2+1 for i in range(20)] + [40, 41, 43, 44]
+        self.price_cols = [i*2 for i in range(20)]
+        self.vol_cols = [i*2+1 for i in range(20)]
 
-        # 使用部分截取
-        if params.use_pk and params.use_trade:
+        if not need_split_data_set:
             logger.debug("使用全部数据")
+            if params.use_trade:
+                self.price_cols += [42, 45]
+                self.vol_cols += [40, 41, 43, 44]
 
-        elif params.use_pk:
-            logger.debug("只使用盘口数据")
-            self.price_cols = [i*2 for i in range(20)]
-            self.vol_cols = [i*2+1 for i in range(20)]
+        else:
+            # 使用部分截取
+            if (params.use_pk and params.use_trade):
+                raise Exception('no use')
 
-        elif params.use_trade:
-            logger.debug("只使用交易数据")
-            self.price_cols = [2, 5]
-            self.vol_cols = [0, 1, 3, 4]
+            elif params.use_pk:
+                logger.debug("只使用盘口数据")
+
+            elif params.use_trade:
+                logger.debug("只使用交易数据")
+                self.price_cols = [2, 5]
+                self.vol_cols = [0, 1, 3, 4]
 
         self.data = torch.from_numpy(data_map['raw'].values)
         del data_map['raw']
@@ -329,25 +333,20 @@ class Dataset(torch.utils.data.Dataset):
         #############################
         # 1. 部分截取
         #############################
-        # 使用部分截取 xa, xb
-        xa, xb = 0, 46
-        if params.use_pk and params.use_trade:
-            pass
-        elif params.use_pk:
-            xb = 40
-        elif params.use_trade:
-            xa = 40
+        if need_split_data_set:
+            # 使用部分截取 xa, xb
+            xa, xb = 0, 46
+            if params.use_pk and params.use_trade:
+                raise Exception('no use')
+            elif params.use_pk:
+                xb = 40
+            elif params.use_trade:
+                xa = 40
 
-        # # 获取切片x
-        # x = None
-        # if self.train and params.random_mask_row>0:
-        #     # 随机删除行，保持行数不变
-        #     x = random_mask_row(self.data[:, self.x_idx[index][0]:b, xa:xb].clone(), a, b, params.random_mask_row)
-        # else:
-        #     x = self.data[:, a:b, xa:xb].clone()
-
-        # 截取mean_std
-        mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+            # 截取mean_std
+            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+        else:
+            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
         #############################
         # 2. 全部使用，在读取数据的部分作截取操作
@@ -360,9 +359,6 @@ class Dataset(torch.utils.data.Dataset):
             x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
         else:
             x = self.data[:, a:b, :].clone()
-
-        # # 截取mean_std
-        # mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
         #############################
         #############################
@@ -443,43 +439,45 @@ class cache():
 def load_data(file, diff_length, data_map):
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
-    # report_memory_usage()
+    length = 0
+    
+    # 判断是否需要截取操作
+    global need_split_data_set
+    if need_split_data_set is None:
+        # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
+        # feature == 46 且 params.use_pk/params.use_trade 不全为true
+        need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
+
+        # 校正参数
+        if len(mean_std[0]) == 40:
+            params.use_pk = True
+            params.use_trade = False
 
     ###################################################
     # 1. 不做截取操作 在dataset中截取
     ###################################################
-    # raw = reduce_mem_usage(raw)
-    # data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
-    # length = len(raw)
+    if not need_split_data_set:
+        raw = reduce_mem_usage(raw)
+        data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+        length = len(raw)
 
     data_map['mean_std'] += mean_std
     ###################################################
     # 2. 截取操作
     ###################################################
-    xa, xb = 0, 46
-    if params.use_pk and params.use_trade:
-        pass
-    elif params.use_pk:
-        xb = 40
-    elif params.use_trade:
-        xa = 40
+    if need_split_data_set:
+        xa, xb = 0, 46
+        if params.use_pk and params.use_trade:
+            raise Exception('no use')
+        elif params.use_pk:
+            xb = 40
+        elif params.use_trade:
+            xa = 40
 
-    raw2 = raw.iloc[:, xa:xb].copy()
-    raw2 = reduce_mem_usage(raw2)
-    data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
-    length = len(raw2)
-
-    # for i in mean_std:
-    #     data_map['mean_std'].append(tuple(i[xa:xb]))
-    #     for idx in range(len(i), 0, -1):
-    #         del i[idx - 1]
-    #     # i.clear()
-
-    # for i in mean_std:
-    #     for idx in range(len(i), 0, -1):
-    #         del i[idx - 1]
-    #     i.clear()
-    # mean_std.clear()
+        raw2 = raw.iloc[:, xa:xb].copy()
+        raw2 = reduce_mem_usage(raw2)
+        data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
+        length = len(raw2)
 
     ###################################################
     ###################################################
@@ -502,40 +500,39 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
     # 获取数据分段
     files = []
+    data_set_files = sorted([i for i in os.listdir(data_path)])
     if target_parm['y_n'] > 1:
         # 分类数据集
-        for file in os.listdir(data_path):
+        for file in data_set_files:
             if _type in file:
                 files.append(file)
         files.sort()
     else:
         # 回归数据集
-        # 起始时间
-        date = target_parm['begin_date']
-        dt = tz_beijing.localize(
-            datetime.datetime.strptime(date, '%Y-%m-%d'))
+        begin_date = ''
+        totals = 0
+        if len(data_set_files[0]) == 12:
+            # a股数据集 20240313.pkl
+            begin_date = target_parm['begin_date'].replace('-', '') + '.pkl'
+            totals = target_parm['total_hours'] // 24
+        else:
+            # 数字货币数据集 20240427_10.pkl
+            begin_date = target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
+            totals = target_parm['total_hours'] // 2
+
+        files = data_set_files[data_set_files.index(begin_date):]
 
         # 初始化个部分的 begin end
         _rate_sum = sum(target_parm['data_rate'])
         idx = 0 if _type=='train' else 1 if _type=='val' else 2
 
-        begin_hour = 0
+        # 起始索引，以begin_date为0索引
+        begin_idx = 0
         for i in range(idx):
-            begin_hour = int(target_parm['total_hours'] * (target_parm['data_rate'][i] / _rate_sum))
+            begin_idx += int(totals * (target_parm['data_rate'][i] / _rate_sum))
+        end_idx = int(totals * (target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
 
-        rate = target_parm['data_rate'][idx] / _rate_sum
-        hours = int(target_parm['total_hours'] * rate)# 使用时长
-
-        # begin_hour 必须整除2
-        if begin_hour % 2 != 0:
-            begin_hour += 1
-            hours -= 1
-        begin_dt = dt + datetime.timedelta(hours=begin_hour)
-
-        for i in range(hours // 2):
-            _dt = begin_dt + datetime.timedelta(hours=i*2)
-            file = f'{datetime.datetime.strftime(_dt, "%Y%m%d_%H")}.pkl'
-            files.append(file)
+        files = files[begin_idx:end_idx]
 
     logger.debug(f'{files}')
 

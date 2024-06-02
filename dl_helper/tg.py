@@ -5,7 +5,7 @@ import hashlib
 import inspect
 import math
 import os, time
-from .train_param import params, logger
+from dl_helper.train_param import params, logger
 from collections import defaultdict
 from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, BinaryIO
 
@@ -333,19 +333,28 @@ def progress_cb(current, total):
     if current == total:
         t = 0
 
-async def _download_dataset(client, dataset_name):
-    """ 返回成功/失败 """
-    # channel name
+async def get_channel_entity(client, name):
     name = 'dl_dataset'
-    entity = None
     
     # 匹配channel
     async for dialog in client.iter_dialogs():
         if dialog.name == name:
             # 频道文件列表
             channel_username = dialog.id  # 替换为频道的用户名或 ID
-            entity = await client.get_entity(channel_username)  # 获取频道实体对象
-            break
+            return await client.get_entity(channel_username)  # 获取频道实体对象
+    
+    return None
+
+async def _upload_file(client, filepath):
+    entity = await get_channel_entity(client, 'dl_dataset')
+
+    with open(filepath, "rb") as out:
+        media = await upload_file(client, out, filepath.split('/')[-1], progress_callback=progress_cb)
+        await client.send_file(entity, media)
+
+async def _handle_massage(client, massage_name, handle_func):
+    """ 返回成功/失败 """
+    entity = await get_channel_entity(client, 'dl_dataset')
 
     messages = client.iter_messages(entity, reverse=True)
     files = []
@@ -354,40 +363,78 @@ async def _download_dataset(client, dataset_name):
             continue
 
         files.append(message.file.name)
-        if message.file.name != dataset_name:
+        if message.file.name != massage_name:
             continue
 
+        # 处理数据
+        await handle_func(client, message)
+        return True
+
+    print(f"Files: {files}")
+    print(f"no match: {massage_name}")
+    return False
+
+async def _del_file(client, filename):
+    async def del_func(client, message):
+        await client.delete_messages(message.peer_id, message)
+    return await _handle_massage(client, filename, del_func)
+
+async def _download_dataset(client, dataset_name, dst_folder):
+    """ 返回成功/失败 """
+    async def download_func(client, message):
         print(f"File Name: {message.file.name}")
         print(f"File Size: {message.file.size}")
 
         # 下载文件
-        os.makedirs(os.path.join('./data'), exist_ok=True)
-        _file = os.path.join('./data', message.file.name)
+        dst = './data' if not dst_folder else dst_folder
+        os.makedirs(dst, exist_ok=True)
+        _file = os.path.join(dst, message.file.name)
         print(f"download: {_file}")
         with open(_file, "wb") as out:
             await download_file(client, message.document, out, progress_callback=progress_cb)
 
         # 解压文件
         decompress(_file)
-        return True
 
-    print(f"Files: {files}")
-    print(f"no match: {dataset_name}")
-    return False
+    return await _handle_massage(client, dataset_name, download_func)
 
-async def download_dataset_async(session, dataset_name):
+async def download_dataset_async(session, dataset_name, dst_folder=''):
     """ 返回成功/失败 """
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
-        return await _download_dataset(client, dataset_name)
+        return await _download_dataset(client, dataset_name, dst_folder)
 
-def download_dataset(session, dataset_name):
+async def del_file_async(session, file_name):
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
-    with client:
-        client.loop.run_until_complete(_download_dataset(client, dataset_name))
+    async with client:
+        return await _del_file(client, file_name)
+
+async def upload_async(session, filepath):
+    filepath = filepath.replace('\\', '/')
+
+    # 创建客户端
+    client = TelegramClient(StringSession(session), 1, '1')
+    async with client:
+        await _upload_file(client, filepath)
+
+def tg_download(session, dataset_name, dst_folder=''):
+    return asyncio.get_event_loop().run_until_complete(download_dataset_async(session, dataset_name, dst_folder))
+
+def tg_del_file(session, file_name):
+    return asyncio.get_event_loop().run_until_complete(del_file_async(session, file_name))
+
+def tg_upload(session, filepath):
+    return asyncio.get_event_loop().run_until_complete(upload_async(session, filepath))
 
 if __name__ == '__main__':
     ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
-    download_dataset(ses, 'pred_5_pass_70_y_3_bd_2024_04_08_dr_8@2@2_th_72_s_2_t_samepaper.7z')
+    
+    # res = tg_download(ses, 'tdx-a.7z', r'C:\Users\lh\Desktop\temp')
+    # res = tg_download(ses, 'tdx-a.7z')
+
+    res = tg_del_file(ses, r"tdx-a.7z")
+    # res = tg_upload(ses, r"C:\Users\lh\Downloads\tdx-a.7z")
+
+    print(f'res: {res}')
