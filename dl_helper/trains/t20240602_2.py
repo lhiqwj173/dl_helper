@@ -34,7 +34,7 @@ class trainer(trainer_base):
 
         y_n = 3
         title = f'a_binctabl_p{predict_n}_v{idx}'
-        target_parm = {
+        data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 105,
             'y_n': 1,
