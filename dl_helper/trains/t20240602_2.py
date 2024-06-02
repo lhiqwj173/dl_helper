@@ -33,7 +33,7 @@ class trainer(trainer_base):
         predict_idx = predict_ns.index(predict_n)
 
         y_n = 3
-        title = f'a_binctabl_p{predict_n}_v{idx}'
+        title = f'a_deeplob_p{predict_n}_v{idx}'
         data_parm = {
             'predict_n': [10, 20, 30, 40, 50, 60],
             'pass_n': 105,
