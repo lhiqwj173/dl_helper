@@ -303,6 +303,16 @@ def count_correct_predictions(predictions, labels):
 
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
+    # 检查下载tg上的保持训练数据
+    tg_download(
+        ses,
+        f'{params.train_title}.7z',
+        '/kaggle/working/tg'
+    )
+
+    if os.path.exists(os.path.join('/kaggle/working/tg', params.train_title, 'var', f'helper.pkl')):
+        shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
+
     # 恢复 scheduler/optmizer
     sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
     if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
@@ -948,14 +958,6 @@ class trainer:
 
         # 训练结果
         self.result_dict = {}
-        
-        # 检查下载tg上的保持训练数据
-        tg_download(
-            ses,
-            f'{params.train_title}.7z',
-            '/kaggle/working/tg'
-        )
-
 
     def test_data(self):
         data_parm = {
