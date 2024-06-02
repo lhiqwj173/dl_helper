@@ -303,13 +303,6 @@ def count_correct_predictions(predictions, labels):
 
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
-    # 检查下载tg上的保持训练数据
-    tg_download(
-        ses,
-        f'{params.train_title}.7z',
-        '/kaggle/working/'
-    )
-
     # 恢复 scheduler/optmizer
     sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
     if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
@@ -997,6 +990,13 @@ class trainer:
         raise '下载数据集失败'
 
     def train(self, only_test=False):
+        # 检查下载tg上的保持训练数据
+        tg_download(
+            ses,
+            f'{params.train_title}.7z',
+            '/kaggle/working/'
+        )
+
         if self.debug:
             # 使用最小数据进行测试
             params.data_parm['data_rate'] = (44,2,2)
