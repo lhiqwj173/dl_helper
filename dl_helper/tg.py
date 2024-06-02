@@ -420,13 +420,22 @@ async def tg_upload_async(session, filepath):
         await _upload_file(client, filepath)
 
 def tg_download(session, dataset_name, dst_folder=''):
-    return asyncio.get_event_loop().run_until_complete(tg_download_dataset_async(session, dataset_name, dst_folder))
+    try:
+        return asyncio.get_event_loop().run_until_complete(tg_download_dataset_async(session, dataset_name, dst_folder))
+    except:
+        return asyncio.run(tg_download_dataset_async(session, dataset_name, dst_folder))
 
 def tg_del_file(session, file_name):
-    return asyncio.get_event_loop().run_until_complete(tg_del_file_async(session, file_name))
+    try:
+        return asyncio.get_event_loop().run_until_complete(tg_del_file_async(session, file_name))
+    except:
+        return asyncio.run(tg_del_file_async(session, file_name))
 
 def tg_upload(session, filepath):
-    return asyncio.get_event_loop().run_until_complete(tg_upload_async(session, filepath))
+    try:
+        return asyncio.get_event_loop().run_until_complete(tg_upload_async(session, filepath))
+    except:
+        return asyncio.run(tg_upload_async(session, filepath))
 
 if __name__ == '__main__':
     ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
