@@ -42,7 +42,7 @@ class trainer(trainer_base):
             'data_rate': (10, 2, 3),
             'total_hours': int(24*45),
             'symbols': 'T0ETF@KZZ',
-            'taget': 'same paper',
+            'target': 'same paper',
             'std_mode': '5d'  # 4h/1d/3d/5d
         }
 
