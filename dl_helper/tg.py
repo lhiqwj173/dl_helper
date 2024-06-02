@@ -1,6 +1,7 @@
 # copied from https://github.com/tulir/mautrix-telegram/blob/master/mautrix_telegram/util/parallel_file_transfer.py
 # Copyright (C) 2021 Tulir Asokan
 import asyncio
+import threading
 import hashlib
 import inspect
 import math
@@ -419,23 +420,37 @@ async def tg_upload_async(session, filepath):
     async with client:
         await _upload_file(client, filepath)
 
+def thread_run_async_func(func, rets, *args):
+    rets.append(asyncio.run(func(*args)))
+
+def run_async_func(func, *args, **kwargs):
+    # try:
+    #     loop = asyncio.get_running_loop()
+    # except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+    #     loop = None
+
+    # if loop and loop.is_running():
+    #     tsk = loop.create_task(func(*args, **kwargs))
+    #     return tsk
+    # else:
+    #     print('Starting new event loop')
+    #     return asyncio.run(func(*args, **kwargs))
+    rets = []
+    args = [rets] + list(args)
+    t = threading.Thread(target=thread_run_async_func, args=(func, *args))
+    t.start()
+    t.join()
+
+    return rets[0]
+
 def tg_download(session, dataset_name, dst_folder=''):
-    try:
-        return asyncio.get_event_loop().run_until_complete(tg_download_async(session, dataset_name, dst_folder))
-    except:
-        return asyncio.get_running_loop().run_until_complete(tg_download_async(session, dataset_name, dst_folder))
+    return run_async_func(tg_download_async, session, dataset_name, dst_folder)
 
 def tg_del_file(session, file_name):
-    try:
-        return asyncio.get_event_loop().run_until_complete(tg_del_file_async(session, file_name))
-    except:
-        return asyncio.get_running_loop().run_until_complete(tg_del_file_async(session, file_name))
+    return run_async_func(tg_del_file_async, session, file_name)
 
 def tg_upload(session, filepath):
-    try:
-        return asyncio.get_event_loop().run_until_complete(tg_upload_async(session, filepath))
-    except:
-        return asyncio.get_running_loop().run_until_complete(tg_upload_async(session, filepath))
+    return run_async_func(tg_upload_async, session, filepath)
 
 if __name__ == '__main__':
     ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
