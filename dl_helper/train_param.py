@@ -27,6 +27,8 @@ from datetime import datetime
 import multiprocessing
 import os
 
+from .tg import tg_download
+
 def data_parm2str(parm):
     # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
     parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
@@ -132,6 +134,7 @@ class Params:
   model = None
 
   data_folder = ''
+  tg_ses = ''
 
 params = Params()
 
@@ -158,8 +161,8 @@ def init_param(
     # 数据使用部分
     use_pk = True, use_trade = False,
 
-    describe=''
-
+    describe='',
+    tg_ses = '',
 ):
     global params
 
@@ -193,8 +196,17 @@ def init_param(
 
     params.data_folder = data_folder if data_folder else './data'
 
+    params.tg_ses = tg_ses
+
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)
+
+    # 检查下载tg上的保持训练数据
+    tg_download(
+      tg_ses,
+      f'{params.train_title}.7z',
+      '/kaggle/working/tg'
+    )
 
     # log
     os.makedirs(os.path.join(params.root, 'log'), exist_ok=True)
