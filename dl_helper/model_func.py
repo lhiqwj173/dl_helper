@@ -32,7 +32,7 @@ import random, psutil
 from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
-from .tg import download_dataset_async, tg_download_async, tg_upload_async, tg_del_file_async
+from .tg import download_dataset_async, tg_download, tg_upload, tg_del_file
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
@@ -304,7 +304,7 @@ def count_correct_predictions(predictions, labels):
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
     # 检查下载tg上的保持训练数据
-    await tg_download_async(
+    tg_download(
         ses,
         f'{params.train_title}.7z',
         '/kaggle/working/'
@@ -939,9 +939,9 @@ def pack_folder():
     compress_folder(params.root, file, 9, inplace=False)
 
     # 删除当前的训练文件，如果存在
-    await tg_del_file(ses, f'{params.train_title}.7z')
+    tg_del_file(ses, f'{params.train_title}.7z')
     # 上传到tg
-    await tg_upload(ses, file)
+    tg_upload(ses, file)
 
 class trainer:
     def __init__(self, idx, debug=False, cnn=True, workers=3):
