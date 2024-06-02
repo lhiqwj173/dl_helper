@@ -32,7 +32,7 @@ import random, psutil
 from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
-from .tg import download_dataset_async, tg_download, tg_upload, tg_del_file
+from .tg import tg_download_async, tg_download, tg_upload, tg_del_file
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP

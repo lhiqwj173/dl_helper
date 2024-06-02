@@ -398,7 +398,7 @@ async def _download_dataset(client, dataset_name, dst_folder):
 
     return await _handle_massage(client, dataset_name, download_func)
 
-async def tg_download_dataset_async(session, dataset_name, dst_folder=''):
+async def tg_download_async(session, dataset_name, dst_folder=''):
     """ 返回成功/失败 """
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
@@ -421,9 +421,9 @@ async def tg_upload_async(session, filepath):
 
 def tg_download(session, dataset_name, dst_folder=''):
     try:
-        return asyncio.get_event_loop().run_until_complete(tg_download_dataset_async(session, dataset_name, dst_folder))
+        return asyncio.get_event_loop().run_until_complete(tg_download_async(session, dataset_name, dst_folder))
     except:
-        return asyncio.run(tg_download_dataset_async(session, dataset_name, dst_folder))
+        return asyncio.run(tg_download_async(session, dataset_name, dst_folder))
 
 def tg_del_file(session, file_name):
     try:
