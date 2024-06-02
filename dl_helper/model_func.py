@@ -932,9 +932,9 @@ def pack_folder():
     compress_folder(params.root, file, 9, inplace=False)
 
     # 删除当前的训练文件，如果存在
-    tg_del_file(params.ses, f'{params.train_title}.7z')
+    tg_del_file(ses, f'{params.train_title}.7z')
     # 上传到tg
-    tg_upload(params.ses, file)
+    tg_upload(ses, file)
 
 class trainer:
     def __init__(self, idx, debug=False, cnn=True, workers=3):
@@ -948,6 +948,14 @@ class trainer:
 
         # 训练结果
         self.result_dict = {}
+        
+        # 检查下载tg上的保持训练数据
+        tg_download(
+            ses,
+            f'{params.train_title}.7z',
+            '/kaggle/working/tg'
+        )
+
 
     def test_data(self):
         data_parm = {
