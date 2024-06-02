@@ -436,8 +436,7 @@ def run_async_func(func, *args, **kwargs):
     #     print('Starting new event loop')
     #     return asyncio.run(func(*args, **kwargs))
     rets = []
-    args = [rets] + list(args)
-    t = threading.Thread(target=thread_run_async_func, args=(func, *args))
+    t = threading.Thread(target=thread_run_async_func, args=(func, rets, *args))
     t.start()
     t.join()
 
