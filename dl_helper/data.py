@@ -464,6 +464,7 @@ def load_data(file, diff_length, data_map):
         # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
         # feature == 46 且 params.use_pk/params.use_trade 不全为true
         need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
+        logger.debug(f'need_split_data_set: {need_split_data_set}')
 
         # 校正参数
         if len(mean_std[0]) == 40:

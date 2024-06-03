@@ -303,8 +303,9 @@ def count_correct_predictions(predictions, labels):
 
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
-    # 测试载入数据
+    # # 测试载入数据
     # train_loader_cache = read_data('train', cnn=cnn)
+    # y = train_loader_cache.data.dataset[0]
     # return
 
     # 检查下载tg上的保持训练数据
@@ -1010,7 +1011,7 @@ class trainer:
             params.data_parm['total_hours'] = 48
 
             params.data_parm['data_rate'] = (2,1,1)
-            params.data_parm['total_hours'] = 24*4
+            params.data_parm['total_hours'] = 2*4
 
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
             params.epochs = 2
