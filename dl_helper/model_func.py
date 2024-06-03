@@ -303,6 +303,10 @@ def count_correct_predictions(predictions, labels):
 
 
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
+    # 测试载入数据
+    # train_loader_cache = read_data('train', cnn=cnn)
+    # return
+
     # 检查下载tg上的保持训练数据
     tg_download(
         ses,
@@ -413,7 +417,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     t = time.time()
     for it in range(begin, epochs):
         # 早停检查
-        if best_test_epoch > 0 and best_test_epoch + params.no_better_stop < it:
+        if best_test_epoch > 0 and params.no_better_stop>0 and best_test_epoch + params.no_better_stop < it:
             break
 
         msg = f'Epoch {it+1}/{epochs} '
@@ -1005,8 +1009,8 @@ class trainer:
             params.data_parm['data_rate'] = (44,2,2)
             params.data_parm['total_hours'] = 48
 
-            params.data_parm['data_rate'] = (2,2,2)
-            params.data_parm['total_hours'] = 6
+            params.data_parm['data_rate'] = (2,1,1)
+            params.data_parm['total_hours'] = 24*4
 
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
             params.epochs = 2
@@ -1037,6 +1041,8 @@ class trainer:
 
                 # 训练
                 cost_hour = batch_gd(_model, criterion, optimizer_class, None, epochs=params.epochs, result_dict=self.result_dict, debug=self.debug, cnn=self.cnn)
+
+            # return
 
             ## 测试模型
             test_model(self.result_dict, self.debug, self.cnn)

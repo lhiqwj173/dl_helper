@@ -7,7 +7,8 @@ import torch
 import random
 import datetime
 from tqdm import tqdm
-
+from pympler import asizeof
+# import gc
 from .train_param import params, logger, data_parm2str, data_str2parm
 from .tool import report_memory_usage, check_nan
 
@@ -251,6 +252,8 @@ class Dataset(torch.utils.data.Dataset):
                     raise Exception('"pls set classify_func to split class"')
                 data_map['y'] = [classify_func(i) for i in data_map['y']]
 
+                report_memory_usage('simple y')
+
                 # 训练集 数据平衡
                 if train:
                     labels = set(data_map['y'])
@@ -437,9 +440,23 @@ class cache():
 
 
 def load_data(file, diff_length, data_map):
+    # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
+
+    # TODO a股数据内存占用过大
+    # ids,mean_std, x, y, raw   : load 占用的内存：5.290GB
+    # ids,mean_std, x, _, _     : load 占用的内存：2.596GB
+    # ids,_, _, _, _            ：load 占用的内存：1.635GB
+    # _,_, _, _, _              ：load 占用的内存：1.406GB
+    # _,_, _, _, _ = pickle.load(open(file, 'rb'))
+    # gc.collect()
+
+    # total_size = (asizeof.asizeof((ids,mean_std, x, y)) + raw.memory_usage(index=True, deep=True).sum())  / (1024**3)
+    # logger.debug(f'load: {total_size:.2f} GB')
+
     length = 0
+    # report_memory_usage('load')
     
     # 判断是否需要截取操作
     global need_split_data_set
@@ -460,8 +477,10 @@ def load_data(file, diff_length, data_map):
         raw = reduce_mem_usage(raw)
         data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
         length = len(raw)
+        # report_memory_usage('concat raw')
 
     data_map['mean_std'] += mean_std
+    # report_memory_usage('concat mean_std')
     ###################################################
     # 2. 截取操作
     ###################################################
@@ -485,6 +504,7 @@ def load_data(file, diff_length, data_map):
     data_map['y'] += y
     data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in x]
     diff_length += length
+    # report_memory_usage('concat other')
 
     return diff_length
 

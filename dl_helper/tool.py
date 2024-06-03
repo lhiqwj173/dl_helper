@@ -9,7 +9,7 @@ def check_nan(data, **kwargs):
         wx.send_message(f'{params.train_title} 训练异常')
         raise Exception("error train data")
 
-def report_memory_usage():
+def report_memory_usage(msg=''):
     # 获取当前进程ID
     pid = psutil.Process().pid
 
@@ -23,4 +23,4 @@ def report_memory_usage():
     memory_gb = memory_info.rss / (1024 ** 3)
 
     # 打印内存大小
-    logger.debug(f"占用的内存：{memory_gb:.3f}GB")
+    logger.debug(f"{msg} 占用的内存：{memory_gb:.3f}GB")
