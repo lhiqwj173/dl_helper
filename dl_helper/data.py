@@ -308,6 +308,13 @@ class Dataset(torch.utils.data.Dataset):
         
         data_map.clear()
 
+        self.need_split_data_set = need_split_data_set
+        self.use_pk = params.use_pk
+        self.use_trade = params.use_trade
+        self.random_mask_row = params.random_mask_row
+        self.random_scale = params.random_scale
+        self.random_mask = params.random_mask
+
         logger.debug(f'数据集初始化完毕')
         report_memory_usage()
 
@@ -336,14 +343,14 @@ class Dataset(torch.utils.data.Dataset):
         #############################
         # 1. 部分截取
         #############################
-        if need_split_data_set:
+        if self.need_split_data_set:
             # 使用部分截取 xa, xb
             xa, xb = 0, 46
-            if params.use_pk and params.use_trade:
+            if self.use_pk and self.use_trade:
                 raise Exception('no use')
-            elif params.use_pk:
+            elif self.use_pk:
                 xb = 40
-            elif params.use_trade:
+            elif self.use_trade:
                 xa = 40
 
             # 截取mean_std
@@ -357,9 +364,9 @@ class Dataset(torch.utils.data.Dataset):
 
         # 获取切片x
         x = None
-        if self.train and params.random_mask_row>0:
+        if self.train and self.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.random_mask_row)
         else:
             x = self.data[:, a:b, :].clone()
 
@@ -372,12 +379,12 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] /= mean_std[:, 1]
 
         # 随机缩放
-        if self.train and params.random_scale>0:
-            x = random_scale(x, self.vol_cols, params.random_scale)
+        if self.train and self.random_scale>0:
+            x = random_scale(x, self.vol_cols, self.random_scale)
 
         # 随机mask
-        if self.train and params.random_mask>0:
-            x = random_mask(x, params.random_mask)
+        if self.train and self.random_mask>0:
+            x = random_mask(x, self.random_mask)
 
         check_nan(x)
 
