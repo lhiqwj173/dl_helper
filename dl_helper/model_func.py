@@ -373,29 +373,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     if os.path.exists(os.path.join('/kaggle/working/tg', params.train_title, 'var', f'helper.pkl')):
         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
-    # 储存其他更多新的训练变量 
-    more_helper = {
-        'begin_time': time.time(),
-        'sd_scheduler2' : None,
-    }
-    if os.path.exists(os.path.join(params.root, 'var', f'more_helper.pkl')):
-        more_helper = pickle.load(open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'rb'))
-
-    # 恢复 scheduler/optmizer
-    sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
-    if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
-        sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = pickle.load(
-            open(os.path.join(params.root, 'var', f'helper.pkl'), 'rb'))
-
-    # 获取训练数据
-    train_loader_cache = read_data('train', cnn=cnn)
-    if not None is sd_train_loader:
-        train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
-    assert len(train_loader_cache.data) > 0, "没有训练数据"
-
-    # 获取输入数据形状
-    input_shape = train_loader_cache.data.dataset.input_shape
-
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
     train_r2s = np.full(epochs, np.nan)
@@ -441,6 +418,29 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         model = torch.load(os.path.join(params.root, 'var', f'model.pkl'))
     else:
         logger.debug(f"新的训练")
+
+    # 储存其他更多新的训练变量 
+    more_helper = {
+        'begin_time': time.time(),
+        'sd_scheduler2' : None,
+    }
+    if os.path.exists(os.path.join(params.root, 'var', f'more_helper.pkl')):
+        more_helper = pickle.load(open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'rb'))
+
+    # 恢复 scheduler/optmizer
+    sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
+    if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
+        sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = pickle.load(
+            open(os.path.join(params.root, 'var', f'helper.pkl'), 'rb'))
+
+    # 获取训练数据
+    train_loader_cache = read_data('train', cnn=cnn)
+    if not None is sd_train_loader:
+        train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
+    assert len(train_loader_cache.data) > 0, "没有训练数据"
+
+    # 获取输入数据形状
+    input_shape = train_loader_cache.data.dataset.input_shape
 
     # 构造优化器
     optimizer = optimizer_class(
