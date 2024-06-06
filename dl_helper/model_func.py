@@ -85,7 +85,7 @@ class ReduceLR_slow_loss():
             return
         for i, param_group in enumerate(self.optimizer.param_groups):
             old_lr = float(param_group['lr'])
-            new_lr = max(old_lr * self.factor, self.min_lrs)
+            new_lr = max(old_lr * self.factor, self.min_lr)
             if old_lr - new_lr > self.eps:
                 param_group['lr'] = new_lr
 
