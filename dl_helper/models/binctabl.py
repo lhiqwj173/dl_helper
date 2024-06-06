@@ -159,7 +159,16 @@ class m_bin_ctabl(nn.Module):
     self.max_norm_(self.TABL.W.data)
     self.max_norm_(self.TABL.W2.data)
     x = self.TABL(x)
-    x = torch.squeeze(x)
+
+    # in: (1, 40, 100)
+    # 1 torch.Size([1, 3, 1])
+    # 2 torch.Size([3])
+    # 
+    # in: (2, 40, 100)
+    # 1 torch.Size([2, 3, 1])
+    # 2 torch.Size([2, 3])
+    # x = torch.squeeze(x)
+    x = torch.squeeze(x,dim=2)# 保留batch维度
     x = torch.softmax(x, 1)
     
     return x
@@ -186,17 +195,17 @@ if __name__ == "__main__":
 
     summary(model, (2, 40, 100), device=device)
 
-    model = model.to(device)
-    input = torch.randn((2, 40, 100)).to(device)
+    # model = model.to(device)
+    # input = torch.randn((2, 40, 100)).to(device)
 
-    # 导出模型为ONNX格式
-    onnx_path = "bin_ctabl.onnx"
-    torch.onnx.export(model, input, onnx_path)
+    # # 导出模型为ONNX格式
+    # onnx_path = "bin_ctabl.onnx"
+    # torch.onnx.export(model, input, onnx_path)
 
-    flops, params = profile(model, inputs=(input,))
-    flops, params = clever_format([flops, params])
-    print(f"FLOPs: {flops} Params: {params}")
+    # flops, params = profile(model, inputs=(input,))
+    # flops, params = clever_format([flops, params])
+    # print(f"FLOPs: {flops} Params: {params}")
 
-    out = model(input)
-    print(out.shape)# torch.Size([2, 3])
+    # out = model(input)
+    # print(out.shape)# torch.Size([2, 3])
 
