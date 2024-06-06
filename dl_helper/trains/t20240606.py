@@ -37,14 +37,14 @@ class trainer(trainer_base):
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
-            'data_rate': (6, 2, 4),
-            'total_hours': int(24*8),
+            'data_rate': (7, 2, 3),
+            'total_hours': int(24*7),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
         }
 
-        batch_n = 4
+        batch_n = 8
 
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
         init_param(
