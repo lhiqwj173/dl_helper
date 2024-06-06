@@ -140,6 +140,9 @@ class ResumeSample():
         return {'step': self.step, 'seed': self.seed, 'shuffle': self.shuffle, 'size': self.size, 'idx': self.idx, 'loop': self._loop}
 
     def load_state_dict(self, state_dict):
+        if not state_dict:
+            return self
+
         self.step = state_dict['step']
         self.seed = state_dict['seed']
         self.shuffle = state_dict['shuffle']
@@ -155,7 +158,6 @@ class ResumeSample():
 
     def _init_data(self):
         if self.shuffle:
-
             self.data = random.sample(range(self.size), self.size)
         else:
             self.data = list(range(self.size))
