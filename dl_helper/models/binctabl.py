@@ -162,7 +162,7 @@ class m_bin_ctabl(nn.Module):
 
     # in: (1, 40, 100)
     # 1 torch.Size([1, 3, 1])
-    # 2 torch.Size([3])
+    # 2 torch.Size([3]) -》 torch.Size([1, 3])
     # 
     # in: (2, 40, 100)
     # 1 torch.Size([2, 3, 1])
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     model = m_bin_ctabl(60, 40, 100, 40, 120, 12, 3, 1)
     print(model)
 
-    summary(model, (2, 40, 100), device=device)
+    summary(model, (1, 40, 100), device=device)
 
     # model = model.to(device)
     # input = torch.randn((2, 40, 100)).to(device)
