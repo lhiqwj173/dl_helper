@@ -445,7 +445,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     # 构造优化器
     optimizer = optimizer_class(
         model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    scheduler2 = ReduceLR_slow_loss(model.parameters())# 新增一个调度器
     if None is lr_lambda:
         if params.init_learning_ratio > 0:
             scheduler = Increase_ReduceLROnPlateau(optimizer)
@@ -454,6 +453,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     else:
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lr_lambda=lr_lambda)
+    scheduler2 = ReduceLR_slow_loss(optimizer)# 新增一个调度器
 
     # 载入缓存
     if not None is sd_scheduler:
