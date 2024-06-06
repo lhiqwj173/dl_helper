@@ -18,7 +18,7 @@ class trainer(trainer_base):
     predict_n = 60
     测试性能极限
     """
-    def __init__(self, idx, workers=3, debug=False):
+    def __init__(self, idx, workers=4, debug=False):
         super().__init__(idx, debug, False, workers)
 
     def init_param(self, data_folder=''):
@@ -38,7 +38,7 @@ class trainer(trainer_base):
             'y_n': 1,
             'begin_date': '2024-04-27',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*9),
+            'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
             'std_mode': '1d'  # 4h/1d/5d
