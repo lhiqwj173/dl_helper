@@ -26,6 +26,11 @@ class trainer(trainer_base):
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
+        vars = [0.005, 0.01, 0.001, 0.0005, 0.0001]
+        assert self.idx < len(vars)
+
+        lr = vars[self.idx]
+
         predict_n = 60
         predict_ns = [10, 20, 30, 40, 50, 60]
         predict_idx = predict_ns.index(predict_n)
@@ -49,7 +54,7 @@ class trainer(trainer_base):
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.005*batch_n, batch_size=64*batch_n, workers=self.workers,
+            learning_rate=lr*batch_n, batch_size=64*batch_n, workers=self.workers,
 
             # 数据增强
             random_scale=0.05, random_mask_row=0.7,
@@ -59,5 +64,5 @@ class trainer(trainer_base):
 
             data_folder=data_folder,
 
-            describe='binctabl predict_n=60'
+            describe=f'binctabl lr={lr}'
         )
