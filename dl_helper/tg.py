@@ -10,6 +10,7 @@ from dl_helper.train_param import params, logger
 from collections import defaultdict
 from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, BinaryIO
 
+from telethon import errors
 from telethon import utils, helpers, TelegramClient
 from telethon.crypto import AuthKey
 from telethon.sessions import StringSession
@@ -421,7 +422,17 @@ async def tg_upload_async(session, filepath):
         await _upload_file(client, filepath)
 
 def thread_run_async_func(func, rets, *args):
-    rets.append(asyncio.run(func(*args)))
+    for i in range(3):
+        try:
+            rets.append(asyncio.run(func(*args)))
+            return
+
+        except errors.FloodWaitError as e:
+            print('Have to sleep', e.seconds, 'seconds')
+            time.sleep(e.seconds)
+        except Exception as e:
+            print(e)
+            time.sleep(10)
 
 def run_async_func(func, *args, **kwargs):
     # try:
