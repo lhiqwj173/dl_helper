@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import math
-from .tabl import BL_layer, TABL_layer
+from dl_helper.models.tabl import BL_layer, TABL_layer
 
 class BiN(nn.Module):
   def __init__(self, d1, t1):
@@ -188,9 +188,15 @@ if __name__ == "__main__":
 
     model = model.to(device)
     input = torch.randn((2, 40, 100)).to(device)
+
+    # 导出模型为ONNX格式
+    onnx_path = "bin_ctabl.onnx"
+    torch.onnx.export(model, input, onnx_path)
+
     flops, params = profile(model, inputs=(input,))
     flops, params = clever_format([flops, params])
     print(f"FLOPs: {flops} Params: {params}")
 
     out = model(input)
     print(out.shape)# torch.Size([2, 3])
+

@@ -315,6 +315,10 @@ class Dataset(torch.utils.data.Dataset):
         self.random_scale = params.random_scale
         self.random_mask = params.random_mask
 
+        self.input_shape = self.__getitem__(0).shape
+        # 增加一个batch维度
+        self.input_shape = (1,) + self.input_shape
+
         logger.debug(f'数据集初始化完毕')
         report_memory_usage()
 

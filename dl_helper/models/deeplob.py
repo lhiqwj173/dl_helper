@@ -121,6 +121,11 @@ if __name__ == "__main__":
 
     model = model.to(device)
     input = torch.randn((1, 1, 70, 46)).to(device)
+
+    # 导出模型为ONNX格式
+    onnx_path = "deeplob.onnx"
+    torch.onnx.export(model, input, onnx_path)
+
     flops, params = profile(model, inputs=(input,))
     flops, params = clever_format([flops, params])
     print(f"FLOPs: {flops} Params: {params}")

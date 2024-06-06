@@ -43,6 +43,58 @@ ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7
 # 设置启动方法为'spawn'
 multiprocessing.set_start_method('spawn', force=True)
 
+# 当训练的损失序列区域平缓时，减低学习率
+class ReduceLR_slow_loss():
+    def __init__(self, optimizer, min_pct=-0.00005, patience=10, factor=0.1, min_lr=0, eps=1e-8, debug=False):
+        self.optimizer = optimizer
+
+        self.min_pct = min_pct
+        self.patience = patience
+        self.factor = factor
+        self.min_lr = min_lr
+        self.eps = eps
+        self.wait = 0
+
+        self.debug = debug
+
+    def step(self, array_loss):
+        if self.wait > 0:
+            self.wait -= 1
+            return
+
+        # 计算损失均线，ma=self.patience
+        # 均线变动率 大于 min_pct 则减少学习率
+        loss = pd.DataFrame({'loss': array_loss}).dropna()
+        if len(loss) < self.patience+1:
+            return
+
+        loss['ma'] = loss['loss'].rolling(self.patience).mean()
+        loss['pct'] = loss['ma'].pct_change()
+        loss['match'] = loss['pct']>=self.min_pct
+
+        if loss.iloc[-1]['match']:
+            self._reduce_lr()
+        elif self.debug:
+            print('pass')
+
+    def _reduce_lr(self):
+        self.wait = self.patience
+        if self.debug:
+            print('reduce_lr')
+        if None is self.optimizer:
+            return
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            old_lr = float(param_group['lr'])
+            new_lr = max(old_lr * self.factor, self.min_lrs)
+            if old_lr - new_lr > self.eps:
+                param_group['lr'] = new_lr
+
+    def state_dict(self):
+        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
+
 class Increase_ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
     """
     按照指定速率，初始学习率在每个迭代中增加学习率，单触发 ReduceLROnPlateau 衰减后则不在增加学习率
@@ -165,7 +217,7 @@ def debug_plot():
     
     plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
-def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour):
+def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour, send_wx=True, folder=''):
 
     # 创建图形和坐标轴
     fig, axs = None, None
@@ -260,10 +312,12 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
         axs[1].legend(handles=t2_handles)
 
     plt.title(f'{params.train_title} | {params.describe} | {datetime.now().strftime("%Y%m%d")}          cost:{cost_hour:.2} hours')
-    plt.savefig(os.path.join(params.root, f"{params.train_title}.png"))
-    wx.send_file(os.path.join(params.root,f"{params.train_title}.png"))
-    # display.clear_output(wait=True)
-    # plt.pause(0.00000001)
+
+    pic_file = os.path.join(folder if folder else params.root, f"{params.train_title}.png")
+    plt.savefig(pic_file)
+
+    if send_wx:
+        wx.send_file(pic_file)
 
 def log_grad(model):
     '''Print the grad of each layer'''
@@ -299,6 +353,7 @@ def count_correct_predictions(predictions, labels):
     # logger.debug(f'correct: {correct_count} / {len(labels)}')
     return correct_count
 
+
 # A function to encapsulate the training loop
 
 
@@ -318,6 +373,14 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     if os.path.exists(os.path.join('/kaggle/working/tg', params.train_title, 'var', f'helper.pkl')):
         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
+    # 储存其他更多新的训练变量 
+    more_helper = {
+        'begin_time': time.time(),
+        'sd_scheduler2' : None,
+    }
+    if os.path.exists(os.path.join(params.root, 'var', f'more_helper.pkl')):
+        more_helper = pickle.load(open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'rb'))
+
     # 恢复 scheduler/optmizer
     sd_scheduler, sd_optimizer, sd_train_loader, sd_test_loader = None,None,None,None
     if os.path.exists(os.path.join(params.root, 'var', f'helper.pkl')):
@@ -329,6 +392,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     if not None is sd_train_loader:
         train_loader_cache.data.sampler.load_state_dict(sd_train_loader)
     assert len(train_loader_cache.data) > 0, "没有训练数据"
+
+    # 获取输入数据形状
+    input_shape = train_loader_cache.data.dataset.input_shape
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
@@ -357,6 +423,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     # optimizer
     optimizer = None
     scheduler = None
+    scheduler2 = None
 
     # Automatic Mixed Precision
     scaler = None if not params.amp else GradScaler()
@@ -378,7 +445,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     # 构造优化器
     optimizer = optimizer_class(
         model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    scheduler = None
+    scheduler2 = ReduceLR_slow_loss(model.parameters())# 新增一个调度器
     if None is lr_lambda:
         if params.init_learning_ratio > 0:
             scheduler = Increase_ReduceLROnPlateau(optimizer)
@@ -388,9 +455,12 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lr_lambda=lr_lambda)
 
+    # 载入缓存
     if not None is sd_scheduler:
         scheduler.load_state_dict(sd_scheduler)
         optimizer.load_state_dict(sd_optimizer)
+    if not None is more_helper['sd_scheduler2']:
+        scheduler2.load_state_dict(more_helper['sd_scheduler2'])
 
     # 初始化warnup
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -415,7 +485,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
     report_memory_usage()
 
-    t = time.time()
     for it in range(begin, epochs):
         # 早停检查
         if best_test_epoch > 0 and params.no_better_stop>0 and best_test_epoch + params.no_better_stop < it:
@@ -499,6 +568,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
                         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
                         pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+                        more_helper['sd_scheduler2'] = scheduler2.state_dict()
+                        pickle.dump(more_helper, open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'wb'))
 
                         # 打包文件
                         pack_folder()
@@ -516,6 +587,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+            more_helper['sd_scheduler2'] = scheduler2.state_dict()
+            pickle.dump(more_helper, open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'wb'))
 
             report_memory_usage()
             train_loader_cache.cache()
@@ -593,6 +666,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
                             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
                             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
+                            more_helper['sd_scheduler2'] = scheduler2.state_dict()
+                            pickle.dump(more_helper, open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'wb'))
 
                             # 打包文件
                             pack_folder()
@@ -624,7 +699,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                         train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
             torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
             pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
-            
+            more_helper['sd_scheduler2'] = scheduler2.state_dict()
+            pickle.dump(more_helper, open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'wb'))
+
             report_memory_usage()
             val_loader_cache.cache()
             logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
@@ -648,9 +725,18 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             test_r2s[it] = test_r_squared.compute()
 
         if test_loss < best_test_loss:
+            model.eval()
+
             torch.save(model, os.path.join(params.root, f'best_val_model'))
             best_test_loss = test_loss
             best_test_epoch = it
+
+            # 导出onnx
+            onnx_file = os.path.join(params.root, f'best_val_model.onnx')
+            try:
+                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file)
+            except:
+                logger.debug('导出onnx失败')
 
         # 更新学习率
         lrs[it] = optimizer.param_groups[0]["lr"]
@@ -659,6 +745,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             scheduler.step(train_loss)
         else:
             scheduler.step()
+        scheduler2.step(train_losses)
 
         msg += f'lr: {lrs[it]:.8f} -> {optimizer.param_groups[0]["lr"]:.8f}\n'
 
@@ -676,7 +763,17 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
         torch.save(model, os.path.join(params.root, 'var', f'model.pkl'))
         pickle.dump((scheduler.state_dict(), optimizer.state_dict(), train_loader_sampler_state_dict, val_loader_sampler_state_dict), open(os.path.join(params.root, 'var', f'helper.pkl'), 'wb'))
-            
+        more_helper['sd_scheduler2'] = scheduler2.state_dict()
+        pickle.dump(more_helper, open(os.path.join(params.root, 'var', f'more_helper.pkl'), 'wb'))
+
+        # 导出onnx
+        model.eval()
+        onnx_file = os.path.join(params.root, 'var', f'model.onnx')
+        try:
+            torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file)
+        except:
+            logger.debug('导出onnx失败')
+
         # 打包文件
         pack_folder()
 
@@ -697,7 +794,11 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             result_dict['train_r2'] = train_r2s[best_idx]
             result_dict['val_r2'] = test_r2s[best_idx]
 
-    cost_hour = (time.time() - t) / 3600
+        # 保存损失图
+        cost_hour = (time.time() - more_helper['begin_time']) / 3600
+        plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour, send_wx=False)
+
+    cost_hour = (time.time() - more_helper['begin_time']) / 3600
     plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
     return cost_hour
