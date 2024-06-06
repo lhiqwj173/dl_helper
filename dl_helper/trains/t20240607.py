@@ -26,7 +26,7 @@ class trainer(trainer_base):
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
-        vars = [0.005, 0.01, 0.001, 0.0005, 0.0001]
+        vars = [0.00016,0.00013,0.00007,0.000004]
         assert self.idx < len(vars)
 
         lr = vars[self.idx]
