@@ -37,7 +37,7 @@ class trainer(trainer_base):
             'pass_n': 100,
             'y_n': 1,
             'begin_date': '2024-04-27',
-            'data_rate': (7, 2, 3),
+            'data_rate': (6, 2, 4),
             'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
             'target': 'same paper',
