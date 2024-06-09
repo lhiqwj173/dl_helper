@@ -234,57 +234,43 @@ class Dataset(torch.utils.data.Dataset):
         # 训练数据集
         self.train = train
 
-        # 针对回归数据集, y可能为一个列表
-        if isinstance(data_map['y'][0], list):
-            if regress_y_idx != -1:
-                logger.debug(f"回归标签列表处理 使用标签idx:{regress_y_idx}")
-                data_map['y'] = [i[regress_y_idx] for i in data_map['y']]
+        if classify:
+            # 分类训练集 数据平衡
+            if train:
+                labels = set(data_map['y'])
+                sy = pd.Series(data_map['y'])
+                min_num = sy.value_counts().min()
+                logger.debug(f'min_num: {min_num}')
 
-                # y 可能为nan
-                idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
-                # 过滤nan
-                data_map['y'] = [data_map['y'][i] for i in idxs]
-                data_map['x'] = [data_map['x'][i] for i in idxs]
-                self.mean_std = [self.mean_std[i] for i in idxs]
-                data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
-            elif classify_y_idx!=1:
-                logger.debug(f"分类标签列表处理 使用标签idx:{classify_y_idx}")
-                data_map['y'] = [i[classify_y_idx] for i in data_map['y']]
-                if None is classify_func:
-                    raise Exception('"pls set classify_func to split class"')
-                data_map['y'] = [classify_func(i) for i in data_map['y']]
+                report_memory_usage()
 
-                report_memory_usage('simple y')
+                idx = []
+                for label in labels:
+                    origin_idx = sy[sy == label].index
 
-                # 训练集 数据平衡
-                if train:
-                    labels = set(data_map['y'])
-                    sy = pd.Series(data_map['y'])
-                    min_num = sy.value_counts().min()
-                    logger.debug(f'min_num: {min_num}')
+                    if len(origin_idx) > min_num:
+                        idx += np.random.choice(origin_idx,
+                                                min_num, replace=False).tolist()
+                    else:
+                        idx += origin_idx.tolist()
 
-                    report_memory_usage()
+                # 排序
+                idx.sort()
 
-                    idx = []
-                    for label in labels:
-                        origin_idx = sy[sy == label].index
-
-                        if len(origin_idx) > min_num:
-                            idx += np.random.choice(origin_idx,
-                                                    min_num, replace=False).tolist()
-                        else:
-                            idx += origin_idx.tolist()
-
-                    # 排序
-                    idx.sort()
-
-                    logger.debug(f'reindex')
-                    data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
-                    data_map['x'] = [data_map['x'][i] for i in idx]
-                    data_map['y'] = [data_map['y'][i] for i in idx]
-                    self.mean_std = [self.mean_std[i] for i in idx]
-            else:
-                raise "regress_y_idx/classify_y_idx no set"
+                logger.debug(f'reindex')
+                data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
+                data_map['x'] = [data_map['x'][i] for i in idx]
+                data_map['y'] = [data_map['y'][i] for i in idx]
+                self.mean_std = [self.mean_std[i] for i in idx]
+        # else:
+        #     # 回归数据集
+        #     # y 可能为nan
+        #     idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
+        #     # 过滤nan
+        #     data_map['y'] = [data_map['y'][i] for i in idxs]
+        #     data_map['x'] = [data_map['x'][i] for i in idxs]
+        #     self.mean_std = [self.mean_std[i] for i in idxs]
+        #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
 
         report_memory_usage()
 
@@ -526,6 +512,8 @@ def load_data(file, diff_length, data_map):
             raise Exception('"pls set classify_func to split class"')
         data_map['y'] = [params.classify_func(i) for i in data_map['y']]
 
+    assert data_map['y'].isnull().sum() == 0
+
     data_map['ids'] += ids
     data_map['y'] += y
     data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in x]
@@ -556,13 +544,13 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
             break
 
     if _type_in_dataname:
-        # 分类数据集
+        # 按照数据类型读取数据集
         for file in data_set_files:
             if _type in file:
                 files.append(file)
         files.sort()
     else:
-        # 回归数据集
+        # 按照日期读取回归数据集
         begin_date = ''
         totals = 0
         if len(data_set_files[0]) == 12:
