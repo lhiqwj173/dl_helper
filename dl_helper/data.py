@@ -504,15 +504,15 @@ def load_data(file, diff_length, data_map):
     # 预处理标签
     if params.regress_y_idx != -1:
         logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
-        data_map['y'] = [i[params.regress_y_idx] for i in data_map['y']]
+        y = [i[params.regress_y_idx] for i in y]
     elif params.classify_y_idx!=1:
         logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
-        data_map['y'] = [i[params.classify_y_idx] for i in data_map['y']]
+        y = [i[params.classify_y_idx] for i in y]
         if None is params.classify_func:
             raise Exception('"pls set classify_func to split class"')
-        data_map['y'] = [params.classify_func(i) for i in data_map['y']]
+        y = [params.classify_func(i) for i in y]
 
-    assert data_map['y'].isnull().sum() == 0
+    assert y.isnull().sum() == 0
 
     data_map['ids'] += ids
     data_map['y'] += y
