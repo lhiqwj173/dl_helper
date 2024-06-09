@@ -141,7 +141,7 @@ def init_param(
     # 训练参数
     learning_rate, batch_size, 
     epochs=100, warm_up_epochs=3, 
-    no_better_stop=15,amp=False, label_smoothing=0.1, weight_decay=0.01, workers=3,
+    no_better_stop=0,amp=False, label_smoothing=0.1, weight_decay=0.01, workers=3,
 
     # 数据增强
     random_mask=0, random_scale=0, random_mask_row=0, 

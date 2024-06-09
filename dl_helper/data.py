@@ -190,7 +190,7 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, data_map, regress_y_idx=-1, classify_y_idx=-1,classify_func=None, train=True, cnn=True):
+    def __init__(self, data_map, classify=False, train=True, cnn=True):
         """Initialization"""
         self.cnn = cnn
 
@@ -514,6 +514,18 @@ def load_data(file, diff_length, data_map):
 
     ###################################################
     ###################################################
+
+    # 预处理标签
+    if params.regress_y_idx != -1:
+        logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
+        data_map['y'] = [i[params.regress_y_idx] for i in data_map['y']]
+    elif params.classify_y_idx!=1:
+        logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
+        data_map['y'] = [i[params.classify_y_idx] for i in data_map['y']]
+        if None is params.classify_func:
+            raise Exception('"pls set classify_func to split class"')
+        data_map['y'] = [params.classify_func(i) for i in data_map['y']]
+
     data_map['ids'] += ids
     data_map['y'] += y
     data_map['x'] += [(i[0] + diff_length, i[1] + diff_length) for i in x]
@@ -535,7 +547,15 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # 获取数据分段
     files = []
     data_set_files = sorted([i for i in os.listdir(data_path)])
-    if target_parm['y_n'] > 1:
+
+    # 判断数据名类型
+    _type_in_dataname = False
+    for file in data_set_files:
+        if _type in file:
+            _type_in_dataname = True
+            break
+
+    if _type_in_dataname:
         # 分类数据集
         for file in data_set_files:
             if _type in file:
