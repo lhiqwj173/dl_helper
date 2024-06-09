@@ -628,7 +628,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    dataset_test = Dataset(data_map, params.regress_y_idx, params.classify_y_idx, params.classify_func, train=_type == 'train', cnn=cnn)
+    dataset_test = Dataset(data_map, params.classify_y_idx>0, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
