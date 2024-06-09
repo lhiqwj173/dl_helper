@@ -512,7 +512,7 @@ def load_data(file, diff_length, data_map):
             raise Exception('"pls set classify_func to split class"')
         y = [params.classify_func(i) for i in y]
 
-    assert y.isnull().sum() == 0
+    assert all(not math.isnan(_y) for _y in y)
 
     data_map['ids'] += ids
     data_map['y'] += y
