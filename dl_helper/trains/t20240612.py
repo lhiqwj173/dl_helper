@@ -52,6 +52,7 @@ class trainer(trainer_base):
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
+        # 0 - 5
         vars = []
         for regress_idx, name, y_n in zip(
             [[0, 1], 2, 3], 
@@ -63,7 +64,12 @@ class trainer(trainer_base):
 
         assert self.idx < len(vars)
 
-        regress_idx, targrt_name, y_n, idx = vars[self.idx]
+        regress_idx, targrt_name, y_n, idx = None, None, None, None
+        if self.idx == -1:
+            # 测试半精度训练
+            regress_idx, targrt_name, y_n, idx = vars[0]
+        else:
+            regress_idx, targrt_name, y_n, idx = vars[self.idx]
 
         title = f'binctabl_{targrt_name}_v{idx}'
         data_parm = {
@@ -83,6 +89,9 @@ class trainer(trainer_base):
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
             learning_rate=0.00013*batch_n, batch_size=64*batch_n, workers=self.workers,
+
+            # 使用半精度
+            amp = self.idx==-1,
 
             # 数据增强
             random_scale=0.05, random_mask_row=0.7,
