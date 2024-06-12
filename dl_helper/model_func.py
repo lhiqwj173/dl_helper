@@ -486,6 +486,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     logger.debug(f'缓存 val_loader_cache 耗时{val_loader_cache.cost:.3f}s')
     report_memory_usage()
 
+    y_data_type = torch.int64 if params.classify else torch.float
+
     for it in range(begin, epochs):
         # 早停检查
         if best_test_epoch > 0 and params.no_better_stop>0 and best_test_epoch + params.no_better_stop < it:
@@ -517,7 +519,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             # for inputs, targets in train_loader_cache.data:
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
-                    params.device, dtype=torch.int64)
+                    params.device, dtype=y_data_type)
                 optimizer.zero_grad()
 
                 outputs = None
@@ -626,7 +628,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                 for inputs, targets in tqdm(val_loader_cache.data, initial=int(val_loader_cache.data.sampler.idx / params.batch_size), total=len(val_loader_cache.data)):
                 # for inputs, targets in val_loader_cache.data:
                     inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
-                        params.device, dtype=torch.int64)
+                        params.device, dtype=y_data_type)
 
                     outputs = model(inputs)
                     loss = criterion(outputs, targets)
@@ -828,6 +830,8 @@ def test_model(result_dict, debug, cnn, select='best'):
 
     total_times = 0
     total_counts = 0
+
+    y_data_type = torch.int64 if params.classify else torch.float
 
     logger.debug(f'测试模型')
     with torch.no_grad():
