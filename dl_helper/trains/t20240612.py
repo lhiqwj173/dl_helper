@@ -59,7 +59,7 @@ class trainer(trainer_base):
             [2, 1, 1]
         ):
             for idx in range(2):
-                vars.append((regress_idx, name, idx))
+                vars.append((regress_idx, name, y_n, idx))
 
         assert self.idx < len(vars)
 
