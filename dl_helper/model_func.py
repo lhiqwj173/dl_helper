@@ -270,21 +270,25 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
         # train_val_max = ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}')
     else:
         # 回归模型
-        # 计算r2最高点
-        max_train_r2 = max(train_r2s)
-        max_test_r2 = max(test_r2s)
-        max_train_r2_x = train_r2s.tolist().index(max_train_r2)
-        max_test_r2_x = test_r2s.tolist().index(max_test_r2)
-        # 绘制r2曲线
-        ax1_handles.append(ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')[0])
-        # line_train_r2, = ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')
-        ax1_handles.append(ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')[0])
-        # line_test_r2, = ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')
-        # 标记r2最高点
-        ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}'))
-        # train_r2_max = ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}')
-        ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}'))
-        # test_r2_max = ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}')
+        colors = ['#C39BD3', '#F1948A', '#F9E79F', '#F5CBA7', '#AEB6BF', '#48C9B0']
+        for i in range(params.y_n):
+            # 计算r2最高点
+            max_train_r2 = max(train_r2s[i])
+            max_test_r2 = max(test_r2s[i])
+            max_train_r2_x = train_r2s.tolist().index(max_train_r2)
+            max_test_r2_x = test_r2s.tolist().index(max_test_r2)
+            # 绘制r2曲线
+            c1, c2 = colors[0], colors[1]
+            colors = colors[2:]
+            ax1_handles.append(ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c=c1)[0])
+            # line_train_r2, = ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')
+            ax1_handles.append(ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c=c2)[0])
+            # line_test_r2, = ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')
+            # 标记r2最高点
+            ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c=c1,label=f'train r2 {i} max: {max_train_r2:.4f}'))
+            # train_r2_max = ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}')
+            ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c=c2,label=f'validation r2 {i} max: {max_test_r2:.4f}'))
+            # test_r2_max = ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}')
 
     # 创建右侧坐标轴
     ax2 = ax1.twinx()
@@ -376,8 +380,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
-    train_r2s = np.full(epochs, np.nan)
-    test_r2s = np.full(epochs, np.nan)
+    train_r2s = [np.full(epochs, np.nan) for i in range(params.y_n)] if not params.classify else None
+    test_r2s = [np.full(epochs, np.nan) for i in range(params.y_n)] if not params.classify else None
     train_acc = np.full(epochs, np.nan)
     test_acc = np.full(epochs, np.nan)
     lrs = np.full(epochs, np.nan)
@@ -390,8 +394,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     begin = 0
     train_loss = []
     test_loss = []
-    train_r_squared = R2Score()
-    test_r_squared = R2Score()
+    train_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
+    test_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
     train_correct = 0
     train_all = 0
     test_correct = 0
@@ -554,7 +558,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                         train_all += len(targets)
                     else:
                         # 回归模型 统计 r方
-                        train_r_squared.update(outputs, targets)
+                        for i in range(params.y_n):
+                            train_r_squared[i].update(outputs[:, i], targets[:, i])
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -656,7 +661,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                         all_predictions.append(predictions.cpu().numpy())
                     else:
                         # 回归模型 统计 r方
-                        test_r_squared.update(outputs, targets)
+                        for i in range(params.y_n):
+                            test_r_squared[i].update(outputs[:, i], targets[:, i])
 
                     if idx%100 == 0:
                         t1 = time.time()
@@ -724,8 +730,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             train_acc[it] = train_correct / train_all
             test_acc[it] = test_correct / test_all
         else:
-            train_r2s[it] = train_r_squared.compute()
-            test_r2s[it] = test_r_squared.compute()
+            for i in range(params.y_n):
+                train_r2s[i][it] = train_r_squared[i].compute()
+                test_r2s[i][it] = test_r_squared[i].compute()
 
         if test_loss < best_test_loss:
             model.eval()
@@ -759,8 +766,10 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         # 缓存数据
         train_loss = []
         test_loss = []
-        train_r_squared.reset()
-        test_r_squared.reset()
+
+        for i in range(params.y_n):
+            train_r_squared[i].reset()
+            test_r_squared[i].reset()
         step_in_epoch = 0
         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
@@ -794,8 +803,9 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                 result_dict[f'F1_{idx}'] = f1_scores[i][best_idx]
         else:
             # 回归模型 记录最佳模型的 R方
-            result_dict['train_r2'] = train_r2s[best_idx]
-            result_dict['val_r2'] = test_r2s[best_idx]
+            for i in range(params.y_n):
+                result_dict['train_r2_{i}'] = train_r2s[i][best_idx]
+                result_dict['val_r2_{i}'] = test_r2s[i][best_idx]
 
         # 保存损失图
         cost_hour = (time.time() - more_helper['begin_time']) / 3600
