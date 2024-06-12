@@ -1117,6 +1117,7 @@ class trainer:
 
             params.data_set = f'{data_parm2str(params.data_parm)}.7z'
             params.epochs = 2
+            params.workers = 0
 
         try:
             t0 = datetime.now()
