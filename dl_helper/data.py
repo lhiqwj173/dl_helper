@@ -638,7 +638,8 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
     dataset_test = Dataset(data_map, params.classify, train=_type == 'train', cnn=cnn)
-    logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
+    if params.classify:
+        logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
         params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False)
