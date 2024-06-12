@@ -72,7 +72,7 @@ class trainer(trainer_base):
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*7),
+            'total_hours': int(24*6),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
