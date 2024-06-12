@@ -126,7 +126,7 @@ class Params:
 
   regress_y_idx = -1
   classify_y_idx = -1
-  classify_func = None
+  y_func = None
   classify = False
 
   # 模型
@@ -184,7 +184,7 @@ def init_param(
     params.data_parm = data_str2parm(data_set)
     params.regress_y_idx = regress_y_idx
     params.classify_y_idx = classify_y_idx
-    params.classify_func = classify_func
+    params.y_func = y_func
     params.model = model
     params.describe = describe
     params.y_n = y_n
