@@ -7,10 +7,12 @@ import torch
 import random
 import datetime
 from tqdm import tqdm
+from collections.abc import Iterable
 from pympler import asizeof
 # import gc
 from .train_param import params, logger, data_parm2str, data_str2parm
 from .tool import report_memory_usage, check_nan
+
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -502,17 +504,24 @@ def load_data(file, diff_length, data_map):
     ###################################################
 
     # 预处理标签
+    y_idx = -1
     if params.regress_y_idx != -1:
         logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
-        y = [i[params.regress_y_idx] for i in y]
+        y_idx = params.regress_y_idx
+        
     elif params.classify_y_idx!=1:
         logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
-        y = [i[params.classify_y_idx] for i in y]
-        if None is params.classify_func:
-            raise Exception('"pls set classify_func to split class"')
-        y = [params.classify_func(i) for i in y]
+        y_idx = params.classify_y_idx
 
-    assert all(not math.isnan(_y) for _y in y)
+    # 多个可迭代
+    if isinstance(y_idx, Iterable):
+        y = [[i[j] for j in y_idx] for i in y]
+    else:
+        y = [i[y_idx] for i in y]
+
+    # 预处理
+    if not params.y_func is None:
+        y = [params.y_func(i) for i in y]
 
     data_map['ids'] += ids
     data_map['y'] += y
@@ -628,7 +637,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    dataset_test = Dataset(data_map, params.classify_y_idx>0, train=_type == 'train', cnn=cnn)
+    dataset_test = Dataset(data_map, params.classify, train=_type == 'train', cnn=cnn)
     logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(

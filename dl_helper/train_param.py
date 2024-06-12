@@ -127,6 +127,7 @@ class Params:
   regress_y_idx = -1
   classify_y_idx = -1
   classify_func = None
+  classify = False
 
   # 模型
   model = None
@@ -150,7 +151,8 @@ def init_param(
     init_learning_ratio = 0, increase_ratio = 0.2, 
 
     # 使用回归数据集参数
-    y_n=1,regress_y_idx=-1,classify_y_idx=-1,classify_func=None,
+    classify = False,
+    y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,
     
     # 数据集路径
     data_folder = '',

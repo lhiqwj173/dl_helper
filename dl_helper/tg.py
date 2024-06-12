@@ -347,16 +347,16 @@ async def get_channel_entity(client, name):
     
     return None
 
-async def _upload_file(client, filepath):
-    entity = await get_channel_entity(client, 'dl_dataset')
+async def _upload_file(client, filepath, channel_name):
+    entity = await get_channel_entity(client, channel_name)
 
     with open(filepath, "rb") as out:
         media = await upload_file(client, out, filepath.split('/')[-1], progress_callback=progress_cb)
         await client.send_file(entity, media)
 
-async def _handle_massage(client, massage_name, handle_func):
+async def _handle_massage(client, massage_name, handle_func, channel_name):
     """ 返回成功/失败 """
-    entity = await get_channel_entity(client, 'dl_dataset')
+    entity = await get_channel_entity(client, channel_name)
 
     messages = client.iter_messages(entity, reverse=True)
     files = []
@@ -376,12 +376,12 @@ async def _handle_massage(client, massage_name, handle_func):
     print(f"no match: {massage_name}")
     return False
 
-async def _del_file(client, filename):
+async def _del_file(client, filename, channel_name):
     async def del_func(client, message):
         await client.delete_messages(message.peer_id, message)
-    return await _handle_massage(client, filename, del_func)
+    return await _handle_massage(client, filename, del_func, channel_name)
 
-async def _download_dataset(client, dataset_name, dst_folder):
+async def _download_dataset(client, dataset_name, dst_folder, channel_name):
     """ 返回成功/失败 """
     async def download_func(client, message):
         print(f"File Name: {message.file.name}")
@@ -395,31 +395,34 @@ async def _download_dataset(client, dataset_name, dst_folder):
         with open(_file, "wb") as out:
             await download_file(client, message.document, out, progress_callback=progress_cb)
 
-        # 解压文件
-        decompress(_file)
+        # 尝试解压文件
+        try:
+            decompress(_file)
+        except:
+            pass
 
-    return await _handle_massage(client, dataset_name, download_func)
+    return await _handle_massage(client, dataset_name, download_func, channel_name)
 
-async def tg_download_async(session, dataset_name, dst_folder=''):
+async def tg_download_async(session, dataset_name, dst_folder='', channel_name = 'dl_dataset' ):
     """ 返回成功/失败 """
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
-        return await _download_dataset(client, dataset_name, dst_folder)
+        return await _download_dataset(client, dataset_name, dst_folder, channel_name)
 
-async def tg_del_file_async(session, file_name):
+async def tg_del_file_async(session, file_name, channel_name = 'dl_dataset' ):
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
-        return await _del_file(client, file_name)
+        return await _del_file(client, file_name, channel_name)
 
-async def tg_upload_async(session, filepath):
+async def tg_upload_async(session, filepath, channel_name = 'dl_dataset' ):
     filepath = filepath.replace('\\', '/')
 
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
-        await _upload_file(client, filepath)
+        await _upload_file(client, filepath, channel_name)
 
 def thread_run_async_func(func, rets, *args):
     for i in range(3):
@@ -453,14 +456,14 @@ def run_async_func(func, *args, **kwargs):
 
     return rets[0]
 
-def tg_download(session, dataset_name, dst_folder=''):
-    return run_async_func(tg_download_async, session, dataset_name, dst_folder)
+def tg_download(session, dataset_name, dst_folder='', channel_name = 'dl_dataset' ):
+    return run_async_func(tg_download_async, session, dataset_name, dst_folder, channel_name)
 
-def tg_del_file(session, file_name):
-    return run_async_func(tg_del_file_async, session, file_name)
+def tg_del_file(session, file_name, channel_name = 'dl_dataset' ):
+    return run_async_func(tg_del_file_async, session, file_name, channel_name)
 
-def tg_upload(session, filepath):
-    return run_async_func(tg_upload_async, session, filepath)
+def tg_upload(session, filepath, channel_name = 'dl_dataset' ):
+    return run_async_func(tg_upload_async, session, filepath, channel_name)
 
 if __name__ == '__main__':
     ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='

@@ -221,7 +221,8 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
 
     # 创建图形和坐标轴
     fig, axs = None, None
-    if params.y_n != 1:
+    if params.classify:
+        # 分类模型
         fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
     else:
         fig, axs = plt.subplots(figsize=(15, 10))
@@ -250,7 +251,7 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
     # test_loss_min = ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',
     #             label=f'validation loss min: {min_test_loss:.4f}')
 
-    if params.y_n != 1:
+    if params.classify:
         # 分类模型
         # 计算acc最高点
         max_train_acc = max(train_acc)
@@ -300,7 +301,7 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
     ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
 
     # 图2
-    if params.y_n != 1:
+    if classify:
         # 分类模型
         t2_handles = []
         # 绘制f1曲线
@@ -544,7 +545,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                 train_loss.append(loss.item())
 
                 with torch.no_grad():
-                    if params.y_n != 1:
+                    if params.classify:
                         # 分类模型 统计acc
                         train_correct += count_correct_predictions(
                             outputs, targets)
@@ -636,7 +637,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                     test_loss.append(loss.item())
                     # logger.debug(f'test_loss: {loss.item()}')
                     
-                    if params.y_n != 1:
+                    if params.classify:
                         # 分类模型 统计acc / f1 score
                         test_correct += count_correct_predictions(
                             outputs, targets)
@@ -674,7 +675,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
 
                     idx += 1
 
-            if params.y_n != 1:
+            if params.classify:
                 # 分类模型 统计 f1 score
                 all_targets = np.concatenate(all_targets)
                 all_predictions = np.concatenate(all_predictions)
@@ -717,7 +718,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         train_losses[it] = train_loss
         test_losses[it] = test_loss
 
-        if params.y_n != 1:
+        if params.classify:
             train_acc[it] = train_correct / train_all
             test_acc[it] = test_correct / test_all
         else:
@@ -782,7 +783,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         result_dict['train_loss'] = train_losses[best_idx]
         result_dict['val_loss'] = test_losses[best_idx]
 
-        if params.y_n != 1:
+        if params.classify:
             # 分类模型 记录最佳模型的acc / f1 score
             result_dict['train_acc'] = train_acc[best_idx]
             result_dict['val_acc'] = test_acc[best_idx]
@@ -843,7 +844,7 @@ def test_model(result_dict, debug, cnn, select='best'):
             total_times += time.time() - t0
             total_counts += len(targets)
 
-            if params.y_n != 1:
+            if params.classify:
                 # 分类模型
                 # 转成概率
                 p = torch.softmax(outputs, dim=1)
@@ -885,7 +886,7 @@ def test_model(result_dict, debug, cnn, select='best'):
             for timestamp, target, pre,  in data_list:
                 f.write(f'{timestamp},{target},{pre}\n')
 
-    if params.y_n != 1:
+    if params.classify:
         # 分类模型
         logger.debug(
             f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
@@ -1131,7 +1132,7 @@ class trainer:
 
                 # 损失函数
                 criterion = None
-                if params.y_n != 1:
+                if params.classify:
                     # 分类模型
                     criterion = nn.CrossEntropyLoss(label_smoothing=params.label_smoothing)
                 else:
