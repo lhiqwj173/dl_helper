@@ -71,7 +71,7 @@ class trainer(trainer_base):
         else:
             regress_idx, targrt_name, y_n, idx = vars[self.idx]
 
-        title = f'binctabl_{targrt_name}_v{idx}'
+        title = f'binctabl_{targrt_name}_v{idx}' if self.workers==4 else f'binctabl_{targrt_name}_v{idx}_w{self.workers}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
