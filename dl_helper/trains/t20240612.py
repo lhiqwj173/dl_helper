@@ -33,6 +33,15 @@ class trainer(trainer_base):
     batch size = 64
     lr=0.00013
     
+    workers=4
+    23112/23112 [1:05:32<00:00,  5.88it/s]
+    
+    workers=3
+    23112/23112 [1:09:27<00:00,  5.55it/s]
+
+    workers=2
+    23112/23112 [1:15:59<00:00,  5.07it/s]
+
     测试标签:
         双回归:
         [0] 10_target_long
@@ -44,7 +53,7 @@ class trainer(trainer_base):
         单回归:
         [3] 10_target_5_period_point
     """
-    def __init__(self, idx, workers=4, debug=False):
+    def __init__(self, idx, workers=3, debug=False):
         super().__init__(idx, debug, False, workers)
 
     def init_param(self, data_folder=''):
@@ -71,14 +80,14 @@ class trainer(trainer_base):
         else:
             regress_idx, targrt_name, y_n, idx = vars[self.idx]
 
-        title = f'binctabl_{targrt_name}_v{idx}' if self.workers==4 else f'binctabl_{targrt_name}_v{idx}_w{self.workers}'
+        title = f'binctabl_{targrt_name}_v{idx}' if self.workers==3 else f'binctabl_{targrt_name}_v{idx}_w{self.workers}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*6) if self.idx!=-1 else int(24*7),
+            'total_hours': int(24*7) if self.idx==0 else int(24*7.5) if self.idx==1 else int(24*8),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
