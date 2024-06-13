@@ -221,14 +221,14 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
 
     # 创建图形和坐标轴
     fig, axs = None, None
+    ax1 = None
     if params.classify:
         # 分类模型
         fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
+        ax1 = axs[0]
     else:
         fig, axs = plt.subplots(figsize=(15, 10))
-
-    # 1 图左侧坐标轴
-    ax1 = axs[0]
+        ax1 = axs
 
     # 用于添加图例
     ax1_handles = []
@@ -275,14 +275,14 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
             # 计算r2最高点
             max_train_r2 = max(train_r2s[i])
             max_test_r2 = max(test_r2s[i])
-            max_train_r2_x = train_r2s.tolist().index(max_train_r2)
-            max_test_r2_x = test_r2s.tolist().index(max_test_r2)
+            max_train_r2_x = train_r2s[i].tolist().index(max_train_r2)
+            max_test_r2_x = test_r2s[i].tolist().index(max_test_r2)
             # 绘制r2曲线
             c1, c2 = colors[0], colors[1]
             colors = colors[2:]
-            ax1_handles.append(ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c=c1)[0])
+            ax1_handles.append(ax1.plot(list(range(epochs)), train_r2s[i], label=f'train r2 {last_value(train_r2s[i])}', c=c1)[0])
             # line_train_r2, = ax1.plot(list(range(epochs)), train_r2s, label=f'train r2 {last_value(train_r2s)}', c='r')
-            ax1_handles.append(ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c=c2)[0])
+            ax1_handles.append(ax1.plot(list(range(epochs)), test_r2s[i], label=f'validation r2 {last_value(test_r2s[i])}', c=c2)[0])
             # line_test_r2, = ax1.plot(list(range(epochs)), test_r2s, label=f'validation r2 {last_value(test_r2s)}', c='#FFA07A')
             # 标记r2最高点
             ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c=c1,label=f'train r2 {i} max: {max_train_r2:.4f}'))
@@ -305,7 +305,7 @@ def plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc,
     ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
 
     # 图2
-    if classify:
+    if params.classify:
         # 分类模型
         t2_handles = []
         # 绘制f1曲线
@@ -359,6 +359,7 @@ def count_correct_predictions(predictions, labels):
     return correct_count
 
 
+debug = False
 # A function to encapsulate the training loop
 
 
@@ -368,15 +369,16 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     # y = train_loader_cache.data.dataset[0]
     # return
 
-    # 检查下载tg上的保持训练数据
-    tg_download(
-        ses,
-        f'{params.train_title}.7z',
-        '/kaggle/working/tg'
-    )
+    if not debug:
+        # 检查下载tg上的保持训练数据
+        tg_download(
+            ses,
+            f'{params.train_title}.7z',
+            '/kaggle/working/tg'
+        )
 
-    if os.path.exists(os.path.join('/kaggle/working/tg', params.train_title, 'var', f'helper.pkl')):
-        shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
+        if os.path.exists(os.path.join('/kaggle/working/tg', params.train_title, 'var', f'helper.pkl')):
+            shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
     train_losses = np.full(epochs, np.nan)
     test_losses = np.full(epochs, np.nan)
@@ -394,8 +396,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     begin = 0
     train_loss = []
     test_loss = []
-    train_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
-    test_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
+    train_r_squared = [R2Score().to(params.device) for i in range(params.y_n)] if not params.classify else None
+    test_r_squared = [R2Score().to(params.device) for i in range(params.y_n)] if not params.classify else None
     train_correct = 0
     train_all = 0
     test_correct = 0
@@ -521,10 +523,39 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             train_last = time.time()
             for inputs, targets in tqdm(train_loader_cache.data, initial=int(train_loader_cache.data.sampler.idx / params.batch_size), total=len(train_loader_cache.data)):
             # for inputs, targets in train_loader_cache.data:
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(targets.shape) == 1:
+                    targets = targets.unsqueeze(1)
+                
                 # move data to GPU
                 inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                     params.device, dtype=y_data_type)
                 optimizer.zero_grad()
+
+                # num_workers = 0
+                # 合并统计后的内存大小：0.846GB
+
+                # num_workers = 1
+                # 合并统计后的内存大小：2.389GB
+
+                # num_workers = 2
+                # 合并统计后的内存大小：3.000GB
+                # 合并统计后的内存大小：2.837GB
+                # 合并统计后的内存大小：2.787GB
+
+                # num_workers = 3
+                # 合并统计后的内存大小：3.581GB
+
+                # num_workers = 4
+                # 合并统计后的内存大小：4.191GB
+                # 合并统计后的内存大小：3.795GB  优化get
+                # 合并统计后的内存大小：3.805GB  batchsize=1
+
+                # num_workers = 8
+                # 合并统计后的内存大小：6.578GB
+
+                # report_memory_usage()
+                # raise
 
                 outputs = None
                 loss = None
@@ -632,6 +663,10 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
                 val_last = time.time()
                 for inputs, targets in tqdm(val_loader_cache.data, initial=int(val_loader_cache.data.sampler.idx / params.batch_size), total=len(val_loader_cache.data)):
                 # for inputs, targets in val_loader_cache.data:
+                    # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                    if not params.classify and len(targets.shape) == 1:
+                        targets = targets.unsqueeze(1)
+
                     inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                         params.device, dtype=y_data_type)
 
@@ -744,9 +779,11 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             # 导出onnx
             onnx_file = os.path.join(params.root, f'best_val_model.onnx')
             try:
-                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file)
+                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False)
             except:
                 logger.debug('导出onnx失败')
+                logger.debug(f"模型的设备：{next(model.parameters()).device}")
+                logger.debug(f"数据的设备：{torch.randn(input_shape).to(params.device).device}")
 
         # 更新学习率
         lrs[it] = optimizer.param_groups[0]["lr"]
@@ -760,7 +797,14 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         msg += f'lr: {lrs[it]:.8f} -> {optimizer.param_groups[0]["lr"]:.8f}\n'
 
         dt = datetime.now() - t0
-        msg += f'Train Loss: {train_loss:.4f}, Val Loss: {test_loss:.4f}, Train acc: {train_acc[it]:.4f}, Val acc: {test_acc[it]:.4f} \nDuration: {dt}, Best Val Epoch: {best_test_epoch}'
+        msg += f'Train Loss: {train_loss:.4f}, Val Loss: {test_loss:.4f}'
+        if params.classify:
+            msg += f', Train acc: {train_acc[it]:.4f}, Val acc: {test_acc[it]:.4f}'
+        else:
+            for i in range(params.y_n):
+                msg += f', Train R2 {i}: {train_r2s[i][it]:.4f}, Val R2 {i}: {test_r2s[i][it]:.4f}'
+
+        msg += f'\nDuration: {dt}, Best Val Epoch: {best_test_epoch}'
         logger.debug(msg)
 
         # 缓存数据
@@ -782,9 +826,11 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         model.eval()
         onnx_file = os.path.join(params.root, 'var', f'model.onnx')
         try:
-            torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file)
+            torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False)
         except:
             logger.debug('导出onnx失败')
+            logger.debug(f"模型的设备：{next(model.parameters()).device}")
+            logger.debug(f"数据的设备：{torch.randn(input_shape).to(params.device).device}")
 
         # 打包文件
         pack_folder()
@@ -836,7 +882,7 @@ def test_model(result_dict, debug, cnn, select='best'):
     # model = torch.load('best_val_model_pytorch')
     all_targets = []
     all_predictions = []
-    r2score = R2Score()
+    r2score = [R2Score().to(params.device) for i in range(params.y_n)]
 
     total_times = 0
     total_counts = 0
@@ -846,6 +892,10 @@ def test_model(result_dict, debug, cnn, select='best'):
     logger.debug(f'测试模型')
     with torch.no_grad():
         for inputs, targets in test_loader_cache.data:
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(targets.shape) == 1:
+                targets = targets.unsqueeze(1)
+
             # Move to GPU
             inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
                 params.device, dtype=torch.int64)
@@ -869,7 +919,8 @@ def test_model(result_dict, debug, cnn, select='best'):
                 all_predictions.append(predictions.cpu().numpy())
             else:
                 # 回归模型 统计 r方
-                r2score.update(outputs, targets)
+                for i in range(params.y_n):
+                    r2score[i].update(outputs[:, i], targets[:, i])
                 all_predictions.append(outputs.cpu().numpy())
 
             all_targets.append(targets.cpu().numpy())
@@ -924,13 +975,14 @@ def test_model(result_dict, debug, cnn, select='best'):
         dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
     else:
         # 回归模型 统计 R2, MSE, RMSE
-        r2 = r2score.compute()
-        mse = mean_squared_error(all_targets, all_predictions)
-        rmse = torch.sqrt(mse)
-
-        result_dict['test_r2'] = r2
+        mse = mean_squared_error(all_targets, all_predictions, multioutput='raw_values')
+        rmse = np.sqrt(mse)
         result_dict['test_mse'] = mse
         result_dict['test_rmse'] = rmse
+
+        for i in range(params.y_n):
+            r2 = r2score[i].compute()
+            result_dict[f'test_r2_{i}'] = r2
 
     # 记录预测平均耗时 ms 
     result_dict['predict_ms'] = (total_times / total_counts) * 1000
@@ -1062,10 +1114,11 @@ def pack_folder():
 
     compress_folder(params.root, file, 9, inplace=False)
 
-    # 删除当前的训练文件，如果存在
-    tg_del_file(ses, f'{params.train_title}.7z')
-    # 上传到tg
-    tg_upload(ses, file)
+    if not debug:
+        # 删除当前的训练文件，如果存在
+        tg_del_file(ses, f'{params.train_title}.7z')
+        # 上传到tg
+        tg_upload(ses, file)
 
 class trainer:
     def __init__(self, idx, debug=False, cnn=True, workers=3):
@@ -1158,6 +1211,8 @@ class trainer:
                 optimizer_class = torch.optim.AdamW
 
                 # 训练
+                global debug
+                debug = self.debug
                 cost_hour = batch_gd(_model, criterion, optimizer_class, None, epochs=params.epochs, result_dict=self.result_dict, debug=self.debug, cnn=self.cnn)
 
             # return
@@ -1174,6 +1229,7 @@ class trainer:
             # 数据参数
             data_dict =  data_str2parm(params.data_set)
             data_dict['y_n'] = params.y_n
+            data_dict['classify'] = params.classify
             data_dict['regress_y_idx'] = params.regress_y_idx
             data_dict['classify_y_idx'] = params.classify_y_idx
             if not os.path.exists(result_file):
