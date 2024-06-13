@@ -39,6 +39,7 @@ class trainer(trainer_base):
     workers=3
     23112/23112 [1:09:27<00:00,  5.55it/s]
     3759 /28391 [20:05<1:11:33,  5.74it/s] 7.5
+   *23031/30505 [1:11:29<21:58,  5.67it/s] 8
 
     workers=2
     23112/23112 [1:15:59<00:00,  5.07it/s]
@@ -88,7 +89,7 @@ class trainer(trainer_base):
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*8) if self.idx==0 else int(24*8.5) if self.idx==1 else int(24*9),
+            'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
