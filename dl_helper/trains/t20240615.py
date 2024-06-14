@@ -110,7 +110,7 @@ class trainer(trainer_base):
         classify_idx, targrt_name, yfunc = vars[self.idx]
         y_n = 3
 
-        title = f'binctabl_{targrt_name}_v{idx}' if self.workers==3 else f'binctabl_{targrt_name}_v{idx}_w{self.workers}'
+        title = f'binctabl_{targrt_name}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 105,
