@@ -113,7 +113,7 @@ class trainer(trainer_base):
         title = f'binctabl_{targrt_name}'
         data_parm = {
             'predict_n': [10, 20, 30],
-            'pass_n': 105,
+            'pass_n': 100,
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),

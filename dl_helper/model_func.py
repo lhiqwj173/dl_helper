@@ -779,7 +779,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
             # 导出onnx
             onnx_file = os.path.join(params.root, f'best_val_model.onnx')
             try:
-                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False)
+                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False,
+                input_names=['input'], output_names=['output'])
             except:
                 logger.debug('导出onnx失败')
                 logger.debug(f"模型的设备：{next(model.parameters()).device}")
@@ -826,7 +827,8 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         model.eval()
         onnx_file = os.path.join(params.root, 'var', f'model.onnx')
         try:
-            torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False)
+            torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnx_file, do_constant_folding=False,
+            input_names=['input'], output_names=['output'])
         except:
             logger.debug('导出onnx失败')
             logger.debug(f"模型的设备：{next(model.parameters()).device}")
