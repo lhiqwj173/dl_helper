@@ -68,7 +68,7 @@ def convert_float16_2_32(df):
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 105
 def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     need_length = end-begin
-    assert need_length+max_mask_num <= tensor.shape[1]
+    assert need_length+max_mask_num <= tensor.shape[1], f"need_length:{need_length} max_mask_num:{max_mask_num} tensor.shape:{tensor.shape}"
 
     # 实际的 begin，end
     length = tensor.shape[1]
