@@ -182,12 +182,15 @@ def init_param(
     params.increase_ratio = increase_ratio
     params.data_set = data_set
     params.data_parm = data_str2parm(data_set)
+
+    params.classify = classify
+    params.y_n = y_n
     params.regress_y_idx = regress_y_idx
     params.classify_y_idx = classify_y_idx
     params.y_func = y_func
+
     params.model = model
     params.describe = describe
-    params.y_n = y_n
     params.use_pk = use_pk
     params.use_trade = use_trade
     params.workers = workers

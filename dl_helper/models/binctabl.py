@@ -195,12 +195,13 @@ if __name__ == "__main__":
 
     summary(model, (1, 40, 100), device=device)
 
-    # model = model.to(device)
-    # input = torch.randn((2, 40, 100)).to(device)
+    model = model.to(device)
+    input = torch.randn((1, 40, 100)).to(device)
 
-    # # 导出模型为ONNX格式
-    # onnx_path = "bin_ctabl.onnx"
-    # torch.onnx.export(model, input, onnx_path)
+    # 导出模型为ONNX格式
+    onnx_path = "C:/Users/lh/Desktop/temp/bin_ctabl.onnx"
+    torch.onnx.export(model, input, onnx_path, do_constant_folding=False,
+                input_names=['input'], output_names=['output'])
 
     # flops, params = profile(model, inputs=(input,))
     # flops, params = clever_format([flops, params])
