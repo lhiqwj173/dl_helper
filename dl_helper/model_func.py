@@ -362,7 +362,6 @@ def count_correct_predictions(predictions, labels):
 debug = False
 # A function to encapsulate the training loop
 
-
 def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, debug, cnn):
     # # 测试载入数据
     # train_loader_cache = read_data('train', cnn=cnn)
@@ -812,7 +811,7 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         train_loss = []
         test_loss = []
 
-        if params.classify:
+        if not params.classify:
             # 重置
             for i in range(params.y_n):
                 train_r_squared[i].reset()
@@ -866,7 +865,6 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
     plot_loss(epochs, train_losses, test_losses, train_r2s, test_r2s, train_acc, test_acc, lrs, f1_scores, cost_hour)
 
     return cost_hour
-
 
 def test_model(result_dict, debug, cnn, select='best'):
     """
@@ -991,123 +989,6 @@ def test_model(result_dict, debug, cnn, select='best'):
 
     # 记录预测平均耗时 ms 
     result_dict['predict_ms'] = (total_times / total_counts) * 1000
-
-def test_ps(data_loader, ps):
-    """
-    data_loader 数据
-    ps     概率阈值
-    """
-    # 载入模型
-    model = torch.load(os.path.join(params.root, f'best_val_model'))
-
-    # 真实标签 预测概率
-    true_label = []
-    p = []
-
-    for inputs, targets in data_loader:
-        # Move to GPU
-        inputs = inputs.to(params.device, dtype=torch.float)
-
-        # Forward pass
-        outputs = model(inputs)
-
-        # 转成概率
-        # 0， 1， 2
-        _p = torch.softmax(outputs, dim=1)
-
-        true_label.append(targets.numpy())
-        p.append(_p.detach().cpu().numpy())
-
-    true_label = np.concatenate(true_label)
-    p = np.concatenate(p)
-    _, predictions = torch.max(torch.tensor(p), 1)
-    logger.debug(pd.DataFrame({'label': predictions})['label'].value_counts())
-
-    # 标签类别
-    n = p.shape[1]
-
-    predict_labels = np.zeros(p.shape)
-    for i in range(n):
-        # 生成预测
-        func = np.vectorize(lambda x: 1 if x > ps[i] else 0)
-        predict_labels[:, i] = func(p[:, i])
-
-    predicts = [0 if predict_labels[i][0] else 2 if predict_labels[i]
-                [2] else 1 for i in range(predict_labels.shape[0])]
-    # predicts = [1 if predict_labels[i][1] else 0 if predict_labels[i][0] else 2 for i in range(predict_labels.shape[0])]
-
-    logger.debug(pd.DataFrame({'label': predicts})['label'].value_counts())
-
-    report = classification_report(
-        true_label, predicts, digits=4, output_dict=True)
-    # 将分类报告转换为DataFrame
-    df = pd.DataFrame(report).transpose()
-    logger.debug(f'\n{df}')
-    # dfi.export(df, 'pic.png', table_conversion="matplotlib")
-    # wx.send_file("pic.png")
-
-def plot_roc(data_loader):
-    """
-    data_loader 数据
-    """
-    # 载入模型
-    model = torch.load(os.path.join(params.root, f'best_val_model'))
-
-    # 针对 0 标签（下跌）
-    # label = 0
-
-    # 真实标签 预测概率
-    true_label = []
-    p = []
-
-    for inputs, targets in data_loader:
-        # Move to GPU
-        inputs = inputs.to(params.device, dtype=torch.float)
-
-        # Forward pass
-        outputs = model(inputs)
-
-        # 转成概率
-        # 0， 1， 2
-        _p = torch.softmax(outputs, dim=1)
-
-        true_label.append(targets.numpy())
-        p.append(_p.detach().cpu().numpy())
-
-    true_label = np.concatenate(true_label)
-    p = np.concatenate(p)
-
-    # 标签类别
-    n = p.shape[1]
-
-    # 子图
-    fig, axes = plt.subplots(1, n, figsize=(15, 5))
-
-    bests = []
-    for i in range(n):
-        # 计算混淆矩阵
-        c_m = confusion_matrix(true_label, np.argmax(p, axis=1), labels=[i])
-        logger.debug(f'类别:{i} 混淆矩阵:\n{c_m}')
-
-        # 计算roc曲线数值
-        fpr, tpr, thresholds = roc(true_label, p[:, i], pos_label=i)
-
-        # 找到最佳的阈值
-        best_idx = (tpr - fpr).tolist().index(max(tpr - fpr))
-        pbest = thresholds[best_idx]
-        bests.append(pbest)
-        logger.debug(f'类别:{i} 最佳阈值:{pbest:.3f}')
-
-        # 绘制roc曲线
-        axes[i].plot(fpr, tpr)
-        axes[i].set_title(f'ROC label:{i} best:{pbest:.3f}')
-        axes[i].scatter(fpr[best_idx], tpr[best_idx], c='r')
-        axes[i].grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-    return bests
 
 def pack_folder():
     # 打包训练文件夹 zip 
