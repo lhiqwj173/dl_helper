@@ -812,9 +812,12 @@ def batch_gd(model, criterion, optimizer_class, lr_lambda, epochs, result_dict, 
         train_loss = []
         test_loss = []
 
-        for i in range(params.y_n):
-            train_r_squared[i].reset()
-            test_r_squared[i].reset()
+        if params.classify:
+            # 重置
+            for i in range(params.y_n):
+                train_r_squared[i].reset()
+                test_r_squared[i].reset()
+
         step_in_epoch = 0
         pickle.dump((train_losses, test_losses, train_r2s, test_r2s, train_r_squared, test_r_squared, train_acc, test_acc, lrs,f1_scores, all_targets, all_predictions, best_test_loss, best_test_epoch, it+1, train_loss, test_loss,
                     train_correct, test_correct, train_all, test_all, step_in_epoch, scaler), open(os.path.join(params.root, 'var', f'datas.pkl'), 'wb'))
