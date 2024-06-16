@@ -649,7 +649,9 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
                 logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
-        params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False)
+        params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False,
+        drop_last=True
+        )
     del dataset_test
 
     data_loader_cache = cache(data_loader, _type)
