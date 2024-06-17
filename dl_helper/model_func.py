@@ -378,8 +378,8 @@ class helper:
         self.it = 0
         self.resume_train_step = 0
         self.resume_val_step = 0
-        self.train_loss = []
-        self.test_loss = []
+        self.train_loss = 0.0 
+        self.test_loss = 0.0 
         self.train_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
         self.test_r_squared = [R2Score() for i in range(params.y_n)] if not params.classify else None
         self.train_correct = 0
@@ -501,7 +501,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                 # 记录loss
-                help_vars.train_loss.append(loss.detach().float())
+                help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
                 with torch.no_grad():
@@ -540,7 +540,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             help_vars.step_in_epoch += 1
 
             # Get train loss and test loss
-            help_vars.train_loss = np.mean(help_vars.train_loss)
+            help_vars.train_loss = help_vars.train_loss.item() / len(active_dataloader)
 
         if accelerator.is_local_main_process:
             logger.debug(f'{msg}训练完成')
@@ -579,7 +579,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                     # 记录loss
-                    help_vars.test_loss.append(loss.detach().float())
+                    help_vars.test_loss += loss.detach().float()
 
                     # 记录正确率/r方
                     if accelerator.is_local_main_process:
@@ -636,7 +636,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     help_vars.f1_scores[i][it] = _f1_scores_dict[i]
 
             help_vars.step_in_epoch += 1
-            help_vars.test_loss = np.mean(help_vars.test_loss)
+            help_vars.test_loss = help_vars.test_loss.item() / len(active_dataloader)
 
         if accelerator.is_local_main_process:
             logger.debug(f'{msg}验证完成')
