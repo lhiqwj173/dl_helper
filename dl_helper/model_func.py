@@ -370,7 +370,7 @@ class helper:
         self.train_acc = np.full(params.epochs, np.nan)
         self.test_acc = np.full(params.epochs, np.nan)
         self.lrs = np.full(params.epochs, np.nan)
-        self.all_targets, all_predictions = [], []
+        self.all_targets, self.all_predictions = [], []
         self.f1_scores = {}
         self.best_test_loss = np.inf
         self.best_test_epoch = 0
