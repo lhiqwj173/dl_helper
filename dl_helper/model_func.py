@@ -290,7 +290,7 @@ def plot_loss(help_vars, cost_hour, send_wx=True, folder=''):
         # 分类模型
         t2_handles = []
         # 绘制f1曲线
-        for i in help_vars.f1_scores[1:]:
+        for i in help_vars.f1_scores:
             _line, = axs[1].plot(list(range(epochs)), help_vars.f1_scores[i], label=f'f1 {i} {last_value(help_vars.f1_scores[i])}')
             t2_handles.append(_line)
         axs[1].grid(True)
