@@ -275,7 +275,7 @@ def plot_loss(help_vars, cost_hour, send_wx=True, folder=''):
     ax2 = ax1.twinx()
 
     # 绘制学习率
-    line_lr, = ax2.plot(list(range(epochs)), lrs, label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
+    line_lr, = ax2.plot(list(range(epochs)), help_vars.lrs, label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
 
     # 添加图例
     ax1.legend(handles=ax1_handles)
@@ -290,8 +290,8 @@ def plot_loss(help_vars, cost_hour, send_wx=True, folder=''):
         # 分类模型
         t2_handles = []
         # 绘制f1曲线
-        for i in f1_scores:
-            _line, = axs[1].plot(list(range(epochs)), f1_scores[i], label=f'f1 {i} {last_value(f1_scores[i])}')
+        for i in help_vars.f1_scores[1:]:
+            _line, = axs[1].plot(list(range(epochs)), help_vars.f1_scores[i], label=f'f1 {i} {last_value(help_vars.f1_scores[i])}')
             t2_handles.append(_line)
         axs[1].grid(True)
         axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
@@ -443,10 +443,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
         model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars
     )
 
-    # 保存模型
-    accelerator.wait_for_everyone()
-    model_save_path = os.path.join(params.root, f'best_val_model')
-    accelerator.save_model(model, model_save_path)
+    # 注册变量
+    accelerator.register_for_checkpointing(help_vars)
 
     # 检查是否有缓存文件
     if resume_from_checkpoint:
@@ -633,7 +631,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     help_vars.all_targets, help_vars.all_predictions, digits=4, output_dict=True)
                 # 将分类报告转换为DataFrame
                 df_report = pd.DataFrame(report).transpose()
-                _f1_scores_dict = df_report.iloc[:-3, 2].to_dict()
+                rows = [i for i in range(len(df_report))]
+                rows = rows[:-3] + rows[-1:]
+                _f1_scores_dict = df_report.iloc[rows, 2].to_dict()
                 # 存入 f1_scores
                 for i in _f1_scores_dict:
                     if i not in help_vars.f1_scores:
@@ -664,12 +664,12 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             help_vars.best_test_loss = help_vars.test_loss
             help_vars.best_test_epoch = it
 
-            model_save_path = os.path.join(params.root, f'best_val_model')
-            onnex_model_save_path = os.path.join(params.root, f'best_val_model.onnx')
+            model_save_path = os.path.join(params.root, 'model', f'best_val_model')
+            onnex_model_save_path = os.path.join(params.root, 'model',  f'best_val_model.onnx')
 
         else:
-            model_save_path = os.path.join(params.root, f'final_model')
-            onnex_model_save_path = os.path.join(params.root, f'final_model.onnx')
+            model_save_path = os.path.join(params.root, 'model', f'final_model')
+            onnex_model_save_path = os.path.join(params.root, 'model',  f'final_model.onnx')
 
         # 保存模型
         accelerator.wait_for_everyone()
