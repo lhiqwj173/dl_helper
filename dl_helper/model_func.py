@@ -43,9 +43,6 @@ from .tool import report_memory_usage, check_nan
 
 ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
 
-# 设置启动方法为'spawn'
-multiprocessing.set_start_method('spawn', force=True)
-
 # 当训练的损失序列区域平缓时，减低学习率
 class ReduceLR_slow_loss():
     def __init__(self, optimizer, min_pct=-0.00005, patience=10, factor=0.1, min_lr=0, eps=1e-8, debug=False):
@@ -896,8 +893,8 @@ class trainer:
         self.workers = workers
         self.custom_param = custom_param
 
-        # 开启CuDNN自动优化
-        torch.backends.cudnn.benchmark = True
+        # # 开启CuDNN自动优化
+        # torch.backends.cudnn.benchmark = True
 
         # 训练结果
         self.result_dict = {}
