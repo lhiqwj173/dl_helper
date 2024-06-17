@@ -504,7 +504,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                 # 记录loss
-                help_vars.train_loss += loss.detach().float()
+                help_vars.train_loss += loss.detach().item() 
 
                 # 记录正确率/r方
                 with torch.no_grad():
@@ -582,7 +582,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                     # 记录loss
-                    help_vars.test_loss += loss.detach().float()
+                    help_vars.test_loss += loss.detach().item()
 
                     # 记录正确率/r方
                     if accelerator.is_local_main_process:
