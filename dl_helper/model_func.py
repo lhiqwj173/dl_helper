@@ -597,8 +597,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             # torch.max returns both max and argmax
                             _, predictions = torch.max(p, 1)
 
-                            help_vars.all_targets.append(all_targets.numpy())
-                            help_vars.all_predictions.append(predictions.numpy())
+                            help_vars.all_targets.append(all_targets.cpu().numpy())
+                            help_vars.all_predictions.append(predictions.cpu().numpy())
                         else:
                             logger.debug(f'loss: {loss.item()}')
                             # 回归模型 统计 r方
