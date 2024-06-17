@@ -666,11 +666,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             model_save_path = os.path.join(params.root, f'final_model')
             onnex_model_save_path = os.path.join(params.root, f'final_model.onnx')
 
+        # 保存模型
+        accelerator.wait_for_everyone()
+        accelerator.save_model(model, model_save_path)
 
         if accelerator.is_local_main_process:
-            # 保存模型
-            accelerator.save_model(model, model_save_path)
-
             # 导出onnx
             try:
                 torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnex_model_save_path, do_constant_folding=False,
