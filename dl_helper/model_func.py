@@ -443,6 +443,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
         model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars
     )
 
+    # 保存模型
+    accelerator.wait_for_everyone()
+    model_save_path = os.path.join(params.root, f'best_val_model')
+    accelerator.save_model(model, model_save_path)
+
     # 检查是否有缓存文件
     if resume_from_checkpoint:
         if accelerator.is_local_main_process:
