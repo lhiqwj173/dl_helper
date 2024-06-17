@@ -13,8 +13,7 @@ warm_up_epochs: warm up 数
 no_better_stop: 早停参数
 random_mask: 随机遮蔽
 random_mask_row: 随机遮蔽行
-amp: 是否使用混合精度
-amp_ratio: 混合精度比例
+amp: 是否使用混合精度: fp16/bf16/no
 label_smoothing: 标签平滑
 weight_decay: 权重衰减
 init_learning_ratio: 测试最优学习率
@@ -84,6 +83,8 @@ class Params:
   # workers = int(multiprocessing.cpu_count())
   workers = 3
 
+  debug = False
+
   #############################
   # 训练超参数
   #############################
@@ -106,8 +107,7 @@ class Params:
   random_scale = 0
 
   # 是否使用混合精度
-  amp = False
-  amp_ratio = 2
+  amp = ''
 
   label_smoothing=0.1
 
@@ -142,7 +142,7 @@ def init_param(
     # 训练参数
     learning_rate, batch_size, 
     epochs=100, warm_up_epochs=3, 
-    no_better_stop=0,amp=False, label_smoothing=0.1, weight_decay=0.01, workers=3,
+    no_better_stop=0, label_smoothing=0.1, weight_decay=0.01, workers=3,
 
     # 数据增强
     random_mask=0, random_scale=0, random_mask_row=0, 
@@ -161,6 +161,8 @@ def init_param(
     use_pk = True, use_trade = False,
 
     describe='',
+
+    debug = False,
 ):
     global params
 
@@ -175,7 +177,6 @@ def init_param(
     params.random_mask = random_mask
     params.random_scale = random_scale
     params.random_mask_row = random_mask_row
-    params.amp = amp
     params.label_smoothing = label_smoothing
     params.weight_decay = weight_decay
     params.init_learning_ratio = init_learning_ratio
@@ -196,6 +197,8 @@ def init_param(
     params.workers = workers
 
     params.data_folder = data_folder if data_folder else './data'
+
+    params
 
     # 运行变量
     os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)

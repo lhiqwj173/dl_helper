@@ -16,8 +16,6 @@ from .tool import report_memory_usage, check_nan
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
-need_split_data_set = None
-
 # Memory saving function credit to https://www.kaggle.com/gemartin/load-data-reduce-memory-usage
 def reduce_mem_usage(df):
     """ iterate through all the columns of a dataframe and modify the data type
@@ -139,18 +137,13 @@ class ResumeSample():
         self._loop = False
 
     def state_dict(self):
-        return {'step': self.step, 'seed': self.seed, 'shuffle': self.shuffle, 'size': self.size, 'idx': self.idx, 'loop': self._loop}
+        return {key: value for key, value in self.__dict__.items()}
 
     def load_state_dict(self, state_dict):
         if not state_dict:
             return self
 
-        self.step = state_dict['step']
-        self.seed = state_dict['seed']
-        self.shuffle = state_dict['shuffle']
-        self.size = state_dict['size']
-        self.idx = state_dict['idx']
-        self._loop = state_dict['loop']
+        self.__dict__.update(state_dict)
 
         # 使用原种子
         random.seed(self.seed)
@@ -192,8 +185,9 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, data_map, classify=False, train=True, cnn=True):
+    def __init__(self, data_map, need_split_data_set, classify=False, train=True, cnn=True, log=False):
         """Initialization"""
+        self.log = log
         self.cnn = cnn
 
         # 原始数据
@@ -204,7 +198,8 @@ class Dataset(torch.utils.data.Dataset):
         self.vol_cols = [i*2+1 for i in range(20)]
 
         if not need_split_data_set:
-            logger.debug("使用全部数据")
+            if self.log:
+                logger.debug("使用全部数据")
             if params.use_trade:
                 self.price_cols += [42, 45]
                 self.vol_cols += [40, 41, 43, 44]
@@ -215,10 +210,12 @@ class Dataset(torch.utils.data.Dataset):
                 raise Exception('no use')
 
             elif params.use_pk:
-                logger.debug("只使用盘口数据")
+                if self.log:
+                    logger.debug("只使用盘口数据")
 
             elif params.use_trade:
-                logger.debug("只使用交易数据")
+                if self.log:
+                    logger.debug("只使用交易数据")
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
@@ -440,7 +437,7 @@ class cache():
         self.cost = time.time() - t0
 
 
-def load_data(file, diff_length, data_map):
+def load_data(file, diff_length, data_map, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
@@ -454,23 +451,20 @@ def load_data(file, diff_length, data_map):
     # gc.collect()
 
     # total_size = (asizeof.asizeof((ids,mean_std, x, y)) + raw.memory_usage(index=True, deep=True).sum())  / (1024**3)
-    # logger.debug(f'load: {total_size:.2f} GB')
 
     length = 0
-    # report_memory_usage('load')
-    
+
     # 判断是否需要截取操作
-    global need_split_data_set
-    if need_split_data_set is None:
-        # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
-        # feature == 46 且 params.use_pk/params.use_trade 不全为true
-        need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
+    # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
+    # feature == 46 且 params.use_pk/params.use_trade 不全为true
+    need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
+    if log:
         logger.debug(f'need_split_data_set: {need_split_data_set}')
 
-        # 校正参数
-        if len(mean_std[0]) == 40:
-            params.use_pk = True
-            params.use_trade = False
+    # 校正参数
+    if len(mean_std[0]) == 40:
+        params.use_pk = True
+        params.use_trade = False
 
     ###################################################
     # 1. 不做截取操作 在dataset中截取
@@ -506,11 +500,13 @@ def load_data(file, diff_length, data_map):
     # 预处理标签
     y_idx = -1
     if params.regress_y_idx != -1:
-        logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
+        if log:
+            logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
         y_idx = params.regress_y_idx
         
     elif params.classify_y_idx!=1:
-        logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
+        if log:
+            logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
         y_idx = params.classify_y_idx
 
     # 多个可迭代
@@ -529,12 +525,13 @@ def load_data(file, diff_length, data_map):
     diff_length += length
     # report_memory_usage('concat other')
 
-    return diff_length
+    return diff_length, need_split_data_set
 
-def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
+def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, seed=42, log=False):
     # # 读取测试数据
     # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
-    logger.debug(f'读取 {_type} 数据')
+    if log:
+        logger.debug(f'读取 {_type} 数据')
 
     data_path = params.data_folder
 
@@ -585,11 +582,13 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
 
         files = files[begin_idx:end_idx]
 
-    logger.debug(f'{files}')
+    if log:
+        logger.debug(f'{files}')
 
     # 读取分段合并
     diff_length = 0
     count = 0
+    need_split_data_set = False
 
     # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     # data_map['ids'] = []
@@ -611,14 +610,15 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
         if count > max_num:
             break
 
-        diff_length = load_data(os.path.join(data_path, file), diff_length, data_map)
+        diff_length, need_split_data_set = load_data(os.path.join(data_path, file), diff_length, data_map)
         report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
 
     if head_n > 0:
-        logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
+        if log:
+            logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
         data_map['raw'] = data_map['raw'].iloc[:head_n, :]
         to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
 
@@ -630,34 +630,29 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True):
     if not need_id:
         data_map['ids'].clear()
 
-    logger.debug(f"恢复成 float32")
+    if log:
+        logger.debug(f"恢复成 float32")
     data_map['raw'] = convert_float16_2_32(data_map['raw'])
     report_memory_usage()
 
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    dataset_test = Dataset(data_map, params.classify, train=_type == 'train', cnn=cnn)
-    if params.classify:
-        logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
-    else:
-        try:
-            logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
-        except:
-            _df = pd.DataFrame(dataset_test.y)
-            for col in list(_df):
-                logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
+    dataset_test = Dataset(data_map, need_split_data_set, params.classify, train=_type == 'train', cnn=cnn, log=log)
+    if log:
+        if params.classify:
+            logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
+        else:
+            try:
+                logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
+            except:
+                _df = pd.DataFrame(dataset_test.y)
+                for col in list(_df):
+                    logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
 
-    data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size if not (params.amp and _type == 'train') else int(
-        params.batch_size*params.amp_ratio), sampler=ResumeSample(len(dataset_test), shuffle=_type == 'train'), num_workers=params.workers, pin_memory=True if params.workers>0 else False,
-        drop_last=True
-        )
+    data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size, num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
-
-    data_loader_cache = cache(data_loader, _type)
-    del data_loader
-
-    return data_loader_cache
+    return data_loader
 
 if __name__ == "__main__":
     data = read_data(r'D:\code\featrue_data\notebook\20240413_滚动标准化', 'test')
