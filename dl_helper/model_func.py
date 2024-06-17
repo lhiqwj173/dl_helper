@@ -939,7 +939,7 @@ class trainer:
                 
         raise '下载数据集失败'
 
-    def train(self, num_processes, mixed_precision, only_test=False, seed=42):
+    def train(self, num_processes, mixed_precision='no', only_test=False, seed=42):
         """
         num_processes: int 8(tpu)/1(p100)/2(t4*2)/0(cpu)
         mixed_precision: 'fp16' or 'bf16' or 'no'        
