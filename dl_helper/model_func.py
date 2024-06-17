@@ -504,7 +504,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                 # 记录loss
-                help_vars.train_loss += loss.detach().item() 
+                help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
                 with torch.no_grad():
@@ -582,7 +582,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
                     # 记录loss
-                    help_vars.test_loss += loss.detach().item()
+                    help_vars.test_loss += loss.detach().float()
 
                     # 记录正确率/r方
                     if accelerator.is_local_main_process:
@@ -711,8 +711,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             logger.debug(msg)
 
         # 重置记录变量
-        help_vars.train_loss = []
-        help_vars.test_loss = []
+        help_vars.train_loss = 0.0
+        help_vars.test_loss = 0.0
         if accelerator.is_local_main_process:
             logger.debug("重置训练记录")
         help_vars.train_correct = 0
