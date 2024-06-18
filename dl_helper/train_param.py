@@ -27,10 +27,10 @@ import multiprocessing
 import os
 
 def get_gpu_info():
-  return '111'
+    return '111'
     if 'TPU_WORKER_ID' in os.environ:
         return 'TPU'
-    
+
     elif torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
             gpu = torch.cuda.get_device_name(i)
@@ -38,7 +38,7 @@ def get_gpu_info():
                 return 'T4x2'
             elif 'P100' in gpu:
                 return 'P100'
-    
+
     return 'CPU'
 
 def data_parm2str(parm):
