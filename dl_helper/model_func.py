@@ -39,7 +39,7 @@ from .tg import tg_download_async, tg_download, tg_upload, tg_del_file
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
-from .tool import report_memory_usage, check_nan, get_gpu_info
+from .tool import report_memory_usage, check_nan
 
 ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
 
