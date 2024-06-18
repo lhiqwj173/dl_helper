@@ -1,7 +1,7 @@
 from functools import partial
 
 from ..model_func import trainer as trainer_base
-from ..train_param import init_param
+from ..train_param import init_param, get_gpu_info
 from ..models.binctabl import m_bin_ctabl
 from ..data import data_parm2str
 
@@ -57,7 +57,14 @@ class trainer(trainer_base):
             1: 10_target_mid < 0
             2: other
     """
-    def __init__(self, idx, mixed_precision='no', workers=3, debug=False, custom_param={}):
+    def __init__(self, idx, mixed_precision='no', workers=-1, debug=False, custom_param={}):
+        if workers == -1:
+            device = get_gpu_info()
+            if device in ['CPU', 'P100']:
+                workers = 3
+            elif device in ['TPU', 'T4x2']:
+                workers = 0
+
         super().__init__(idx, mixed_precision, debug, False, workers, custom_param)
 
         self.minchange = {
@@ -115,8 +122,8 @@ class trainer(trainer_base):
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(12),
-            # 'total_hours': int(24),
+            # 'total_hours': int(12),
+            'total_hours': int(24),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d

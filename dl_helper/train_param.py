@@ -45,6 +45,9 @@ def get_gpu_info():
         elif 'P100' in gpu_info:
             _run_device = 'P100'
         
+    else:
+        _run_device = 'CPU'
+        
     return _run_device
 
 def match_num_processes():
