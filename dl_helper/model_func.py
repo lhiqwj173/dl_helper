@@ -39,7 +39,7 @@ from .tg import tg_download_async, tg_download, tg_upload, tg_del_file
 from .train_param import init_param, logger, params, data_parm2str, data_str2parm
 from .data import read_data
 from .data_map import DATA_MAP
-from .tool import report_memory_usage, check_nan
+from .tool import report_memory_usage, check_nan, get_gpu_info
 
 ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
 
@@ -890,9 +890,16 @@ def test_model(model, accelerator, result_dict, cnn, select='best'):
     # 记录预测平均耗时 ms 
     result_dict['predict_ms'] = (total_times / total_counts) * 1000
 
+
 class trainer:
-    def __init__(self, idx, debug=False, cnn=True, workers=3, custom_param={}):
+    def __init__(self, idx, num_processes, mixed_precision='no', debug=False, cnn=True, workers=3, custom_param={}):
+        """
+        num_processes: int 8(tpu)/1(p100)/2(t4*2)/0(cpu)
+        mixed_precision: 'fp16' or 'bf16' or 'no'        
+        """
         self.idx = idx
+        self.num_processes = num_processes
+        self.mixed_precision = mixed_precision
         self.debug = debug
         self.cnn = cnn
         self.workers = workers
@@ -944,11 +951,8 @@ class trainer:
                 
         raise '下载数据集失败'
 
-    def train(self, num_processes, mixed_precision='no', only_test=False, seed=42):
-        """
-        num_processes: int 8(tpu)/1(p100)/2(t4*2)/0(cpu)
-        mixed_precision: 'fp16' or 'bf16' or 'no'        
-        """
+    def train(self, only_test=False, seed=42):
+
         accelerator = Accelerator()
 
         # Set the seed before splitting the data.
@@ -978,8 +982,8 @@ class trainer:
                     setattr(params, i, self.custom_param[i])
 
         # 混合精度
-        if mixed_precision:
-            params.amp = mixed_precision
+        if self.mixed_precision:
+            params.amp = self.mixed_precision
 
         try:
             t0 = datetime.now()

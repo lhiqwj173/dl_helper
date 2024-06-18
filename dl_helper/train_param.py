@@ -26,6 +26,20 @@ from datetime import datetime
 import multiprocessing
 import os
 
+def get_gpu_info():
+    if 'TPU_WORKER_ID' in os.environ:
+        return 'TPU'
+    
+    elif torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            gpu = torch.cuda.get_device_name(i)
+            if 'Tesla T4' == gpu:
+                return 'T4x2'
+            elif 'P100' in gpu:
+                return 'P100'
+    
+    return 'CPU'
+
 def data_parm2str(parm):
     # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
     parmstr = f"pred_{'@'.join([str(i) for i in parm['predict_n']])}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
@@ -166,8 +180,9 @@ def init_param(
 ):
     global params
 
-    params.train_title = train_title
-    params.root = root
+    run_device = get_gpu_info()
+    params.train_title = f'{train_title}_{run_device}'
+    params.root = f'{root}_{run_device}'
 
     params.epochs = epochs
     params.batch_size = batch_size
