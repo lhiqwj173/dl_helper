@@ -24,22 +24,34 @@ model: 模型
 import torch
 from datetime import datetime
 import multiprocessing
-import os
+import subprocess, os
 
 def get_gpu_info():
-    return '111'
     if 'TPU_WORKER_ID' in os.environ:
         return 'TPU'
 
-    elif torch.cuda.is_available():
-        for i in range(torch.cuda.device_count()):
-            gpu = torch.cuda.get_device_name(i)
-            if 'Tesla T4' == gpu:
-                return 'T4x2'
-            elif 'P100' in gpu:
-                return 'P100'
-
+    elif 'CUDA_VERSION' in os.environ:
+        # 执行 nvidia-smi 命令，并捕获输出
+        result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # 解析输出，去掉标题行
+        gpu_info = result.stdout.split('\n')[1].strip()
+        if 'T4' in gpu_info:
+            return 'T4x2'
+        elif 'P100' in gpu_info:
+            return 'P100'
+        
     return 'CPU'
+
+def match_num_processes():
+    device = get_gpu_info()
+    if device == 'TPU':
+        return 8
+    elif device == 'T4x2':
+        return 2
+    elif device == 'P100':
+        return 1
+    else:
+        return 0
 
 def data_parm2str(parm):
     # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"
@@ -179,9 +191,13 @@ def init_param(
 ):
     global params
 
+    # 添加训练后缀 (训练设备/混合精度)
     run_device = get_gpu_info()
     params.train_title = f'{train_title}_{run_device}'
     params.root = f'{root}_{run_device}'
+    if params.amp and params.amp!='no':
+        params.train_title = f'{params.train_title }_{params.amp}'
+        params.root = f'{params.root }_{params.amp}'
 
     params.epochs = epochs
     params.batch_size = batch_size

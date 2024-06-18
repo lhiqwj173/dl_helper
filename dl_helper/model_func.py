@@ -894,14 +894,17 @@ def test_model(accelerator, result_dict, cnn, select='best'):
 
 
 class trainer:
-    def __init__(self, idx, num_processes, mixed_precision='no', debug=False, cnn=True, workers=3, custom_param={}):
+    def __init__(self, idx, mixed_precision='no', debug=False, cnn=True, workers=3, custom_param={}):
         """
-        num_processes: int 8(tpu)/1(p100)/2(t4*2)/0(cpu)
         mixed_precision: 'fp16' or 'bf16' or 'no'        
         """
         self.idx = idx
-        self.num_processes = num_processes
+        
+        # 混合精度
         self.mixed_precision = mixed_precision
+        if self.mixed_precision:
+            params.amp = self.mixed_precision
+
         self.debug = debug
         self.cnn = cnn
         self.workers = workers
@@ -982,10 +985,6 @@ class trainer:
                 # 检查是否存在
                 if hasattr(params, i):
                     setattr(params, i, self.custom_param[i])
-
-        # 混合精度
-        if self.mixed_precision:
-            params.amp = self.mixed_precision
 
         try:
             t0 = datetime.now()
