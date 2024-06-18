@@ -36,7 +36,7 @@ from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
 from .tg import tg_download_async, tg_download, tg_upload, tg_del_file
-from .train_param import init_param, logger, params, data_parm2str, data_str2parm
+from .train_param import init_param, logger, params, data_parm2str, data_str2parm, match_num_processes
 from .data import read_data
 from .data_map import DATA_MAP
 from .tool import report_memory_usage, check_nan
@@ -984,6 +984,18 @@ class trainer:
                 # 检查是否存在
                 if hasattr(params, i):
                     setattr(params, i, self.custom_param[i])
+
+        # 依据设备调整 batch_size/num_workers/lr
+        num_processes = match_num_processes()
+        if num_processes > 1:
+            params.batch_size //= num_processes
+            params.learning_rate /= num_processes
+            params.workers = 0
+
+            if accelerator.is_local_main_process:
+                logger.debug(f'batch_size       -> {params.batch_size}')
+                logger.debug(f'learning_rate    -> {params.learning_rate}')
+                logger.debug(f'workers          -> {params.workers}')
 
         try:
             t0 = datetime.now()

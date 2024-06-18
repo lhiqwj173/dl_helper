@@ -57,14 +57,7 @@ class trainer(trainer_base):
             1: 10_target_mid < 0
             2: other
     """
-    def __init__(self, idx, mixed_precision='no', workers=-1, debug=False, custom_param={}):
-        if workers == -1:
-            device = get_gpu_info()
-            if device in ['CPU', 'P100']:
-                workers = 3
-            elif device in ['TPU', 'T4x2']:
-                workers = 0
-
+    def __init__(self, idx, mixed_precision='no', workers=3, debug=False, custom_param={}):
         super().__init__(idx, mixed_precision, debug, False, workers, custom_param)
 
         self.minchange = {
