@@ -28,10 +28,10 @@ import subprocess, os
 
 _run_device = ''
 def get_gpu_info():
+    global _run_device
     if _run_device:
       return _run_device
 
-    global _run_device
     if 'TPU_WORKER_ID' in os.environ:
         _run_device = 'TPU'
 
