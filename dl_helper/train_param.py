@@ -26,9 +26,14 @@ from datetime import datetime
 import multiprocessing
 import subprocess, os
 
+_run_device = ''
 def get_gpu_info():
+    if _run_device:
+      return _run_device
+
+    global _run_device
     if 'TPU_WORKER_ID' in os.environ:
-        return 'TPU'
+        _run_device = 'TPU'
 
     elif 'CUDA_VERSION' in os.environ:
         # 执行 nvidia-smi 命令，并捕获输出
@@ -36,11 +41,11 @@ def get_gpu_info():
         # 解析输出，去掉标题行
         gpu_info = result.stdout.split('\n')[1].strip()
         if 'T4' in gpu_info:
-            return 'T4x2'
+            _run_device = 'T4x2'
         elif 'P100' in gpu_info:
-            return 'P100'
+            _run_device = 'P100'
         
-    return 'CPU'
+    return _run_device
 
 def match_num_processes():
     device = get_gpu_info()
@@ -106,7 +111,7 @@ class Params:
   # 项目路径
   root = './train_title'
 
-  workers = 3
+  workers = 0
 
   debug = False
 

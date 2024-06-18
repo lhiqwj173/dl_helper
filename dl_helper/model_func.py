@@ -892,14 +892,13 @@ def test_model(accelerator, result_dict, cnn, select='best'):
         # 记录预测平均耗时 ms 
         result_dict['predict_ms'] = (total_times / total_counts) * 1000
 
-
 class trainer:
     def __init__(self, idx, mixed_precision='no', debug=False, cnn=True, workers=3, custom_param={}):
         """
         mixed_precision: 'fp16' or 'bf16' or 'no'        
         """
         self.idx = idx
-        
+
         # 混合精度
         self.mixed_precision = mixed_precision
         if self.mixed_precision:
