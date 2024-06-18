@@ -86,15 +86,13 @@ class Params:
   #############################
   # 通用参数
   #############################
-  train_title = ''
+  train_title = 'train_title'
 
-  describe = ''
+  describe = 'describe'
 
   # 项目路径
-  root = ''
+  root = './train_title'
 
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  # workers = int(multiprocessing.cpu_count())
   workers = 3
 
   debug = False
@@ -102,9 +100,9 @@ class Params:
   #############################
   # 训练超参数
   #############################
-  epochs = 0
+  epochs = 100
 
-  batch_size = 0
+  batch_size = 64
 
   # learning_rate
   learning_rate = 0.001
@@ -221,9 +219,6 @@ def init_param(
     # log
     os.makedirs(os.path.join(params.root, 'log'), exist_ok=True)
     logger.add(os.path.join(params.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
-
-    # 检查是否有可用的GPU
-    logger.debug(params.device)
 
     # cpu核数
     logger.debug(f'workers: {params.workers}')

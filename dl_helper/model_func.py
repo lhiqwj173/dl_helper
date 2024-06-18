@@ -678,12 +678,12 @@ def batch_gd(accelerator, result_dict, cnn, seed):
         if accelerator.is_local_main_process:
             # 导出onnx
             try:
-                torch.onnx.export(model, torch.randn(input_shape).to(params.device), onnex_model_save_path, do_constant_folding=False,
+                torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
                 input_names=['input'], output_names=['output'])
             except:
                 logger.debug('导出onnx失败')
                 logger.debug(f"模型的设备：{next(model.parameters()).device}")
-                logger.debug(f"数据的设备：{torch.randn(input_shape).to(params.device).device}")
+                logger.debug(f"数据的设备：{torch.randn(input_shape).to(accelerator.device).device}")
 
         # 更新学习率
         help_vars.lrs[it] = optimizer.param_groups[0]["lr"]
@@ -766,26 +766,30 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
     return cost_hour
 
-def test_model(model, accelerator, result_dict, cnn, select='best'):
+def test_model(accelerator, result_dict, cnn, select='best'):
     """
     模型可选 最优/最终 best/final
     """
-    model = None
-
+    model = accelerator.unwrap_model(params.model)
     if 'best' == select:
-        model = torch.load(os.path.join(params.root, f'best_val_model'))
+        path_to_load = os.path.join(params.root, 'model', f'best_val_model')
     elif 'final' == select:
-        model = torch.load(os.path.join(params.root, 'var', f'model.pkl'))
+        path_to_load = os.path.join(params.root, 'model', f'final_model')
     else:
         return
+
+    # 加载模型
+    model.load_state_dict(torch.load(path_to_load))
 
     # 读取数据
     test_loader = read_data('test', need_id=True, cnn=cnn)
 
-    # model = torch.load('best_val_model_pytorch')
+    # 准备数据
+    model, test_loader = accelerator.prepare(model, test_loader)
+
     all_targets = []
     all_predictions = []
-    r2score = [R2Score().to(params.device) for i in range(params.y_n)]
+    r2score = [R2Score().to(accelerator.device) for i in range(params.y_n)]
 
     total_times = 0
     total_counts = 0
@@ -799,10 +803,6 @@ def test_model(model, accelerator, result_dict, cnn, select='best'):
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
 
-            # Move to GPU
-            inputs, targets = inputs.to(params.device, dtype=torch.float), targets.to(
-                params.device, dtype=torch.int64)
-
             t0 = time.time()
             # Forward pass
             outputs = model(inputs)
@@ -811,84 +811,86 @@ def test_model(model, accelerator, result_dict, cnn, select='best'):
             total_times += time.time() - t0
             total_counts += len(targets)
 
-            if params.classify:
-                # 分类模型
-                # 转成概率
-                p = torch.softmax(outputs, dim=1)
+            if accelerator.is_local_main_process:
+                _all_outputs, _all_targets = accelerator.gather_for_metrics((outputs, targets))
 
-                # Get prediction
-                # torch.max returns both max and argmax
-                _, predictions = torch.max(p, 1)
-                all_predictions.append(predictions.cpu().numpy())
-            else:
-                # 回归模型 统计 r方
-                for i in range(params.y_n):
-                    r2score[i].update(outputs[:, i], targets[:, i])
-                all_predictions.append(outputs.cpu().numpy())
+                if params.classify:
+                    # 分类模型
+                    # 转成概率
+                    p = torch.softmax(_all_outputs, dim=1)
 
-            all_targets.append(targets.cpu().numpy())
+                    # Get prediction
+                    # torch.max returns both max and argmax
+                    _, predictions = torch.max(p, 1)
+                    all_predictions.append(predictions.cpu().numpy())
+                else:
+                    # 回归模型 统计 r方
+                    for i in range(params.y_n):
+                        r2score[i].update(_all_outputs[:, i], _all_targets[:, i])
+                    all_predictions.append(_all_outputs.cpu().numpy())
+
+                all_targets.append(_all_targets.cpu().numpy())
             
-    all_targets = np.concatenate(all_targets)
-    all_predictions = np.concatenate(all_predictions)
-    ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
+    if accelerator.is_local_main_process:
+        all_targets = np.concatenate(all_targets)
+        all_predictions = np.concatenate(all_predictions)
+        ids = test_loader.dataset.ids# code_timestamp: btcusdt_1710289478588
 
-    del test_loader
+        # 分类预测
+        datas = {}
+        for i in range(len(ids)):
+            symbol, timestamp = ids[i].split('_')
+            if symbol not in datas:
+                datas[symbol] = []
+            
+            datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
 
-    # 分类预测
-    datas = {}
-    for i in range(len(ids)):
-        symbol, timestamp = ids[i].split('_')
-        if symbol not in datas:
-            datas[symbol] = []
-        
-        datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
+        # 储存预测结果
+        # symbol_begin_end.csv
+        for symbol in datas:
+            data_list = datas[symbol]
+            begin = data_list[0][0]
+            end = data_list[-1][0]
+            with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                f.write('timestamp,target,predict\n')
+                for timestamp, target, pre,  in data_list:
+                    f.write(f'{timestamp},{target},{pre}\n')
 
-    # 储存预测结果
-    # symbol_begin_end.csv
-    for symbol in datas:
-        data_list = datas[symbol]
-        begin = data_list[0][0]
-        end = data_list[-1][0]
-        with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-            f.write('timestamp,target,predict\n')
-            for timestamp, target, pre,  in data_list:
-                f.write(f'{timestamp},{target},{pre}\n')
+        if params.classify:
+            # 分类模型
+            logger.debug(
+                f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
+            report = classification_report(
+                all_targets, all_predictions, digits=4, output_dict=True)
+            # 将分类报告转换为DataFrame
+            df = pd.DataFrame(report).transpose()
+            logger.debug(f'测试结果:\n{df}')
+            
+            # 储存测试acc
+            result_dict['test_acc'] = df.iloc[-3, -1]
 
-    if params.classify:
-        # 分类模型
-        logger.debug(
-            f'accuracy_score: {accuracy_score(all_targets, all_predictions)}')
-        report = classification_report(
-            all_targets, all_predictions, digits=4, output_dict=True)
-        # 将分类报告转换为DataFrame
-        df = pd.DataFrame(report).transpose()
-        logger.debug(f'测试结果:\n{df}')
-        
-        # 储存测试acc
-        result_dict['test_acc'] = df.iloc[-3, -1]
+            # 储存平均f1
+            result_dict['wa_f1'] = df.iloc[-1, -2]
 
-        # 储存平均f1
-        result_dict['wa_f1'] = df.iloc[-1, -2]
+            _f1_scores_dict = df.iloc[:-3, 2].to_dict()
+            # 存入 result_dict
+            for idx, i in enumerate(_f1_scores_dict):
+                result_dict[f'test_f1_{idx}'] = _f1_scores_dict[i]
 
-        _f1_scores_dict = df.iloc[:-3, 2].to_dict()
-        # 存入 result_dict
-        for idx, i in enumerate(_f1_scores_dict):
-            result_dict[f'test_f1_{idx}'] = _f1_scores_dict[i]
+            dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
+        else:
+            # 回归模型 统计 R2, MSE, RMSE
+            mse = mean_squared_error(all_targets, all_predictions, multioutput='raw_values')
+            rmse = np.sqrt(mse)
+            result_dict['test_mse'] = mse
+            result_dict['test_rmse'] = rmse
 
-        dfi.export(df, os.path.join(params.root, 'test_result.png'), table_conversion="matplotlib")
-    else:
-        # 回归模型 统计 R2, MSE, RMSE
-        mse = mean_squared_error(all_targets, all_predictions, multioutput='raw_values')
-        rmse = np.sqrt(mse)
-        result_dict['test_mse'] = mse
-        result_dict['test_rmse'] = rmse
+            for i in range(params.y_n):
+                r2 = r2score[i].compute()
+                result_dict[f'test_r2_{i}'] = r2
 
-        for i in range(params.y_n):
-            r2 = r2score[i].compute()
-            result_dict[f'test_r2_{i}'] = r2
-
-    # 记录预测平均耗时 ms 
-    result_dict['predict_ms'] = (total_times / total_counts) * 1000
+        # 记录预测平均耗时 ms 
+        result_dict['predict_ms'] = (total_times / total_counts) * 1000
 
 
 class trainer:
