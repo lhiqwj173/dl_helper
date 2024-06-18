@@ -3,8 +3,6 @@ from py_ext.wechat import wx
 from .train_param import logger
 from .train_param import params
 
-
-
 def check_nan(data, **kwargs):
     if torch.isnan(data).any().item() or torch.isinf(data).any().item():
         pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))

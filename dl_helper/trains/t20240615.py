@@ -57,8 +57,8 @@ class trainer(trainer_base):
             1: 10_target_mid < 0
             2: other
     """
-    def __init__(self, idx, workers=3, debug=False):
-        super().__init__(idx, debug, False, workers)
+    def __init__(self, idx, num_processes, mixed_precision, workers=3, debug=False, custom_param={}):
+        super().__init__(idx, num_processes, mixed_precision, debug, False, workers, custom_param)
 
         self.minchange = {
             'BTC': 0.00001,
@@ -66,8 +66,6 @@ class trainer(trainer_base):
         }
 
     def init_param(self, data_folder=''):
-        print('init_param')
-
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         def yfunc_target_long_short(x):
