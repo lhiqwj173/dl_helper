@@ -27,6 +27,7 @@ import multiprocessing
 import os
 
 def get_gpu_info():
+  return '111'
     if 'TPU_WORKER_ID' in os.environ:
         return 'TPU'
     
