@@ -57,7 +57,7 @@ class trainer(trainer_base):
             1: 10_target_mid < 0
             2: other
     """
-    def __init__(self, idx, num_processes, mixed_precision, workers=3, debug=False, custom_param={}):
+    def __init__(self, idx, num_processes, mixed_precision='no', workers=3, debug=False, custom_param={}):
         super().__init__(idx, num_processes, mixed_precision, debug, False, workers, custom_param)
 
         self.minchange = {
