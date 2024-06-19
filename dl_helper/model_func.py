@@ -416,6 +416,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     # 等待所有进程
     print(accelerator.device)
     accelerator.wait_for_everyone()
+    return
 
     # 训练过程变量
     help_vars = helper()
