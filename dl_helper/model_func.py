@@ -414,9 +414,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
 
     # 等待所有进程
-    print(accelerator.device)
     accelerator.wait_for_everyone()
-    return
 
     # 训练过程变量
     help_vars = helper()
@@ -434,6 +432,12 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     # 获取训练数据
     train_loader = read_data('train', cnn=cnn, seed=seed, log=accelerator.is_local_main_process)
     assert len(train_loader) > 0, "没有训练数据"
+
+    # 等待所有进程
+    print(accelerator.device)
+    accelerator.wait_for_everyone()
+    return
+
     # 获取验证数据
     val_loader = read_data('val', cnn=cnn, seed=seed, log=accelerator.is_local_main_process)
     assert len(val_loader) > 0, "没有验证数据"
