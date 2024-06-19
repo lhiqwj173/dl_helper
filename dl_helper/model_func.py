@@ -411,6 +411,10 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             resume_from_checkpoint = True
             shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
+    # 等待所有进程
+    accelerator.wait_for_everyone()
+    return
+
     # 训练过程变量
     help_vars = helper()
 
@@ -893,7 +897,7 @@ def test_model(accelerator, result_dict, cnn, select='best'):
         result_dict['predict_ms'] = (total_times / total_counts) * 1000
 
 class trainer:
-    def __init__(self, idx, mixed_precision='no', debug=False, cnn=True, workers=3, custom_param={}):
+    def __init__(self, idx, mixed_precision='no', debug=False, cnn=True, workers=0, custom_param={}):
         """
         mixed_precision: 'fp16' or 'bf16' or 'no'        
         """
@@ -965,37 +969,41 @@ class trainer:
         # torch.cuda.manual_seed_all(seed)
         set_seed(42)
 
-        if self.debug:
-            # 使用最小数据进行测试
-            params.data_parm['data_rate'] = (44,2,2)
-            params.data_parm['total_hours'] = 48
+        if accelerator.is_local_main_process:
+            if self.debug:
+                # 使用最小数据进行测试
+                params.data_parm['data_rate'] = (44,2,2)
+                params.data_parm['total_hours'] = 48
 
-            params.data_parm['data_rate'] = (2,1,1)
-            params.data_parm['total_hours'] = 2*4
+                params.data_parm['data_rate'] = (2,1,1)
+                params.data_parm['total_hours'] = 2*4
 
-            params.data_set = f'{data_parm2str(params.data_parm)}.7z'
-            params.epochs = 2
-            params.workers = 0
-            params.debug = True
+                params.data_set = f'{data_parm2str(params.data_parm)}.7z'
+                params.epochs = 2
+                params.workers = 0
+                params.debug = True
 
-        # 客制化参数
-        if self.custom_param:
-            for i in self.custom_param:
-                # 检查是否存在
-                if hasattr(params, i):
-                    setattr(params, i, self.custom_param[i])
+            # 客制化参数
+            if self.custom_param:
+                for i in self.custom_param:
+                    # 检查是否存在
+                    if hasattr(params, i):
+                        setattr(params, i, self.custom_param[i])
 
-        # 依据设备调整 batch_size/num_workers/lr
-        num_processes = match_num_processes()
-        if num_processes > 1:
-            params.batch_size //= num_processes
-            params.learning_rate *= num_processes
-            params.workers = 0
+            # 依据设备调整 batch_size/num_workers/lr
+            num_processes = match_num_processes()
+            if num_processes > 1:
+                params.batch_size //= num_processes
+                params.learning_rate *= num_processes
+                params.workers = 0
 
-            if accelerator.is_local_main_process:
-                logger.debug(f'batch_size       -> {params.batch_size}')
-                logger.debug(f'learning_rate    -> {params.learning_rate}')
-                logger.debug(f'workers          -> {params.workers}')
+                if accelerator.is_local_main_process:
+                    logger.debug(f'batch_size       -> {params.batch_size}')
+                    logger.debug(f'learning_rate    -> {params.learning_rate}')
+                    logger.debug(f'workers          -> {params.workers}')
+
+        # 等待同步
+        accelerator.wait_for_everyone()
 
         try:
             t0 = datetime.now()
@@ -1006,10 +1014,17 @@ class trainer:
                     wx.send_message(f'[{params.train_title}] 开始训练')
                 cost_hour = batch_gd(accelerator, result_dict=self.result_dict, cnn=self.cnn, seed=seed)
 
+                # 等待同步
+                accelerator.wait_for_everyone()
+                return
+
             ## 测试模型
             if accelerator.is_local_main_process:
                 logger.debug(f'[{params.train_title}] 开始验证')
             test_model(accelerator, self.result_dict, self.cnn)
+
+            # 等待同步
+            accelerator.wait_for_everyone()
 
             ## 储存结果
             if accelerator.is_local_main_process:

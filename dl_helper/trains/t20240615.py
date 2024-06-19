@@ -57,7 +57,7 @@ class trainer(trainer_base):
             1: 10_target_mid < 0
             2: other
     """
-    def __init__(self, idx, mixed_precision='no', workers=3, debug=False, custom_param={}):
+    def __init__(self, idx, mixed_precision='no', workers=0, debug=False, custom_param={}):
         super().__init__(idx, mixed_precision, debug, False, workers, custom_param)
 
         self.minchange = {
@@ -115,8 +115,8 @@ class trainer(trainer_base):
             'y_n': y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            # 'total_hours': int(12),
-            'total_hours': int(24),
+            'total_hours': int(12),
+            # 'total_hours': int(24),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
@@ -126,7 +126,7 @@ class trainer(trainer_base):
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, y_n, 1)
         init_param(
             train_title=title, root=f'./{title}', model=model, data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.00013*batch_n, batch_size=64*batch_n, workers=self.workers,
+            learning_rate=0.00013*batch_n, batch_size=64*batch_n, epochs=10, workers=self.workers,
 
             # 数据增强
             random_scale=0.05, random_mask_row=0.7,
