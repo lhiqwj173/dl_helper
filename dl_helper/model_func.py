@@ -463,11 +463,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
         scheduler.warn_up(init=True)
 
-    # 等待所有进程
-    print(f'wait run epochs {accelerator.device}')
-    accelerator.wait_for_everyone()
-    return
-
     for it in range(help_vars.begin, params.epochs):
         # 记录当前轮数
         help_vars.it = it
@@ -483,6 +478,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
         if help_vars.step_in_epoch == 0:
             if accelerator.is_local_main_process:
                 logger.debug(f"开始训练")
+
+            # 等待所有进程
+            print(f'step_in_epoch == 0 {accelerator.device}')
+            accelerator.wait_for_everyone()
+            return
 
             # 跳过训练过的步骤
             if resume_from_checkpoint and it == help_vars.begin and help_vars.resume_train_step:
