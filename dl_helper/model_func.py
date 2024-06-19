@@ -512,7 +512,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
-                all_outputs, all_targets = accelerator.gather_for_metrics((outputs, targets))
+                all_outputs = accelerator.gather_for_metrics(outputs)
+                all_targets = accelerator.gather_for_metrics(targets)
                 with torch.no_grad():
                     if accelerator.is_local_main_process:
                         print(all_outputs.shape, all_targets.shape)
