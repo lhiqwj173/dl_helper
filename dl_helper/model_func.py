@@ -490,12 +490,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             idx = 0
             train_last = time.time()
             for inputs, targets in tqdm(active_dataloader, disable=not accelerator.is_local_main_process):
-
-                # 等待所有进程
-                print(f'inputs, targets {accelerator.device}')
-                accelerator.wait_for_everyone()
-                return
-
                 # 记录恢复步数
                 help_vars.resume_train_step += idx + 1
 
@@ -510,6 +504,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 accelerator.backward(loss)
                 optimizer.step()
                 optimizer.zero_grad()
+
+                # 等待所有进程
+                print(f'inputs, targets {accelerator.device}')
+                accelerator.wait_for_everyone()
+                return
 
                 # 检查loss 是否nan
                 check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
