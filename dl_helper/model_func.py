@@ -511,6 +511,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 # 记录loss
                 help_vars.train_loss += loss.detach().float()
 
+                # 等待所有进程
+                print(f'inputs, targets {accelerator.device}')
+                accelerator.wait_for_everyone()
+                return
+
                 # 记录正确率/r方
                 with torch.no_grad():
                     if accelerator.is_local_main_process:
@@ -529,11 +534,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                 # 等待所有进程
                 accelerator.wait_for_everyone()
-                
-                # 等待所有进程
-                print(f'inputs, targets {accelerator.device}')
-                accelerator.wait_for_everyone()
-                return
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
