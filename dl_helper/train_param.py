@@ -47,13 +47,13 @@ def get_gpu_info():
         
     else:
         _run_device = 'CPU'
-        
+
     return _run_device
 
 def match_num_processes():
     device = get_gpu_info()
     if device == 'TPU':
-        return 8
+        return 4
     elif device == 'T4x2':
         return 2
     elif device == 'P100':
@@ -244,6 +244,3 @@ def init_param(
     # log
     os.makedirs(os.path.join(params.root, 'log'), exist_ok=True)
     logger.add(os.path.join(params.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
-
-    # cpu核数
-    logger.debug(f'workers: {params.workers}')

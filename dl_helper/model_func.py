@@ -989,7 +989,7 @@ class trainer:
         num_processes = match_num_processes()
         if num_processes > 1:
             params.batch_size //= num_processes
-            params.learning_rate /= num_processes
+            params.learning_rate *= num_processes
             params.workers = 0
 
             if accelerator.is_local_main_process:
