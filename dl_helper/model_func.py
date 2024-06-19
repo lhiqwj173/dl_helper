@@ -343,7 +343,7 @@ def count_correct_predictions(predictions, labels):
 debug = False
 # A function to encapsulate the training loop
 
-def pack_folder():
+def pack_folder(upload=False):
     # 打包训练文件夹 zip 
     file = params.root+".7z"
 
@@ -356,8 +356,10 @@ def pack_folder():
     if not debug:
         # 删除当前的训练文件，如果存在
         tg_del_file(ses, f'{params.train_title}.7z')
-        # 上传到tg
-        tg_upload(ses, file)
+
+        if upload:
+            # 上传到tg
+            tg_upload(ses, file)
 
 
 class helper:
@@ -532,7 +534,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
                     scheduler.warn_up()
 
-                if idx%100 == 0 or idx == step_length - 1:
+                if (idx!=0 and idx%100 == 0) or idx == step_length - 1:
                     t1 = time.time()
                     if t1 - train_last >= 30*60 or idx == step_length - 1:
                         train_last = t1
@@ -542,6 +544,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                         # 打包文件
                         if accelerator.is_local_main_process:
+                            logger.debug(f'save_state')
                             pack_folder()
                             logger.debug(f'pack_folder')
 
