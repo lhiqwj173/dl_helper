@@ -411,9 +411,10 @@ def batch_gd(accelerator, result_dict, cnn, seed):
             resume_from_checkpoint = True
             shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
+
     # 等待所有进程
+    print(accelerator.device)
     accelerator.wait_for_everyone()
-    return
 
     # 训练过程变量
     help_vars = helper()
@@ -526,6 +527,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             for i in range(params.y_n):
                                 help_vars.train_r_squared[i].update(all_outputs[:, i], all_targets[:, i])
 
+                # 等待所有进程
+                accelerator.wait_for_everyone()
+
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
                     scheduler.warn_up()
@@ -541,6 +545,10 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                         # 打包文件
                         if accelerator.is_local_main_process:
                             pack_folder()
+                            logger.debug(f'pack_folder')
+
+                # 等待所有进程
+                accelerator.wait_for_everyone()
 
                 idx += 1
 
@@ -612,6 +620,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             for i in range(params.y_n):
                                 help_vars.test_r_squared[i].update(all_outputs[:, i], all_targets[:, i])
 
+                    # 等待所有进程
+                    accelerator.wait_for_everyone()
+
                     if idx%100 == 0 or idx == step_length - 1:
                         t1 = time.time()
                         if t1 - val_last >= 30*60 or idx == step_length - 1:
@@ -623,6 +634,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             # 打包文件
                             if accelerator.is_local_main_process:
                                 pack_folder()
+                                
+                    # 等待所有进程
+                    accelerator.wait_for_everyone()
 
                     idx += 1
 
@@ -735,23 +749,24 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
         help_vars.step_in_epoch = 0
 
-        # 更新最佳数据
-        best_idx = help_vars.test_losses.tolist().index(min(help_vars.test_losses))
-        result_dict['train_loss'] = help_vars.train_losses[best_idx]
-        result_dict['val_loss'] = help_vars.test_losses[best_idx]
+        if accelerator.is_local_main_process:
+            # 更新最佳数据
+            best_idx = help_vars.test_losses.tolist().index(min(help_vars.test_losses))
+            result_dict['train_loss'] = help_vars.train_losses[best_idx]
+            result_dict['val_loss'] = help_vars.test_losses[best_idx]
 
-        if params.classify:
-            # 分类模型 记录最佳模型的acc / f1 score
-            result_dict['train_acc'] = help_vars.train_acc[best_idx]
-            result_dict['val_acc'] = help_vars.test_acc[best_idx]
+            if params.classify:
+                # 分类模型 记录最佳模型的acc / f1 score
+                result_dict['train_acc'] = help_vars.train_acc[best_idx]
+                result_dict['val_acc'] = help_vars.test_acc[best_idx]
 
-            for idx, i in enumerate(help_vars.f1_scores):
-                result_dict[f'F1_{idx}'] = help_vars.f1_scores[i][best_idx]
-        else:
-            # 回归模型 记录最佳模型的 R方
-            for i in range(params.y_n):
-                result_dict['train_r2_{i}'] = help_vars.train_r2s[i][best_idx]
-                result_dict['val_r2_{i}'] = help_vars.test_r2s[i][best_idx]
+                for idx, i in enumerate(help_vars.f1_scores):
+                    result_dict[f'F1_{idx}'] = help_vars.f1_scores[i][best_idx]
+            else:
+                # 回归模型 记录最佳模型的 R方
+                for i in range(params.y_n):
+                    result_dict['train_r2_{i}'] = help_vars.train_r2s[i][best_idx]
+                    result_dict['val_r2_{i}'] = help_vars.test_r2s[i][best_idx]
 
         # 缓存数据
         accelerator.save_state(os.path.join(params.root, 'checkpoints'))
@@ -763,6 +778,10 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
             # 打包文件
             pack_folder()
+
+        # 等待所有进程
+        accelerator.wait_for_everyone()
+        return
 
     if accelerator.is_local_main_process:
         cost_hour = (time.time() - help_vars.begin_time) / 3600
