@@ -444,15 +444,15 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     scheduler = Increase_ReduceLROnPlateau(optimizer) if params.init_learning_ratio > 0 else warm_up_ReduceLROnPlateau(optimizer, warm_up_epoch=params.warm_up_epochs, iter_num_each_epoch=len(train_loader))
     scheduler2 = ReduceLR_slow_loss(optimizer)# 新增一个调度器
 
-    # 等待所有进程
-    print(f'wait prepare {accelerator.device}')
-    accelerator.wait_for_everyone()
-    return
-
     # 交由Accelerator处理
     model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars
     )
+    
+    # 等待所有进程
+    print(f'prepare {accelerator.device}')
+    accelerator.wait_for_everyone()
+    return
 
     # 注册变量
     accelerator.register_for_checkpointing(help_vars)
