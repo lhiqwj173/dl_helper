@@ -548,23 +548,18 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             pack_folder()
                             logger.debug(f'pack_folder')
 
-                # 等待所有进程
-                accelerator.wait_for_everyone()
-                if idx + 1 == 3:
-                    return
-
                 idx += 1
-                
-                # 等待所有进程
-                print(f'inputs, targets done {accelerator.device}')
-                accelerator.wait_for_everyone()
-                return
+            
+                if accelerator.is_local_main_process:
+                    logger.debug(f'step {idx} {accelerator.device}')
 
             help_vars.step_in_epoch += 1
 
             # Get train loss and test loss
             help_vars.train_loss = help_vars.train_loss.item() / len(active_dataloader)
 
+        # 等待所有进程
+        accelerator.wait_for_everyone()
         if accelerator.is_local_main_process:
             logger.debug(f'{msg}训练完成')
 
