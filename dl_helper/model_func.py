@@ -512,30 +512,21 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
-                all_outputs = accelerator.gather_for_metrics(outputs)
-                all_targets = accelerator.gather_for_metrics(targets)
-                with torch.no_grad():
-                    if accelerator.is_local_main_process:
-                        print(all_outputs.shape, all_targets.shape)
+                # all_outputs = accelerator.gather_for_metrics(outputs)
+                # all_targets = accelerator.gather_for_metrics(targets)
+                all_outputs, all_targets = accelerator.gather_for_metrics((outputs, targets))
+                if accelerator.is_local_main_process:
+                    with torch.no_grad():
                         if params.classify:
                             # 分类模型 统计acc
                             help_vars.train_correct += count_correct_predictions(
                                 all_outputs, all_targets)
-                            print(f'train_correct: {help_vars.train_correct}')
                             help_vars.train_all += len(all_targets)
-                            print(f'train_all: {help_vars.train_all}')
                         else:
                             # 回归模型 统计 r方
                             for i in range(params.y_n):
                                 help_vars.train_r_squared[i].update(all_outputs[:, i], all_targets[:, i])
-
-                # 等待所有进程
-                print(f'inputs, targets {accelerator.device}')
-                accelerator.wait_for_everyone()
-                return
-
-                # 等待所有进程
-                accelerator.wait_for_everyone()
+                        print(f'acc/r2 done: {accelerator.device}')
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
@@ -560,6 +551,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                     return
 
                 idx += 1
+                
+                # 等待所有进程
+                print(f'inputs, targets done {accelerator.device}')
+                accelerator.wait_for_everyone()
+                return
 
             help_vars.step_in_epoch += 1
 
