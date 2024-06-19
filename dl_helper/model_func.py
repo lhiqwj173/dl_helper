@@ -433,11 +433,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     train_loader = read_data('train', cnn=cnn, seed=seed, log=accelerator.is_local_main_process)
     assert len(train_loader) > 0, "没有训练数据"
 
-    # 等待所有进程
-    print(accelerator.device)
-    accelerator.wait_for_everyone()
-    return
-
     # 获取验证数据
     val_loader = read_data('val', cnn=cnn, seed=seed, log=accelerator.is_local_main_process)
     assert len(val_loader) > 0, "没有验证数据"
@@ -448,6 +443,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     # 构造调度器
     scheduler = Increase_ReduceLROnPlateau(optimizer) if params.init_learning_ratio > 0 else warm_up_ReduceLROnPlateau(optimizer, warm_up_epoch=params.warm_up_epochs, iter_num_each_epoch=len(train_loader))
     scheduler2 = ReduceLR_slow_loss(optimizer)# 新增一个调度器
+
+    # 等待所有进程
+    print(f'wait prepare {accelerator.device}')
+    accelerator.wait_for_everyone()
+    return
 
     # 交由Accelerator处理
     model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars = accelerator.prepare(
