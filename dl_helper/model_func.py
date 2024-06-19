@@ -512,11 +512,10 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
+                all_outputs, all_targets = accelerator.gather_for_metrics((outputs, targets))
                 with torch.no_grad():
                     if accelerator.is_local_main_process:
-                        all_outputs, all_targets = accelerator.gather_for_metrics((outputs, targets))
                         print(all_outputs.shape, all_targets.shape)
-
                         if params.classify:
                             # 分类模型 统计acc
                             help_vars.train_correct += count_correct_predictions(
