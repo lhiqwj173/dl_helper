@@ -448,11 +448,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler, scheduler2, help_vars
     )
-    
-    # 等待所有进程
-    print(f'prepare {accelerator.device}')
-    accelerator.wait_for_everyone()
-    return
 
     # 注册变量
     accelerator.register_for_checkpointing(help_vars)
@@ -467,6 +462,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
     # 初始化warnup
     if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
         scheduler.warn_up(init=True)
+
+    # 等待所有进程
+    print(f'wait run epochs {accelerator.device}')
+    accelerator.wait_for_everyone()
+    return
 
     for it in range(help_vars.begin, params.epochs):
         # 记录当前轮数
