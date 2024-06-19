@@ -505,11 +505,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 optimizer.step()
                 optimizer.zero_grad()
 
-                # 等待所有进程
-                print(f'inputs, targets {accelerator.device}')
-                accelerator.wait_for_everyone()
-                return
-
                 # 检查loss 是否nan
                 check_nan(loss, inputs=inputs, targets=targets, outputs=outputs)
 
@@ -534,6 +529,11 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                 # 等待所有进程
                 accelerator.wait_for_everyone()
+                
+                # 等待所有进程
+                print(f'inputs, targets {accelerator.device}')
+                accelerator.wait_for_everyone()
+                return
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
