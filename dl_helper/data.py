@@ -191,7 +191,7 @@ class Dataset(torch.utils.data.Dataset):
         self.cnn = cnn
 
         # 原始数据
-        report_memory_usage()
+        # report_memory_usage()
 
         # 区分价量列
         self.price_cols = [i*2 for i in range(20)]
@@ -225,8 +225,8 @@ class Dataset(torch.utils.data.Dataset):
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
 
-        logger.debug('del data_map > raw / mean_std')
-        report_memory_usage()
+        # logger.debug('del data_map > raw / mean_std')
+        # report_memory_usage()
 
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
 
@@ -241,7 +241,7 @@ class Dataset(torch.utils.data.Dataset):
                 min_num = sy.value_counts().min()
                 logger.debug(f'min_num: {min_num}')
 
-                report_memory_usage()
+                # report_memory_usage()
 
                 idx = []
                 for label in labels:
@@ -271,7 +271,7 @@ class Dataset(torch.utils.data.Dataset):
         #     self.mean_std = [self.mean_std[i] for i in idxs]
         #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
 
-        report_memory_usage()
+        # report_memory_usage()
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
@@ -306,8 +306,9 @@ class Dataset(torch.utils.data.Dataset):
         # 增加一个batch维度
         self.input_shape = (1,) + self.input_shape
 
-        logger.debug(f'数据集初始化完毕')
-        report_memory_usage()
+        if self.log:
+            logger.debug(f'数据集初始化完毕')
+        # report_memory_usage()
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -611,7 +612,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, 
             break
 
         diff_length, need_split_data_set = load_data(os.path.join(data_path, file), diff_length, data_map)
-        report_memory_usage()
+        # report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:
         head_n = int(len(x) * (pct / 100))
@@ -633,7 +634,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, 
     if log:
         logger.debug(f"恢复成 float32")
     data_map['raw'] = convert_float16_2_32(data_map['raw'])
-    report_memory_usage()
+    # report_memory_usage()
 
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'

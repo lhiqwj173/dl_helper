@@ -147,7 +147,7 @@ class Increase_ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
 
         if init:
             if not self.init_lr:
-                logger.debug(f'init warn up')
+                # logger.debug(f'init warn up')
                 self.init_lr = True
             else:
                 # 已经初始化过了
@@ -188,7 +188,8 @@ class warm_up_ReduceLROnPlateau(torch.optim.lr_scheduler.ReduceLROnPlateau):
 
         if init:
             if self.lr_diff == {}:
-                logger.debug(f'init warn up')
+                pass
+                # logger.debug(f'init warn up')
             else:
                 # 已经初始化过了
                 return
@@ -549,6 +550,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                 # 等待所有进程
                 accelerator.wait_for_everyone()
+                if idx + 1 == 3:
+                    return
 
                 idx += 1
 
