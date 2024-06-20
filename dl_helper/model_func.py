@@ -989,7 +989,14 @@ class trainer:
                 
         raise '下载数据集失败'
 
-    def train(self, only_test=False, seed=42):
+    def lock_print(self, msg, lock):
+        if lock:
+            with lock:
+                print(msg)
+        else:
+            print(msg)
+
+    def train(self, only_test=False, seed=42, lock=None):
 
         accelerator = Accelerator()
 
@@ -1000,7 +1007,7 @@ class trainer:
         set_seed(42)
 
         # 等待同步
-        print(params.data_parm, accelerator.device)
+        lock_print(f'{params.params}, {accelerator.device}', lock)
         accelerator.wait_for_everyone()
 
         if accelerator.is_local_main_process:
@@ -1038,7 +1045,7 @@ class trainer:
 
         # 等待同步
         accelerator.wait_for_everyone()
-        print(params.data_parm, accelerator.device)
+        lock_print(f'{params.params}, {accelerator.device}', lock)
         return 
 
         try:
