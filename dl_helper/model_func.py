@@ -530,6 +530,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                                 help_vars.train_r_squared[i].update(all_outputs[:, i], all_targets[:, i])
                         print(f'acc/r2 done: {accelerator.device}')
 
+                # 等待所有进程
+                accelerator.wait_for_everyone()
+
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
                     scheduler.warn_up()
