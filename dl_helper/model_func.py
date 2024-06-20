@@ -999,6 +999,10 @@ class trainer:
         # torch.cuda.manual_seed_all(seed)
         set_seed(42)
 
+        # 等待同步
+        print(params.data_parm, accelerator.device)
+        accelerator.wait_for_everyone()
+
         if accelerator.is_local_main_process:
             if self.debug:
                 # 使用最小数据进行测试
@@ -1034,6 +1038,8 @@ class trainer:
 
         # 等待同步
         accelerator.wait_for_everyone()
+        print(params.data_parm, accelerator.device)
+        return 
 
         try:
             t0 = datetime.now()
