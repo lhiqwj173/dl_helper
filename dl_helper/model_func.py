@@ -528,7 +528,7 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                             # 回归模型 统计 r方
                             for i in range(params.y_n):
                                 help_vars.train_r_squared[i].update(all_outputs[:, i], all_targets[:, i])
-                        print(f'acc/r2 done: {accelerator.device}')
+                        logger.debug(f'acc/r2 done: {accelerator.device}')
 
                 # 等待所有进程
                 accelerator.wait_for_everyone()
