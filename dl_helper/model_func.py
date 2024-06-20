@@ -1007,7 +1007,7 @@ class trainer:
         set_seed(42)
 
         # 等待同步
-        lock_print(f'{params.params}, {accelerator.device}', lock)
+        self.lock_print(f'{params.params}, {accelerator.device}', lock)
         accelerator.wait_for_everyone()
 
         if accelerator.is_local_main_process:
@@ -1045,7 +1045,7 @@ class trainer:
 
         # 等待同步
         accelerator.wait_for_everyone()
-        lock_print(f'{params.params}, {accelerator.device}', lock)
+        self.lock_print(f'{params.params}, {accelerator.device}', lock)
         return 
 
         try:
