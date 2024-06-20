@@ -531,7 +531,6 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                         logger.debug(f'acc/r2 done: {accelerator.device}')
 
                 # 等待所有进程
-                accelerator.wait_for_everyone()
                 if accelerator.is_local_main_process:
                     print(f'wait warnup')
 
