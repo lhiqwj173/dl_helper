@@ -532,6 +532,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                 # 等待所有进程
                 accelerator.wait_for_everyone()
+                if accelerator.is_local_main_process:
+                    print(f'wait warnup')
 
                 # warnup
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
