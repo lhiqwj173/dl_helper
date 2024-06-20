@@ -514,8 +514,8 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 help_vars.train_loss += loss.detach().float()
 
                 # 记录正确率/r方
-                all_outputs = accelerator.gather_for_metrics(outputs)
-                all_targets = accelerator.gather_for_metrics(targets)
+                # all_outputs = accelerator.gather_for_metrics(outputs)
+                # all_targets = accelerator.gather_for_metrics(targets)
                 # all_outputs, all_targets = accelerator.gather_for_metrics((outputs, targets))
                 if accelerator.is_local_main_process:
                     with torch.no_grad():
@@ -537,6 +537,9 @@ def batch_gd(accelerator, result_dict, cnn, seed):
                 if isinstance(scheduler, warm_up_ReduceLROnPlateau) or isinstance(scheduler, Increase_ReduceLROnPlateau):
                     scheduler.warn_up()
 
+                if accelerator.is_local_main_process:
+                    print(f'warnup')
+
                 if (idx!=0 and idx%100 == 0) or idx == step_length - 1:
                     t1 = time.time()
                     if t1 - train_last >= 30*60 or idx == step_length - 1:
@@ -547,14 +550,15 @@ def batch_gd(accelerator, result_dict, cnn, seed):
 
                         # 打包文件
                         if accelerator.is_local_main_process:
-                            logger.debug(f'save_state')
                             pack_folder()
-                            logger.debug(f'pack_folder')
+
+                if accelerator.is_local_main_process:
+                    print(f'save_state')
 
                 idx += 1
             
                 if accelerator.is_local_main_process:
-                    logger.debug(f'step {idx} {accelerator.device}')
+                    print(f'step {idx} {accelerator.device}')
 
             help_vars.step_in_epoch += 1
 
