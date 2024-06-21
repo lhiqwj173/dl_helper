@@ -126,7 +126,7 @@ class train_tpu(train_base):
         if xm.xrt_world_size() > 1:
             # 获取dataloader参数
             dataset = data_loader.dataset
-            shuffle = isinstance(data_loader.sampler, (RandomSampler, DistributedSampler))
+            shuffle = isinstance(data_loader.sampler, RandomSampler)
             batch_size = data_loader.batch_size
             drop_last=data_loader.drop_last
             num_workers = data_loader.num_workers
