@@ -257,9 +257,13 @@ def run_fn(index, num_processes, test):
 
     trainer.print('初始化训练元素')
     model = trainer.init_model(model)
+    trainer.print('model')
     train_data = trainer.init_data_loader(train_data)
+    trainer.print('train_data')
     val_data = trainer.init_data_loader(val_data)
+    trainer.print('val_data')
     criterion = trainer.init_criterion(criterion)
+    trainer.print('criterion')
 
     trainer.print('开始训练')
     train_fn(index, params, model, criterion, optimizer, train_data, val_data, trainer)
