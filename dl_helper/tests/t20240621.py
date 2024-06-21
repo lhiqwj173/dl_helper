@@ -4,31 +4,29 @@ from dl_helper.train_param import Params
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 
+def yfunc_target_long_short(x):
+    # long/ short
+    x1, x2 = x
+    if x1 > 0:# 多头盈利
+        return 0
+    elif x2 > 0:# 空头盈利
+        return 1
+    else:
+        return 2
+
+def yfunc_target_simple(x):
+    if x > 0:
+        return 0
+    elif x < 0:
+        return 1
+    else:
+        return 2
+
 class test(test_base):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
-
-        def yfunc_target_long_short(x):
-            # long/ short
-            x1, x2 = x
-            if x1 > 0:# 多头盈利
-                return 0
-            elif x2 > 0:# 空头盈利
-                return 1
-            else:
-                return 2
-
-        def yfunc_target_simple(x):
-            if x > 0:
-                return 0
-            elif x < 0:
-                return 1
-            else:
-                return 2
-
-                # 0 - 2
 
         vars = []
         for classify_idx, name, yfunc in zip(
