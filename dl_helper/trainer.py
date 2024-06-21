@@ -173,9 +173,10 @@ class train_tpu(train_base):
         # print(_loss)
     
     def init_model(self, model):
+        self.print(f'init model {self.device}')
         model = model.to(self.device)
         # Optional for TPU v4 and GPU
-        # xm.broadcast_master_param(model)
+        xm.broadcast_master_param(model)
         model = DDP(model, gradient_as_bucket_view=True)
         return model
     
