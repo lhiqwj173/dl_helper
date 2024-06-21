@@ -154,7 +154,7 @@ class train_tpu(train_base):
 
     def get_device(self):
         if None is self.device:
-            self.device = xla.device()
+            self.device = xm.xla_device()
         return self.device
     
     def step(self, loss, optimizer):
