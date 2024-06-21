@@ -1,3 +1,7 @@
+"""
+弃用
+"""
+
 from torch.nn.utils import weight_norm
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
