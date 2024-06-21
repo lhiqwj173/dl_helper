@@ -119,8 +119,8 @@ class train_gpu(train_base):
 
 class train_tpu(train_base):
     def __init__(self, seed, amp):
-        super().__init__(seed, amp)
         dist.init_process_group('xla', init_method='xla://')
+        super().__init__(seed, amp)
           
     def init_data_loader(self, data_loader):
         if xm.xrt_world_size() > 1:
@@ -248,6 +248,7 @@ def run_fn(index, num_processes, test):
         trainer = train_base(params.seed, params.amp)
     else:
         trainer = train_gpu(params.seed, params.amp)
+    device = trainer.get_device()
 
     trainer.print('准备训练元素')
     model = test.get_model()
