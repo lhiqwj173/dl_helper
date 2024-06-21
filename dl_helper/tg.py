@@ -6,7 +6,7 @@ import hashlib
 import inspect
 import math
 import os, time
-from dl_helper.train_param import params, logger
+from dl_helper.train_param import logger
 from collections import defaultdict
 from typing import Optional, List, AsyncGenerator, Union, Awaitable, DefaultDict, Tuple, BinaryIO
 

@@ -19,19 +19,13 @@ weight_decay: 权重衰减
 init_learning_ratio: 测试最优学习率
 increase_ratio: 测试最优学习率增加比例
 data_set: 数据集
-model: 模型
 """
 import torch
 from datetime import datetime
 import multiprocessing
 import subprocess, os
 
-_run_device = ''
 def get_gpu_info():
-    global _run_device
-    if _run_device:
-      return _run_device
-
     if 'TPU_WORKER_ID' in os.environ:
         _run_device = 'TPU'
 
@@ -53,7 +47,7 @@ def get_gpu_info():
 def match_num_processes():
     device = get_gpu_info()
     if device == 'TPU':
-        return 4
+        return 8
     elif device == 'T4x2':
         return 2
     elif device == 'P100':
@@ -101,8 +95,6 @@ class logger:
   def add(*args):
     _logger.add(*args)
 
-
-
 class Params:
   #############################
   # 通用参数
@@ -117,6 +109,8 @@ class Params:
   workers = 0
 
   debug = False
+
+  seed = 42
 
   #############################
   # 训练超参数
@@ -162,85 +156,83 @@ class Params:
   y_func = None
   classify = False
 
-  # 模型
-  model = None
-
   data_folder = ''
 
-params = Params()
+  # 模型类型 
+  cnn=False
 
-def init_param(
-    train_title, root, model, data_set,
+  def __init__(
+      self,
+      train_title, root, data_set,
 
-    # 训练参数
-    learning_rate, batch_size, 
-    epochs=100, warm_up_epochs=3, 
-    no_better_stop=0, label_smoothing=0.1, weight_decay=0.01, workers=0,
+      # 训练参数
+      learning_rate, batch_size, 
+      epochs=100, warm_up_epochs=3, 
+      no_better_stop=0, label_smoothing=0.1, weight_decay=0.01, workers=0,
 
-    # 数据增强
-    random_mask=0, random_scale=0, random_mask_row=0, 
+      # 数据增强
+      random_mask=0, random_scale=0, random_mask_row=0, 
 
-    # 测试最优学习率
-    init_learning_ratio = 0, increase_ratio = 0.2, 
+      # 测试最优学习率
+      init_learning_ratio = 0, increase_ratio = 0.2, 
 
-    # 使用回归数据集参数
-    classify = False,
-    y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,
-    
-    # 数据集路径
-    data_folder = '',
+      # 使用回归数据集参数
+      classify = False,cnn=False,
+      y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,
+      
+      # 数据集路径
+      data_folder = '',
 
-    # 数据使用部分
-    use_pk = True, use_trade = False,
+      # 数据使用部分
+      use_pk = True, use_trade = False,
 
-    describe='',
+      describe='',
 
-    debug = False,
-):
-    global params
+      debug = False,seed = 42,amp=False
+  ):
+      # 添加训练后缀 (训练设备/混合精度)
+      run_device = get_gpu_info()
+      self.train_title = f'{train_title}_{run_device}'
+      self.root = f'{root}_{run_device}'
+      self.amp = amp
+      if self.amp and self.amp!='no':
+          self.train_title = f'{self.train_title }_{self.amp}'
+          self.root = f'{self.root }_{self.amp}'
 
-    # 添加训练后缀 (训练设备/混合精度)
-    run_device = get_gpu_info()
-    params.train_title = f'{train_title}_{run_device}'
-    params.root = f'{root}_{run_device}'
-    if params.amp and params.amp!='no':
-        params.train_title = f'{params.train_title }_{params.amp}'
-        params.root = f'{params.root }_{params.amp}'
+      self.epochs = epochs
+      self.batch_size = batch_size
+      self.learning_rate = learning_rate
+      self.warm_up_epochs = warm_up_epochs
+      self.no_better_stop = no_better_stop
+      self.random_mask = random_mask
+      self.random_scale = random_scale
+      self.random_mask_row = random_mask_row
+      self.label_smoothing = label_smoothing
+      self.weight_decay = weight_decay
+      self.init_learning_ratio = init_learning_ratio
+      self.increase_ratio = increase_ratio
+      self.data_set = data_set
+      self.data_parm = data_str2parm(data_set)
 
-    params.epochs = epochs
-    params.batch_size = batch_size
-    params.learning_rate = learning_rate
-    params.warm_up_epochs = warm_up_epochs
-    params.no_better_stop = no_better_stop
-    params.random_mask = random_mask
-    params.random_scale = random_scale
-    params.random_mask_row = random_mask_row
-    params.label_smoothing = label_smoothing
-    params.weight_decay = weight_decay
-    params.init_learning_ratio = init_learning_ratio
-    params.increase_ratio = increase_ratio
-    params.data_set = data_set
-    params.data_parm = data_str2parm(data_set)
+      self.classify = classify
+      self.y_n = y_n
+      self.regress_y_idx = regress_y_idx
+      self.classify_y_idx = classify_y_idx
+      self.y_func = y_func
 
-    params.classify = classify
-    params.y_n = y_n
-    params.regress_y_idx = regress_y_idx
-    params.classify_y_idx = classify_y_idx
-    params.y_func = y_func
+      self.describe = describe
+      self.use_pk = use_pk
+      self.use_trade = use_trade
+      self.workers = workers
 
-    params.model = model
-    params.describe = describe
-    params.use_pk = use_pk
-    params.use_trade = use_trade
-    params.workers = workers
+      self.data_folder = data_folder if data_folder else './data'
 
-    params.data_folder = data_folder if data_folder else './data'
+      self.debug = debug
+      self.seed = seed
 
-    params
+      # 运行变量
+      os.makedirs(os.path.join(self.root, 'var'), exist_ok=True)
 
-    # 运行变量
-    os.makedirs(os.path.join(params.root, 'var'), exist_ok=True)
-
-    # log
-    os.makedirs(os.path.join(params.root, 'log'), exist_ok=True)
-    logger.add(os.path.join(params.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
+      # log
+      os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)
+      logger.add(os.path.join(self.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))

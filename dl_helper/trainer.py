@@ -3,7 +3,7 @@ from dl_helper.train_param import match_num_processes
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
+from torch.utils.data.sampler import RandomSampler
 
 from accelerate import Accelerator
 from accelerate import notebook_launcher
@@ -16,28 +16,43 @@ if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.xla_multiprocessing as xmp
     import torch_xla.distributed.parallel_loader as pl
-    import torch_xla.distributed.data_parallel as dp
-
+    
+    from torch_xla.amp import autocast, GradScaler
+    try:
+      from torch_xla.amp import syncfree
+    except ImportError:
+      assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 class train_base():
     def __init__(self, seed, amp):
         self.amp = amp
         set_seed(seed)
+        self.device = None
         
-    def get_data(self, num_samples, num_classes, batch_size):
+    def get_fake_data(self, num_samples, num_classes, batch_size):
         data = torch.randn(num_samples, 3, 32, 32)
-        targets = torch.randint(0, num_classes, (num_samples,))
-
+        target = torch.randint(0, num_classes, (num_samples,))
+        dataset = torch.utils.data.TensorDataset(data, target)
+        
+        # for debug
+        # for i in range(8):
+        #     self.print(i, data[i][0][0][:5])
+        
         # 创建数据加载器
         train_loader = torch.utils.data.DataLoader(
-            torch.utils.data.TensorDataset(data, targets),
+            dataset,
             batch_size=batch_size,
             shuffle=True,
         )
+
         return train_loader
+
+    def init_data_loader(self, data_loader):
+        return data_loader
         
     def get_device(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if None is self.device:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return self.device
     
     def init_criterion(self, criterion):
@@ -53,26 +68,26 @@ class train_base():
     def prepare(self, d, t):
         return d.to(self.device), t.to(self.device)
     
-    def print(self, msg):
-        print(msg)
+    def print(self, *msg):
+        print(*msg)
         
-    def cal_output_loss(self, model, data, criterion):
-        outputs = model(data)
-        loss = criterion(outputs, targets)
-        return outputs, loss
+    def cal_output_loss(self, model, data, target, criterion):
+        output = model(data)
+        loss = criterion(output, target)
+        return output, loss
   
 class train_gpu(train_base):
     def __init__(self, seed, amp):
         super().__init__(seed, amp)
         self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
-        
-    def get_data(self, num_samples, num_classes, batch_size):
-        train_loader = super().get_data(num_samples, num_classes, batch_size)
-        train_loader = self.accelerator.prepare(train_loader)
-        return train_loader
+
+    def init_data_loader(self, data_loader):
+        data_loader = self.accelerator.prepare(data_loader)
+        return data_loader
         
     def get_device(self):
-        self.device = self.accelerator.device
+        if None is self.device:
+            self.device = self.accelerator.device
         return self.device
     
     def step(self, loss, optimizer):
@@ -90,112 +105,177 @@ class train_gpu(train_base):
     def prepare(self, d, t):
         return d, t
     
-    def print(self, msg):
-        self.accelerator.print(msg)
+    def print(self, *msg):
+        self.accelerator.print(*msg)
         
-    def cal_output_loss(self, model, data, criterion):
+    def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
-            output = self.model(data)
+            output = model(data)
             with self.accelerator.autocast():
-                loss = self.loss_fn(output, target)
-            return outputs, loss
+                loss = criterion(output, target)
+            return output, loss
         else:
-            return super().cal_output_loss(model, data, criterion)
+            return super().cal_output_loss(model, data, target, criterion)
 
 class train_tpu(train_base):
     def __init__(self, seed, amp):
         super().__init__(seed, amp)
         dist.init_process_group('xla', init_method='xla://')
-        
-    def get_data(self, num_samples, num_classes, batch_size):
-        train_loader = super().get_data(num_samples, num_classes, batch_size)
-        # train_device_loader = pl.MpDeviceLoader(train_loader, self.device)
-        # 使用DataParallel对DataLoader进行分布式处理
-        train_device_loader = dp.DataLoader(train_loader)
+          
+    def init_data_loader(self, data_loader):
+        if xm.xrt_world_size() > 1:
+            # 获取dataloader参数
+            dataset = data_loader.dataset
+            shuffle = isinstance(data_loader.sampler, (RandomSampler, DistributedSampler))
+            batch_size = data_loader.batch_size
+            drop_last=data_loader.drop_last
+            num_workers = data_loader.num_workers
+            pin_memory = data_loader.pin_memory
+
+            del data_loader
+
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=xm.xrt_world_size(),
+                rank=xm.get_ordinal(),
+                shuffle=shuffle)
+
+            # 新建dataloader
+            data_loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=batch_size,
+                sampler=train_sampler,
+                drop_last=drop_last,
+                num_workers=num_workers,
+                pin_memory=pin_memory)
+              
+        train_device_loader = pl.MpDeviceLoader(data_loader, self.device)
         return train_device_loader
-        
+
     def get_device(self):
-        self.device = xla.device()
+        if None is self.device:
+            self.device = xla.device()
         return self.device
     
     def step(self, loss, optimizer):
         loss.backward()
-        xm.mark_step()
+        optimizer.step()
+
+        # ddp模式，不需要 xm.optimizer_step，会自动同步梯度
+        # xm.optimizer_step(optimizer)
+        
+        # for debug
+        # 汇总loss
+        # _loss = loss.item()
+        # print(_loss)
+        # xm.mark_step()
+        # losss = xm.all_gather(_loss)
+        # print(_loss)
     
     def init_model(self, model):
-        model = DDP(model.to(self.device), gradient_as_bucket_view=True)
+        model = model.to(self.device)
+        # Optional for TPU v4 and GPU
+        xm.broadcast_master_param(model)
+        # model = DDP(model, gradient_as_bucket_view=True)
         return model
     
     def prepare(self, d, t):
         return d, t
     
-    def print(self, msg):
-        xm.master_print(msg)
+    def print(self, *msg):
+        xm.master_print(*msg)
         
-    def cal_output_loss(self, model, data, criterion):
+    def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
             with autocast(xm.xla_device()):
-                output = self.model(data)
-                loss = self.loss_fn(output, target)
-            return outputs, loss
+                output = model(data)
+                loss = criterion(output, target)
+            return output, loss
         
         else:
-            return super().cal_output_loss(model, data, criterion)
+            return super().cal_output_loss(model, data, target, criterion)
 
-def train_fn_sample(i, seed:int=42, batch_size:int=16, lr=3e-2/25, amp=False):
-    
-    # 设置训练参数
-    epochs = 30
-    
-    if num_processes == 8:
-        trainer = train_tpu(seed, amp)
-        batch_size //= 8
-        # lr*=8
-        
-    elif num_processes == 0:
-        trainer = train_base(seed, amp)
-
-    else:
-        trainer = train_gpu(seed, amp)
-        if num_processes > 1:
-            batch_size //= num_processes
-            # lr*=num_processes
-    
-    device = trainer.get_device()
-
-    # 创建模拟数据
-    num_classes = 10
-    num_samples = 100000
-    train_loader = trainer.get_data(num_samples, num_classes, batch_size)
-
-    model = ResNet()
-    model = trainer.init_model(model)
-    model.train()
-    
-    criterion = nn.CrossEntropyLoss()
-    criterion = trainer.init_criterion(criterion)
-
-    # 初始化优化器
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-
-    # TPU  each epoch step: 782
-    # P100 each epoch step: 6250
-    # T4*2 each epoch step: 3125
-    trainer.print(f'batch_size: {batch_size}')
-    trainer.print(f'each epoch step: {len(train_loader)}')
-    
+def train_fn(index, params, model, criterion, optimizer, train_data, val_data, trainer):
     # 训练循环
-    for epoch in range(epochs):
-        idx = 0
-        for data, targets in train_loader:
-            data, targets = trainer.prepare(data, targets)
-            optimizer.zero_grad()
-            outputs = model(data)
-            loss = criterion(outputs, targets)
+    for epoch in range(params.epochs):
+
+        # 训练
+        model.train()
+        for idx, (data, target) in enumerate(train_data):
             
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(targets.shape) == 1:
+                targets = targets.unsqueeze(1)
+
+            data, target = trainer.prepare(data, target)
+            optimizer.zero_grad()
+            output, loss = trainer.cal_output_loss(model, data, target, criterion)
             trainer.step(loss, optimizer)
+
+        # # 验证
+        # model.eval()
+        # for idx, (data, target) in enumerate(val_data):
+        #     data, target = trainer.prepare(data, target)
+        #     output, loss = trainer.cal_output_loss(model, data, target, criterion)
             
         if epoch%5 == 0 and epoch!=0:
             trainer.print(f'epoch {epoch}')
 
+def test_fn(index):
+    pass
 
+def run_fn(index, num_processes, test):
+
+
+    ###########################################
+    # 1. 训练
+    ###########################################
+    # 调整训练参数
+    params = test.get_param()
+    # 调整batch_size
+    if num_processes == 2:
+        params.batch_size //= num_processes
+
+    # 调整lr
+    if num_processes > 0:
+        params.learning_rate *= num_processes
+
+    # 创建训练器
+    if num_processes == 8:
+        trainer = train_tpu(params.seed, params.amp)
+    elif num_processes == 0:
+        trainer = train_base(params.seed, params.amp)
+    else:
+        trainer = train_gpu(params.seed, params.amp)
+
+    trainer.print('准备训练元素')
+    model = test.get_model()
+    train_data = test.get_data('train', params)
+    val_data = test.get_data('val', params)
+    criterion = test.get_criterion()
+    optimizer = test.get_optimizer(model)
+
+    trainer.print('初始化训练元素')
+    model = trainer.init_model(model)
+    train_data = trainer.init_data_loader(train_data)
+    val_data = trainer.init_data_loader(val_data)
+    criterion = trainer.init_criterion(criterion)
+
+    trainer.print('开始训练')
+    train_fn(index, params, model, criterion, optimizer, train_data, val_data, trainer)
+    ###########################################
+    # 1. 测试
+    ###########################################
+
+def run(test):
+    # 训练核心数
+    # P100 = 1
+    # T4x2 = 2
+    # TPU  = 8
+    # CPU  = 0
+    num_processes = match_num_processes()
+
+    if num_processes == 8:
+        xmp.spawn(run_fn, args=(num_processes, test), start_method='fork')      
+    else:
+        notebook_launcher(run_fn, args=(0, num_processes, test), num_processes=num_processes)

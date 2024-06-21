@@ -36,7 +36,7 @@ from py_ext.wechat import wx
 from py_ext.lzma import compress_folder
 
 from .tg import tg_download_async, tg_download, tg_upload, tg_del_file
-from .train_param import init_param, logger, params, data_parm2str, data_str2parm, match_num_processes
+from .train_param import init_param, logger, data_parm2str, data_str2parm, match_num_processes
 from .data import read_data
 from .data_map import DATA_MAP
 from .tool import report_memory_usage, check_nan
@@ -1087,7 +1087,7 @@ class trainer:
                     # 初始化列名
                     with open(result_file, 'w') as f:
                         # 训练参数
-                        f.write('time,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_scale,random_mask_row,amp,label_smoothing,weight_decay,,')
+                        f.write('time,debug,seed,epochs,batch_size,learning_rate,warm_up_epochs,no_better_stop,random_mask,random_scale,random_mask_row,amp,label_smoothing,weight_decay,,')
 
                         # 数据参数
                         for i in data_dict:
@@ -1104,7 +1104,7 @@ class trainer:
                 # 写入结果
                 with open(result_file, 'a') as f:
                     # 训练参数
-                    f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_scale},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
+                    f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")},{params.debug},{params.seed},{params.epochs},{params.batch_size},{params.learning_rate},{params.warm_up_epochs},{params.no_better_stop},{params.random_mask},{params.random_scale},{params.random_mask_row},{params.amp},{params.label_smoothing},{params.weight_decay},,')
 
                     # 数据参数
                     for i in data_dict:

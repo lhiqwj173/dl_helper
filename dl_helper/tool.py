@@ -1,12 +1,11 @@
 import psutil, pickle, torch, os
 from py_ext.wechat import wx
-from .train_param import logger
-from .train_param import params
+from dl_helper.train_param import logger
 
 def check_nan(data, **kwargs):
     if torch.isnan(data).any().item() or torch.isinf(data).any().item():
         pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))
-        wx.send_message(f'{params.train_title} 训练异常')
+        wx.send_message(f'训练异常')
         raise Exception("error train data")
 
 def report_memory_usage(msg=''):

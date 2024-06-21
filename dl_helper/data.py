@@ -10,9 +10,8 @@ from tqdm import tqdm
 from collections.abc import Iterable
 from pympler import asizeof
 # import gc
-from .train_param import params, logger, data_parm2str, data_str2parm
-from .tool import report_memory_usage, check_nan
-
+from dl_helper.train_param import logger, data_parm2str, data_str2parm
+from dl_helper.tool import report_memory_usage, check_nan
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -52,7 +51,6 @@ def reduce_mem_usage(df):
     # logger.debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
 
     return df
-
 
 def convert_float16_2_32(df):
     for col in df.columns:
@@ -185,10 +183,10 @@ class ResumeSample():
 class Dataset(torch.utils.data.Dataset):
     """Characterizes a dataset for PyTorch"""
 
-    def __init__(self, data_map, need_split_data_set, classify=False, train=True, cnn=True, log=False):
+    def __init__(self, params, data_map, need_split_data_set, classify=False, train=True, log=False):
         """Initialization"""
         self.log = log
-        self.cnn = cnn
+        self.params = params
 
         # 原始数据
         # report_memory_usage()
@@ -239,7 +237,9 @@ class Dataset(torch.utils.data.Dataset):
                 labels = set(data_map['y'])
                 sy = pd.Series(data_map['y'])
                 min_num = sy.value_counts().min()
-                logger.debug(f'min_num: {min_num}')
+
+                if self.log:
+                    logger.debug(f'min_num: {min_num}')
 
                 # report_memory_usage()
 
@@ -256,7 +256,8 @@ class Dataset(torch.utils.data.Dataset):
                 # 排序
                 idx.sort()
 
-                logger.debug(f'reindex')
+                if self.log:
+                    logger.debug(f'reindex')
                 data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
                 data_map['x'] = [data_map['x'][i] for i in idx]
                 data_map['y'] = [data_map['y'][i] for i in idx]
@@ -296,11 +297,6 @@ class Dataset(torch.utils.data.Dataset):
         data_map.clear()
 
         self.need_split_data_set = need_split_data_set
-        self.use_pk = params.use_pk
-        self.use_trade = params.use_trade
-        self.random_mask_row = params.random_mask_row
-        self.random_scale = params.random_scale
-        self.random_mask = params.random_mask
 
         self.input_shape = self.__getitem__(0)[0].shape
         # 增加一个batch维度
@@ -338,11 +334,11 @@ class Dataset(torch.utils.data.Dataset):
         if self.need_split_data_set:
             # 使用部分截取 xa, xb
             xa, xb = 0, 46
-            if self.use_pk and self.use_trade:
+            if self.params.use_pk and self.params.use_trade:
                 raise Exception('no use')
-            elif self.use_pk:
+            elif self.params.use_pk:
                 xb = 40
-            elif self.use_trade:
+            elif self.params.use_trade:
                 xa = 40
 
             # 截取mean_std
@@ -356,9 +352,9 @@ class Dataset(torch.utils.data.Dataset):
 
         # 获取切片x
         x = None
-        if self.train and self.random_mask_row>0:
+        if self.train and self.params.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.params.random_mask_row)
         else:
             x = self.data[:, a:b, :].clone()
 
@@ -371,17 +367,17 @@ class Dataset(torch.utils.data.Dataset):
         x[0, :, :] /= mean_std[:, 1]
 
         # 随机缩放
-        if self.train and self.random_scale>0:
-            x = random_scale(x, self.vol_cols, self.random_scale)
+        if self.train and self.params.random_scale>0:
+            x = random_scale(x, self.vol_cols, self.params.random_scale)
 
         # 随机mask
-        if self.train and self.random_mask>0:
-            x = random_mask(x, self.random_mask)
+        if self.train and self.params.random_mask>0:
+            x = random_mask(x, self.params.random_mask)
 
         check_nan(x)
 
         # return x, (self.y[index], self.ids[index])
-        if self.cnn:
+        if self.params.cnn:
             # x:[channel, pass_n, feature] -> [1, 100, 40/6/46]
             return x, self.y[index]
         else:
@@ -395,7 +391,7 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
     need_reindex = False
 
     # 标签平衡
-    logger.debug('标签平衡')
+    # logger.debug('标签平衡')
     need_reindex = True
 
     labels = set(test_y)
@@ -438,7 +434,7 @@ class cache():
         self.cost = time.time() - t0
 
 
-def load_data(file, diff_length, data_map, log=False):
+def load_data(params, file, diff_length, data_map, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
@@ -528,12 +524,7 @@ def load_data(file, diff_length, data_map, log=False):
 
     return diff_length, need_split_data_set
 
-def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, seed=42, log=False):
-    # # 读取测试数据
-    # price_mean_std, x, y, raw = pickle.load(open(os.path.join(data_path, f'{_type}.pkl'), 'rb'))
-    if log:
-        logger.debug(f'读取 {_type} 数据')
-
+def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False):
     data_path = params.data_folder
 
     # 数据集参数
@@ -606,12 +597,12 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, 
         'raw': pd.DataFrame()
     }
 
-    for file in tqdm(files):
+    for file in files:
         count += 1
         if count > max_num:
             break
 
-        diff_length, need_split_data_set = load_data(os.path.join(data_path, file), diff_length, data_map)
+        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map)
         # report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:
@@ -639,7 +630,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, 
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    dataset_test = Dataset(data_map, need_split_data_set, params.classify, train=_type == 'train', cnn=cnn, log=log)
+    dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
     if log:
         if params.classify:
             logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
@@ -653,6 +644,7 @@ def read_data(_type, max_num=10000, head_n=0, pct=100, need_id=False, cnn=True, 
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size*(1 if _type == 'train' else 2), num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
+
     return data_loader
 
 if __name__ == "__main__":
