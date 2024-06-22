@@ -36,13 +36,12 @@ class test(test_base):
         ):
             vars.append((classify_idx, name, yfunc))
 
-        assert self.idx < len(vars)
-
-        classify_idx, targrt_name, yfunc = vars[self.idx]
+        classify_idx, targrt_name, yfunc = vars[2]
         self.y_n = 3
 
         batch_n = 8
-        title = f'binctabl_{targrt_name}'
+        batch_n *= 2**(self.idx)
+        title = f'binctabl_{targrt_name}' if self.idx == 0 else f'binctabl_{targrt_name}_x{2**(self.idx)}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
@@ -59,7 +58,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.00013*batch_n, batch_size=64*batch_n, epochs=10,
+            learning_rate=0.00013*batch_n, batch_size=64*batch_n, epochs=100,
 
             # 数据增强
             random_scale=0.05, random_mask_row=0.7,
