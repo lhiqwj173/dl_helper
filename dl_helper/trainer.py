@@ -1,4 +1,5 @@
 from dl_helper.train_param import match_num_processes
+from dl_helper.tracker import Tracker
 
 from tqdm import tqdm
 
@@ -84,6 +85,11 @@ class train_base():
     def wait_for_everyone(self):
         return
 
+    def gather_for_metrics(self, *args):
+        if len(args) == 1:
+            return args[0]
+        return args
+
 class train_gpu(train_base):
     def __init__(self, seed, amp):
         super().__init__(seed, amp)
@@ -130,6 +136,9 @@ class train_gpu(train_base):
 
     def wait_for_everyone(self):
         self.accelerator.wait_for_everyone()
+
+    def gather_for_metrics(self, *args):
+        return self.accelerator.gather_for_metrics(args)
 
 class train_tpu(train_base):
     def __init__(self, seed, amp):
@@ -216,7 +225,13 @@ class train_tpu(train_base):
     def wait_for_everyone(self):
         xm.mark_step()
 
-def train_fn(index, params, model, criterion, optimizer, train_data, trainer):
+    def gather_for_metrics(self, *args):
+        res = [xm.all_gather(i) for i in args]
+        if len(res) == 1:
+            return res[0]
+        return res
+
+def train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker):
     # 收集数据
     # loss
     # 分类: acc 
@@ -231,22 +246,31 @@ def train_fn(index, params, model, criterion, optimizer, train_data, trainer):
         data, target = trainer.prepare(data, target)
         optimizer.zero_grad()
         output, loss = trainer.cal_output_loss(model, data, target, criterion)
+        tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
-def val_fn(index, params, model, criterion, optimizer, val_data, trainer):
-    # 收集数据
-    # loss
-    # 分类: acc 
-    # 回归: r2_list
-
+def val_fn(index, params, model, val_data, trainer, criterion, tracker):
     model.eval()
-    for idx, (data, target) in enumerate(val_data):
-        # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-        if not params.classify and len(targets.shape) == 1:
-            targets = targets.unsqueeze(1)
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(val_data):
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(targets.shape) == 1:
+                targets = targets.unsqueeze(1)
 
-        data, target = trainer.prepare(data, target)
-        output = model(data)
+            data, target = trainer.prepare(data, target)
+            output, loss = trainer.cal_output_loss(model, data, target, criterion)
+            tracker.track(output, target, loss, 'val')
+
+def test_fn(index, params, model, test_data, trainer):
+    model.eval()
+    with torch.no_grad():
+        for idx, (data, target) in enumerate(test_data):
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(targets.shape) == 1:
+                targets = targets.unsqueeze(1)
+
+            data, target = trainer.prepare(data, target)
+            output = model(data)
 
 def run_fn(index, num_processes, test):
 
@@ -271,6 +295,9 @@ def run_fn(index, num_processes, test):
     else:
         trainer = train_gpu(params.seed, params.amp)
     device = trainer.get_device()
+        
+    # 训练追踪器
+    tracker = Tracker(params, trainer)
 
     trainer.print('准备训练元素')
     model = test.get_model()
@@ -281,33 +308,34 @@ def run_fn(index, num_processes, test):
 
     trainer.print('初始化训练元素')
     model = trainer.init_model(model)
-    trainer.print('model')
     train_data = trainer.init_data_loader(train_data)
-    trainer.print('train_data')
     val_data = trainer.init_data_loader(val_data)
-    trainer.print('val_data')
     criterion = trainer.init_criterion(criterion)
-    trainer.print('criterion')
 
     trainer.print('开始训练')
     for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
         # 训练
-        train_fn(index, params, model, criterion, optimizer, train_data, trainer)
+        train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker)
 
         # 验证
-        val_fn(index, params, model, criterion, optimizer, val_data, trainer)
+        val_fn(index, params, model, val_data, trainer, criterion, tracker)
+
+        # 每epoch更新
+        tracker.update()
 
     ###########################################
     # 1. 测试
     ###########################################
     trainer.print('开始测试')
-    del train_data, val_data, criterion, optimizer
+    del train_data, val_data, optimizer
 
     test_data = test.get_data('test', params)
     test_data = trainer.init_data_loader(test_data)
 
-    val_fn(index, params, model, criterion, optimizer, test_data, trainer)
-
+    val_fn(index, params, model, test_data, trainer, criterion, tracker)
+    
+    tracker.update()
+    tracker.plot()
 
 def run(test):
     # 训练核心数

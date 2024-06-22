@@ -49,7 +49,7 @@ class test(test_base):
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24 * 5),
+            'total_hours': int(24 * 5),# TPU 内存占用 104 GB
             # 'total_hours': int(24),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
