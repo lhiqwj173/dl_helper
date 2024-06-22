@@ -1,5 +1,6 @@
 from dl_helper.train_param import match_num_processes
 from dl_helper.tracker import Tracker
+from dl_helper.scheduler import ReduceLR_slow_loss
 
 from tqdm import tqdm
 
@@ -64,6 +65,9 @@ class train_base():
     def init_model(self, model):
         return model.to(self.device)
     
+    def init_scheduler(self, scheduler):
+        return scheduler
+
     def step(self, loss, optimizer):
         loss.backward()
         optimizer.step()
@@ -90,6 +94,8 @@ class train_base():
             return args[0]
         return args
 
+
+
 class train_gpu(train_base):
     def __init__(self, seed, amp):
         super().__init__(seed, amp)
@@ -115,6 +121,10 @@ class train_gpu(train_base):
     def init_model(self, model):
         model = self.accelerator.prepare(model)
         return model
+
+    def init_scheduler(self, scheduler):
+        scheduler = self.accelerator.prepare(scheduler)
+        return scheduler
     
     def prepare(self, d, t):
         return d, t
@@ -249,6 +259,8 @@ def train_fn(index, params, model, criterion, optimizer, train_data, trainer, tr
         tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
+    
+
 def val_fn(index, params, model, val_data, trainer, criterion, tracker):
     model.eval()
     with torch.no_grad():
@@ -295,9 +307,6 @@ def run_fn(index, num_processes, test):
     else:
         trainer = train_gpu(params.seed, params.amp)
     device = trainer.get_device()
-        
-    # 训练追踪器
-    tracker = Tracker(params, trainer)
 
     trainer.print('准备训练元素')
     model = test.get_model()
@@ -305,12 +314,17 @@ def run_fn(index, num_processes, test):
     val_data = test.get_data('val', params)
     criterion = test.get_criterion()
     optimizer = test.get_optimizer(model)
+    scheduler = ReduceLR_slow_loss(optimizer)
 
     trainer.print('初始化训练元素')
     model = trainer.init_model(model)
     train_data = trainer.init_data_loader(train_data)
     val_data = trainer.init_data_loader(val_data)
     criterion = trainer.init_criterion(criterion)
+    scheduler = trainer.init_scheduler(scheduler)
+            
+    # 训练追踪器
+    tracker = Tracker(params, trainer, scheduler)
 
     trainer.print('开始训练')
     for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):

@@ -20,10 +20,11 @@ def last_value(data):
 
 
 class Tracker():
-    def __init__(self, params, trader):
+    def __init__(self, params, trader, scheduler):
         self.begin_time = time.time()
         self.params = params
         self.trader = trader
+        self.scheduler = scheduler
 
         # 最终数据
         self.data = {}
@@ -73,6 +74,12 @@ class Tracker():
                     )
                 else:
                     self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
+
+        if 'train' in self.track_update:
+            # 更新 学习率
+            self.scheduler.step(self.data['train_loss'])
+            # 记录学习率
+            self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
 
         self.reset_temp()
         self.trader.print(self.data)
@@ -238,8 +245,6 @@ class Tracker():
 
         pic_file = os.path.join(params.root, f"{params.train_title}.png")
         plt.savefig(pic_file)
-
-
 
 
 if __name__ == '__main__':
