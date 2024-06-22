@@ -7,10 +7,11 @@ import torch
 import torch.nn as nn
 
 class test_base():
-    def __init__(self, idx, data_folder='', amp='no'):
+    def __init__(self, idx, data_folder='', amp='no', debug=False):
         self.idx = idx
         self.data_folder = data_folder if data_folder else './data'
         self.amp = amp
+        self.debug = debug
         self.para = None
 
     # 获取训练参数
@@ -21,6 +22,9 @@ class test_base():
     # 初始化数据
     # 返回一个 torch dataloader
     def get_data(self, _type, params):
+        if self.debug:
+            params.epochs = 2
+            return read_data(_type = _type, params=params, max_num=1)
         return read_data(_type = _type, params=params)
 
     # 初始化模型
