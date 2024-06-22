@@ -32,7 +32,12 @@ class train_base():
     def __init__(self, seed, amp):
         self.amp = amp
         set_seed(seed)
+
         self.device = None
+        self.data_loader = []
+        self.criterion = None
+        self.model = None
+        self.scheduler = None
         
     def get_fake_data(self, num_samples, num_classes, batch_size):
         data = torch.randn(num_samples, 3, 32, 32)
@@ -51,22 +56,26 @@ class train_base():
         )
 
         return train_loader
-
-    def init_data_loader(self, data_loader):
-        return data_loader
         
     def get_device(self):
         if None is self.device:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return self.device
     
+    def init_data_loader(self, data_loader):
+        self.data_loader.append(data_loader)
+        return data_loader
+
     def init_criterion(self, criterion):
+        self.criterion = criterion
         return criterion
         
     def init_model(self, model):
-        return model.to(self.device)
+        self.model = model.to(self.device)
+        return self.model
     
     def init_scheduler(self, scheduler):
+        self.scheduler = scheduler
         return scheduler
 
     def step(self, loss, optimizer):
@@ -101,10 +110,6 @@ class train_gpu(train_base):
     def __init__(self, seed, amp):
         super().__init__(seed, amp)
         self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
-
-    def init_data_loader(self, data_loader):
-        data_loader = self.accelerator.prepare(data_loader)
-        return data_loader
         
     def get_device(self):
         if None is self.device:
@@ -114,6 +119,9 @@ class train_gpu(train_base):
     def step(self, loss, optimizer):
         self.accelerator.backward(loss)
         optimizer.step()
+    def init_data_loader(self, data_loader):
+        data_loader = self.accelerator.prepare(data_loader)
+        return data_loader
         
     def init_criterion(self, criterion):
         criterion = self.accelerator.prepare(criterion)
@@ -184,6 +192,7 @@ class train_tpu(train_base):
                 pin_memory=pin_memory)
               
         train_device_loader = pl.MpDeviceLoader(data_loader, self.device)
+        self.data_loader.append(train_device_loader)
         return train_device_loader
 
     def get_device(self):
@@ -211,8 +220,8 @@ class train_tpu(train_base):
         model = model.to(self.device)
         # Optional for TPU v4 and GPU
         xm.broadcast_master_param(model)
-        model = DDP(model, gradient_as_bucket_view=True)
-        return model
+        self.model = DDP(model, gradient_as_bucket_view=True)
+        return self.model
     
     def prepare(self, d, t):
         return d, t
@@ -337,6 +346,10 @@ def run_fn(index, num_processes, test):
 
         # 每epoch更新
         tracker.update()
+
+        # 缓存训练数据
+        if tracker.need_save:
+            pass
 
     ###########################################
     # 1. 测试
