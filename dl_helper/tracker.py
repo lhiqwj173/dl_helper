@@ -20,8 +20,12 @@ def last_value(data):
 
 
 class Tracker():
-    def __init__(self, params, trader, scheduler):
+    def __init__(self, params, trader, scheduler, num_processes):
+        # 时间统计
         self.begin_time = time.time()
+        self.epoch_count = 0
+        self.run_limit_hour = 12 if  num_processes != 8 else 9
+
         self.params = params
         self.trader = trader
         self.scheduler = scheduler
@@ -59,6 +63,8 @@ class Tracker():
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
+            self.trader.print(self.temp)
+
             # 汇总所有设备上的数据
             _loss, _num, _y_true, _y_pred = self.trader.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
             if self.params.classify:
@@ -80,6 +86,14 @@ class Tracker():
             self.scheduler.step(self.data['train_loss'])
             # 记录学习率
             self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
+
+            # 判断是否需要储存 训练数据
+            self.epoch_count += 1
+            last_time_hour = ((time.time() - self.begin_time) / 3600)
+            each_epoch_time_cost = last_time_hour / self.epoch_count
+            free_time = self.run_limit_hour - last_time_hour
+            if free_time < each_epoch_time_cost * 1.2:
+                self.trader.print('储存训练数据')
 
         self.reset_temp()
         self.trader.print(self.data)

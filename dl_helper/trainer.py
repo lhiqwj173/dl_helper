@@ -3,6 +3,7 @@ from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
 
 from tqdm import tqdm
+import time
 
 import torch
 import torch.nn as nn
@@ -324,7 +325,7 @@ def run_fn(index, num_processes, test):
     scheduler = trainer.init_scheduler(scheduler)
             
     # 训练追踪器
-    tracker = Tracker(params, trainer, scheduler)
+    tracker = Tracker(params, trainer, scheduler, num_processes)
 
     trainer.print('开始训练')
     for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
