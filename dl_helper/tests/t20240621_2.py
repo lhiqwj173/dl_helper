@@ -41,15 +41,15 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[self.idx]
         self.y_n = 3
 
-        batch_n = 8
-        title = f'binctabl2_{targrt_name}'
+        batch_n = 8*4
+        title = f'binctabl_x4_{targrt_name}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24 * 5),# TPU 内存占用 104 GB
+            'total_hours': int(12),
             # 'total_hours': int(24),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
