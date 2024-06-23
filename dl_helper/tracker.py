@@ -20,7 +20,7 @@ def last_value(data):
 
 
 class Tracker():
-    def __init__(self, params, trader, scheduler, num_processes):
+    def __init__(self, params, trainer, scheduler, num_processes):
         # 时间统计
         self.begin_time = time.time()
         self.epoch_count = 0
@@ -28,7 +28,7 @@ class Tracker():
         self.need_save = False
 
         self.params = params
-        self.trader = trader
+        self.trainer = trainer
         self.scheduler = scheduler
 
         # 最终数据
@@ -64,19 +64,19 @@ class Tracker():
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
-            self.trader.wait_for_everyone()
-            self.trader.print(self.trader.device, "loss", self.temp[f'{i}_loss'], main=False)
-            self.trader.print(self.trader.device, "num", self.temp[f'{i}_num'], main=False)
-            self.trader.print(self.trader.device, "y_true", len(self.temp[f'{i}_y_true']), main=False)
-            self.trader.print(self.trader.device, "y_pred", len(self.temp[f'{i}_y_pred']), main=False)
-            self.trader.wait_for_everyone()
+            self.trainer.wait_for_everyone()
+            self.trainer.print(self.trainer.device, "loss", self.temp[f'{i}_loss'], main=False)
+            self.trainer.print(self.trainer.device, "num", self.temp[f'{i}_num'], main=False)
+            self.trainer.print(self.trainer.device, "y_true", len(self.temp[f'{i}_y_true']), main=False)
+            self.trainer.print(self.trainer.device, "y_pred", len(self.temp[f'{i}_y_pred']), main=False)
+            self.trainer.wait_for_everyone()
 
             # 汇总所有设备上的数据
-            _loss, _num, _y_true, _y_pred = self.trader.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
+            _loss, _num, _y_true, _y_pred = self.trainer.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
             if self.params.classify:
-                _correct = self.trader.gather_for_metrics(self.temp[f'{i}_correct'])
+                _correct = self.trainer.gather_for_metrics(self.temp[f'{i}_correct'])
 
-            if self.trader.is_main_process():
+            if self.trainer.is_main_process():
                 self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
 
                 if self.params.classify:
@@ -99,11 +99,10 @@ class Tracker():
             each_epoch_time_cost = last_time_hour / self.epoch_count
             free_time = self.run_limit_hour - last_time_hour
             if free_time < each_epoch_time_cost * 1.2:
-                self.trader.print('储存训练数据')
                 self.need_save = True
 
         self.reset_temp()
-        self.trader.print(self.data)
+        self.trainer.print(self.data)
 
     def reset_temp(self):
         # 重置计算变量
@@ -145,7 +144,7 @@ class Tracker():
             self.temp[f'{_type}_y_pred'].extend(output)
 
     def plot(self):
-        if not self.trader.is_main_process():
+        if not self.trainer.is_main_process():
             return
 
         params = self.params

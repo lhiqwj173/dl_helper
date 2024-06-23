@@ -1,6 +1,7 @@
 from dl_helper.train_param import match_num_processes
 from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
+from dl_helper.tool import report_memory_usage
 
 import multiprocessing as mp
 
@@ -31,9 +32,10 @@ if match_num_processes() ==8:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 class train_base():
-    def __init__(self, seed, amp, process_index, lock):
-        self.amp = amp
-        set_seed(seed)
+    def __init__(self, params, process_index, lock):
+        self.params = params
+        set_seed(self.params.seed)
+        self.save_folder = os.path.join(self.params.root, 'var')
 
         self.lock = lock
         self.process_index = process_index
@@ -43,7 +45,22 @@ class train_base():
         self.criterion = None
         self.model = None
         self.scheduler = None
+
+    def check_cache(self):
+        assert (not None is self.device) and (not None is self.data_loader) and (not None is self.criterion) and (not None is self.model) and (not None is self.scheduler), 'must prepare trade parts'
         
+        # 判断 save_folder 下是否为空
+        if not os.path.listdir(self.save_folder):
+            return False
+        return True
+
+    def save(self):
+        pass
+
+    def load(self):
+        if self.check_cache():
+            return
+
     def get_fake_data(self, num_samples, num_classes, batch_size):
         data = torch.randn(num_samples, 3, 32, 32)
         target = torch.randint(0, num_classes, (num_samples,))
@@ -117,6 +134,13 @@ class train_gpu(train_base):
         super().__init__(*args, **kwargs)
         self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
         
+    def save(self):
+        pass
+
+    def load(self):
+        if self.check_cache():
+            return
+
     def get_device(self):
         if None is self.device:
             self.device = self.accelerator.device
@@ -152,7 +176,7 @@ class train_gpu(train_base):
                 print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
-        if self.amp != 'no':
+        if self.params.amp != 'no':
             output = model(data)
             with self.accelerator.autocast():
                 loss = criterion(output, target)
@@ -226,7 +250,7 @@ class train_tpu(train_base):
         # print(_loss)
     
     def init_model(self, model):
-        self.print(f'init model {self.device}')
+        # self.print(f'init model {self.device}')
         model = model.to(self.device)
         # Optional for TPU v4 and GPU
         xm.broadcast_master_param(model)
@@ -248,7 +272,7 @@ class train_tpu(train_base):
 
         
     def cal_output_loss(self, model, data, target, criterion):
-        if self.amp != 'no':
+        if self.params.amp != 'no':
             with autocast(xm.xla_device()):
                 output = model(data)
                 loss = criterion(output, target)
@@ -269,14 +293,9 @@ class train_tpu(train_base):
             return res[0]
         return res
 
-def train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker):
-    # 收集数据
-    # loss
-    # 分类: acc 
-    # 回归: r2_list
-
+def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
     model.train()
-    for idx, (data, target) in enumerate(train_data):
+    for idx, (data, target) in tqdm(enumerate(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
@@ -287,10 +306,14 @@ def train_fn(index, params, model, criterion, optimizer, train_data, trainer, tr
         tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
-def val_fn(index, params, model, val_data, trainer, criterion, tracker):
+        trainer.wait_for_everyone()
+        if trainer.is_main_process():
+            report_memory_usage(f'train_{idx}')
+
+def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in enumerate(val_data):
+        for idx, (data, target) in tqdm(enumerate(val_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} validation'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
@@ -298,6 +321,10 @@ def val_fn(index, params, model, val_data, trainer, criterion, tracker):
             data, target = trainer.prepare(data, target)
             output, loss = trainer.cal_output_loss(model, data, target, criterion)
             tracker.track(output, target, loss, 'val')
+
+            trainer.wait_for_everyone()
+            if trainer.is_main_process():
+                report_memory_usage(f'val_{idx}')
 
 def test_fn(index, params, model, test_data, trainer):
     model.eval()
@@ -327,11 +354,11 @@ def run_fn(index, lock, num_processes, test):
 
     # 创建训练器
     if num_processes == 8:
-        trainer = train_tpu(params.seed, params.amp, index, lock)
+        trainer = train_tpu(params, index, lock)
     elif num_processes == 0:
-        trainer = train_base(params.seed, params.amp, index, lock)
+        trainer = train_base(params, index, lock)
     else:
-        trainer = train_gpu(params.seed, params.amp, index, lock)
+        trainer = train_gpu(params, index, lock)
     device = trainer.get_device()
 
     trainer.print('准备训练元素...')
@@ -356,25 +383,31 @@ def run_fn(index, lock, num_processes, test):
 
     # 同步
     trainer.wait_for_everyone()
+    if trainer.is_main_process():
+        report_memory_usage('开始训练')
 
-    trainer.print('开始训练')
-    for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
+    # for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
+    for epoch in range(params.epochs):
         # 训练
-        train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker)
+        train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker)
         # 同步
         trainer.wait_for_everyone()
+        if trainer.is_main_process():
+            report_memory_usage()
 
         # 验证
-        val_fn(index, params, model, val_data, trainer, criterion, tracker)
+        val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker)
         # 同步
         trainer.wait_for_everyone()
-        
+        if trainer.is_main_process():
+            report_memory_usage()
+
         # 每epoch更新
         tracker.update()
 
         # 缓存训练数据
         if tracker.need_save:
-            pass
+            trainer.print('cache train data')
 
         # 同步
         trainer.wait_for_everyone()
