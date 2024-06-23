@@ -107,10 +107,14 @@ class train_base():
     
     def prepare(self, d, t):
         return d.to(self.device), t.to(self.device)
-    
+       
+    def print_head(self, idx):
+        return f'[{datetime.now()}][{idx}]'
+
     def print(self, *msg, main=True, **kwargs):
+        head = self.print_head(self.process_index)
         with self.lock:
-            print(f'[{self.process_index}]', *msg, **kwargs)
+            print(head, *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         self.wait_for_everyone()
@@ -185,13 +189,14 @@ class train_gpu(train_base):
     
     def prepare(self, d, t):
         return d, t
-    
+ 
     def print(self, *msg, main=True, **kwargs):
+        head = self.print_head(self.process_index)
         with self.lock:
             if main:
-                self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
+                self.accelerator.print(head, *msg, **kwargs)
             else:
-                print(f'[{self.process_index}]', *msg, **kwargs)
+                print(head, *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.params.amp != 'no':
@@ -290,14 +295,15 @@ class train_tpu(train_base):
         return d, t
     
     def print(self, *msg, main=True, **kwargs):
+        head = self.print_head(self.process_index)
         with self.lock:
             if main:
                 if self.is_main_process():
-                    print(f'[{self.process_index}]', *msg, **kwargs)
+                    print(head, *msg, **kwargs)
 
                 # xm.master_print(*msg)
             else:
-                print(f'[{self.process_index}]', *msg, **kwargs)
+                print(head, *msg, **kwargs)
 
         
     def cal_output_loss(self, model, data, target, criterion):
