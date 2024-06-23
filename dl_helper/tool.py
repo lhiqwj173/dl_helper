@@ -69,5 +69,5 @@ def report_memory_usage(msg=''):
             # 跳过无法访问的进程
             continue
     
-    # 打印合并统计后的内存大小
-    logger.debug(f"合并统计后的内存大小：{total_memory_gb:.3f}GB")
+    # # 打印合并统计后的内存大小
+    # logger.debug(f"合并统计后的内存大小：{total_memory_gb:.3f}GB")

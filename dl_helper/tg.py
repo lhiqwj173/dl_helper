@@ -226,7 +226,7 @@ class ParallelTransferrer:
                 part += 1
                 # logger.debug(f"Part {part} downloaded")
 
-        logger.debug("Parallel download finished, cleaning up connections")
+        # logger.debug("Parallel download finished, cleaning up connections")
         await self._cleanup()
 
 

@@ -196,8 +196,8 @@ class Dataset(torch.utils.data.Dataset):
         self.vol_cols = [i*2+1 for i in range(20)]
 
         if not need_split_data_set:
-            if self.log:
-                logger.debug("使用全部数据")
+            # if self.log:
+            #     logger.debug("使用全部数据")
             if params.use_trade:
                 self.price_cols += [42, 45]
                 self.vol_cols += [40, 41, 43, 44]
@@ -208,12 +208,13 @@ class Dataset(torch.utils.data.Dataset):
                 raise Exception('no use')
 
             elif params.use_pk:
-                if self.log:
-                    logger.debug("只使用盘口数据")
+                # if self.log:
+                #     logger.debug("只使用盘口数据")
+                pass
 
             elif params.use_trade:
-                if self.log:
-                    logger.debug("只使用交易数据")
+                # if self.log:
+                #     logger.debug("只使用交易数据")
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
@@ -238,8 +239,8 @@ class Dataset(torch.utils.data.Dataset):
                 sy = pd.Series(data_map['y'])
                 min_num = sy.value_counts().min()
 
-                if self.log:
-                    logger.debug(f'min_num: {min_num}')
+                # if self.log:
+                #     logger.debug(f'min_num: {min_num}')
 
                 # report_memory_usage()
 
@@ -256,8 +257,9 @@ class Dataset(torch.utils.data.Dataset):
                 # 排序
                 idx.sort()
 
-                if self.log:
-                    logger.debug(f'reindex')
+                # if self.log:
+                #     logger.debug(f'reindex')
+
                 data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
                 data_map['x'] = [data_map['x'][i] for i in idx]
                 data_map['y'] = [data_map['y'][i] for i in idx]
@@ -302,8 +304,8 @@ class Dataset(torch.utils.data.Dataset):
         # 增加一个batch维度
         self.input_shape = (1,) + self.input_shape
 
-        if self.log:
-            logger.debug(f'数据集初始化完毕')
+        # if self.log:
+        #     logger.debug(f'数据集初始化完毕')
         # report_memory_usage()
 
     def __len__(self):
@@ -455,8 +457,8 @@ def load_data(params, file, diff_length, data_map, log=False):
     # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
     # feature == 46 且 params.use_pk/params.use_trade 不全为true
     need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
-    if log:
-        logger.debug(f'need_split_data_set: {need_split_data_set}')
+    # if log:
+    #     logger.debug(f'need_split_data_set: {need_split_data_set}')
 
     # 校正参数
     if len(mean_std[0]) == 40:
@@ -497,13 +499,13 @@ def load_data(params, file, diff_length, data_map, log=False):
     # 预处理标签
     y_idx = -1
     if params.regress_y_idx != -1:
-        if log:
-            logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
+        # if log:
+        #     logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
         y_idx = params.regress_y_idx
         
     elif params.classify_y_idx!=1:
-        if log:
-            logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
+        # if log:
+        #     logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
         y_idx = params.classify_y_idx
 
     # 多个可迭代
@@ -574,8 +576,8 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
 
         files = files[begin_idx:end_idx]
 
-    if log:
-        logger.debug(f'{files}')
+    # if log:
+    #     logger.debug(f'{files}')
 
     # 读取分段合并
     diff_length = 0
@@ -609,8 +611,8 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
         head_n = int(len(x) * (pct / 100))
 
     if head_n > 0:
-        if log:
-            logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
+        # if log:
+        #     logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
         data_map['raw'] = data_map['raw'].iloc[:head_n, :]
         to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
 
@@ -622,8 +624,8 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     if not need_id:
         data_map['ids'].clear()
 
-    if log:
-        logger.debug(f"恢复成 float32")
+    # if log:
+    #     logger.debug(f"恢复成 float32")
     data_map['raw'] = convert_float16_2_32(data_map['raw'])
     # report_memory_usage()
 
@@ -631,16 +633,16 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
     dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
-    if log:
-        if params.classify:
-            logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
-        else:
-            try:
-                logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
-            except:
-                _df = pd.DataFrame(dataset_test.y)
-                for col in list(_df):
-                    logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
+    # if log:
+    #     if params.classify:
+    #         logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
+    #     else:
+    #         try:
+    #             logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
+    #         except:
+    #             _df = pd.DataFrame(dataset_test.y)
+    #             for col in list(_df):
+    #                 logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
 
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size*(1 if _type == 'train' else 2), num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
