@@ -70,4 +70,5 @@ def report_memory_usage(msg=''):
             continue
     
     # # 打印合并统计后的内存大小
-    print(f"合并统计后的内存大小：{total_memory_gb:.3f}GB")
+    msg = '合并统计后的内存大小' if msg == '' else f'{msg}'
+    print(f"{msg}: {total_memory_gb:.3f}GB")
