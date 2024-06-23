@@ -308,6 +308,10 @@ class train_tpu(train_base):
 def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
     model.train()
     for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
+        trainer.wait_for_everyone()
+        if trainer.is_main_process():
+            report_memory_usage(f'begin')
+        
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
@@ -317,14 +321,14 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
 
         trainer.wait_for_everyone()
         if trainer.is_main_process():
-            report_memory_usage(f'train_{idx}')
+            report_memory_usage(f'output, loss')
 
         # tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
         trainer.wait_for_everyone()
         if trainer.is_main_process():
-            report_memory_usage(f'train_{idx}')
+            report_memory_usage(f'step')
 
 def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
     model.eval()
