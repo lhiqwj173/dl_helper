@@ -147,7 +147,7 @@ class train_base():
 class train_gpu(train_base):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
+        self.accelerator = Accelerator(mixed_precision=self.amp if self.amp!='no' else 'no')
         
     def save(self):
         self.check_cache(check_cache_exist=False)
