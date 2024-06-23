@@ -242,8 +242,10 @@ class train_tpu(train_base):
                 if self.is_main_process():
                     print(f'[{self.process_index}]', *msg, **kwargs)
 
-            print(f'[{self.process_index}]', *msg, **kwargs)
-            # xm.master_print(*msg)
+                # xm.master_print(*msg)
+            else:
+                print(f'[{self.process_index}]', *msg, **kwargs)
+
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
