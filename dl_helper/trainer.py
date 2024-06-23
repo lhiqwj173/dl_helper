@@ -307,7 +307,7 @@ class train_tpu(train_base):
 
 def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
     model.train()
-    for idx, (data, target) in tqdm(enumerate(train_data), disable=not trainer.is_main_process()): #, total=len(train_data), desc=f'training {epoch}'):
+    for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
@@ -329,7 +329,7 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
 def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(val_data), disable=not trainer.is_main_process(), desc=f'validation {epoch}'):
+        for idx, (data, target) in tqdm(enumerate(val_data), total=len(val_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} validating'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
