@@ -2,6 +2,8 @@ from dl_helper.train_param import match_num_processes
 from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
 
+import multiprocessing as mp
+
 from tqdm import tqdm
 import time
 
@@ -29,10 +31,11 @@ if match_num_processes() ==8:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 class train_base():
-    def __init__(self, seed, amp, process_index):
+    def __init__(self, seed, amp, process_index, lock):
         self.amp = amp
         set_seed(seed)
 
+        self.lock = lock
         self.process_index = process_index
 
         self.device = None
@@ -88,7 +91,8 @@ class train_base():
         return d.to(self.device), t.to(self.device)
     
     def print(self, *msg, main=True, **kwargs):
-        print(f'[{self.process_index}]', *msg, **kwargs)
+        with self.lock:
+            print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         output = model(data)
@@ -141,10 +145,11 @@ class train_gpu(train_base):
         return d, t
     
     def print(self, *msg, main=True, **kwargs):
-        if main:
-            self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
-        else:
-            print(f'[{self.process_index}]', *msg, **kwargs)
+        with self.lock:
+            if main:
+                self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
+            else:
+                print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
@@ -232,12 +237,13 @@ class train_tpu(train_base):
         return d, t
     
     def print(self, *msg, main=True, **kwargs):
-        if main:
-            if self.is_main_process():
-                print(f'[{self.process_index}]', *msg, **kwargs)
+        with self.lock:
+            if main:
+                if self.is_main_process():
+                    print(f'[{self.process_index}]', *msg, **kwargs)
 
-        print(f'[{self.process_index}]', *msg, **kwargs)
-        # xm.master_print(*msg)
+            print(f'[{self.process_index}]', *msg, **kwargs)
+            # xm.master_print(*msg)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
@@ -304,7 +310,7 @@ def test_fn(index, params, model, test_data, trainer):
             data, target = trainer.prepare(data, target)
             output = model(data)
 
-def run_fn(index, num_processes, test):
+def run_fn(index, lock, num_processes, test):
 
     ###########################################
     # 1. 训练/验证
@@ -321,11 +327,11 @@ def run_fn(index, num_processes, test):
 
     # 创建训练器
     if num_processes == 8:
-        trainer = train_tpu(params.seed, params.amp, index)
+        trainer = train_tpu(params.seed, params.amp, index, lock)
     elif num_processes == 0:
-        trainer = train_base(params.seed, params.amp, index)
+        trainer = train_base(params.seed, params.amp, index, lock)
     else:
-        trainer = train_gpu(params.seed, params.amp, index)
+        trainer = train_gpu(params.seed, params.amp, index, lock)
     device = trainer.get_device()
 
     trainer.print('准备训练元素...', end=' ')
@@ -385,7 +391,9 @@ def run(test):
     # CPU  = 0
     num_processes = match_num_processes()
 
+    lock = mp.Manager().Lock()
+
     if num_processes == 8:
-        xmp.spawn(run_fn, args=(num_processes, test), start_method='fork')      
+        xmp.spawn(run_fn, args=(lock, num_processes, test), start_method='fork')      
     else:
-        notebook_launcher(run_fn, args=(0, num_processes, test), num_processes=num_processes)
+        notebook_launcher(run_fn, args=(0, lock, num_processes, test), num_processes=num_processes)
