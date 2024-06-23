@@ -227,7 +227,9 @@ class train_tpu(train_base):
         return d, t
     
     def print(self, *msg, **kwargs):
-        xm.master_print(*msg)
+        if self.is_main_process():
+            print(*msg, **kwargs)
+        # xm.master_print(*msg)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':

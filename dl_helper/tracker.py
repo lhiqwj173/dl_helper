@@ -64,10 +64,12 @@ class Tracker():
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
+            self.trader.wait_for_everyone()
             print(self.trader.device, "loss", self.temp[f'{i}_loss'])
             print(self.trader.device, "num", self.temp[f'{i}_num'])
             print(self.trader.device, "y_true", len(self.temp[f'{i}_y_true']))
             print(self.trader.device, "y_pred", len(self.temp[f'{i}_y_pred']))
+            self.trader.wait_for_everyone()
 
             # 汇总所有设备上的数据
             _loss, _num, _y_true, _y_pred = self.trader.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
