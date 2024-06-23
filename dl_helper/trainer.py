@@ -231,7 +231,7 @@ class train_tpu(train_base):
     def print(self, *msg, main=True, **kwargs):
         if main and self.is_main_process():
             print(f'[{self.process_index}]', *msg, **kwargs)
-            
+
         print(f'[{self.process_index}]', *msg, **kwargs)
         # xm.master_print(*msg)
         
@@ -317,11 +317,11 @@ def run_fn(index, num_processes, test):
 
     # 创建训练器
     if num_processes == 8:
-        trainer = train_tpu(params.seed, params.amp)
+        trainer = train_tpu(params.seed, params.amp, index)
     elif num_processes == 0:
-        trainer = train_base(params.seed, params.amp)
+        trainer = train_base(params.seed, params.amp, index)
     else:
-        trainer = train_gpu(params.seed, params.amp)
+        trainer = train_gpu(params.seed, params.amp, index)
     device = trainer.get_device()
 
     trainer.print('准备训练元素...', end=' ')
