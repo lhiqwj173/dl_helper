@@ -166,6 +166,7 @@ class train_gpu(train_base):
     def step(self, loss, optimizer):
         self.accelerator.backward(loss)
         optimizer.step()
+
     def init_data_loader(self, data_loader):
         data_loader = self.accelerator.prepare(data_loader)
         return data_loader
@@ -266,6 +267,8 @@ class train_tpu(train_base):
 
         # ddp模式，不需要 xm.optimizer_step，会自动同步梯度
         # xm.optimizer_step(optimizer)
+
+        xm.mark_step()
         
         # for debug
         # 汇总loss
