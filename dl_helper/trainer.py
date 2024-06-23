@@ -29,9 +29,11 @@ if match_num_processes() ==8:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 class train_base():
-    def __init__(self, seed, amp):
+    def __init__(self, seed, amp, process_index):
         self.amp = amp
         set_seed(seed)
+
+        self.process_index = process_index
 
         self.device = None
         self.data_loader = []
@@ -85,8 +87,8 @@ class train_base():
     def prepare(self, d, t):
         return d.to(self.device), t.to(self.device)
     
-    def print(self, *msg, **kwargs):
-        print(*msg, **kwargs)
+    def print(self, *msg, main=True, **kwargs):
+        print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         output = model(data)
@@ -138,8 +140,8 @@ class train_gpu(train_base):
     def prepare(self, d, t):
         return d, t
     
-    def print(self, *msg, **kwargs):
-        self.accelerator.print(*msg, **kwargs)
+    def print(self, *msg, main=True, **kwargs):
+        self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
@@ -226,9 +228,11 @@ class train_tpu(train_base):
     def prepare(self, d, t):
         return d, t
     
-    def print(self, *msg, **kwargs):
-        if self.is_main_process():
-            print(*msg, **kwargs)
+    def print(self, *msg, main=True, **kwargs):
+        if main and self.is_main_process():
+            print(f'[{self.process_index}]', *msg, **kwargs)
+            
+        print(f'[{self.process_index}]', *msg, **kwargs)
         # xm.master_print(*msg)
         
     def cal_output_loss(self, model, data, target, criterion):
