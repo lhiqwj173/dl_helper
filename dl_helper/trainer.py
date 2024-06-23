@@ -109,8 +109,8 @@ class train_base():
 
 
 class train_gpu(train_base):
-    def __init__(self, seed, amp):
-        super().__init__(seed, amp)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
         
     def get_device(self):
@@ -162,9 +162,9 @@ class train_gpu(train_base):
         return self.accelerator.gather_for_metrics(args)
 
 class train_tpu(train_base):
-    def __init__(self, seed, amp):
+    def __init__(self, *args, **kwargs):
         dist.init_process_group('xla', init_method='xla://')
-        super().__init__(seed, amp)
+        super().__init__(*args, **kwargs)
           
     def init_data_loader(self, data_loader):
         if xm.xrt_world_size() > 1:
