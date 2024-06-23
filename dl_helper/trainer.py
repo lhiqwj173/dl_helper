@@ -85,8 +85,8 @@ class train_base():
     def prepare(self, d, t):
         return d.to(self.device), t.to(self.device)
     
-    def print(self, *msg):
-        print(*msg)
+    def print(self, *msg, **kwargs):
+        print(*msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         output = model(data)
@@ -138,8 +138,8 @@ class train_gpu(train_base):
     def prepare(self, d, t):
         return d, t
     
-    def print(self, *msg):
-        self.accelerator.print(*msg)
+    def print(self, *msg, **kwargs):
+        self.accelerator.print(*msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
@@ -226,8 +226,8 @@ class train_tpu(train_base):
     def prepare(self, d, t):
         return d, t
     
-    def print(self, *msg):
-        xm.master_print(*msg)
+    def print(self, *msg, **kwargs):
+        xm.master_print(*msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
