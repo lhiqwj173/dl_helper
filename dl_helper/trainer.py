@@ -334,7 +334,7 @@ def run_fn(index, lock, num_processes, test):
         trainer = train_gpu(params.seed, params.amp, index, lock)
     device = trainer.get_device()
 
-    trainer.print('准备训练元素...', end=' ')
+    trainer.print('准备训练元素...')
     model = test.get_model()
     train_data = test.get_data('train', params)
     val_data = test.get_data('val', params)
@@ -343,7 +343,7 @@ def run_fn(index, lock, num_processes, test):
     scheduler = ReduceLR_slow_loss(optimizer)
     trainer.print('done')
 
-    trainer.print('初始化训练元素...', end=' ')
+    trainer.print('初始化训练元素...')
     model = trainer.init_model(model)
     train_data = trainer.init_data_loader(train_data)
     val_data = trainer.init_data_loader(val_data)
