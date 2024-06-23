@@ -113,8 +113,22 @@ class train_base():
             print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
+        self.wait_for_everyone()
+        if self.is_main_process():
+            report_memory_usage('cal_output_loss 0')
+
         output = model(data)
+
+        self.wait_for_everyone()
+        if self.is_main_process():
+            report_memory_usage('cal_output_loss 1')
+
         loss = criterion(output, target)
+        
+        self.wait_for_everyone()
+        if self.is_main_process():
+            report_memory_usage('cal_output_loss 2')
+
         return output, loss
   
     def is_main_process(self):
