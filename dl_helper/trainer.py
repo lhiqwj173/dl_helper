@@ -141,7 +141,10 @@ class train_gpu(train_base):
         return d, t
     
     def print(self, *msg, main=True, **kwargs):
-        self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
+        if main:
+            self.accelerator.print(f'[{self.process_index}]', *msg, **kwargs)
+        else:
+            print(f'[{self.process_index}]', *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
         if self.amp != 'no':
@@ -229,8 +232,9 @@ class train_tpu(train_base):
         return d, t
     
     def print(self, *msg, main=True, **kwargs):
-        if main and self.is_main_process():
-            print(f'[{self.process_index}]', *msg, **kwargs)
+        if main:
+            if self.is_main_process():
+                print(f'[{self.process_index}]', *msg, **kwargs)
 
         print(f'[{self.process_index}]', *msg, **kwargs)
         # xm.master_print(*msg)
