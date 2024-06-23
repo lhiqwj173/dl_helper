@@ -345,33 +345,39 @@ def run_fn(index, lock, num_processes, test):
 
     trainer.print('初始化训练元素...')
     model = trainer.init_model(model)
-    trainer.print('model')
     train_data = trainer.init_data_loader(train_data)
-    trainer.print('train_data')
     val_data = trainer.init_data_loader(val_data)
-    trainer.print('val_data')
     criterion = trainer.init_criterion(criterion)
-    trainer.print('criterion')
     scheduler = trainer.init_scheduler(scheduler)
     trainer.print('done')
             
     # 训练追踪器
     tracker = Tracker(params, trainer, scheduler, num_processes)
 
+    # 同步
+    trainer.wait_for_everyone()
+
     trainer.print('开始训练')
     for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
         # 训练
         train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker)
+        # 同步
+        trainer.wait_for_everyone()
 
         # 验证
         val_fn(index, params, model, val_data, trainer, criterion, tracker)
-
+        # 同步
+        trainer.wait_for_everyone()
+        
         # 每epoch更新
         tracker.update()
 
         # 缓存训练数据
         if tracker.need_save:
             pass
+
+        # 同步
+        trainer.wait_for_everyone()
 
     return
 
