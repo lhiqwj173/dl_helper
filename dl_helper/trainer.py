@@ -46,13 +46,14 @@ class train_base():
         self.model = None
         self.scheduler = None
 
-    def check_cache(self):
+    def check_cache(self, check_cache_exist=True):
         assert (not None is self.device) and (not None is self.data_loader) and (not None is self.criterion) and (not None is self.model) and (not None is self.scheduler), 'must prepare trade parts'
         
         # 判断 save_folder 下是否为空
-        if not os.path.listdir(self.save_folder):
-            return False
-        return True
+        if check_cache_exist:
+            if not os.path.listdir(self.save_folder):
+                return False
+            return True
 
     def save(self):
         pass
@@ -135,11 +136,13 @@ class train_gpu(train_base):
         self.accelerator = Accelerator(mixed_precision=amp if amp!='no' else 'no')
         
     def save(self):
-        pass
+        self.check_cache(check_cache_exist=False)
+        # 缓存训练数据
+        self.accelerator.save_state(self.save_folder)
 
     def load(self):
         if self.check_cache():
-            return
+            self.accelerator.load_state(self.save_folder)
 
     def get_device(self):
         if None is self.device:
@@ -197,7 +200,16 @@ class train_tpu(train_base):
     def __init__(self, *args, **kwargs):
         dist.init_process_group('xla', init_method='xla://')
         super().__init__(*args, **kwargs)
-          
+
+    def save(self):
+        self.check_cache(check_cache_exist=False)
+        # 缓存训练数据
+        self.accelerator.save_state(self.save_folder)
+
+    def load(self):
+        if self.check_cache():
+            self.accelerator.load_state(self.save_folder)
+
     def init_data_loader(self, data_loader):
         if xm.xrt_world_size() > 1:
             # 获取dataloader参数
