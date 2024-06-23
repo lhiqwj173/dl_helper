@@ -287,8 +287,6 @@ def train_fn(index, params, model, criterion, optimizer, train_data, trainer, tr
         tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
-    
-
 def val_fn(index, params, model, val_data, trainer, criterion, tracker):
     model.eval()
     with torch.no_grad():
@@ -361,8 +359,8 @@ def run_fn(index, lock, num_processes, test):
         # 训练
         train_fn(index, params, model, criterion, optimizer, train_data, trainer, tracker)
 
-        # # 验证
-        # val_fn(index, params, model, val_data, trainer, criterion, tracker)
+        # 验证
+        val_fn(index, params, model, val_data, trainer, criterion, tracker)
 
         # 每epoch更新
         tracker.update()
