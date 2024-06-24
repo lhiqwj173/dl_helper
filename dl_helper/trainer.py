@@ -328,7 +328,7 @@ def run_fn(index, lock, num_processes, test):
     num_samples = 1100000 
     
     # for debug
-    num_samples = 100000
+    num_samples = 50000
 
     data = torch.randn(num_samples, 40, 100)
     target = torch.randint(0, num_classes, (num_samples,))
