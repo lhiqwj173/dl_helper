@@ -37,14 +37,19 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
     model.train()
     for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
         trainer.wait_for_everyone()
+
         if trainer.is_main_process():
             report_memory_usage(f'begin')
         
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
+
+        trainer.print('prepare data')
         data, target = trainer.prepare(data, target)
+        trainer.print('zero_grad')
         optimizer.zero_grad()
+        trainer.print('output, loss')
         output, loss = trainer.cal_output_loss(model, data, target, criterion)
 
         trainer.wait_for_everyone()
