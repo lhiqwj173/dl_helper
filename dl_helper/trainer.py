@@ -139,13 +139,14 @@ def run_fn(index, lock, num_processes, test):
     trainer.print('done')
 
     # 同步
-    trainer.wait_for_everyone()
     if trainer.is_main_process():
         report_memory_usage('开始训练')
 
+    trainer.wait_for_everyone()
     # for epoch in tqdm(range(params.epochs), disable=not trainer.is_main_process()):
     for epoch in range(params.epochs):
         # 训练
+        trainer.wait_for_everyone()
         train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker)
         # 同步
         trainer.wait_for_everyone()
