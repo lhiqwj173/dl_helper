@@ -221,7 +221,7 @@ def run_fn(index, lock, num_processes, test):
     val_data = test.get_data('val', params, get_data_sampler)
     criterion = test.get_criterion()
     optimizer = torch.optim.AdamW(
-            model.parameters(), lr=self.para.learning_rate, weight_decay=self.para.weight_decay)
+            model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     scheduler = ReduceLR_slow_loss(optimizer)
     xm.master_print('done')
 
