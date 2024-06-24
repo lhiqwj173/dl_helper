@@ -5,6 +5,8 @@ from dl_helper.tool import report_memory_usage
 from dl_helper.trainers.gpu import train_gpu
 from dl_helper.trainers.tpu import train_tpu
 
+import copy
+
 import multiprocessing as mp
 
 from tqdm import tqdm
@@ -198,4 +200,4 @@ def run(test):
     if num_processes == 8:
         xmp.spawn(run_fn, args=(lock, num_processes, test), start_method='fork')      
     else:
-        notebook_launcher(run_fn, args=(0, lock, num_processes, test), num_processes=num_processes)
+        notebook_launcher(run_fn, args=(0, lock, num_processes, copy.deepcopy(test)), num_processes=num_processes)
