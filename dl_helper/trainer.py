@@ -26,7 +26,6 @@ if match_num_processes() ==8:
     import torch_xla.distributed.xla_multiprocessing as xmp
     import torch_xla.distributed.parallel_loader as pl
     from torch_xla import runtime as xr
-    
     from torch_xla.amp import autocast, GradScaler
     try:
       from torch_xla.amp import syncfree
@@ -85,7 +84,7 @@ def test_fn(index, params, model, test_data, trainer):
             data, target = trainer.prepare(data, target)
             output = model(data)
 
-def run_fn(index, lock, num_processes, test):
+def run_fn_0(index, lock, num_processes, test):
     ###########################################
     # 1. 训练/验证
     ###########################################
@@ -179,6 +178,120 @@ def run_fn(index, lock, num_processes, test):
     
     tracker.update()
     tracker.plot()
+
+def run_fn(index, lock, num_processes, test):
+    ###########################################
+    # 1. 训练/验证
+    ###########################################
+    # 调整参数
+    params = test.get_param()
+    # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+    if num_processes == 2:
+        params.batch_size //= num_processes
+
+    # 调整lr
+    if num_processes > 0:
+        params.learning_rate *= num_processes
+
+    dist.init_process_group('xla', init_method='xla://')
+
+    device = xm.xla_device()
+
+    xm.master_print('准备训练元素...')
+    model = test.get_model()
+    train_data = test.get_data('train', params, trainer.get_data_sampler)
+    val_data = test.get_data('val', params, trainer.get_data_sampler)
+    criterion = test.get_criterion()
+    optimizer = test.get_optimizer(model)
+    scheduler = ReduceLR_slow_loss(optimizer)
+    xm.master_print('done')
+
+    xm.master_print('初始化训练元素...')
+    xm.master_print('model')
+    model = model.to(device)
+    if xr.using_pjrt():
+        xm.broadcast_master_param(model)
+    model = DDP(model, gradient_as_bucket_view=True)
+
+    xm.master_print('train_data')
+    train_data = pl.MpDeviceLoader(data_loader, device)
+    xm.master_print('val_data')
+    val_data = pl.MpDeviceLoader(val_data, device)
+    xm.master_print('done')
+
+    if xm.is_master_ordinal():
+        report_memory_usage('开始训练')
+  
+
+    for epoch in range(params.epochs):
+        # 训练
+        model.train()
+        for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not xm.is_master_ordinal(), desc=f'epoch {epoch} training'):
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(targets.shape) == 1:
+                targets = targets.unsqueeze(1)
+
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+
+            if idx % 10 == 0:
+                if xm.is_master_ordinal():
+                    report_memory_usage(f'step {idx}')
+
+            xm.mark_step()
+
+        # 同步
+        xm.rendezvous("wait_for_everyone")
+
+        # 验证
+        model.eval()
+        with torch.no_grad():
+            for idx, (data, target) in tqdm(enumerate(val_data), total=len(val_data), disable=not xm.is_master_ordinal(), desc=f'epoch {epoch} validating'):
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(targets.shape) == 1:
+                    targets = targets.unsqueeze(1)
+
+                output = model(data)
+                loss = criterion(output, target)
+
+                if idx % 10 == 0:
+                    if xm.is_master_ordinal():
+                        report_memory_usage(f'step {idx}')
+
+                xm.mark_step()
+
+        # 同步
+        xm.rendezvous("wait_for_everyone")
+
+        # # 每epoch更新
+        # tracker.update()
+
+        # # 缓存训练数据
+        # if tracker.need_save:
+        #     xm.master_print('cache train data')
+        #     # tracker.save()
+
+
+    return
+
+    ###########################################
+    # 1. 测试
+    ###########################################
+    xm.master_print('开始测试')
+    trainer.clear_data_loader()
+    del train_data, val_data, optimizer
+
+    test_data = test.get_data('test', params, trainer.get_data_sampler)
+    test_data = trainer.init_data_loader(test_data)
+
+    val_fn(index, params, model, test_data, trainer, criterion, tracker)
+    
+    tracker.update()
+    tracker.plot()
+
 
 def run(test):
     # 训练核心数

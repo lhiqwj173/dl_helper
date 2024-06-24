@@ -47,6 +47,8 @@ class train_tpu(train_base):
             self._save(i)
         for idx, i in enumerate(self.data_loader):
             self._save(i, f'data_loader_{idx}')
+
+        self.wait_for_everyone()
         
     def load(self):
         if self.check_cache():
@@ -138,7 +140,7 @@ class train_tpu(train_base):
         return xm.is_master_ordinal()
 
     def wait_for_everyone(self):
-        xm.mark_step()
+        xm.rendezvous("wait_for_everyone")
 
     def gather_for_metrics(self, *args):
         res = [xm.all_gather(i) for i in args]
