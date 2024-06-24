@@ -37,7 +37,6 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
     model.train()
     for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
         trainer.wait_for_everyone()
-
         if trainer.is_main_process():
             report_memory_usage(f'begin')
         
