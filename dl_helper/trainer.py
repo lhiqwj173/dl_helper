@@ -313,6 +313,8 @@ def run_fn(index, lock, num_processes, test):
 
     device = xm.xla_device()
 
+    batch_size = 1024
+
     # 创建模拟数据
     num_classes = 10
 
@@ -325,8 +327,8 @@ def run_fn(index, lock, num_processes, test):
     # T4x2 limit
     num_samples = 1100000 
     
-#     # for debug
-#     num_samples = 20
+    # for debug
+    num_samples = 1000
 
     data = torch.randn(num_samples, 40, 100)
     target = torch.randint(0, num_classes, (num_samples,))
