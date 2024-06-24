@@ -379,8 +379,8 @@ def run_fn(index, lock, num_processes, test):
             loss.backward()
             optimizer.step()
             
-            if idx%5 == 0 and xm.is_master_ordinal():
-                report_memory_usage(f'{idx}')
+        if xm.is_master_ordinal():
+            report_memory_usage(f'{epoch}')
 
 def run(test):
     # bug:
