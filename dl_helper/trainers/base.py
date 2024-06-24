@@ -101,11 +101,11 @@ class train_base():
             print(head, *msg, **kwargs)
         
     def cal_output_loss(self, model, data, target, criterion):
-        if self.is_main_process():
-            report_memory_usage('cal_output_loss 0')
-        self.wait_for_everyone()
+        # if self.is_main_process():
+        #     report_memory_usage('cal_output_loss 0')
+        # self.wait_for_everyone()
 
-        print('cal_output_loss00_')
+        # print('cal_output_loss00_')
         self.print('cal_output_loss 0', main=False)
         output = model(data)
 
