@@ -46,16 +46,9 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
 
-        trainer.print('prepare data')
         data, target = trainer.prepare(data, target)
-        trainer.print('zero_grad')
         optimizer.zero_grad()
-        trainer.print('output, loss')
         output, loss = trainer.cal_output_loss(model, data, target, criterion)
-
-        trainer.wait_for_everyone()
-        if trainer.is_main_process():
-            report_memory_usage(f'output, loss')
 
         # tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
