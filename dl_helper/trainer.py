@@ -316,7 +316,7 @@ def run_fn(index, lock, num_processes, test):
     batch_size = 1024
 
     # 创建模拟数据
-    num_classes = 10
+    num_classes = 3
 
     # TPU limit
     num_samples = 3000000 
