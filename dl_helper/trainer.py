@@ -179,6 +179,18 @@ def run_fn_0(index, lock, num_processes, test):
     tracker.update()
     tracker.plot()
 
+
+def get_data_sampler(data_set):
+    train_sampler = None
+    if xm.xrt_world_size() > 1:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            data_set,
+            num_replicas=xm.xrt_world_size(),
+            rank=xm.get_ordinal(),
+            shuffle=True)
+
+    return train_sampler
+
 def run_fn(index, lock, num_processes, test):
     ###########################################
     # 1. 训练/验证
@@ -199,8 +211,8 @@ def run_fn(index, lock, num_processes, test):
 
     xm.master_print('准备训练元素...')
     model = test.get_model()
-    train_data = test.get_data('train', params, trainer.get_data_sampler)
-    val_data = test.get_data('val', params, trainer.get_data_sampler)
+    train_data = test.get_data('train', params, get_data_sampler)
+    val_data = test.get_data('val', params, get_data_sampler)
     criterion = test.get_criterion()
     optimizer = test.get_optimizer(model)
     scheduler = ReduceLR_slow_loss(optimizer)
