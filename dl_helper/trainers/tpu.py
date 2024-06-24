@@ -1,6 +1,8 @@
 from dl_helper.train_param import match_num_processes
 from dl_helper.trainers.base import train_base
 
+import torch
+
 if match_num_processes() ==8:
     from torch.nn.parallel import DistributedDataParallel as DDP
     import torch.distributed as dist
