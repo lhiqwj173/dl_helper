@@ -330,27 +330,28 @@ def run_fn(index, lock, num_processes, test):
     # for debug
     num_samples = 50000
 
-    data = torch.randn(num_samples, 40, 100)
-    target = torch.randint(0, num_classes, (num_samples,))
-    train_dataset = torch.utils.data.TensorDataset(data, target)
+    # data = torch.randn(num_samples, 40, 100)
+    # target = torch.randint(0, num_classes, (num_samples,))
+    # train_dataset = torch.utils.data.TensorDataset(data, target)
 
-    train_sampler = None
-    if xm.xrt_world_size() > 1:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset,
-            num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
-            shuffle=True)
+    # train_sampler = None
+    # if xm.xrt_world_size() > 1:
+    #     train_sampler = torch.utils.data.distributed.DistributedSampler(
+    #         train_dataset,
+    #         num_replicas=xm.xrt_world_size(),
+    #         rank=xm.get_ordinal(),
+    #         shuffle=True)
     
-    # 创建数据加载器
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        sampler=train_sampler,
-        drop_last=True
-        # shuffle=True,
-    )
+    # # 创建数据加载器
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_dataset,
+    #     batch_size=batch_size,
+    #     sampler=train_sampler,
+    #     drop_last=True
+    #     # shuffle=True,
+    # )
 
+    train_loader = test.get_data('train', params, get_data_sampler)
     train_loader = pl.MpDeviceLoader(train_loader, device)
 
     # model = ResNet()
