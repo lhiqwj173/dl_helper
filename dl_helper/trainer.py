@@ -92,6 +92,7 @@ def test_fn(index, params, model, test_data, trainer):
             output = model(data)
 
 def run_fn(index, lock, num_processes, test):
+    print(f'run_fn {index}')
 
     ###########################################
     # 1. 训练/验证
