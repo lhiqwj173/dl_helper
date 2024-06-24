@@ -191,7 +191,7 @@ def get_data_sampler(data_set):
 
     return train_sampler
 
-def run_fn(index, lock, num_processes, test):
+def run_fn_1(index, lock, num_processes, test):
     ###########################################
     # 1. 训练/验证
     ###########################################
@@ -303,6 +303,83 @@ def run_fn(index, lock, num_processes, test):
     tracker.update()
     tracker.plot()
 
+from dl_helper.models.binctabl import m_bin_ctabl
+
+def run_fn(index, lock, num_processes, test):
+    # 设置训练参数
+    epochs = 30
+    
+    set_seed(42)
+    dist.init_process_group('xla', init_method='xla://')
+
+    device = xm.xla_device()
+
+    # 创建模拟数据
+    num_classes = 10
+
+    # TPU limit
+    num_samples = 3000000 
+    
+    # P100 limit
+    num_samples = 2400000 
+    
+    # T4x2 limit
+    num_samples = 1100000 
+    
+#     # for debug
+#     num_samples = 20
+
+    data = torch.randn(num_samples, 40, 100)
+    target = torch.randint(0, num_classes, (num_samples,))
+    train_dataset = torch.utils.data.TensorDataset(data, target)
+
+    train_sampler = None
+    if xm.xrt_world_size() > 1:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset,
+            num_replicas=xm.xrt_world_size(),
+            rank=xm.get_ordinal(),
+            shuffle=True)
+    
+    # 创建数据加载器
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        sampler=train_sampler,
+        drop_last=True
+        # shuffle=True,
+    )
+
+    train_loader = pl.MpDeviceLoader(train_loader, device)
+
+    # model = ResNet()
+    model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    model = model.to(device)
+    model.train()
+    
+    criterion = nn.CrossEntropyLoss()
+
+    # 初始化优化器
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    
+    # TPU  each epoch step: 782
+    # P100 each epoch step: 6250
+    # T4*2 each epoch step: 3125
+    xm.master_print(f'batch_size: {batch_size}')
+    xm.master_print(f'each epoch step: {len(train_loader)}')
+    
+    # 训练循环
+    for epoch in range(epochs):
+        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
+            
+            if idx%5 == 0:
+                report_memory_usage(f'{idx}')
 
 def run(test):
     # bug:
