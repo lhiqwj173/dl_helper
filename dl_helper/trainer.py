@@ -16,6 +16,21 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
+if match_num_processes() ==8:
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    import torch.distributed as dist
+    import torch_xla as xla
+    import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.xla_multiprocessing as xmp
+    import torch_xla.distributed.parallel_loader as pl
+    from torch_xla import runtime as xr
+    
+    from torch_xla.amp import autocast, GradScaler
+    try:
+      from torch_xla.amp import syncfree
+    except ImportError:
+      assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
+
 from accelerate import notebook_launcher
 
 def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
