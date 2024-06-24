@@ -226,7 +226,7 @@ def run_fn(index, lock, num_processes, test):
     model = DDP(model, gradient_as_bucket_view=True)
 
     xm.master_print('train_data')
-    train_data = pl.MpDeviceLoader(data_loader, device)
+    train_data = pl.MpDeviceLoader(train_data, device)
     xm.master_print('val_data')
     val_data = pl.MpDeviceLoader(val_data, device)
     xm.master_print('done')
