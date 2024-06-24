@@ -105,6 +105,7 @@ class train_base():
             report_memory_usage('cal_output_loss 0')
         self.wait_for_everyone()
 
+        print('cal_output_loss00_')
         self.print('cal_output_loss 0', main=False)
         output = model(data)
 
