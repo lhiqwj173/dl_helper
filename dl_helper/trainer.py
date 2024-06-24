@@ -327,8 +327,8 @@ def run_fn(index, lock, num_processes, test):
     # T4x2 limit
     num_samples = 1100000 
     
-    # # for debug
-    # num_samples = 1000
+    # for debug
+    num_samples = 100000
 
     data = torch.randn(num_samples, 40, 100)
     target = torch.randint(0, num_classes, (num_samples,))
@@ -379,7 +379,7 @@ def run_fn(index, lock, num_processes, test):
             loss.backward()
             optimizer.step()
             
-            if idx%5 == 0:
+            if idx%5 == 0 and xm.is_master_ordinal():
                 report_memory_usage(f'{idx}')
 
 def run(test):
