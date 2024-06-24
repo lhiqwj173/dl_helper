@@ -21,11 +21,11 @@ class test_base():
 
     # 初始化数据
     # 返回一个 torch dataloader
-    def get_data(self, _type, params):
+    def get_data(self, _type, params, data_sample_getter_func=None):
         if self.debug:
             params.epochs = 2
-            return read_data(_type = _type, params=params, max_num=1)
-        return read_data(_type = _type, params=params)
+            return read_data(_type = _type, params=params, max_num=1, data_sample_getter_func = data_sample_getter_func)
+        return read_data(_type = _type, params=params, data_sample_getter_func = data_sample_getter_func)
 
     # 初始化模型
     # 返回一个 torch model

@@ -526,7 +526,7 @@ def load_data(params, file, diff_length, data_map, log=False):
 
     return diff_length, need_split_data_set
 
-def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False):
+def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
 
     # 数据集参数
@@ -644,7 +644,11 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     #             for col in list(_df):
     #                 logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
 
-    data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size*(1 if _type == 'train' else 2), num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
+    train_sampler = None
+    if not None is data_sample_getter_func:
+        train_sampler = data_sample_getter_func(dataset_test)
+
+    data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size*(1 if _type == 'train' else 2), sampler=train_sampler, num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
 
     return data_loader
