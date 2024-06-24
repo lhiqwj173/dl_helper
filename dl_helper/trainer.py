@@ -306,6 +306,16 @@ def run_fn_1(index, lock, num_processes, test):
 from dl_helper.models.binctabl import m_bin_ctabl
 
 def run_fn(index, lock, num_processes, test):
+    # 调整参数
+    params = test.get_param()
+    # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+    if num_processes == 2:
+        params.batch_size //= num_processes
+
+    # 调整lr
+    if num_processes > 0:
+        params.learning_rate *= num_processes
+
     # 设置训练参数
     epochs = 30
 
