@@ -53,9 +53,10 @@ def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trai
         # tracker.track(output, target, loss, 'train')
         trainer.step(loss, optimizer)
 
+        if idx % 10 == 0:
+            if trainer.is_main_process():
+                report_memory_usage(f'step')
         trainer.wait_for_everyone()
-        if trainer.is_main_process():
-            report_memory_usage(f'step')
 
 def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
     model.eval()
