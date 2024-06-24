@@ -327,8 +327,8 @@ def run_fn(index, lock, num_processes, test):
     # T4x2 limit
     num_samples = 1100000 
     
-    # for debug
-    num_samples = 1000
+    # # for debug
+    # num_samples = 1000
 
     data = torch.randn(num_samples, 40, 100)
     target = torch.randint(0, num_classes, (num_samples,))
