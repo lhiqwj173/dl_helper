@@ -234,7 +234,6 @@ def run_fn(index, lock, num_processes, test):
     if xm.is_master_ordinal():
         report_memory_usage('开始训练')
   
-
     for epoch in range(params.epochs):
         # 训练
         model.train()
