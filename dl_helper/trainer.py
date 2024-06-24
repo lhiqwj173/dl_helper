@@ -308,8 +308,7 @@ from dl_helper.models.binctabl import m_bin_ctabl
 def run_fn(index, lock, num_processes, test):
     # 设置训练参数
     epochs = 30
-    
-    set_seed(42)
+
     dist.init_process_group('xla', init_method='xla://')
 
     device = xm.xla_device()
