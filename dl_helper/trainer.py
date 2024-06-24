@@ -96,7 +96,7 @@ def run_fn(index, lock, num_processes, test):
     ###########################################
     # 1. 训练/验证
     ###########################################
-    trainer.print('调整训练参数...')
+    # 调整参数
     params = test.get_param()
     # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
     if num_processes == 2:
@@ -106,7 +106,7 @@ def run_fn(index, lock, num_processes, test):
     if num_processes > 0:
         params.learning_rate *= num_processes
 
-    trainer.print('创建训练器...')
+    # 创建训练器
     if num_processes == 8:
         trainer = train_tpu(params, index, lock)
     else:
