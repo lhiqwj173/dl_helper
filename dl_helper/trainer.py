@@ -383,8 +383,8 @@ def run_fn(index, num_processes, test, fake_data=False):
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
-    if xr.using_pjrt():
-        xm.broadcast_master_param(model)
+    # if xr.using_pjrt():
+    #     xm.broadcast_master_param(model)
     model = DDP(model, gradient_as_bucket_view=True)
     
     criterion = nn.CrossEntropyLoss()
