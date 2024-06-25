@@ -432,11 +432,11 @@ def run_fn(index, num_processes, test, fake_data=False):
             optimizer.step()
 
             if xm.is_master_ordinal() and idx % 50 == 0:
-                report_memory_usage(f'train {idx}')
+                report_memory_usage(f'train {epoch} {idx}')
 
         xm.rendezvous(f"train {epoch} done")
         if xm.is_master_ordinal():
-            report_memory_usage(f'train done')
+            report_memory_usage(f'train {epoch} done')
 
         model.eval()
         with torch.no_grad():
@@ -445,11 +445,11 @@ def run_fn(index, num_processes, test, fake_data=False):
                 loss = criterion(output, target)
 
                 if xm.is_master_ordinal() and idx % 50 == 0:
-                    report_memory_usage(f'val {idx}')
+                    report_memory_usage(f'val {epoch} {idx}')
 
         xm.rendezvous(f"val {epoch} done")
         if xm.is_master_ordinal():
-            report_memory_usage(f'val done')
+            report_memory_usage(f'val {epoch} done')
 
     if xm.is_master_ordinal():
         report_memory_usage('STOP')
