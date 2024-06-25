@@ -333,7 +333,7 @@ def run_fn(index, num_processes, test, fake_data=False):
     # 设置训练参数
     epochs = 30
 
-    dist.init_process_group('xla', init_method='xla://')
+    # dist.init_process_group('xla', init_method='xla://')
 
     device = xm.xla_device()
 
