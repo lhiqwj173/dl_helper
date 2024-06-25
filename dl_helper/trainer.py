@@ -399,6 +399,7 @@ def run_fn(index, num_processes, test, fake_data=False):
         test_loader = test.get_data('val', params, get_data_sampler)
 
     xm.master_print(f'data_set len: {len(train_loader.dataset)}')
+    print(f'{index} {device}')
     xm.rendezvous("init train_loader")
     if xm.is_master_ordinal():
         report_memory_usage(f'train_loader')
