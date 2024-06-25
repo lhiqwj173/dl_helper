@@ -405,6 +405,9 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
+
+            # 清理内存，删除不再需要的副本
+            del data
             
         if xm.is_master_ordinal():
             report_memory_usage(f'{epoch}')
