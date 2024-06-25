@@ -366,7 +366,7 @@ def run_fn(index, num_processes, test, fake_data=False):
         # 真实数据
         train_loader = test.get_data('train', params, get_data_sampler)
 
-    xm.master_print(f'data_set len: {len(train_loader.data_set)}')
+    xm.master_print(f'data_set len: {len(train_loader.dataset)}')
     if xm.is_master_ordinal():
         report_memory_usage(f'train_loader')
     train_loader = pl.MpDeviceLoader(train_loader, device)
