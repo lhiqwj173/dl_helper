@@ -8,6 +8,27 @@ def check_nan(data, **kwargs):
         wx.send_message(f'训练异常')
         raise Exception("error train data")
 
+def stop_all_python_processes():
+    current_pid = os.getpid()
+
+    # 获取当前正在运行的所有进程
+    all_processes = psutil.process_iter()
+
+    # 遍历所有进程并停止 Python 进程
+    for process in all_processes:
+        try:
+            process_info = process.as_dict(attrs=['pid', 'name'])
+            pid = process_info['pid']
+            name = process_info['name']
+
+            # 如果进程是 Python 进程且不是当前进程，则终止该进程
+            if name.lower() == 'python' and pid != current_pid:
+                process.terminate()
+                print(f"Terminated Python process: {pid}")
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # 忽略无法访问或不存在的进程
+            pass
+
 def report_memory_usage(msg=''):
 
     memory_usage = psutil.virtual_memory()

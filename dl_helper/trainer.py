@@ -407,11 +407,11 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
+        # if xm.is_master_ordinal():
+        #     report_memory_usage(f'{epoch}')
 
-            # del data, target
-            
-        if xm.is_master_ordinal():
-            report_memory_usage(f'{epoch}')
+    xm.master_print(f'each epoch stop: {len(train_loader)}')
+
 
 def run(test, fake_data=False):
     num_processes = match_num_processes()
