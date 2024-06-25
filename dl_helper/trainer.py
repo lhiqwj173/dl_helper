@@ -319,8 +319,8 @@ class ResNet(nn.Module):
         out = self.fc(out)
         return out
         
-model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
-WRAPPED_MODEL = xmp.MpModelWrapper(model)
+# model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+# WRAPPED_MODEL = xmp.MpModelWrapper(model)
 
 def run_fn(index, num_processes, test, fake_data=False):
     # 调整参数
@@ -413,7 +413,8 @@ def run_fn(index, num_processes, test, fake_data=False):
     test_loader = pl.MpDeviceLoader(test_loader, device)
 
     # model = ResNet()
-    # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    WRAPPED_MODEL = xmp.MpModelWrapper(model)
     # model = model.to(device)
     model = WRAPPED_MODEL.to(device)
     if ddp:
