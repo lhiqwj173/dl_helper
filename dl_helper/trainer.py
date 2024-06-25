@@ -363,16 +363,16 @@ def run_fn(index, num_processes, test, fake_data=False):
 
     train_loader = pl.MpDeviceLoader(train_loader, device)
 
-    # model = ResNet()
-    model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    model = ResNet()
+    # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
     model.train()
     
     criterion = nn.CrossEntropyLoss()
 
     # 初始化优化器
-    # optimizer = optim.SGD(model.parameters(), lr=0.01)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     
     # TPU  each epoch step: 782
     # P100 each epoch step: 6250
