@@ -210,7 +210,7 @@ def train_mnist(flags, **kwargs):
     train_loop_fn(train_device_loader, epoch)
     # xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
 
-    if xm.is_master_ordinal():
+    if xm.is_master_ordinal() and epoch % 5 == 0:
       report_memory_usage('epoch {}'.format(epoch))
 
     # accuracy = test_loop_fn(test_device_loader)
@@ -228,6 +228,9 @@ def train_mnist(flags, **kwargs):
   # test_utils.close_summary_writer(writer)
   # xm.master_print('Max Accuracy: {:.2f}%'.format(max_accuracy))
   # return max_accuracy
+
+  if xm.is_master_ordinal():
+    report_memory_usage('stop')
 
 
 def _mp_fn(index, flags):
