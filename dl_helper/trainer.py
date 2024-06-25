@@ -179,7 +179,6 @@ def run_fn_0(index, lock, num_processes, test):
     tracker.update()
     tracker.plot()
 
-
 def get_data_sampler(data_set):
     train_sampler = None
     if xm.xrt_world_size() > 1:
@@ -383,8 +382,9 @@ def run_fn(index, num_processes, test, fake_data=False):
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
-    # if xr.using_pjrt():
-    #     xm.broadcast_master_param(model)
+    if xr.using_pjrt():
+        xm.master_print('broadcast_master_param')
+        xm.broadcast_master_param(model)
     model = DDP(model, gradient_as_bucket_view=True)
     
     criterion = nn.CrossEntropyLoss()
@@ -404,9 +404,9 @@ def run_fn(index, num_processes, test, fake_data=False):
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
             optimizer.zero_grad()
             output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-            optimizer.step()
+            # loss = criterion(output, target)
+            # loss.backward()
+            # optimizer.step()
 
         if xm.is_master_ordinal() and epoch % 10 == 0:
             report_memory_usage(f'{epoch}')
