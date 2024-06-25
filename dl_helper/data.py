@@ -317,6 +317,13 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         """Generates samples of data"""
+        #############################
+        # 测试用
+        #############################
+        return torch.randn(40, 100), 0
+        #############################
+        #############################
+        
         # 切片范围
         a, b = self.x_idx[index]
 
@@ -330,58 +337,63 @@ class Dataset(torch.utils.data.Dataset):
         if ab_length > self.time_length:
             a += (ab_length-self.time_length)
 
+        #############################
+        # 1. 部分截取
+        #############################
+        if self.need_split_data_set:
+            # 使用部分截取 xa, xb
+            xa, xb = 0, 46
+            if self.params.use_pk and self.params.use_trade:
+                raise Exception('no use')
+            elif self.params.use_pk:
+                xb = 40
+            elif self.params.use_trade:
+                xa = 40
+
+            # 截取mean_std
+            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+        else:
+            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
+
+        #############################
+        # 2. 全部使用，在读取数据的部分作截取操作
+        #############################
+
+        # 获取切片x
+        x = None
+        if self.train and self.params.random_mask_row>0:
+            # 随机删除行，保持行数不变
+            x = random_mask_row(self.data[:, a-self.max_mask_num:b, :].clone(), a, b, self.params.random_mask_row)
+        else:
+            x = self.data[:, a:b, :].clone()
+
+        #############################
+        #############################
+        # mid_price
+        mid = (x[0, -1, 0] + x[0, -1, 2]) / 2
+
+        # 价格标准化
+        x[0, :, self.price_cols] /= mid
+        x[0, :, :] -= mean_std[:, 0]
+        x[0, :, :] /= mean_std[:, 1]
+
+        # 随机缩放
+        if self.train and self.params.random_scale>0:
+            x = random_scale(x, self.vol_cols, self.params.random_scale)
+
+        # 随机mask
+        if self.train and self.params.random_mask>0:
+            x = random_mask(x, self.params.random_mask)
+
+        check_nan(x)
+
         # #############################
-        # # 1. 部分截取
+        # # 测试用
         # #############################
-        # if self.need_split_data_set:
-        #     # 使用部分截取 xa, xb
-        #     xa, xb = 0, 46
-        #     if self.params.use_pk and self.params.use_trade:
-        #         raise Exception('no use')
-        #     elif self.params.use_pk:
-        #         xb = 40
-        #     elif self.params.use_trade:
-        #         xa = 40
-
-        #     # 截取mean_std
-        #     mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-        # else:
-        #     mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
-
-        # #############################
-        # # 2. 全部使用，在读取数据的部分作截取操作
-        # #############################
-
-        # # 获取切片x
-        # x = None
-        # if self.train and self.params.random_mask_row>0:
-        #     # 随机删除行，保持行数不变
-        #     x = random_mask_row(self.data[:, a-self.max_mask_num:b, :].clone(), a, b, self.params.random_mask_row)
-        # else:
-        #     x = self.data[:, a:b, :].clone()
-
+        # # x = self.data[:, a:b, :].clone()
+        # x = self.data[:, a:b, :]
         # #############################
         # #############################
-        # # mid_price
-        # mid = (x[0, -1, 0] + x[0, -1, 2]) / 2
-
-        # # 价格标准化
-        # x[0, :, self.price_cols] /= mid
-        # x[0, :, :] -= mean_std[:, 0]
-        # x[0, :, :] /= mean_std[:, 1]
-
-        # # 随机缩放
-        # if self.train and self.params.random_scale>0:
-        #     x = random_scale(x, self.vol_cols, self.params.random_scale)
-
-        # # 随机mask
-        # if self.train and self.params.random_mask>0:
-        #     x = random_mask(x, self.params.random_mask)
-
-        # check_nan(x)
-
-        # x = self.data[:, a:b, :].clone()
-        x = self.data[:, a:b, :]
 
         # return x, (self.y[index], self.ids[index])
         if self.params.cnn:
