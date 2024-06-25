@@ -419,8 +419,8 @@ def run_fn(index, num_processes, test, fake_data=False):
     criterion = nn.CrossEntropyLoss()
 
     # 初始化优化器
-    # optimizer = optim.SGD(model.parameters(), lr=0.01)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     
     xm.master_print(f'batch_size: {batch_size}')
     xm.master_print(f'each epoch step: {len(train_loader)}')
