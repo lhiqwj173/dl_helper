@@ -1,4 +1,4 @@
-import args_parse
+# import args_parse
 from torch_xla import runtime as xr
 
 from dl_helper.tool import report_memory_usage
@@ -12,16 +12,16 @@ MODEL_OPTS = {
     },
 }
 
-FLAGS = args_parse.parse_common_options(
-    datadir='/tmp/mnist-data',
-    batch_size=128,
-    momentum=0.5,
-    lr=0.01,
-    target_accuracy=98.0,
-    num_epochs=18,
-    opts=MODEL_OPTS.items(),
-    fake_data=True,
-)
+# FLAGS = args_parse.parse_common_options(
+#     datadir='/tmp/mnist-data',
+#     batch_size=128,
+#     momentum=0.5,
+#     lr=0.01,
+#     target_accuracy=98.0,
+#     num_epochs=18,
+#     opts=MODEL_OPTS.items(),
+#     fake_data=True,
+# )
 
 import os
 import shutil
