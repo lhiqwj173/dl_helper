@@ -393,9 +393,6 @@ def run_fn(index, num_processes, test, fake_data=False):
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     
-    # TPU  each epoch step: 782
-    # P100 each epoch step: 6250
-    # T4*2 each epoch step: 3125
     xm.master_print(f'batch_size: {batch_size}')
     xm.master_print(f'each epoch step: {len(train_loader)}')
     
