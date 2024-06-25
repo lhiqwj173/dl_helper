@@ -356,12 +356,12 @@ def run_fn(index, num_processes, test, fake_data=False):
     else:
         # 真实数据
         train_loader = test.get_data('train', params, get_data_sampler)
-
-    train_loader = pl.MpDeviceLoader(train_loader, device)
     xm.master_print(f'data_set len: {len(train_loader.dataset)}')
     xm.rendezvous("init train_loader")
     if xm.is_master_ordinal():
         report_memory_usage(f'train_loader')
+
+    train_loader = pl.MpDeviceLoader(train_loader, device)
 
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
