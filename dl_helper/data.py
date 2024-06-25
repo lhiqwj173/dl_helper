@@ -649,14 +649,14 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     # 检查数值异常
     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
     
-    # fake
-    num_classes = 3
-    num_samples = 272955
-    data = torch.randn(num_samples, 40, 100)
-    # data = torch.randn(num_samples, 3, 64, 64)
-    target = torch.randint(0, num_classes, (num_samples,))
-    dataset_test = torch.utils.data.TensorDataset(data, target)
-    # dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
+    # # fake
+    # num_classes = 3
+    # num_samples = 272955
+    # data = torch.randn(num_samples, 40, 100)
+    # # data = torch.randn(num_samples, 3, 64, 64)
+    # target = torch.randint(0, num_classes, (num_samples,))
+    # dataset_test = torch.utils.data.TensorDataset(data, target)
+    dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
     # if log:
     #     if params.classify:
     #         logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
