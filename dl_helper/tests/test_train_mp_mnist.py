@@ -113,6 +113,7 @@ def train_mnist(flags, **kwargs):
               transforms.Normalize((0.1307,), (0.3081,))]))
     
     xm.rendezvous("download train_loader")
+    xm.master_print("download train_loader done")
     
     train_dataset = datasets.MNIST(
         flags.datadir,
