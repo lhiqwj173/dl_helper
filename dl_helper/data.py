@@ -185,9 +185,6 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, params, data_map, need_split_data_set, classify=False, train=True, log=False):
         """Initialization"""
-        # 数据长度
-        self.length = len(data_map['x'])
-
         self.log = log
         self.params = params
 
@@ -226,6 +223,9 @@ class Dataset(torch.utils.data.Dataset):
 
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
+
+        # 数据长度
+        self.length = len(data_map['x'])
 
         # logger.debug('del data_map > raw / mean_std')
         # report_memory_usage()
