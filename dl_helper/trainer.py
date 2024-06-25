@@ -406,7 +406,7 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss.backward()
             optimizer.step()
 
-            del data, target
+            # del data, target
             
         if xm.is_master_ordinal():
             report_memory_usage(f'{epoch}')
