@@ -224,9 +224,6 @@ class Dataset(torch.utils.data.Dataset):
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
 
-        # 数据长度
-        self.length = len(data_map['x'])
-
         # logger.debug('del data_map > raw / mean_std')
         # report_memory_usage()
 
@@ -285,6 +282,9 @@ class Dataset(torch.utils.data.Dataset):
         # id
         self.ids = data_map['ids']
         del data_map['ids']
+        
+        # 数据长度
+        self.length = len(data_map['x'])
 
         # x 切片索引
         self.x_idx = data_map['x']
