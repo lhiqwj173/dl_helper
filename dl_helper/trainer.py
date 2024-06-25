@@ -346,6 +346,7 @@ def run_fn(index, num_processes, test, fake_data=False):
 
         # for debug
         num_samples = 272955
+        num_samples = 50000
 
         # data = torch.randn(num_samples, 40, 100)
         data = torch.randn(num_samples, 64, 33, 33)
