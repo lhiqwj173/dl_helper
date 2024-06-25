@@ -188,15 +188,21 @@ def train_mnist(flags, **kwargs):
       #       args=(device, step, loss, tracker, epoch, writer),
       #       run_async=flags.async_closures)
 
+      if xm.is_master_ordinal() and step % 15 == 0:
+        report_memory_usage(f'train {step}')
+
   def test_loop_fn(loader):
     total_samples = 0
     correct = 0
     model.eval()
-    for data, target in loader:
+    for step, (data, target) in enumerate(loader):
       output = model(data)
       pred = output.max(1, keepdim=True)[1]
       correct += pred.eq(target.view_as(pred)).sum()
       total_samples += data.size()[0]
+
+      if xm.is_master_ordinal() and step % 15 == 0:
+        report_memory_usage(f'test {step}')
 
     accuracy = 100.0 * correct.item() / total_samples
     accuracy = xm.mesh_reduce('test_accuracy', accuracy, np.mean)
@@ -210,10 +216,11 @@ def train_mnist(flags, **kwargs):
     train_loop_fn(train_device_loader, epoch)
     # xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
 
-    if xm.is_master_ordinal() and epoch % 5 == 0:
+    accuracy = test_loop_fn(test_device_loader)
+
+    if xm.is_master_ordinal():
       report_memory_usage('epoch {}'.format(epoch))
 
-    # accuracy = test_loop_fn(test_device_loader)
     # xm.master_print('Epoch {} test end {}, Accuracy={:.2f}'.format(
     #     epoch, test_utils.now(), accuracy))
     # max_accuracy = max(accuracy, max_accuracy)
