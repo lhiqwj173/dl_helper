@@ -185,131 +185,131 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, params, data_map, need_split_data_set, classify=False, train=True, log=False):
         """Initialization"""
-        self.log = log
-        self.params = params
-
-        # 原始数据
-        # report_memory_usage()
-
-        # 区分价量列
-        self.price_cols = [i*2 for i in range(20)]
-        self.vol_cols = [i*2+1 for i in range(20)]
-
-        if not need_split_data_set:
-            # if self.log:
-            #     logger.debug("使用全部数据")
-            if params.use_trade:
-                self.price_cols += [42, 45]
-                self.vol_cols += [40, 41, 43, 44]
-
-        else:
-            # 使用部分截取
-            if (params.use_pk and params.use_trade):
-                raise Exception('no use')
-
-            elif params.use_pk:
-                # if self.log:
-                #     logger.debug("只使用盘口数据")
-                pass
-
-            elif params.use_trade:
-                # if self.log:
-                #     logger.debug("只使用交易数据")
-                self.price_cols = [2, 5]
-                self.vol_cols = [0, 1, 3, 4]
-
-        self.data = torch.from_numpy(data_map['raw'].values)
-        del data_map['raw']
-
-        self.mean_std = data_map['mean_std']
-        del data_map['mean_std']
-
-        # logger.debug('del data_map > raw / mean_std')
-        # report_memory_usage()
-
-        self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
-
-        # 训练数据集
-        self.train = train
-
-        if classify:
-            # 分类训练集 数据平衡
-            if train:
-                labels = set(data_map['y'])
-                sy = pd.Series(data_map['y'])
-                min_num = sy.value_counts().min()
-
-                # if self.log:
-                #     logger.debug(f'min_num: {min_num}')
-
-                # report_memory_usage()
-
-                idx = []
-                for label in labels:
-                    origin_idx = sy[sy == label].index
-
-                    if len(origin_idx) > min_num:
-                        idx += np.random.choice(origin_idx,
-                                                min_num, replace=False).tolist()
-                    else:
-                        idx += origin_idx.tolist()
-
-                # 排序
-                idx.sort()
-
-                # if self.log:
-                #     logger.debug(f'reindex')
-
-                data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
-                data_map['x'] = [data_map['x'][i] for i in idx]
-                data_map['y'] = [data_map['y'][i] for i in idx]
-                self.mean_std = [self.mean_std[i] for i in idx]
-        # else:
-        #     # 回归数据集
-        #     # y 可能为nan
-        #     idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
-        #     # 过滤nan
-        #     data_map['y'] = [data_map['y'][i] for i in idxs]
-        #     data_map['x'] = [data_map['x'][i] for i in idxs]
-        #     self.mean_std = [self.mean_std[i] for i in idxs]
-        #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
-
-        # report_memory_usage()
-
-        # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
-        self.time_length = int(params.data_set.split('_')[3])
-
-        # id
-        self.ids = data_map['ids']
-        del data_map['ids']
-
         # 数据长度
         self.length = len(data_map['x'])
 
-        # x 切片索引
-        self.x_idx = data_map['x']
-        del data_map['x']
-        # x = torch.tensor(np.array(x), dtype=torch.float)
+        # self.log = log
+        # self.params = params
 
-        # 最大musk时间个数
-        self.max_mask_num = 5
+        # # 原始数据
+        # # report_memory_usage()
 
-        # y
-        # 标签onehot 编码
-        # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
-        self.y = torch.tensor(np.array(data_map['y']), dtype=torch.int64 if params.classify else torch.float)
+        # # 区分价量列
+        # self.price_cols = [i*2 for i in range(20)]
+        # self.vol_cols = [i*2+1 for i in range(20)]
+
+        # if not need_split_data_set:
+        #     # if self.log:
+        #     #     logger.debug("使用全部数据")
+        #     if params.use_trade:
+        #         self.price_cols += [42, 45]
+        #         self.vol_cols += [40, 41, 43, 44]
+
+        # else:
+        #     # 使用部分截取
+        #     if (params.use_pk and params.use_trade):
+        #         raise Exception('no use')
+
+        #     elif params.use_pk:
+        #         # if self.log:
+        #         #     logger.debug("只使用盘口数据")
+        #         pass
+
+        #     elif params.use_trade:
+        #         # if self.log:
+        #         #     logger.debug("只使用交易数据")
+        #         self.price_cols = [2, 5]
+        #         self.vol_cols = [0, 1, 3, 4]
+
+        # self.data = torch.from_numpy(data_map['raw'].values)
+        # del data_map['raw']
+
+        # self.mean_std = data_map['mean_std']
+        # del data_map['mean_std']
+
+        # # logger.debug('del data_map > raw / mean_std')
+        # # report_memory_usage()
+
+        # self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
+
+        # # 训练数据集
+        # self.train = train
+
+        # if classify:
+        #     # 分类训练集 数据平衡
+        #     if train:
+        #         labels = set(data_map['y'])
+        #         sy = pd.Series(data_map['y'])
+        #         min_num = sy.value_counts().min()
+
+        #         # if self.log:
+        #         #     logger.debug(f'min_num: {min_num}')
+
+        #         # report_memory_usage()
+
+        #         idx = []
+        #         for label in labels:
+        #             origin_idx = sy[sy == label].index
+
+        #             if len(origin_idx) > min_num:
+        #                 idx += np.random.choice(origin_idx,
+        #                                         min_num, replace=False).tolist()
+        #             else:
+        #                 idx += origin_idx.tolist()
+
+        #         # 排序
+        #         idx.sort()
+
+        #         # if self.log:
+        #         #     logger.debug(f'reindex')
+
+        #         data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
+        #         data_map['x'] = [data_map['x'][i] for i in idx]
+        #         data_map['y'] = [data_map['y'][i] for i in idx]
+        #         self.mean_std = [self.mean_std[i] for i in idx]
+        # # else:
+        # #     # 回归数据集
+        # #     # y 可能为nan
+        # #     idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
+        # #     # 过滤nan
+        # #     data_map['y'] = [data_map['y'][i] for i in idxs]
+        # #     data_map['x'] = [data_map['x'][i] for i in idxs]
+        # #     self.mean_std = [self.mean_std[i] for i in idxs]
+        # #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
+
+        # # report_memory_usage()
+
+        # # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
+        # self.time_length = int(params.data_set.split('_')[3])
+
+        # # id
+        # self.ids = data_map['ids']
+        # del data_map['ids']
+
+        # # x 切片索引
+        # self.x_idx = data_map['x']
+        # del data_map['x']
+        # # x = torch.tensor(np.array(x), dtype=torch.float)
+
+        # # 最大musk时间个数
+        # self.max_mask_num = 5
+
+        # # y
+        # # 标签onehot 编码
+        # # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
+        # self.y = torch.tensor(np.array(data_map['y']), dtype=torch.int64 if params.classify else torch.float)
         
-        data_map.clear()
+        # data_map.clear()
 
-        self.need_split_data_set = need_split_data_set
+        # self.need_split_data_set = need_split_data_set
 
-        self.input_shape = self.__getitem__(0)[0].shape
-        # 增加一个batch维度
-        self.input_shape = (1,) + self.input_shape
+        # self.input_shape = self.__getitem__(0)[0].shape
+        # # 增加一个batch维度
+        # self.input_shape = (1,) + self.input_shape
 
-        # if self.log:
-        #     logger.debug(f'数据集初始化完毕')
-        # report_memory_usage()
+        # # if self.log:
+        # #     logger.debug(f'数据集初始化完毕')
+        # # report_memory_usage()
 
     def __len__(self):
         """Denotes the total number of samples"""
