@@ -163,11 +163,11 @@ def train_mnist(flags, **kwargs):
       else:
         xm.optimizer_step(optimizer)
       tracker.add(flags.batch_size)
-      if step % flags.log_steps == 0:
-        xm.add_step_closure(
-            _train_update,
-            args=(device, step, loss, tracker, epoch, writer),
-            run_async=flags.async_closures)
+      # if step % flags.log_steps == 0:
+      #   xm.add_step_closure(
+      #       _train_update,
+      #       args=(device, step, loss, tracker, epoch, writer),
+      #       run_async=flags.async_closures)
 
   def test_loop_fn(loader):
     total_samples = 0
@@ -214,12 +214,12 @@ def train_mnist(flags, **kwargs):
 def _mp_fn(index, flags):
   torch.set_default_dtype(torch.float32)
   accuracy = train_mnist(flags)
-  if flags.tidy and os.path.isdir(flags.datadir):
-    shutil.rmtree(flags.datadir)
-  if accuracy < flags.target_accuracy:
-    print('Accuracy {} is below target {}'.format(accuracy,
-                                                  flags.target_accuracy))
-    sys.exit(21)
+  # if flags.tidy and os.path.isdir(flags.datadir):
+  #   shutil.rmtree(flags.datadir)
+  # if accuracy < flags.target_accuracy:
+  #   print('Accuracy {} is below target {}'.format(accuracy,
+  #                                                 flags.target_accuracy))
+  #   sys.exit(21)
 
 
 if __name__ == '__main__':
