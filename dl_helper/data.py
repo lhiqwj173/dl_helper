@@ -380,7 +380,8 @@ class Dataset(torch.utils.data.Dataset):
 
         # check_nan(x)
 
-        x = self.data[:, a:b, :].clone()
+        # x = self.data[:, a:b, :].clone()
+        x = self.data[:, a:b, :]
 
         # return x, (self.y[index], self.ids[index])
         if self.params.cnn:
