@@ -311,7 +311,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.conv = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
         self.relu = nn.ReLU()
-        self.fc = nn.Linear(64, 10)
+        self.fc = nn.Linear(64, 3)
 
     def forward(self, x):
         out = self.conv(x)
@@ -347,7 +347,8 @@ def run_fn(index, num_processes, test, fake_data=False):
         # for debug
         num_samples = 272955
 
-        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 40, 100)
+        data = torch.randn(num_samples, 64, 33, 33)
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
