@@ -429,7 +429,7 @@ def run_fn(index, num_processes, test, fake_data=False):
         model.train()
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
             if not ddp:
-                data, target = data.to(xla.device()), target.to(xla.device())
+                data, target = data.to(device), target.to(device)
 
             optimizer.zero_grad()
             output = model(data)
