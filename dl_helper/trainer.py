@@ -305,6 +305,21 @@ def run_fn_1(index, lock, num_processes, test):
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
+# 定义简单的 ResNet 模型
+class ResNet(nn.Module):
+    def __init__(self):
+        super(ResNet, self).__init__()
+        self.conv = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU()
+        self.fc = nn.Linear(64, 10)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.relu(out)
+        out = out.mean([2, 3])  # 平均池化
+        out = self.fc(out)
+        return out
+        
 def run_fn(index, num_processes, test, fake_data=False):
     # 调整参数
     params = test.get_param()
