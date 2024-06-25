@@ -390,8 +390,8 @@ def run_fn(index, num_processes, test, fake_data=False):
     criterion = nn.CrossEntropyLoss()
 
     # 初始化优化器
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    # optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     
     xm.master_print(f'batch_size: {batch_size}')
     xm.master_print(f'each epoch step: {len(train_loader)}')
@@ -401,9 +401,9 @@ def run_fn(index, num_processes, test, fake_data=False):
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
             optimizer.zero_grad()
             output = model(data)
-            # loss = criterion(output, target)
-            # loss.backward()
-            # optimizer.step()
+            loss = criterion(output, target)
+            loss.backward()
+            optimizer.step()
 
         if xm.is_master_ordinal() and epoch % 10 == 0:
             report_memory_usage(f'{epoch}')
