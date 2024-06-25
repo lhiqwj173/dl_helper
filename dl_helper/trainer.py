@@ -346,10 +346,10 @@ def run_fn(index, num_processes, test, fake_data=False):
 
         # for debug
         num_samples = 272955
-        num_samples = 100000
+        # num_samples = 100000
 
-        # data = torch.randn(num_samples, 40, 100)
-        data = torch.randn(num_samples, 3, 64, 64)
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
@@ -380,8 +380,8 @@ def run_fn(index, num_processes, test, fake_data=False):
 
     train_loader = pl.MpDeviceLoader(train_loader, device)
 
-    model = ResNet()
-    # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    # model = ResNet()
+    model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
     model.train()
     
