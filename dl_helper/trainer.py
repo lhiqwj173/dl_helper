@@ -431,7 +431,7 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss.backward()
             optimizer.step()
 
-            if xm.is_master_ordinal() and idx % 50 == 0:
+            if xm.is_master_ordinal() and idx % 20 == 0:
                 report_memory_usage(f'train {epoch} {idx}')
 
         xm.rendezvous(f"train {epoch} done")
@@ -444,7 +444,7 @@ def run_fn(index, num_processes, test, fake_data=False):
                 output = model(data)
                 loss = criterion(output, target)
 
-                if xm.is_master_ordinal() and idx % 50 == 0:
+                if xm.is_master_ordinal() and idx % 20 == 0:
                     report_memory_usage(f'val {epoch} {idx}')
 
         xm.rendezvous(f"val {epoch} done")
