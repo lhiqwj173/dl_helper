@@ -319,9 +319,6 @@ class Dataset(torch.utils.data.Dataset):
         """Generates samples of data"""
         # 切片范围
         a, b = self.x_idx[index]
-        
-        # mid_price
-        mid = (float(self.data[0, b-1, 0]) + float(self.data[0, b-1, 2])) / 2
 
         # 截断数据 b向上截取
         # a=3, b=6
@@ -365,6 +362,8 @@ class Dataset(torch.utils.data.Dataset):
 
         # #############################
         # #############################
+        # # mid_price
+        # mid = (x[0, -1, 0] + x[0, -1, 2]) / 2
 
         # # 价格标准化
         # x[0, :, self.price_cols] /= mid
