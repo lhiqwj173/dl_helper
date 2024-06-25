@@ -291,6 +291,9 @@ class Dataset(torch.utils.data.Dataset):
         del data_map['x']
         # x = torch.tensor(np.array(x), dtype=torch.float)
 
+        # 最大musk时间个数
+        self.max_mask_num = 5
+
         # y
         # 标签onehot 编码
         # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
@@ -356,7 +359,7 @@ class Dataset(torch.utils.data.Dataset):
         x = None
         if self.train and self.params.random_mask_row>0:
             # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.params.random_mask_row)
+            x = random_mask_row(self.data[:, a-self.max_mask_num:b, :].clone(), a, b, self.params.random_mask_row)
         else:
             x = self.data[:, a:b, :].clone()
 
