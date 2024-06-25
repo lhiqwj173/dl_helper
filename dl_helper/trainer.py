@@ -415,11 +415,11 @@ def run_fn(index, num_processes, test, fake_data=False):
     # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     # model = model.to(device)
     model = WRAPPED_MODEL.to(device)
-    # if ddp:
-    #     if xr.using_pjrt():
-    #         xm.master_print('broadcast_master_param')
-    #         xm.broadcast_master_param(model)
-    #     model = DDP(model, gradient_as_bucket_view=True)
+    if ddp:
+        if xr.using_pjrt():
+            xm.master_print('broadcast_master_param')
+            xm.broadcast_master_param(model)
+        model = DDP(model, gradient_as_bucket_view=True)
     
     criterion = nn.CrossEntropyLoss()
 
@@ -434,8 +434,8 @@ def run_fn(index, num_processes, test, fake_data=False):
     for epoch in range(epochs):
         model.train()
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
-            # if not ddp:
-            #     data, target = data.to(device), target.to(device)
+            if not ddp:
+                data, target = data.to(device), target.to(device)
 
             optimizer.zero_grad()
             output = model(data)
