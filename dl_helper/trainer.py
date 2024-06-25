@@ -430,6 +430,7 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss = criterion(output, target)
             loss.backward()
             optimizer.step()
+            xm.mark_step()
 
             if xm.is_master_ordinal() and idx % 10 == 0:
                 report_memory_usage(f'train {epoch} {idx}')
