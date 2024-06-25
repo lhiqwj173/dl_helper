@@ -369,15 +369,40 @@ def run_fn(index, num_processes, test, fake_data=False):
             # shuffle=True,
         )
 
+        test_samples = int(num_samples / 6)
+        test_data = torch.randn(test_samples, 40, 100)
+        test_target = torch.randint(0, num_classes, (test_samples,))
+        test_dataset = torch.utils.data.TensorDataset(test_data, test_target)
+
+        test_sampler = None
+        if xm.xrt_world_size() > 1:
+            test_sampler = torch.utils.data.distributed.DistributedSampler(
+                test_dataset,
+                num_replicas=xm.xrt_world_size(),
+                rank=xm.get_ordinal(),
+                shuffle=True)
+        
+        # 创建数据加载器
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            sampler=test_sampler,
+            drop_last=True
+            # shuffle=True,
+        )
+
     else:
         # 真实数据
         train_loader = test.get_data('train', params, get_data_sampler)
+        test_loader = test.get_data('val', params, get_data_sampler)
+
     xm.master_print(f'data_set len: {len(train_loader.dataset)}')
     xm.rendezvous("init train_loader")
     if xm.is_master_ordinal():
         report_memory_usage(f'train_loader')
 
     train_loader = pl.MpDeviceLoader(train_loader, device)
+    test_loader = pl.MpDeviceLoader(test_loader, device)
 
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
@@ -398,6 +423,7 @@ def run_fn(index, num_processes, test, fake_data=False):
     
     # 训练循环
     for epoch in range(epochs):
+        model.train()
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
             optimizer.zero_grad()
             output = model(data)
@@ -405,8 +431,25 @@ def run_fn(index, num_processes, test, fake_data=False):
             loss.backward()
             optimizer.step()
 
-        if xm.is_master_ordinal() and epoch % 10 == 0:
-            report_memory_usage(f'{epoch}')
+            if xm.is_master_ordinal() and idx % 50 == 0:
+                report_memory_usage(f'train {idx}')
+
+        xm.rendezvous(f"train {epoch} done")
+        if xm.is_master_ordinal():
+            report_memory_usage(f'train done')
+
+        model.eval()
+        with torch.no_grad():
+            for idx, (data, target) in tqdm(enumerate(test_loader), total=len(test_loader), disable=not xm.is_master_ordinal()):
+                output = model(data)
+                loss = criterion(output, target)
+
+                if xm.is_master_ordinal() and idx % 50 == 0:
+                    report_memory_usage(f'val {idx}')
+
+        xm.rendezvous(f"val {epoch} done")
+        if xm.is_master_ordinal():
+            report_memory_usage(f'val done')
 
     if xm.is_master_ordinal():
         report_memory_usage('STOP')
