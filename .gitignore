@@ -42,3 +42,4 @@ mobilenet_v2_data_v6/
 *.pkl
 *.csv
 /temp
+/logs

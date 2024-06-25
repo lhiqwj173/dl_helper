@@ -39,9 +39,8 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[2]
         self.y_n = 3
 
-        batch_n = 8
-        batch_n *= 2**(self.idx)
-        title = f'binctabl_{targrt_name}' if self.idx == 0 else f'binctabl_{targrt_name}_x{2**(self.idx)}'
+        batch_n = 16
+        title = f'binctabl_{targrt_name}_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,

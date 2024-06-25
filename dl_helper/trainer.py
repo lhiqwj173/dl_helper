@@ -305,7 +305,7 @@ def run_fn_1(index, lock, num_processes, test):
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
-def run_fn(index, lock, num_processes, test):
+def run_fn(index, num_processes, test, fake_data=False):
     # 调整参数
     params = test.get_param()
     # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
@@ -325,44 +325,51 @@ def run_fn(index, lock, num_processes, test):
 
     batch_size = 1024
 
-    # 创建模拟数据
-    num_classes = 3
+    if fake_data:
+        # 创建模拟数据
+        num_classes = 3
 
-    # TPU limit
-    num_samples = 3000000 
-    
-    # P100 limit
-    num_samples = 2400000 
-    
-    # T4x2 limit
-    num_samples = 1100000 
-    
-    # for debug
-    num_samples = 50000
+        # TPU limit
+        num_samples = 3000000 
+        
+        # P100 limit
+        num_samples = 2400000 
+        
+        # T4x2 limit
+        num_samples = 1100000 
+        
+        # for debug
+        num_samples = 50000
 
-    # data = torch.randn(num_samples, 40, 100)
-    # target = torch.randint(0, num_classes, (num_samples,))
-    # train_dataset = torch.utils.data.TensorDataset(data, target)
+        data = torch.randn(num_samples, 40, 100)
+        target = torch.randint(0, num_classes, (num_samples,))
+        train_dataset = torch.utils.data.TensorDataset(data, target)
 
-    # train_sampler = None
-    # if xm.xrt_world_size() > 1:
-    #     train_sampler = torch.utils.data.distributed.DistributedSampler(
-    #         train_dataset,
-    #         num_replicas=xm.xrt_world_size(),
-    #         rank=xm.get_ordinal(),
-    #         shuffle=True)
-    
-    # # 创建数据加载器
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_dataset,
-    #     batch_size=batch_size,
-    #     sampler=train_sampler,
-    #     drop_last=True
-    #     # shuffle=True,
-    # )
+        train_sampler = None
+        if xm.xrt_world_size() > 1:
+            train_sampler = torch.utils.data.distributed.DistributedSampler(
+                train_dataset,
+                num_replicas=xm.xrt_world_size(),
+                rank=xm.get_ordinal(),
+                shuffle=True)
+        
+        # 创建数据加载器
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            drop_last=True
+            # shuffle=True,
+        )
 
-    train_loader = test.get_data('train', params, get_data_sampler)
+    else:
+        # 真实数据
+        train_loader = test.get_data('train', params, get_data_sampler)
+
     train_loader = pl.MpDeviceLoader(train_loader, device)
+    xm.master_print(f'data_set len: {len(train_loader.data_set)}')
+    if xm.is_master_ordinal():
+        report_memory_usage(f'train_loader')
 
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
@@ -372,8 +379,8 @@ def run_fn(index, lock, num_processes, test):
     criterion = nn.CrossEntropyLoss()
 
     # 初始化优化器
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    # optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
     
     # TPU  each epoch step: 782
     # P100 each epoch step: 6250
@@ -393,192 +400,11 @@ def run_fn(index, lock, num_processes, test):
         if xm.is_master_ordinal():
             report_memory_usage(f'{epoch}')
 
-def run(test):
-    # bug:
-    # WARNING: Logging before InitGoogle() is written to STDERR
-    # WARNING: Logging before InitGoogle() is written to STDERR
-    # E0000 00:00:1719236516.757616   18445 common_lib.cc:778] Could not set metric server port: INVALID_ARGUMENT: Could not find SliceBuilder port 8477 in any of the 4 ports provided in `tpu_process_addresses`="localhost:8476,localhost:8477,localhost:8478,localhost:8479"
-    # === Source Location Trace: === 
-    # learning/45eac/tfrc/runtime/common_lib.cc:467
-    # E0000 00:00:1719236516.757613   18459 common_lib.cc:778] Could not set metric server port: INVALID_ARGUMENT: Could not find SliceBuilder port 8479 in any of the 4 ports provided in `tpu_process_addresses`="localhost:8476,localhost:8477,localhost:8478,localhost:8479"
-    # === Source Location Trace: ===
-    # learning/45eac/tfrc/runtime/common_lib.cc:467
-    # WARNING: Logging before InitGoogle() is written to STDERR
-    # E0000 00:00:1719236516.758186   18452 common_lib.cc:778] Could not set metric server port: INVALID_ARGUMENT: Could not find SliceBuilder port 8478 in any of the 4 ports provided in `tpu_process_addresses`="localhost:8476,localhost:8477,localhost:8478,localhost:8479"
-    # === Source Location Trace: ===
-    # learning/45eac/tfrc/runtime/common_lib.cc:467
-    # E0624 13:41:56.788773396   18445 oauth2_credentials.cc:238]            oauth_fetch: UNKNOWN:C-ares status is not ARES_SUCCESS qtype=A name=metadata.google.internal. is_balancer=0: Domain name not found {grpc_status:2, created_time:"2024-06-24T13:41:56.788753605+00:00"}
-    # E0624 13:41:56.789400842   18452 oauth2_credentials.cc:238]            oauth_fetch: UNKNOWN:C-ares status is not ARES_SUCCESS qtype=A name=metadata.google.internal. is_balancer=0: Domain name not found {created_time:"2024-06-24T13:41:56.789384548+00:00", grpc_status:2}
-    # E0624 13:41:56.789423994   18459 oauth2_credentials.cc:238]            oauth_fetch: UNKNOWN:C-ares status is not ARES_SUCCESS qtype=A name=metadata.google.internal. is_balancer=0: Domain name not found {created_time:"2024-06-24T13:41:56.789409058+00:00", grpc_status:2}
-    # E0624 13:41:56.795029596   18438 oauth2_credentials.cc:238]            oauth_fetch: UNKNOWN:C-ares status is not ARES_SUCCESS qtype=A name=metadata.google.internal. is_balancer=0: Domain name not found {created_time:"2024-06-24T13:41:56.795014401+00:00", grpc_status:2}
-    # [W socket.cpp:697] [c10d] The client socket has failed to connect to [localhost]:12355 (errno: 99 - Cannot assign requested address).
-    # [W socket.cpp:697] [c10d] The client socket has failed to connect to [localhost]:12355 (errno: 99 - Cannot assign requested address).
-    # [W socket.cpp:697] [c10d] The client socket has failed to connect to [localhost]:12355 (errno: 99 - Cannot assign requested address).
-    # 准备训练元素...
-    # model
-    # https://symbolize.stripped_domain/r/?trace=7e04d17dcc2d,7e070ddaf04f,7e04d17dccf4,7e04d17dd00c,7e04d142d4ca,7e04d144c65f,7e04d16c0352,7e06e798a817&map= 
-    # *** SIGSEGV (@0x18), see go/stacktraces#s15 received by PID 18459 (TID 19933) on cpu 66; stack trace: ***
-    # PC: @     0x7e04d17dcc2d  (unknown)  std::_Hashtable<>::_M_find_before_node()
-    #     @     0x7e035f101067        928  (unknown)
-    #     @     0x7e070ddaf050       3392  (unknown)
-    #     @     0x7e04d17dccf5         80  std::__detail::_Map_base<>::operator[]()
-    #     @     0x7e04d17dd00d        496  torch_xla::xla_cpu_fallback()
-    #     @     0x7e04d142d4cb        112  at::native::_call_fallback_fn<>::call()
-    #     @     0x7e04d144c660        112  torch_xla::XLANativeFunctions::_local_scalar_dense()
-    #     @     0x7e04d16c0353         96  c10::impl::make_boxed_from_unboxed_functor<>::call()
-    #     @     0x7e06e798a818         48  c10::Dispatcher::callBoxed()
-    #     @ ... and at least 1 more frames
-    # https://symbolize.stripped_domain/r/?trace=7e04d17dcc2d,7e035f101066,7e070ddaf04f,7e04d17dccf4,7e04d17dd00c,7e04d142d4ca,7e04d144c65f,7e04d16c0352,7e06e798a817&map= 
-    # E0624 13:41:59.618505   19933 coredump_hook.cc:442] RAW: Remote crash data gathering hook invoked.
-    # E0624 13:41:59.618516   19933 client.cc:269] RAW: Coroner client retries enabled (b/136286901), will retry for up to 30 sec.
-    # E0624 13:41:59.618521   19933 coredump_hook.cc:537] RAW: Sending fingerprint to remote end.
-    # E0624 13:41:59.618552   19933 coredump_hook.cc:546] RAW: Cannot send fingerprint to Coroner: [NOT_FOUND] stat failed on crash reporting socket /var/google/services/logmanagerd/remote_coredump.socket (Is the listener running?): No such file or directory
-    # E0624 13:41:59.618557   19933 coredump_hook.cc:598] RAW: Dumping core locally.
-    # E0624 13:42:11.279552   19933 process_state.cc:807] RAW: Raising signal 11 with default behavior
-    # https://symbolize.stripped_domain/r/?trace=7e070ddf8e96,7e070ddaf04f&map= 
-    # https://symbolize.stripped_domain/r/?trace=7e070ddf8e96,*** SIGTERM received by PID 18438 (TID 18438) on cpu 93 from PID 13; stack trace: ***
-    # 7e070ddaf04f&map= 
-    # *** SIGTERM received by PID 18452 (TID 18452) on cpu 95 from PID 13; stack trace: ***
-    # https://symbolize.stripped_domain/r/?trace=7e070ddf8e96,7e070ddaf04f&map= 
-    # *** SIGTERM received by PID 18445 (TID 18445) on cpu 22 from PID 13; stack trace: ***
-    # PC: @     0x7e070ddf8e96  (unknown)  (unknown)
-    #     @     0x7e0357101067        928  (unknown)
-    #     @     0x7e070ddaf050  (unknown)  (unknown)
-    # https://symbolize.stripped_domain/r/?trace=7e070ddf8e96,7e0357101066,7e070ddaf04f&map= 
-    # E0624 13:42:11.955676   18445 coredump_hook.cc:388] RAW: Remote crash gathering disabled for SIGTERM.
-    # PC: @     0x7e070ddf8e96  (unknown)  (unknown)
-    # PC: @     0x7e070ddf8e96  (unknown)  (unknown)
-    #     @     0x7e035f101067        928  (unknown)
-    #     @     0x7e035f101067        928  (unknown)
-    #     @     0x7e070ddaf050  (unknown)  (unknown)
-    #     @     0x7e070ddaf050  (unknown)  (unknown)
-    # https://symbolize.stripped_domain/r/?trace=https://symbolize.stripped_domain/r/?trace=7e070ddf8e96,7e070ddf8e96,7e035f101066,7e035f101066,7e070ddaf04f7e070ddaf04f&map=&map= 
-    
-    # E0624 13:42:11.956408   18438 coredump_hook.cc:388] RAW: Remote crash gathering disabled for SIGTERM.
-    # E0624 13:42:11.956408   18452 coredump_hook.cc:388] RAW: Remote crash gathering disabled for SIGTERM.
-    # E0624 13:42:12.061995   18445 process_state.cc:807] RAW: Raising signal 15 with default behavior
-    # E0624 13:42:12.064539   18452 process_state.cc:807] RAW: Raising signal 15 with default behavior
-    # E0624 13:42:12.070060   18438 process_state.cc:807] RAW: Raising signal 15 with default behavior
-    # ---------------------------------------------------------------------------
-    # BrokenProcessPool                         Traceback (most recent call last)
-    # File <timed eval>:1
-
-    # File /kaggle/working/3rd/dl_helper/dl_helper/trainer.py:318, in run(test)
-    #     315 lock = mp.Manager().Lock()
-    #     317 if num_processes == 8:
-    # --> 318     xmp.spawn(run_fn, args=(lock, num_processes, test), start_method='fork')      
-    #     319 else:
-    #     320     notebook_launcher(run_fn, args=(0, lock, num_processes, copy.deepcopy(test)), num_processes=num_processes)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/runtime.py:87, in requires_pjrt.<locals>.wrapper(*args, **kwargs)
-    #     83 if not using_pjrt():
-    #     84   raise NotImplementedError('`{}` not implemented for XRT'.format(
-    #     85       fn.__name__))
-    # ---> 87 return fn(*args, **kwargs)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/distributed/xla_multiprocessing.py:38, in spawn(fn, args, nprocs, join, daemon, start_method)
-    #     6 @xr.requires_pjrt
-    #     7 def spawn(fn,
-    #     8           args=(),
-    # (...)
-    #     11           daemon=False,
-    #     12           start_method='spawn'):
-    #     13   """Enables multi processing based replication.
-    #     14 
-    #     15   Args:
-    # (...)
-    #     36     return None.
-    #     37   """
-    # ---> 38   return pjrt.spawn(fn, nprocs, start_method, args)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/_internal/pjrt.py:200, in spawn(fn, nprocs, start_method, args)
-    #     197 elif nprocs is not None:
-    #     198   logging.warning('Unsupported nprocs (%d), ignoring...' % nprocs)
-    # --> 200 run_multiprocess(spawn_fn, start_method=start_method)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/runtime.py:87, in requires_pjrt.<locals>.wrapper(*args, **kwargs)
-    #     83 if not using_pjrt():
-    #     84   raise NotImplementedError('`{}` not implemented for XRT'.format(
-    #     85       fn.__name__))
-    # ---> 87 return fn(*args, **kwargs)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/_internal/pjrt.py:160, in run_multiprocess(fn, start_method, *args, **kwargs)
-    #     154   mp_fn = functools.partial(
-    #     155       _run_thread_per_device,
-    #     156       local_world_size=num_processes,
-    #     157       fn=functools.partial(fn, *args, **kwargs),
-    #     158       initializer_fn=initialize_multiprocess)
-    #     159   process_results = executor.map(mp_fn, range(num_processes))
-    # --> 160   replica_results = list(
-    #     161       itertools.chain.from_iterable(
-    #     162           result.items() for result in process_results))
-    #     164 return _merge_replica_results(replica_results)
-
-    # File /usr/local/lib/python3.10/site-packages/torch_xla/_internal/pjrt.py:161, in <genexpr>(.0)
-    #     154   mp_fn = functools.partial(
-    #     155       _run_thread_per_device,
-    #     156       local_world_size=num_processes,
-    #     157       fn=functools.partial(fn, *args, **kwargs),
-    #     158       initializer_fn=initialize_multiprocess)
-    #     159   process_results = executor.map(mp_fn, range(num_processes))
-    #     160   replica_results = list(
-    # --> 161       itertools.chain.from_iterable(
-    #     162           result.items() for result in process_results))
-    #     164 return _merge_replica_results(replica_results)
-
-    # File /usr/local/lib/python3.10/concurrent/futures/process.py:575, in _chain_from_iterable_of_lists(iterable)
-    #     569 def _chain_from_iterable_of_lists(iterable):
-    #     570     """
-    #     571     Specialized implementation of itertools.chain.from_iterable.
-    #     572     Each item in *iterable* should be a list.  This function is
-    #     573     careful not to keep references to yielded objects.
-    #     574     """
-    # --> 575     for element in iterable:
-    #     576         element.reverse()
-    #     577         while element:
-
-    # File /usr/local/lib/python3.10/concurrent/futures/_base.py:621, in Executor.map.<locals>.result_iterator()
-    #     618 while fs:
-    #     619     # Careful not to keep a reference to the popped future
-    #     620     if timeout is None:
-    # --> 621         yield _result_or_cancel(fs.pop())
-    #     622     else:
-    #     623         yield _result_or_cancel(fs.pop(), end_time - time.monotonic())
-
-    # File /usr/local/lib/python3.10/concurrent/futures/_base.py:319, in _result_or_cancel(***failed resolving arguments***)
-    #     317 try:
-    #     318     try:
-    # --> 319         return fut.result(timeout)
-    #     320     finally:
-    #     321         fut.cancel()
-
-    # File /usr/local/lib/python3.10/concurrent/futures/_base.py:458, in Future.result(self, timeout)
-    #     456     raise CancelledError()
-    #     457 elif self._state == FINISHED:
-    # --> 458     return self.__get_result()
-    #     459 else:
-    #     460     raise TimeoutError()
-
-    # File /usr/local/lib/python3.10/concurrent/futures/_base.py:403, in Future.__get_result(self)
-    #     401 if self._exception:
-    #     402     try:
-    # --> 403         raise self._exception
-    #     404     finally:
-    #     405         # Break a reference cycle with the exception in self._exception
-    #     406         self = None
-
-    # BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.
-
-    # 训练核心数
-    # P100 = 1
-    # T4x2 = 2
-    # TPU  = 8
-    # CPU  = 0
+def run(test, fake_data=False):
     num_processes = match_num_processes()
-
-    lock = mp.Manager().Lock()
+    # lock = mp.Manager().Lock()
 
     if num_processes == 8:
-        xmp.spawn(run_fn, args=(lock, num_processes, test), start_method='fork')      
+        xmp.spawn(run_fn, args=(num_processes, copy.deepcopy(test), fake_data), start_method='fork')      
     else:
-        notebook_launcher(run_fn, args=(0, lock, num_processes, copy.deepcopy(test)), num_processes=num_processes)
+        notebook_launcher(run_fn, args=(0, num_processes, copy.deepcopy(test), fake_data), num_processes=num_processes)
