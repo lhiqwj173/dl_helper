@@ -329,17 +329,8 @@ def run_fn(index, num_processes, test, fake_data=False):
         # 创建模拟数据
         num_classes = 3
 
-        # TPU limit
-        num_samples = 3000000 
-        
-        # P100 limit
-        num_samples = 2400000 
-        
-        # T4x2 limit
-        num_samples = 1100000 
-        
         # for debug
-        num_samples = 50000
+        num_samples = 272955
 
         data = torch.randn(num_samples, 40, 100)
         target = torch.randint(0, num_classes, (num_samples,))
