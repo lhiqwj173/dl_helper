@@ -333,13 +333,14 @@ def run_fn(index, num_processes, test, fake_data=False):
     # 设置训练参数
     epochs = 30
 
-    # dist.init_process_group('xla', init_method='xla://')
+    ddp = False
+
+    if ddp:
+        dist.init_process_group('xla', init_method='xla://')
 
     device = xm.xla_device()
 
     batch_size = 1024
-
-    ddp = False
 
     if fake_data:
         # 创建模拟数据
