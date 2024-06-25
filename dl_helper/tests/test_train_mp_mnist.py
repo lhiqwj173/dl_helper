@@ -170,7 +170,7 @@ def train_mnist(flags, **kwargs):
   loss_fn = nn.NLLLoss()
 
   def train_loop_fn(loader, epoch):
-    tracker = xm.RateTracker()
+    # tracker = xm.RateTracker()
     model.train()
     for step, (data, target) in enumerate(loader):
       optimizer.zero_grad()
@@ -181,7 +181,7 @@ def train_mnist(flags, **kwargs):
         optimizer.step()
       else:
         xm.optimizer_step(optimizer)
-      tracker.add(flags.batch_size)
+      # tracker.add(flags.batch_size)
       # if step % flags.log_steps == 0:
       #   xm.add_step_closure(
       #       _train_update,
