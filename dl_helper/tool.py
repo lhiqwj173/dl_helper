@@ -31,17 +31,17 @@ def stop_all_python_processes():
             pass
 
 def report_memory_usage(msg=''):
-    cpu_mem_info = psutil.virtual_memory()
-    cpu_mem_used_mb = cpu_mem_info.used / 1024 ** 3
-    tpu_mem_info = xm.get_memory_info(xm.xla_device())
-    tpu_mem_used_mb = (tpu_mem_info["kb_total"] - tpu_mem_info["kb_free"]) // 1024 ** 2
-    print(
-        f"\n\tCPU memory used: {cpu_mem_used_mb:.2f} GB"
-        f"\n\tTPU memory used: {tpu_mem_used_mb:.2f} GB"
-    )
+    # cpu_mem_info = psutil.virtual_memory()
+    # cpu_mem_used_mb = cpu_mem_info.used / 1024 ** 3
+    # tpu_mem_info = xm.get_memory_info(xm.xla_device())
+    # tpu_mem_used_mb = (tpu_mem_info["kb_total"] - tpu_mem_info["kb_free"]) // 1024 ** 2
+    # print(
+    #     f"\n\tCPU memory used: {cpu_mem_used_mb:.2f} GB"
+    #     f"\n\tTPU memory used: {tpu_mem_used_mb:.2f} GB"
+    # )
 
-    # memory_usage = psutil.virtual_memory()
-    # print(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+    memory_usage = psutil.virtual_memory()
+    print(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
     # # 获取当前进程ID
     # pid = psutil.Process().pid
