@@ -89,7 +89,7 @@ def train_mnist(flags, **kwargs):
         data=(torch.zeros(flags.batch_size, 1, 28,
                           28), torch.zeros(flags.batch_size,
                                            dtype=torch.int64)),
-        sample_count=60000 // flags.batch_size // xm.xrt_world_size())
+        sample_count=300000 // flags.batch_size // xm.xrt_world_size())
     test_loader = xu.SampleGenerator(
         data=(torch.zeros(flags.batch_size, 1, 28,
                           28), torch.zeros(flags.batch_size,
@@ -187,9 +187,9 @@ def train_mnist(flags, **kwargs):
   test_device_loader = pl.MpDeviceLoader(test_loader, device)
   accuracy, max_accuracy = 0.0, 0.0
   for epoch in range(1, flags.num_epochs + 1):
-    xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))
+    # xm.master_print('Epoch {} train begin {}'.format(epoch, test_utils.now()))
     train_loop_fn(train_device_loader, epoch)
-    xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
+    # xm.master_print('Epoch {} train end {}'.format(epoch, test_utils.now()))
 
     if xm.is_master_ordinal():
       report_memory_usage('epoch {}'.format(epoch))
