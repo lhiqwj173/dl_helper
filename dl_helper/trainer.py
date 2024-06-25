@@ -349,7 +349,7 @@ def run_fn(index, num_processes, test, fake_data=False):
         num_samples = 50000
 
         # data = torch.randn(num_samples, 40, 100)
-        data = torch.randn(num_samples, 64, 33, 33)
+        data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
