@@ -96,20 +96,39 @@ def train_mnist(flags, **kwargs):
                                            dtype=torch.int64)),
         sample_count=10000 // flags.batch_size // xm.xrt_world_size())
   else:
+    if xm.is_main_process():
+      train_dataset = datasets.MNIST(
+          flags.datadir,
+          train=True,
+          download=True,
+          transform=transforms.Compose(
+              [transforms.ToTensor(),
+              transforms.Normalize((0.1307,), (0.3081,))]))
+      test_dataset = datasets.MNIST(
+          flags.datadir,
+          train=False,
+          download=True,
+          transform=transforms.Compose(
+              [transforms.ToTensor(),
+              transforms.Normalize((0.1307,), (0.3081,))]))
+    
+    xm.rendezvous("download train_loader")
+    
     train_dataset = datasets.MNIST(
-        os.path.join(flags.datadir, str(xm.get_ordinal())),
+        flags.datadir,
         train=True,
-        download=True,
+        download=False,
         transform=transforms.Compose(
             [transforms.ToTensor(),
-             transforms.Normalize((0.1307,), (0.3081,))]))
+            transforms.Normalize((0.1307,), (0.3081,))]))
     test_dataset = datasets.MNIST(
-        os.path.join(flags.datadir, str(xm.get_ordinal())),
+        flags.datadir,
         train=False,
-        download=True,
+        download=False,
         transform=transforms.Compose(
             [transforms.ToTensor(),
-             transforms.Normalize((0.1307,), (0.3081,))]))
+            transforms.Normalize((0.1307,), (0.3081,))]))
+        
     train_sampler = None
     if xm.xrt_world_size() > 1:
       train_sampler = torch.utils.data.distributed.DistributedSampler(
