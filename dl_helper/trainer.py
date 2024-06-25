@@ -338,8 +338,9 @@ def run_fn(index, num_processes, test, fake_data=False):
 
     ddp = False
 
-    if ddp:
-        dist.init_process_group('xla', init_method='xla://')
+    # if ddp:
+    #     dist.init_process_group('xla', init_method='xla://')
+    dist.init_process_group('xla', init_method='xla://')
 
     device = xm.xla_device()
 
