@@ -17,6 +17,8 @@ class test_base():
     # 获取训练参数
     def get_param(self):
         assert self.para, 'should init param in __init__()'
+        if self.debug:
+            params.epochs = 2
         return self.para
 
     # 初始化数据
