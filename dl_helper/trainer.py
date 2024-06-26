@@ -397,7 +397,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model=None):
+def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epochs=-1, model=None):
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -418,6 +418,9 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
         l = params.learning_rate
         params.learning_rate *= num_processes
         p.print(f'learning_rate: {l} -> {params.learning_rate}')
+
+    if epochs > 0:
+        params.epochs = epochs
 
     if fake_data:
         # TODO
@@ -526,7 +529,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run(test_class, *args, fake_data=False, **kwargs):
+def run(test_class, *args, fake_data=False, epochs=-1, **kwargs):
     num_processes = match_num_processes()
 
     model = None
@@ -535,4 +538,4 @@ def run(test_class, *args, fake_data=False, **kwargs):
     #     model = test.get_model()
 
     lock = mp.Manager().Lock()
-    notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, model), num_processes=num_processes)
+    notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, epochs, model), num_processes=num_processes)
