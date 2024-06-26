@@ -545,7 +545,6 @@ def load_data(params, file, diff_length, data_map, log=False):
 
 def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
-    print(f'batch_size: {params.batch_size}')
 
     # 数据集参数
     target_parm = params.data_parm

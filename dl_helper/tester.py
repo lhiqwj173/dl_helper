@@ -22,6 +22,7 @@ class test_base():
     # 初始化数据
     # 返回一个 torch dataloader
     def get_data(self, _type, params, data_sample_getter_func=None):
+        print(f'batch_size: {params.batch_size}')
         if self.debug:
             params.epochs = 2
             return read_data(_type = _type, params=params, max_num=1, data_sample_getter_func = data_sample_getter_func)
