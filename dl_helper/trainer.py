@@ -362,7 +362,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
         # 创建数据加载器
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
         )
@@ -375,7 +375,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
         # 创建数据加载器
         val_loader = torch.utils.data.DataLoader(
             val_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
         )
@@ -403,7 +403,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
     tracker = Tracker(params, accelerator, scheduler, num_processes, printer=p)
 
     p.print(f'prepare done')
-    p.print(f'batch_size: {batch_size}')
+    p.print(f'batch_size: {params.batch_size}')
     p.print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
@@ -463,7 +463,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         # 创建数据加载器
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
         )
@@ -476,7 +476,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         # 创建数据加载器
         val_loader = torch.utils.data.DataLoader(
             val_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
         )
@@ -502,7 +502,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     )
 
     p.print(f'prepare done')
-    p.print(f'batch_size: {batch_size}')
+    p.print(f'batch_size: {params.batch_size}')
     p.print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
