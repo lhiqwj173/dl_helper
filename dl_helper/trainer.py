@@ -255,28 +255,22 @@ def notebook_launcher(
                 print("Launching training on CPU.")
             function(*args)
 
-def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker=None):
     model.train()
-    for idx, (data, target) in tqdm(enumerate(train_data), total=len(train_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} training'):
-        # trainer.wait_for_everyone()
-        # if trainer.is_main_process():
-        #     report_memory_usage(f'begin')
-        
+    for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch training'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(targets.shape) == 1:
             targets = targets.unsqueeze(1)
 
-        data, target = trainer.prepare(data, target)
         optimizer.zero_grad()
-        output, loss = trainer.cal_output_loss(model, data, target, criterion)
+        output = model(data)
+        loss = criterion(output, target)
+        accelerator.backward(loss)
+        optimizer.step()
+        scheduler.step()
 
-        # tracker.track(output, target, loss, 'train')
-        trainer.step(loss, optimizer)
-
-        if idx % 10 == 0:
-            if trainer.is_main_process():
-                report_memory_usage(f'step')
-        trainer.wait_for_everyone()
+        if accelerator.is_main_process and idx % 10 == 0:
+            report_memory_usage(f'[{epoch}][{idx}] train')
 
 def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
     model.eval()
@@ -335,7 +329,7 @@ class printer():
             else:
                 print(head, *msg, **kwargs)
 
-def run_fn(lock, num_processes, test, fake_data=False):
+def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
     # 调整参数
     params = test.get_param()
     if num_processes > 0:
@@ -345,8 +339,6 @@ def run_fn(lock, num_processes, test, fake_data=False):
         params.learning_rate *= num_processes
 
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
-    device = accelerator.device
-
     p = printer(lock, accelerator)
 
     if fake_data:
@@ -391,8 +383,111 @@ def run_fn(lock, num_processes, test, fake_data=False):
     if accelerator.is_main_process:
         report_memory_usage(f'init train data done')
 
-    # model = ResNet()
-    model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    if None is model:
+        # model = ResNet()
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+
+    criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    scheduler = ReduceLR_slow_loss(optimizer)
+
+    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+        model, optimizer, train_loader, val_loader, scheduler
+    )
+
+    tracker = Tracker(params, accelerator, scheduler, num_processes, printer=p)
+
+    p.print(f'prepare done')
+    p.print(f'batch_size: {batch_size}')
+    p.print(f'each epoch step: {len(train_loader)}')
+    
+    # 训练循环
+    for epoch in range(epochs):
+        train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker=tracker)
+
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+
+        model.eval()
+        with torch.no_grad():
+            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(targets.shape) == 1:
+                    targets = targets.unsqueeze(1)
+
+                output = model(data)
+                loss = criterion(output, target)
+
+                if accelerator.is_main_process and idx % 10 == 0:
+                    report_memory_usage(f'[{epoch}][{idx}] val')
+
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
+
+    if accelerator.is_main_process:
+        report_memory_usage('all done')
+
+def run_fn(lock, num_processes, test, fake_data=False, model=None):
+    # 调整参数
+    params = test.get_param()
+    if num_processes > 0:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        params.batch_size //= num_processes
+        # 调整lr
+        params.learning_rate *= num_processes
+
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    p = printer(lock, accelerator)
+
+    if fake_data:
+        # TODO
+        # 创建模拟数据
+        num_classes = 3
+
+        # for debug
+        num_samples = 272955
+        # num_samples = 100000
+
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
+        target = torch.randint(0, num_classes, (num_samples,))
+        train_dataset = torch.utils.data.TensorDataset(data, target)
+
+        # 创建数据加载器
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            drop_last=True,
+            shuffle=True,
+        )
+
+        val_samples = int(num_samples / 6)
+        val_data = torch.randn(val_samples, 40, 100)
+        val_target = torch.randint(0, num_classes, (val_samples,))
+        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
+
+        # 创建数据加载器
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            drop_last=True,
+            shuffle=True,
+        )
+    else:
+        # 真实数据
+        train_loader = test.get_data('train', params)
+        val_loader = test.get_data('val', params)
+
+    if accelerator.is_main_process:
+        report_memory_usage(f'init train data done')
+
+    if None is model:
+        # model = ResNet()
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
@@ -442,5 +537,11 @@ def run_fn(lock, num_processes, test, fake_data=False):
 
 def run(test, fake_data=False):
     num_processes = match_num_processes()
+
+    model = None
+    if num_processes == 8:
+        # tpu 在训练函数外实例化模型 传入
+        model = test.get_model()
+
     lock = mp.Manager().Lock()
-    notebook_launcher(run_fn, args=(lock, num_processes, test, fake_data), num_processes=num_processes)
+    notebook_launcher(run_fn, args=(lock, num_processes, test, fake_data, model), num_processes=num_processes)

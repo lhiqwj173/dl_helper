@@ -71,7 +71,6 @@ class test(test_base):
             amp=self.amp
         )
 
-
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):

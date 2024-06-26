@@ -20,7 +20,7 @@ def last_value(data):
 
 
 class Tracker():
-    def __init__(self, params, trainer, scheduler, num_processes):
+    def __init__(self, params, accelerator, scheduler, num_processes, printer):
         # 时间统计
         self.begin_time = time.time()
         self.epoch_count = 0
@@ -28,8 +28,9 @@ class Tracker():
         self.need_save = False
 
         self.params = params
-        self.trainer = trainer
+        self.accelerator = accelerator
         self.scheduler = scheduler
+        self.printer = printer
 
         # 最终数据
         self.data = {}
@@ -64,19 +65,19 @@ class Tracker():
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
-            self.trainer.wait_for_everyone()
-            self.trainer.print(self.trainer.device, "loss", self.temp[f'{i}_loss'], main=False)
-            self.trainer.print(self.trainer.device, "num", self.temp[f'{i}_num'], main=False)
-            self.trainer.print(self.trainer.device, "y_true", len(self.temp[f'{i}_y_true']), main=False)
-            self.trainer.print(self.trainer.device, "y_pred", len(self.temp[f'{i}_y_pred']), main=False)
-            self.trainer.wait_for_everyone()
+            self.accelerator.wait_for_everyone()
+            self.printer.print("loss", self.temp[f'{i}_loss'], main=False)
+            self.printer.print("num", self.temp[f'{i}_num'], main=False)
+            self.printer.print("y_true", len(self.temp[f'{i}_y_true']), main=False)
+            self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), main=False)
+            self.printer.wait_for_everyone()
 
             # 汇总所有设备上的数据
-            _loss, _num, _y_true, _y_pred = self.trainer.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
+            _loss, _num, _y_true, _y_pred = self.accelerator.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
             if self.params.classify:
-                _correct = self.trainer.gather_for_metrics(self.temp[f'{i}_correct'])
+                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])
 
-            if self.trainer.is_main_process():
+            if self.accelerator.is_main_process:
                 self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
 
                 if self.params.classify:
@@ -102,7 +103,7 @@ class Tracker():
                 self.need_save = True
 
         self.reset_temp()
-        self.trainer.print(self.data)
+        self.printer.print(self.data)
 
     def reset_temp(self):
         # 重置计算变量
@@ -144,7 +145,7 @@ class Tracker():
             self.temp[f'{_type}_y_pred'].extend(output)
 
     def plot(self):
-        if not self.trainer.is_main_process():
+        if not self.accelerator.is_main_process:
             return
 
         params = self.params
@@ -269,7 +270,11 @@ class Tracker():
 
 if __name__ == '__main__':
     import torch
-    from dl_helper.trainer import train_base
+    from accelerate import Accelerator
+    import multiprocessing as mp
+
+    from dl_helper.trainer import printer
+    from dl_helper.scheduler import ReduceLR_slow_loss
 
     class p:
         classify = True
@@ -291,8 +296,14 @@ if __name__ == '__main__':
         loss = torch.nn.MSELoss()(output, target)
         return output, target, loss
     
-    _p = p()
-    t = tracker(_p, train_base(1, 'no'))
+    params = p()
+    accelerator = Accelerator()
+    model = torch.nn.Linear(1, 1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    scheduler = ReduceLR_slow_loss(optimizer)
+    lock = mp.Manager().Lock()
+    p = printer(lock, accelerator)
+    t = Tracker(params, accelerator, scheduler, 1, p)
     for i in range(15):
         for _type in ['train', 'val']:
             for j in range(10):
