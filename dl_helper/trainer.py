@@ -399,7 +399,8 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
 
 def run_fn(lock, num_processes, test, fake_data=False, model=None):
 
-    params = test.get_param()
+    parfams = test.get_param()
+    print(f'id: {id(parfams)}')
 
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
