@@ -2,8 +2,6 @@ from dl_helper.train_param import match_num_processes
 from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
-from dl_helper.trainers.gpu import train_gpu
-from dl_helper.trainers.tpu import train_tpu
 
 import copy
 
