@@ -512,6 +512,9 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
+
+            p.print(len(data))
+            continue
                 
             optimizer.zero_grad()
             output = model(data)
