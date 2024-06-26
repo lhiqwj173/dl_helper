@@ -398,36 +398,27 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
         report_memory_usage('all done')
 
 def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model=None):
-    
+    # 训练实例
     test = test_class(*args, **kwargs)
+
+    # 训练参数
     params = test.get_param()
-    print(f'id: {id(params)}')
 
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
 
     # 调整参数
-    if num_processes >= 2:
+    if num_processes == 2:
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
         b = params.batch_size
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
-
-         # 调整lr
+    
+    if num_processes > 1:
+        # 调整lr
         l = params.learning_rate
         params.learning_rate *= num_processes
-        p.print(f'learning_rate: {l} -> {params.learning_rate}')       
-
-    accelerator.wait_for_everyone()
-    print(f'batch_size: {params.batch_size}')
-    p.print(f'batch_size: {params.batch_size}')
-    return
-    
-    # if num_processes > 1:
-    #     # 调整lr
-    #     l = params.learning_rate
-    #     params.learning_rate *= num_processes
-    #     p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     if fake_data:
         # TODO
