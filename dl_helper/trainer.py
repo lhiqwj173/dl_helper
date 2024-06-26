@@ -399,11 +399,12 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
 
 def run_fn(lock, num_processes, test, fake_data=False, model=None):
 
+    params = test.get_param()
+    
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
 
     # 调整参数
-    params = test.get_param()
     if num_processes > 1:
         b = params.batch_size
         l = params.learning_rate
