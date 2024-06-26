@@ -121,12 +121,6 @@ def notebook_launcher(
         # TPU launch
         import torch_xla.distributed.xla_multiprocessing as xmp
 
-        try:
-            os.environ.pop('CLOUD_TPU_TASK_ID')
-            os.environ.pop('TPU_PROCESS_ADDRESSES')
-        except:
-            pass
-
         if len(AcceleratorState._shared_state) > 0:
             raise ValueError(
                 "To train on TPU in Colab or Kaggle Kernel, the `Accelerator` should only be initialized inside "
@@ -596,6 +590,13 @@ def run(test_class, *args, fake_data=False, epochs=-1, xla=False, **kwargs):
     #     model = test.get_model()
 
     lock = mp.Manager().Lock()
+
+    if num_processes == 8:
+        try:
+            os.environ.pop('CLOUD_TPU_TASK_ID')
+            os.environ.pop('TPU_PROCESS_ADDRESSES')
+        except:
+            pass
 
     if xla and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, fake_data, epochs, model), start_method='fork')     
