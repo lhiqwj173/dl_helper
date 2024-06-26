@@ -418,6 +418,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
 
     print(f'batch_size: {params.batch_size}')
     accelerator.wait_for_everyone()
+    return
     
     # if num_processes > 1:
     #     # 调整lr
