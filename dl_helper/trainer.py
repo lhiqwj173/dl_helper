@@ -416,8 +416,8 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         params.learning_rate *= num_processes
         p.print(f'learning_rate: {l} -> {params.learning_rate}')       
 
-    print(f'batch_size: {params.batch_size}')
     accelerator.wait_for_everyone()
+    print(f'batch_size: {params.batch_size}')
     return
     
     # if num_processes > 1:
