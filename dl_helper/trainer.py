@@ -513,8 +513,8 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
 
-            p.print(len(data))
-            continue
+            # p.print(len(data))
+            # continue
                 
             optimizer.zero_grad()
             output = model(data)
@@ -554,9 +554,9 @@ def run(test, fake_data=False):
     num_processes = match_num_processes()
 
     model = None
-    if num_processes == 8:
-        # tpu 在训练函数外实例化模型 传入
-        model = test.get_model()
+    # if num_processes == 8:
+    #     # tpu 在训练函数外实例化模型 传入
+    #     model = test.get_model()
 
     lock = mp.Manager().Lock()
     notebook_launcher(run_fn, args=(lock, num_processes, test, fake_data, model), num_processes=num_processes)
