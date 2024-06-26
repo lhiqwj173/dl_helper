@@ -499,7 +499,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
             optimizer.step()
             scheduler.step()
 
-            if accelerator.is_main_process and idx % 10 == 0:
+            if accelerator.is_main_process and idx % 15 == 0:
                 report_memory_usage(f'[{epoch}][{idx}] train')
 
         accelerator.wait_for_everyone()
@@ -516,7 +516,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
                 output = model(data)
                 loss = criterion(output, target)
 
-                if accelerator.is_main_process and idx % 10 == 0:
+                if accelerator.is_main_process and idx % 15 == 0:
                     report_memory_usage(f'[{epoch}][{idx}] val')
 
         accelerator.wait_for_everyone()
