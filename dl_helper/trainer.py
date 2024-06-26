@@ -315,7 +315,7 @@ def get_data_sampler(data_set):
 
     return train_sampler
 
-def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epochs=-1, model=None):
+def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -340,8 +340,9 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epoch
 
     p.print(f'batch_size: {params.batch_size}')
 
-    if epochs > 0:
-        params.epochs = epochs
+    if train_param:
+        for k, v in train_param.items():
+            setattr(params, k, v)
 
     if fake_data:
         # TODO
@@ -350,7 +351,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epoch
 
         # for debug
         num_samples = 272955
-        num_samples = 100000
+        num_samples = 60000
 
         # data = torch.randn(num_samples, 40, 100)
         data = torch.randn(num_samples, 3, 64, 64)
@@ -443,7 +444,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epoch
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=False, epochs=-1, model=None):
+def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     ddp = False
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
@@ -462,8 +463,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     # params.batch_size //= num_processes
     xm.master_print(f'batch_size: {params.batch_size}')
 
-    if epochs > 0:
-        params.epochs = epochs
+    if train_param:
+        for k, v in train_param.items():
+            setattr(params, k, v)
 
     if fake_data:
         # TODO
@@ -588,7 +590,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     if xm.is_master_ordinal():
         report_memory_usage('all done')
 
-def run(test_class, *args, fake_data=False, epochs=-1, xla=False, **kwargs):
+def run(test_class, *args, fake_data=False, xla=False, train_param={}, **kwargs):
     num_processes = match_num_processes()
 
     model = None
@@ -606,6 +608,6 @@ def run(test_class, *args, fake_data=False, epochs=-1, xla=False, **kwargs):
             pass
 
     if xla and num_processes == 8:
-        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, fake_data, epochs, model), start_method='fork')     
+        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), start_method='fork')     
     else:
-        notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, epochs, model), num_processes=num_processes)
+        notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), num_processes=num_processes)
