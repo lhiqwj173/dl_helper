@@ -405,22 +405,29 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     p = printer(lock, accelerator)
 
     # 调整参数
-    if num_processes >= 2:
+    if num_processes == 2:
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
         b = params.batch_size
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
 
-         # 调整lr
+        #  # 调整lr
+        # l = params.learning_rate
+        # params.learning_rate *= num_processes
+        # p.print(f'learning_rate: {l} -> {params.learning_rate}')       
+
+    # 调整参数
+    if num_processes == 8:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        b = params.batch_size
+        params.batch_size //= 4
+        p.print(f'batch_size: {b} -> {params.batch_size}')
+    
+    if num_processes > 1:
+        # 调整lr
         l = params.learning_rate
         params.learning_rate *= num_processes
-        p.print(f'learning_rate: {l} -> {params.learning_rate}')       
-    
-    # if num_processes > 1:
-    #     # 调整lr
-    #     l = params.learning_rate
-    #     params.learning_rate *= num_processes
-    #     p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     if fake_data:
         # TODO
