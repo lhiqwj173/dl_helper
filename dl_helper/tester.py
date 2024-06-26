@@ -18,14 +18,13 @@ class test_base():
     def get_param(self):
         assert self.para, 'should init param in __init__()'
         if self.debug:
-            self.para.epochs = 10
+            self.para.epochs = 30
         return self.para
 
     # 初始化数据
     # 返回一个 torch dataloader
     def get_data(self, _type, params, data_sample_getter_func=None):
         if self.debug:
-            params.epochs = 2
             return read_data(_type = _type, params=params, max_num=1, data_sample_getter_func = data_sample_getter_func)
         return read_data(_type = _type, params=params, data_sample_getter_func = data_sample_getter_func)
 
