@@ -481,7 +481,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
         # 创建数据加载器
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             sampler=train_sampler,
             drop_last=True
             # shuffle=True,
@@ -502,7 +502,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
         # 创建数据加载器
         val_loader = torch.utils.data.DataLoader(
             val_dataset,
-            batch_size=batch_size,
+            batch_size=params.batch_size,
             sampler=val_sampler,
             drop_last=True
             # shuffle=True,
