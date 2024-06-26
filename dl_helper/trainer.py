@@ -454,6 +454,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     l = params.learning_rate
     params.learning_rate *= num_processes
     xm.master_print(f'learning_rate: {l} -> {params.learning_rate}')
+    params.batch_size //= num_processes
     xm.master_print(f'batch_size: {params.batch_size}')
 
     if epochs > 0:
