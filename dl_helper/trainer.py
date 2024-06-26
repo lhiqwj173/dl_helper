@@ -426,7 +426,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
 
         # for debug
         num_samples = 272955
-        num_samples = 50000
+        num_samples = 30000
 
         # data = torch.randn(num_samples, 40, 100)
         data = torch.randn(num_samples, 3, 64, 64)
@@ -442,7 +442,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
         )
 
         val_samples = int(num_samples / 6)
-        val_data = torch.randn(val_samples, 40, 100)
+        # val_data = torch.randn(val_samples, 40, 100)
+        val_data = torch.randn(val_samples, 3, 64, 64)
         val_target = torch.randint(0, num_classes, (val_samples,))
         val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
 
