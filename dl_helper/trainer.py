@@ -18,20 +18,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
-if match_num_processes() ==8:
-    from torch.nn.parallel import DistributedDataParallel as DDP
-    import torch.distributed as dist
-    import torch_xla as xla
-    import torch_xla.core.xla_model as xm
-    import torch_xla.distributed.xla_multiprocessing as xmp
-    import torch_xla.distributed.parallel_loader as pl
-    from torch_xla import runtime as xr
-    from torch_xla.amp import autocast, GradScaler
-    try:
-      from torch_xla.amp import syncfree
-    except ImportError:
-      assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
-
+from accelerate import Accelerator
 from accelerate import notebook_launcher
 
 def train_fn(index, epoch, params, model, criterion, optimizer, train_data, trainer, tracker):
@@ -179,17 +166,6 @@ def run_fn_0(index, lock, num_processes, test):
     tracker.update()
     tracker.plot()
 
-def get_data_sampler(data_set):
-    train_sampler = None
-    if xm.xrt_world_size() > 1:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-            data_set,
-            num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
-            shuffle=True)
-
-    return train_sampler
-
 def run_fn_1(index, lock, num_processes, test):
     ###########################################
     # 1. 训练/验证
@@ -318,35 +294,29 @@ class ResNet(nn.Module):
         out = out.mean([2, 3])  # 平均池化
         out = self.fc(out)
         return out
-        
-# model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
-# WRAPPED_MODEL = xmp.MpModelWrapper(model)
 
-def run_fn(index, num_processes, test, fake_data=False):
+class printer():
+    def __init__(self, lock, accelerator):
+        self.lock = lock
+        self.accelerator = accelerator
+    
+    def print(self, *msg, main=True, **kwargs):
+        head = self.print_head(self.accelerator.process_index)
+
+def run_fn(lock, num_processes, test, fake_data=False):
     # 调整参数
     params = test.get_param()
-    # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
-    if num_processes == 2:
-        params.batch_size //= num_processes
-
-    # 调整lr
     if num_processes > 0:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        params.batch_size //= num_processes
+        # 调整lr
         params.learning_rate *= num_processes
 
-    # 设置训练参数
-    epochs = 30
-
-    ddp = False
-
-    # if ddp:
-    #     dist.init_process_group('xla', init_method='xla://')
-    dist.init_process_group('xla', init_method='xla://')
-
-    device = xm.xla_device()
-
-    batch_size = 1024
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    device = accelerator.device
 
     if fake_data:
+        # TODO
         # 创建模拟数据
         num_classes = 3
 
@@ -359,127 +329,85 @@ def run_fn(index, num_processes, test, fake_data=False):
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
-        train_sampler = None
-        if xm.xrt_world_size() > 1:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(
-                train_dataset,
-                num_replicas=xm.xrt_world_size(),
-                rank=xm.get_ordinal(),
-                shuffle=True)
-        
         # 创建数据加载器
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=batch_size,
-            sampler=train_sampler,
-            drop_last=True
-            # shuffle=True,
+            drop_last=True,
+            shuffle=True,
         )
 
-        test_samples = int(num_samples / 6)
-        test_data = torch.randn(test_samples, 40, 100)
-        test_target = torch.randint(0, num_classes, (test_samples,))
-        test_dataset = torch.utils.data.TensorDataset(test_data, test_target)
+        val_samples = int(num_samples / 6)
+        val_data = torch.randn(val_samples, 40, 100)
+        val_target = torch.randint(0, num_classes, (val_samples,))
+        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
 
-        test_sampler = None
-        if xm.xrt_world_size() > 1:
-            test_sampler = torch.utils.data.distributed.DistributedSampler(
-                test_dataset,
-                num_replicas=xm.xrt_world_size(),
-                rank=xm.get_ordinal(),
-                shuffle=True)
-        
         # 创建数据加载器
-        test_loader = torch.utils.data.DataLoader(
-            test_dataset,
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
             batch_size=batch_size,
-            sampler=test_sampler,
-            drop_last=True
-            # shuffle=True,
+            drop_last=True,
+            shuffle=True,
         )
-
     else:
         # 真实数据
-        train_loader = test.get_data('train', params, get_data_sampler)
-        test_loader = test.get_data('val', params, get_data_sampler)
+        train_loader = test.get_data('train', params)
+        val_loader = test.get_data('val', params)
 
-    xm.master_print(f'data_set len: {len(train_loader.dataset)}')
-    print(f'{index} {device}')
-    xm.rendezvous("init train_loader")
-    if xm.is_master_ordinal():
-        report_memory_usage(f'train_loader')
-
-    train_loader = pl.MpDeviceLoader(train_loader, device)
-    test_loader = pl.MpDeviceLoader(test_loader, device)
+    if accelerator.is_main_process:
+        report_memory_usage(f'init train data done')
 
     # model = ResNet()
     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
-    WRAPPED_MODEL = xmp.MpModelWrapper(model)
-    # model = model.to(device)
-    model = WRAPPED_MODEL.to(device)
-    if ddp:
-        if xr.using_pjrt():
-            xm.master_print('broadcast_master_param')
-            xm.broadcast_master_param(model)
-        model = DDP(model, gradient_as_bucket_view=True)
-    
     criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
-    # 初始化优化器
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
-    # optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
-    
-    xm.master_print(f'batch_size: {batch_size}')
-    xm.master_print(f'each epoch step: {len(train_loader)}')
+    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+        model, optimizer, train_loader, val_loader, scheduler
+    )
+
+    accelerator.print(f'prepare done')
+    accelerator.print(f'batch_size: {batch_size}')
+    accelerator.print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
     for epoch in range(epochs):
         model.train()
-        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
-            if not ddp:
-                data, target = data.to(device), target.to(device)
-
+        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
-            loss.backward()
+            accelerator.backward(loss)
+            optimizer.step()
+            scheduler.step()
 
-            if ddp:
-                optimizer.step()
-            else:
-                xm.optimizer_step(optimizer)
+            if accelerator.is_main_process and idx % 10 == 0:
+                report_memory_usage(f'[{epoch}][{idx}] train')
 
-            xm.mark_step()
-
-            if xm.is_master_ordinal() and idx % 10 == 0:
-                report_memory_usage(f'train {epoch} {idx}')
-
-        xm.rendezvous(f"train {epoch} done")
-        if xm.is_master_ordinal():
-            report_memory_usage(f'train {epoch} done')
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
         model.eval()
         with torch.no_grad():
-            for idx, (data, target) in tqdm(enumerate(test_loader), total=len(test_loader), disable=not xm.is_master_ordinal()):
+            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
                 output = model(data)
                 loss = criterion(output, target)
 
-                if xm.is_master_ordinal() and idx % 10 == 0:
-                    report_memory_usage(f'val {epoch} {idx}')
+                if accelerator.is_main_process and idx % 10 == 0:
+                    report_memory_usage(f'[{epoch}][{idx}] val')
 
-        xm.rendezvous(f"val {epoch} done")
-        if xm.is_master_ordinal():
-            report_memory_usage(f'val {epoch} done')
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
-    if xm.is_master_ordinal():
-        report_memory_usage('STOP')
+    if accelerator.is_main_process:
+        report_memory_usage('all done')
 
 
 def run(test, fake_data=False):
     num_processes = match_num_processes()
-    # lock = mp.Manager().Lock()
-
-    if num_processes == 8:
-        xmp.spawn(run_fn, args=(num_processes, copy.deepcopy(test), fake_data), start_method='fork')      
-    else:
-        notebook_launcher(run_fn, args=(0, num_processes, copy.deepcopy(test), fake_data), num_processes=num_processes)
+    lock = mp.Manager().Lock()
+    notebook_launcher(run_fn, args=(lock, num_processes, test, fake_data), num_processes=num_processes)
