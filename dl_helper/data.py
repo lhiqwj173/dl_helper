@@ -545,6 +545,7 @@ def load_data(params, file, diff_length, data_map, log=False):
 
 def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
+    print(f'batch_size: {params.batch_size}')
 
     # 数据集参数
     target_parm = params.data_parm
@@ -672,7 +673,6 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     if not None is data_sample_getter_func:
         train_sampler = data_sample_getter_func(dataset_test)
 
-    print(f'batch_size: {params.batch_size}')
     data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size, sampler=train_sampler, num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
 
