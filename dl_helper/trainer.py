@@ -329,7 +329,7 @@ class printer():
         head = f'[{self.accelerator.process_index}]'
         with self.lock:
             if main:
-                accelerator.print(head, *msg, **kwargs)
+                self.accelerator.print(head, *msg, **kwargs)
             else:
                 print(head, *msg, **kwargs)
 
