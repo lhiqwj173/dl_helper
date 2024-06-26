@@ -480,8 +480,6 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
     p.print(f'prepare done')
     p.print(f'each epoch step: {len(train_loader)}')
     
-    report_batchsize = True
-
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
@@ -489,10 +487,6 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
-
-            if report_batchsize:
-                report_batchsize = False
-                p.print(f'batch_size per core: {target.shape[0]}', main=False)
 
             # p.print(len(data))
             # continue
@@ -504,8 +498,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
             optimizer.step()
             scheduler.step()
 
-            if accelerator.is_main_process and idx % 15 == 0:
-                report_memory_usage(f'[{epoch}][{idx}] train')
+            # if accelerator.is_main_process and idx % 15 == 0:
+            #     report_memory_usage(f'[{epoch}][{idx}] train')
 
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
@@ -521,8 +515,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model
                 output = model(data)
                 loss = criterion(output, target)
 
-                if accelerator.is_main_process and idx % 15 == 0:
-                    report_memory_usage(f'[{epoch}][{idx}] val')
+                # if accelerator.is_main_process and idx % 15 == 0:
+                #     report_memory_usage(f'[{epoch}][{idx}] val')
 
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
