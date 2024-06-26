@@ -397,8 +397,9 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run_fn(lock, num_processes, test, fake_data=False, model=None):
-
+def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, model=None):
+    
+    test = test_class(*args, **kwargs)
     params = test.get_param()
     print(f'id: {id(params)}')
 
@@ -540,7 +541,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run(test, fake_data=False):
+def run(test_class, *args, fake_data=False, **kwargs):
     num_processes = match_num_processes()
 
     model = None
@@ -549,4 +550,4 @@ def run(test, fake_data=False):
     #     model = test.get_model()
 
     lock = mp.Manager().Lock()
-    notebook_launcher(run_fn, args=(lock, num_processes, copy.deepcopy(test), fake_data, model), num_processes=num_processes)
+    notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, model), num_processes=num_processes)
