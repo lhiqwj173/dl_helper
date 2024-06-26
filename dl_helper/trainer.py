@@ -263,8 +263,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     model.train()
     for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch training'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-        if not params.classify and len(targets.shape) == 1:
-            targets = targets.unsqueeze(1)
+        if not params.classify and len(target.shape) == 1:
+            target = target.unsqueeze(1)
 
         optimizer.zero_grad()
         output = model(data)
@@ -418,8 +418,8 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
         with torch.no_grad():
             for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                if not params.classify and len(targets.shape) == 1:
-                    targets = targets.unsqueeze(1)
+                if not params.classify and len(target.shape) == 1:
+                    target = target.unsqueeze(1)
 
                 output = model(data)
                 loss = criterion(output, target)
@@ -509,6 +509,10 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     for epoch in range(params.epochs):
         model.train()
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(target.shape) == 1:
+                target = target.unsqueeze(1)
+                
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
@@ -526,6 +530,10 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         model.eval()
         with torch.no_grad():
             for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(target.shape) == 1:
+                    target = target.unsqueeze(1)
+
                 output = model(data)
                 loss = criterion(output, target)
 
