@@ -462,6 +462,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         val_loader = test.get_data('val', params)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
+    p.print(f'dataloader length: {len(train_loader)}')
 
     if accelerator.is_main_process:
         report_memory_usage(f'init train data done')
