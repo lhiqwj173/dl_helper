@@ -435,16 +435,21 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
         report_memory_usage('all done')
 
 def run_fn(lock, num_processes, test, fake_data=False, model=None):
+
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    p = printer(lock, accelerator)
+
     # 调整参数
     params = test.get_param()
-    if num_processes > 0:
+    if num_processes > 1:
+        b = params.batch_size
+        l = params.learning_rate
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
         params.batch_size //= num_processes
         # 调整lr
         params.learning_rate *= num_processes
-
-    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
-    p = printer(lock, accelerator)
+        p.print(f'batch_size: {b} -> {params.batch_size}')
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     if fake_data:
         # TODO
@@ -502,9 +507,10 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     )
 
     p.print(f'prepare done')
-    p.print(f'batch_size: {params.batch_size}')
     p.print(f'each epoch step: {len(train_loader)}')
     
+    report_batchsize = True
+
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
@@ -512,6 +518,10 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
+
+            if report_batchsize:
+                report_batchsize = False
+                p.print(f'batch_size per core: {data.shape[0]}', main=False)
 
             # p.print(len(data))
             # continue

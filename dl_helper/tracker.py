@@ -70,7 +70,6 @@ class Tracker():
             self.printer.print("num", self.temp[f'{i}_num'], main=False)
             self.printer.print("y_true", len(self.temp[f'{i}_y_true']), main=False)
             self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), main=False)
-            self.printer.wait_for_everyone()
 
             # 汇总所有设备上的数据
             _loss, _num, _y_true, _y_pred = self.accelerator.gather_for_metrics(self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred'])
@@ -307,7 +306,7 @@ if __name__ == '__main__':
     for i in range(15):
         for _type in ['train', 'val']:
             for j in range(10):
-                if _p.classify:
+                if params.classify:
                     output, target, loss = random_classify_data()
                 else:
                     output, target, loss = random_regress_data()
@@ -316,7 +315,7 @@ if __name__ == '__main__':
         t.update()
         
     for j in range(10):
-        if _p.classify:
+        if params.classify:
             output, target, loss = random_classify_data()
         else:
             output, target, loss = random_regress_data()
