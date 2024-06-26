@@ -495,7 +495,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
 
             if report_batchsize:
                 report_batchsize = False
-                p.print(f'batch_size per core: {data.shape[0]}', main=False)
+                p.print(f'batch_size per core: {target.shape[0]}', main=False)
 
             # p.print(len(data))
             # continue
