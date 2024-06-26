@@ -547,4 +547,4 @@ def run(test, fake_data=False):
     #     model = test.get_model()
 
     lock = mp.Manager().Lock()
-    notebook_launcher(run_fn, args=(lock, num_processes, test, fake_data, model), num_processes=num_processes)
+    notebook_launcher(run_fn, args=(lock, num_processes, deepcopy(test), fake_data, model), num_processes=num_processes)
