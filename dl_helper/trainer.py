@@ -407,7 +407,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
     p.print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
-    for epoch in range(epochs):
+    for epoch in range(params.epochs):
         train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker=tracker)
 
         accelerator.wait_for_everyone()
@@ -506,7 +506,7 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
     p.print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
-    for epoch in range(epochs):
+    for epoch in range(params.epochs):
         model.train()
         for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
             optimizer.zero_grad()
