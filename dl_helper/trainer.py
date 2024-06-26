@@ -400,7 +400,7 @@ def run_fn_1(lock, num_processes, test, fake_data=False, model=None):
 def run_fn(lock, num_processes, test, fake_data=False, model=None):
 
     params = test.get_param()
-    
+
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
 
@@ -453,6 +453,8 @@ def run_fn(lock, num_processes, test, fake_data=False, model=None):
         # 真实数据
         train_loader = test.get_data('train', params)
         val_loader = test.get_data('val', params)
+
+    p.print(f'dataset length: {len(train_loader.dataset)}')
 
     if accelerator.is_main_process:
         report_memory_usage(f'init train data done')
