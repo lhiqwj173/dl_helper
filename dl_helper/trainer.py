@@ -363,6 +363,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epoch
             batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
+            workers=4,
         )
 
         val_samples = int(num_samples / 6)
@@ -377,6 +378,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, epoch
             batch_size=params.batch_size,
             drop_last=True,
             shuffle=True,
+            workers=4,
         )
     else:
         # 真实数据
