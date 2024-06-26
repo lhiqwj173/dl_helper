@@ -39,7 +39,7 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[2]
         self.y_n = 3
 
-        batch_n = 16
+        batch_n = 16 * 8
         title = f'binctabl_{targrt_name}_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30],
