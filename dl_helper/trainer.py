@@ -416,7 +416,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
     
-    # if num_processes > 1:
         # 调整lr
         l = params.learning_rate
         params.learning_rate *= num_processes
@@ -424,6 +423,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
 
     p.print(f'batch_size: {params.batch_size}')
 
+    # 临时额外的训练参数
     if train_param:
         for k, v in train_param.items():
             setattr(params, k, v)
@@ -433,9 +433,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
-
-    if accelerator.is_main_process:
-        report_memory_usage(f'init train data done')
 
     if None is model:
         # model = ResNet()
@@ -780,4 +777,4 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=Non
     if xla and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), start_method='fork')     
     else:
-        notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), num_processes=num_processes)
+        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), num_processes=num_processes)

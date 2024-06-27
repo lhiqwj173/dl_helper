@@ -30,6 +30,7 @@ class Tracker():
         self.step_in_epoch = 0
         self.run_limit_hour = 12 if  num_processes != 8 else 9
         self.need_save = False
+        self.need_save = True
 
         self.params = params
         self.accelerator = accelerator
