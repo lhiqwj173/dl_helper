@@ -398,6 +398,8 @@ def produce_data(params, _type='train', fake_data=False):
         # 真实数据
         loader = test.get_data(_type, params)
 
+    return loader
+
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     # 训练实例
