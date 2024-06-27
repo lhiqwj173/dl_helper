@@ -296,6 +296,21 @@ class Tracker():
         pic_file = os.path.join(params.root, f"{params.train_title}.png")
         plt.savefig(pic_file)
 
+    def state_dict(self):
+        # self.params = params
+        # self.accelerator = accelerator
+        # self.scheduler = scheduler
+        # self.printer = printer
+        return {key: value for key, value in self.__dict__.items() if key not in [
+            'params',
+            'accelerator',
+            'scheduler',
+            'printer'
+        ]}
+
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
+
 
 if __name__ == '__main__':
     import torch
@@ -325,6 +340,8 @@ if __name__ == '__main__':
         loss = torch.nn.MSELoss()(output, target)
         return output, target, loss
     
+    state_dict = None
+
     params = p()
     accelerator = Accelerator()
     model = torch.nn.Linear(1, 1)
@@ -342,6 +359,9 @@ if __name__ == '__main__':
                     output, target, loss = random_regress_data()
                 t.track(output, target, loss, _type)
         
+        if i%10 == 0:
+            state_dict = t.state_dict()
+
         t.update()
         
     for j in range(10):
@@ -353,3 +373,6 @@ if __name__ == '__main__':
 
     t.update()
     t.plot()
+
+    t.load_state_dict(state_dict)
+    t.update()
