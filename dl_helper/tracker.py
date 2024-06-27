@@ -11,6 +11,8 @@ from sklearn.metrics import r2_score
 import numpy as np
 import matplotlib.pyplot as plt
 
+from accelerate.utils import broadcast
+
 def last_value(data):
     """返回最后一个非nan值"""
     for i in range(len(data)-1, -1, -1):
@@ -94,13 +96,6 @@ class Tracker():
                 else:
                     self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
 
-        if 'test' not in self.track_update and self.accelerator.is_main_process:
-            # 判断是否需要储存 训练数据
-            last_time_hour = ((time.time() - self.begin_time) / 3600)
-            each_epoch_time_cost = last_time_hour / self.epoch_count
-            free_time = self.run_limit_hour - last_time_hour
-            if free_time < each_epoch_time_cost * 1.2:
-                self.need_save = True
 
         if 'train' in self.track_update:
             # train 结束，指向验证阶段
@@ -127,9 +122,17 @@ class Tracker():
             self.step_in_epoch = 0
             self.epoch_count += 1
 
+        if 'test' not in self.track_update and self.accelerator.is_main_process:
+            # 判断是否需要储存 训练数据
+            last_time_hour = ((time.time() - self.begin_time) / 3600)
+            each_epoch_time_cost = last_time_hour / self.epoch_count
+            free_time = self.run_limit_hour - last_time_hour
+            if free_time < each_epoch_time_cost * 1.2:
+                self.need_save = True
+
         self.reset_temp()
         self.printer.print(self.data)
-        self.step = 0
+        self.step_count = 0
 
     def reset_temp(self):
         # 重置计算变量
@@ -150,7 +153,7 @@ class Tracker():
         self.track_update.add(_type)
 
         # epoch内的迭代次数
-        self.step += 1
+        self.step_count += 1
 
         # 统计损失 tensor
         self.temp[f'{_type}_loss'] += loss
