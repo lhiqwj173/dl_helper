@@ -305,16 +305,28 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
-def test_fn(params, model, test_data, trainer):
+def test_fn(params, model, criterion, test_data, accelerator, tracker):
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in enumerate(test_data):
+        for idx, (data, target) in tqdm(enumerate(test_data), total=len(test_data), disable=not accelerator.is_main_process, desc=f'test model'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(targets.shape) == 1:
-                targets = targets.unsqueeze(1)
+            if not params.classify and len(target.shape) == 1:
+                target = target.unsqueeze(1)
 
-            data, target = trainer.prepare(data, target)
             output = model(data)
+            loss = criterion(output, target)
+
+            # 追踪器 记录数据
+            tracker.track(output, target, loss, 'test')
+
+    # 追踪器，计算必要的数据
+    tracker.update()
+
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"test done")       
+
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
@@ -357,6 +369,36 @@ def get_data_sampler(data_set):
 
     return train_sampler
 
+def produce_data(params, _type='train', fake_data=False):
+    if fake_data:
+        # 创建模拟数据
+        num_classes = 3
+
+        # for debug
+        num_samples = 272955
+        num_samples = 60000
+
+        if _type != 'train':
+            num_samples //= 6
+
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
+        target = torch.randint(0, num_classes, (num_samples,))
+        dataset = torch.utils.data.TensorDataset(data, target)
+
+        # 创建数据加载器
+        loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=params.batch_size,
+            drop_last=True,
+            shuffle=True if _type == 'train' else False,
+            # num_workers=4,
+        )
+    else:
+        # 真实数据
+        loader = test.get_data(_type, params)
+
+
 def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     # 训练实例
     test = test_class(*args, **kwargs)
@@ -386,47 +428,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    if fake_data:
-        # TODO
-        # 创建模拟数据
-        num_classes = 3
-
-        # for debug
-        num_samples = 272955
-        num_samples = 60000
-
-        data = torch.randn(num_samples, 40, 100)
-        # data = torch.randn(num_samples, 3, 64, 64)
-        target = torch.randint(0, num_classes, (num_samples,))
-        train_dataset = torch.utils.data.TensorDataset(data, target)
-
-        # 创建数据加载器
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=params.batch_size,
-            drop_last=True,
-            shuffle=True,
-            # num_workers=4,
-        )
-
-        val_samples = int(num_samples / 6)
-        val_data = torch.randn(val_samples, 40, 100)
-        # val_data = torch.randn(val_samples, 3, 64, 64)
-        val_target = torch.randint(0, num_classes, (val_samples,))
-        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
-
-        # 创建数据加载器
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=params.batch_size,
-            drop_last=True,
-            shuffle=True,
-            # num_workers=4,
-        )
-    else:
-        # 真实数据
-        train_loader = test.get_data('train', params)
-        val_loader = test.get_data('val', params)
+    train_loader = produce_data(params, 'train', fake_data)
+    val_loader = produce_data(params, 'val', fake_data)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
@@ -471,9 +474,15 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
         # 验证
         val_fn(epoch, params, model, criterion, val_data, accelerator, tracker)
 
-    if accelerator.is_main_process:
-        report_memory_usage('all done')
+    # 释放 训练/验证 数据集 optimizer
+    optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
 
+    # 准备测试数据
+    test_loader = produce_data(params, 'test', fake_data)
+    test_loader = accelerator.prepare(test_loader)
+
+    # 测试
+    test_fn(params, model, criterion, test_loader, accelerator, tracker)
 
 def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     # 训练实例
@@ -754,9 +763,10 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, **kwargs)
     num_processes = match_num_processes()
 
     model = None
-    # if num_processes == 8:
-    #     # tpu 在训练函数外实例化模型 传入
-    #     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    if num_processes == 8:
+        # tpu 在训练函数外实例化模型 传入
+        print('训练函数外实例化模型 传入')
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     lock = mp.Manager().Lock()
 
