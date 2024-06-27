@@ -47,7 +47,7 @@ class test(test_base):
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (7, 2, 3),
-            'total_hours': int(24*5),
+            'total_hours': int(24*8),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
@@ -58,8 +58,8 @@ class test(test_base):
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
             learning_rate=0.00013*batch_n, batch_size=64*batch_n, epochs=100,
 
-            # 数据增强
-            random_scale=0.05, random_mask_row=0.7,
+            # # 数据增强
+            # random_scale=0.05, random_mask_row=0.7,
 
             # 3分类
             classify=True,
