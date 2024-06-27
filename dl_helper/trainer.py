@@ -353,8 +353,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
         num_samples = 272955
         num_samples = 60000
 
-        # data = torch.randn(num_samples, 40, 100)
-        data = torch.randn(num_samples, 3, 64, 64)
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
@@ -368,8 +368,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
         )
 
         val_samples = int(num_samples / 6)
-        # val_data = torch.randn(val_samples, 40, 100)
-        val_data = torch.randn(val_samples, 3, 64, 64)
+        val_data = torch.randn(val_samples, 40, 100)
+        # val_data = torch.randn(val_samples, 3, 64, 64)
         val_target = torch.randint(0, num_classes, (val_samples,))
         val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
 
@@ -393,8 +393,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
         report_memory_usage(f'init train data done')
 
     if None is model:
-        model = ResNet()
-        # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        # model = ResNet()
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
@@ -476,8 +476,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
         num_samples = 272955
         num_samples = 100000
 
-        # data = torch.randn(num_samples, 40, 100)
-        data = torch.randn(num_samples, 3, 64, 64)
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
         train_dataset = torch.utils.data.TensorDataset(data, target)
 
@@ -497,8 +497,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
         )
 
         val_samples = int(num_samples / 6)
-        # val_data = torch.randn(val_samples, 40, 100)
-        val_data = torch.randn(val_samples, 3, 64, 64)
+        val_data = torch.randn(val_samples, 40, 100)
+        # val_data = torch.randn(val_samples, 3, 64, 64)
         val_target = torch.randint(0, num_classes, (val_samples,))
         val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
 
@@ -533,8 +533,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     val_loader = pl.MpDeviceLoader(val_loader, device)
 
     if None is model:
-        model = ResNet()
-        # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        # model = ResNet()
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
     if ddp:
         if xr.using_pjrt():
