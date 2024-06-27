@@ -759,14 +759,14 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     if xm.is_master_ordinal():
         report_memory_usage('all done')
 
-def run(test_class, *args, fake_data=False, xla=False, train_param={}, **kwargs):
+def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=None, **kwargs):
     num_processes = match_num_processes()
 
-    model = None
-    if num_processes == 8:
-        # tpu 在训练函数外实例化模型 传入
-        print('训练函数外实例化模型 传入')
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    # model = None
+    # if num_processes == 8:
+    #     # tpu 在训练函数外实例化模型 传入
+    #     print('训练函数外实例化模型 传入')
+    #     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     lock = mp.Manager().Lock()
 
