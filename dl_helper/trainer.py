@@ -315,6 +315,149 @@ def get_data_sampler(data_set):
 
     return train_sampler
 
+def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+    # 训练实例
+    test = test_class(*args, **kwargs)
+
+    # 训练参数
+    params = test.get_param()
+
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    p = printer(lock, accelerator)
+
+    # 调整参数
+    if num_processes >= 2:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        b = params.batch_size
+        params.batch_size //= num_processes
+        p.print(f'batch_size: {b} -> {params.batch_size}')
+    
+    # if num_processes > 1:
+        # 调整lr
+        l = params.learning_rate
+        params.learning_rate *= num_processes
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
+
+    p.print(f'batch_size: {params.batch_size}')
+
+    if train_param:
+        for k, v in train_param.items():
+            setattr(params, k, v)
+
+    if fake_data:
+        # TODO
+        # 创建模拟数据
+        num_classes = 3
+
+        # for debug
+        num_samples = 272955
+        num_samples = 60000
+
+        data = torch.randn(num_samples, 40, 100)
+        # data = torch.randn(num_samples, 3, 64, 64)
+        target = torch.randint(0, num_classes, (num_samples,))
+        train_dataset = torch.utils.data.TensorDataset(data, target)
+
+        # 创建数据加载器
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=params.batch_size,
+            drop_last=True,
+            shuffle=True,
+            # num_workers=4,
+        )
+
+        val_samples = int(num_samples / 6)
+        val_data = torch.randn(val_samples, 40, 100)
+        # val_data = torch.randn(val_samples, 3, 64, 64)
+        val_target = torch.randint(0, num_classes, (val_samples,))
+        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
+
+        # 创建数据加载器
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=params.batch_size,
+            drop_last=True,
+            shuffle=True,
+            # num_workers=4,
+        )
+    else:
+        # 真实数据
+        train_loader = test.get_data('train', params)
+        val_loader = test.get_data('val', params)
+
+    p.print(f'dataset length: {len(train_loader.dataset)}')
+    p.print(f'dataloader length: {len(train_loader)}')
+
+    if accelerator.is_main_process:
+        report_memory_usage(f'init train data done')
+
+    if None is model:
+        # model = ResNet()
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+
+    criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
+
+    # 训练跟踪
+    tracker = Tracker(params, accelerator, scheduler, num_processes, p)
+    # 新增到 状态 管理
+    accelerator.register_for_checkpointing(tracker)
+
+    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+        model, optimizer, train_loader, val_loader, scheduler
+    )
+
+    p.print(f'prepare done')
+    p.print(f'each epoch step: {len(train_loader)}')
+
+    # 读取可能存在的训练数据（继续训练）
+    checkpoint_folder = os.path.join(self.root, 'checkpoint')
+    resume_from_checkpoint = os.path.exists(checkpoint_folder)
+    if resume_from_checkpoint:
+        accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
+        accelerator.load_state(checkpoint_folder)
+    
+    # 训练循环
+    for epoch in range(tracker.epoch_count, params.epochs):
+        # TODO
+        model.train()
+        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(target.shape) == 1:
+                target = target.unsqueeze(1)
+                
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            accelerator.backward(loss)
+            optimizer.step()
+        
+        scheduler.step()
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+
+        model.eval()
+        with torch.no_grad():
+            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(target.shape) == 1:
+                    target = target.unsqueeze(1)
+
+                output = model(data)
+                loss = criterion(output, target)
+
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
+
+    if accelerator.is_main_process:
+        report_memory_usage('all done')
+
+
 def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     # 训练实例
     test = test_class(*args, **kwargs)

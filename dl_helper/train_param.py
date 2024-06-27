@@ -230,9 +230,6 @@ class Params:
       self.debug = debug
       self.seed = seed
 
-      # 运行变量
-      os.makedirs(os.path.join(self.root, 'var'), exist_ok=True)
-
       # # log
       # os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)
       # logger.add(os.path.join(self.root, 'log', f'{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'))
