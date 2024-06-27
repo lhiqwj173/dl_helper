@@ -230,40 +230,72 @@ def notebook_launcher(
             function(*args)
 
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker=None):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker):
+    # 检查是否存在 step 记录
+    skip_steps = tracker.step_count
+
+    active_dataloader = train_loader
+    if skip_steps > 0:
+        accelerator.print(f"[{epoch}] skipping train {skip_steps} steps.")
+        active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
+
     model.train()
-    for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch training'):
+    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
-
+            
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
         accelerator.backward(loss)
         optimizer.step()
-        scheduler.step()
 
-        if accelerator.is_main_process and idx % 10 == 0:
-            report_memory_usage(f'[{epoch}][{idx}] train')
+        # 追踪器 记录数据
+        with torch.no_grad():
+            tracker.track(output, target, loss, 'train')
 
-def val_fn(index, epoch, params, model, val_data, trainer, criterion, tracker):
+        # 缓存checkpoint
+        if tracker.need_save:
+            if idx % params.checkpointing_steps == 0:
+                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+
+    # 追踪器，计算必要的数据
+    tracker.update()
+
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
+    # 检查是否存在 step 记录
+    skip_steps = tracker.step_count
+
+    active_dataloader = val_data
+    if skip_steps > 0:
+        accelerator.print(f"[{epoch}] skipping val {skip_steps} steps.")
+        active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
+
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(val_data), total=len(val_data), disable=not trainer.is_main_process(), desc=f'epoch {epoch} validating'):
+        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
 
-            data, target = trainer.prepare(data, target)
-            output, loss = trainer.cal_output_loss(model, data, target, criterion)
-            # tracker.track(output, target, loss, 'val')
+            output = model(data)
+            loss = criterion(output, target)
 
-            trainer.wait_for_everyone()
-            if trainer.is_main_process():
-                report_memory_usage(f'val_{idx}')
+            tracker.track(output, target, loss, 'val')
 
-def test_fn(index, params, model, test_data, trainer):
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
+
+def test_fn(params, model, test_data, trainer):
     model.eval()
     with torch.no_grad():
         for idx, (data, target) in enumerate(test_data):
@@ -414,7 +446,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     p.print(f'each epoch step: {len(train_loader)}')
 
     # 读取可能存在的训练数据（继续训练）
-    checkpoint_folder = os.path.join(self.root, 'checkpoint')
+    checkpoint_folder = os.path.join(params.root, 'checkpoint')
     resume_from_checkpoint = os.path.exists(checkpoint_folder)
     if resume_from_checkpoint:
         accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
@@ -422,23 +454,10 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
-        # TODO
-        model.train()
-        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
-                
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            accelerator.backward(loss)
-            optimizer.step()
-        
-        scheduler.step()
-        accelerator.wait_for_everyone()
-        if accelerator.is_main_process:
-            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+        if tracker.step_in_epoch == 0:
+            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker)
+
+        val_fn(epoch, params, model, criterion, val_data, accelerator, tracker)
 
         model.eval()
         with torch.no_grad():
@@ -737,9 +756,9 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, **kwargs)
     num_processes = match_num_processes()
 
     model = None
-    # if num_processes == 8:
-    #     # tpu 在训练函数外实例化模型 传入
-    #     model = test.get_model()
+    if num_processes == 8:
+        # tpu 在训练函数外实例化模型 传入
+        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     lock = mp.Manager().Lock()
 

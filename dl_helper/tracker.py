@@ -24,6 +24,10 @@ class Tracker():
         # 时间统计
         self.begin_time = time.time()
         self.epoch_count = 0
+        self.step_count = 0
+        # 每个epoch训练中的阶段
+        # 0: 训练 1: 验证
+        self.step_in_epoch = 0
         self.run_limit_hour = 12 if  num_processes != 8 else 9
         self.need_save = False
 
@@ -72,38 +76,59 @@ class Tracker():
             self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), main=False)
 
             # 汇总所有设备上的数据
+            accelerator.wait_for_everyone()
             _loss, _num, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
             if self.params.classify:
-                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])
+                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])      
+            
+            # 主进程计算data
+            if accelerator.is_main_process:
+                self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
 
-            self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
-
-            if self.params.classify:
-                self.data[f'{i}_acc'].append((_correct / _num).cpu().item())
-                self.data[f'{i}_f1'].append(
-                    f1_score(_y_true, _y_pred, average='weighted')
-                )
-            else:
-                self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
+                if self.params.classify:
+                    self.data[f'{i}_acc'].append((_correct / _num).cpu().item())
+                    self.data[f'{i}_f1'].append(
+                        f1_score(_y_true, _y_pred, average='weighted')
+                    )
+                else:
+                    self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
 
         if 'train' in self.track_update:
-            # 记录学习率
-            self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
+            # train 结束，指向验证阶段
+            self.step_in_epoch = 1
 
-            # 更新 学习率
-            self.scheduler.step(self.data['train_loss'])
+            if accelerator.is_main_process:
+                # 记录学习率
+                self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
 
-            if self.accelerator.is_main_process:
-                # 判断是否需要储存 训练数据
-                self.epoch_count += 1
-                last_time_hour = ((time.time() - self.begin_time) / 3600)
-                each_epoch_time_cost = last_time_hour / self.epoch_count
-                free_time = self.run_limit_hour - last_time_hour
-                if free_time < each_epoch_time_cost * 1.2:
-                    self.need_save = True
+                # 更新 学习率
+                self.scheduler.step(self.data['train_loss'])
+
+                if self.accelerator.is_main_process:
+                    # 判断是否需要储存 训练数据
+                    self.epoch_count += 1
+                    last_time_hour = ((time.time() - self.begin_time) / 3600)
+                    each_epoch_time_cost = last_time_hour / self.epoch_count
+                    free_time = self.run_limit_hour - last_time_hour
+                    if free_time < each_epoch_time_cost * 1.2:
+                        self.need_save = True
+
+            # 同步学习率
+            cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
+            self.accelerator.wait_for_everyone()
+            cur_lr = broadcast(cur_lr)
+
+            # 在其他设备上应用学习率
+            if not self.accelerator.is_main_process:
+                self.scheduler.use_lr(cur_lr)
+
+        if 'val' in self.track_update:
+            # val 结束，重置为训练阶段
+            self.step_in_epoch = 0
 
         self.reset_temp()
         self.printer.print(self.data)
+        self.step = 0
 
     def reset_temp(self):
         # 重置计算变量
@@ -122,6 +147,9 @@ class Tracker():
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         self.track_update.add(_type)
+
+        # epoch内的迭代次数
+        self.step += 1
 
         # 统计损失 tensor
         self.temp[f'{_type}_loss'] += loss

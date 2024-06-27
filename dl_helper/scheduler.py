@@ -46,6 +46,10 @@ class ReduceLR_slow_loss():
             new_lr = max(old_lr * self.factor, self.min_lr)
             if old_lr - new_lr > self.eps:
                 param_group['lr'] = new_lr
+    
+    def use_lr(self, lr):
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            param_group['lr'] = new_lr   
 
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}

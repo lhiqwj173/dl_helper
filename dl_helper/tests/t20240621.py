@@ -58,8 +58,8 @@ class test(test_base):
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
             learning_rate=0.00013*batch_n, batch_size=64*batch_n, epochs=100,
 
-            # 数据增强
-            random_scale=0.05, random_mask_row=0.7,
+            # # 数据增强
+            # random_scale=0.05, random_mask_row=0.7,
 
             # 3分类
             classify=True,

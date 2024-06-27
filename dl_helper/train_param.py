@@ -128,6 +128,9 @@ class Params:
   # 早停参数
   no_better_stop = 15
 
+  # 缓存数据间隔
+  checkpointing_steps =  15
+
   # 随机遮蔽
   random_mask = 0
   random_mask_row = 0
@@ -168,7 +171,7 @@ class Params:
       # 训练参数
       learning_rate, batch_size, 
       epochs=100, warm_up_epochs=3, 
-      no_better_stop=0, label_smoothing=0.1, weight_decay=0.01, workers=0,
+      no_better_stop=0, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
 
       # 数据增强
       random_mask=0, random_scale=0, random_mask_row=0, 
@@ -204,6 +207,7 @@ class Params:
       self.learning_rate = learning_rate
       self.warm_up_epochs = warm_up_epochs
       self.no_better_stop = no_better_stop
+      self.checkpointing_steps = checkpointing_steps
       self.random_mask = random_mask
       self.random_scale = random_scale
       self.random_mask_row = random_mask_row
