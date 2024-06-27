@@ -76,13 +76,13 @@ class Tracker():
             self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), main=False)
 
             # 汇总所有设备上的数据
-            accelerator.wait_for_everyone()
+            self.accelerator.wait_for_everyone()
             _loss, _num, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_num'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
             if self.params.classify:
                 _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])      
             
             # 主进程计算data
-            if accelerator.is_main_process:
+            if self.accelerator.is_main_process:
                 self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
 
                 if self.params.classify:
@@ -93,25 +93,24 @@ class Tracker():
                 else:
                     self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
 
+        if 'test' not in self.track_update and self.accelerator.is_main_process:
+            # 判断是否需要储存 训练数据
+            last_time_hour = ((time.time() - self.begin_time) / 3600)
+            each_epoch_time_cost = last_time_hour / self.epoch_count
+            free_time = self.run_limit_hour - last_time_hour
+            if free_time < each_epoch_time_cost * 1.2:
+                self.need_save = True
+
         if 'train' in self.track_update:
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
-            if accelerator.is_main_process:
+            if self.accelerator.is_main_process:
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
-
-                if self.accelerator.is_main_process:
-                    # 判断是否需要储存 训练数据
-                    self.epoch_count += 1
-                    last_time_hour = ((time.time() - self.begin_time) / 3600)
-                    each_epoch_time_cost = last_time_hour / self.epoch_count
-                    free_time = self.run_limit_hour - last_time_hour
-                    if free_time < each_epoch_time_cost * 1.2:
-                        self.need_save = True
 
             # 同步学习率
             cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
@@ -125,6 +124,7 @@ class Tracker():
         if 'val' in self.track_update:
             # val 结束，重置为训练阶段
             self.step_in_epoch = 0
+            self.epoch_count += 1
 
         self.reset_temp()
         self.printer.print(self.data)

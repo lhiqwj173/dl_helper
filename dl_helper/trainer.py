@@ -288,7 +288,17 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
             output = model(data)
             loss = criterion(output, target)
 
+            # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
+
+            # 缓存checkpoint
+            if tracker.need_save:
+                if idx % params.checkpointing_steps == 0:
+                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+
+    # 追踪器，计算必要的数据
+    tracker.update()
 
     # for debug
     accelerator.wait_for_everyone()
@@ -454,24 +464,12 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
+        # 训练
         if tracker.step_in_epoch == 0:
             train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker)
 
+        # 验证
         val_fn(epoch, params, model, criterion, val_data, accelerator, tracker)
-
-        model.eval()
-        with torch.no_grad():
-            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
-                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                if not params.classify and len(target.shape) == 1:
-                    target = target.unsqueeze(1)
-
-                output = model(data)
-                loss = criterion(output, target)
-
-        accelerator.wait_for_everyone()
-        if accelerator.is_main_process:
-            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if accelerator.is_main_process:
         report_memory_usage('all done')
@@ -756,9 +754,9 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, **kwargs)
     num_processes = match_num_processes()
 
     model = None
-    if num_processes == 8:
-        # tpu 在训练函数外实例化模型 传入
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    # if num_processes == 8:
+    #     # tpu 在训练函数外实例化模型 传入
+    #     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     lock = mp.Manager().Lock()
 
