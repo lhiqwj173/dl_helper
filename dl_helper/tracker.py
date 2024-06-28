@@ -152,8 +152,8 @@ class Tracker():
             if self.params.classify:
                 self.temp[f'{i}_correct'] = 0
 
-            self.temp[f'{i}_y_true'] = []
-            self.temp[f'{i}_y_pred'] = []
+            self.temp[f'{i}_y_true'] = None
+            self.temp[f'{i}_y_pred'] = None
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
@@ -174,13 +174,21 @@ class Tracker():
             self.temp[f'{_type}_correct'] += correct_count
 
             # 统计f1
-            self.temp[f'{_type}_y_true'].extend(target)
-            self.temp[f'{_type}_y_pred'].extend(predicted_labels)
+            if self.temp[f'{_type}_y_true'] is None:
+                self.temp[f'{_type}_y_true'] = target
+                self.temp[f'{_type}_y_pred'] = predicted_labels
+            else:
+                self.temp[f'{_type}_y_true'] = torch.cat([self.temp[f'{_type}_y_true'], target], dim=0)
+                self.temp[f'{_type}_y_pred'] = torch.cat([self.temp[f'{_type}_y_pred'], predicted_labels], dim=0)
 
         else:
             # 统计r2
-            self.temp[f'{_type}_y_true'].extend(target)
-            self.temp[f'{_type}_y_pred'].extend(output)
+            if self.temp[f'{_type}_y_true'] is None:
+                self.temp[f'{_type}_y_true'] = target
+                self.temp[f'{_type}_y_pred'] = output
+            else:
+                self.temp[f'{_type}_y_true'] = torch.cat([self.temp[f'{_type}_y_true'], target], dim=0)
+                self.temp[f'{_type}_y_pred'] = torch.cat([self.temp[f'{_type}_y_pred'], output], dim=0)
 
     def plot(self):
         if not self.accelerator.is_main_process:
