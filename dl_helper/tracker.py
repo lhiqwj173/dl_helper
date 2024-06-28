@@ -63,9 +63,6 @@ class Tracker():
 
         # 计算变量
         self.temp = {}
-        self.temp['_loss'] = 0.0
-        self.temp['_num'] = 0
-        self.temp['_correct'] = 0
 
         self.reset_temp()
 
@@ -142,6 +139,12 @@ class Tracker():
             self.temp[f'{i}_y_true'] = None
             self.temp[f'{i}_y_pred'] = None
 
+        self.temp['_loss'] = 0.0
+        self.temp['_num'] = 0
+        self.temp['_correct'] = 0
+        self.temp['_y_true'] = None
+        self.temp['_y_pred'] = None
+
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         self.printer.print(self.temp[f'{_type}_y_true'], main=False)
@@ -186,13 +189,21 @@ class Tracker():
 
         # 汇总所有设备上的数据
         self.accelerator.wait_for_everyone()
-        _loss, self.temp['_y_true'], self.temp['_y_pred'] = self.accelerator.gather_for_metrics((self.temp[f'{_type}_loss'], self.temp[f'{_type}_y_true'], self.temp[f'{_type}_y_pred']))
-        self.temp['_loss'] = torch.sum(_loss)
-        self.temp['_num'] += self.temp['_y_true'].shape[0]
+        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{_type}_loss'], self.temp[f'{_type}_y_true'], self.temp[f'{_type}_y_pred']))
         if self.params.classify:
             _correct = self.accelerator.gather_for_metrics(self.temp[f'{_type}_correct'])  
-            self.temp['_correct'] = torch.sum(_correct)   
 
+        if self.accelerator.is_main_process:
+            if None is self.temp['_y_true']:
+                self.temp['_y_true'] = _y_true
+                self.temp['_y_pred'] = _y_pred
+            else:
+                self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
+                self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
+            self.temp['_loss'] += torch.sum(_loss)
+            self.temp['_num'] += self.temp['_y_true'].shape[0]
+            if self.params.classify:
+                self.temp['_correct'] += torch.sum(_correct)   
 
     def plot(self):
         if not self.accelerator.is_main_process:
