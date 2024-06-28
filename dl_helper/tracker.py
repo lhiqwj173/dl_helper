@@ -70,22 +70,25 @@ class Tracker():
         self.printer.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
+            self.printer.print("y_true",self.temp[f'{i}_y_true'])
+            self.printer.print("y_pred",self.temp[f'{i}_y_pred'])
+
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
-            self.accelerator.wait_for_everyone()
-            self.printer.print("loss", self.temp[f'{i}_loss'])
-            self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
-            self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), self.temp[f'{i}_y_pred'])
+            # self.accelerator.wait_for_everyone()
+            # self.printer.print("loss", self.temp[f'{i}_loss'])
+            # self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
+            # self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), self.temp[f'{i}_y_true'])
 
             # 汇总所有设备上的数据
-            # self.accelerator.wait_for_everyone()
-            # _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
-            # _loss = torch.sum(_loss)
-            # _num = _y_true.shape[0]
-            # if self.params.classify:
-            #     _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
-            #     _correct = torch.sum(_correct)   
+            self.accelerator.wait_for_everyone()
+            _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
+            _loss = torch.sum(_loss)
+            _num = _y_true.shape[0]
+            if self.params.classify:
+                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
+                _correct = torch.sum(_correct)   
 
             self.printer.print('gather_for_metrics done')
             
