@@ -67,6 +67,7 @@ class Tracker():
         self.reset_temp()
 
     def update(self):
+        self.accelerator.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
