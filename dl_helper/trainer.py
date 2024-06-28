@@ -41,8 +41,8 @@ from accelerate.utils import (
     get_gpu_info,
     is_mps_available,
     patch_environment,
+    set_seed
 )
-
 def notebook_launcher(
     function,
     args=(),
@@ -441,6 +441,8 @@ def produce_data(params, _type='train', fake_data=False):
 
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+    set_seed(42)
+    
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -523,6 +525,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     test_fn(params, model, criterion, test_loader, accelerator, tracker)
 
 def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+    set_seed(42)
+
     # 训练实例
     test = test_class(*args, **kwargs)
 

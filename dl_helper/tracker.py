@@ -88,7 +88,7 @@ class Tracker():
             
             # 主进程计算data
             if self.accelerator.is_main_process:
-                self.data[f'{i}_loss'].append((torch.sum(_loss) / _num).cpu().item())
+                self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
 
                 if self.params.classify:
                     self.data[f'{i}_acc'].append((_correct / _num).cpu().item())
