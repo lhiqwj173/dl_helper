@@ -70,12 +70,6 @@ class Tracker():
         self.printer.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
-            self.printer.print("y_true",self.temp[f'{i}_y_true'])
-            self.printer.print("y_pred",self.temp[f'{i}_y_pred'])
-
-            self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
-            self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
-
             # self.accelerator.wait_for_everyone()
             # self.printer.print("loss", self.temp[f'{i}_loss'])
             # self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
