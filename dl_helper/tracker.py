@@ -100,12 +100,16 @@ class Tracker():
                 else:
                     self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
 
+            self.printer.print('cal done')
 
         if 'train' in self.track_update:
+            self.printer.print('update train')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             if self.accelerator.is_main_process:
+                self.printer.print('scheduler.step')
+
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
 
@@ -113,6 +117,7 @@ class Tracker():
                 self.scheduler.step(self.data['train_loss'])
 
             # 同步学习率
+            self.printer.print('broadcast lr')
             cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
             self.accelerator.wait_for_everyone()
             cur_lr = broadcast(cur_lr)
@@ -134,6 +139,7 @@ class Tracker():
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
+        self.printer.print('reset_temp')
         self.reset_temp()
         self.printer.print(self.data)
         self.step_count = 0
