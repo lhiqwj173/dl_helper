@@ -187,6 +187,8 @@ class Tracker():
                 self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
                 self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], output))
 
+        self.printer.print('sync track...')
+
         # 汇总所有设备上的数据
         self.accelerator.wait_for_everyone()
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{_type}_loss'], self.temp[f'{_type}_y_true'], self.temp[f'{_type}_y_pred']))
