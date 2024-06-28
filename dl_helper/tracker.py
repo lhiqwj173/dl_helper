@@ -20,7 +20,6 @@ def last_value(data):
             return data[i]
     raise ValueError("没有找到非nan值")
 
-
 class Tracker():
     def __init__(self, params, accelerator, scheduler, num_processes, printer):
         # 时间统计
@@ -70,6 +69,9 @@ class Tracker():
         self.printer.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
+            self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
+            self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
+
             # self.accelerator.wait_for_everyone()
             # self.printer.print("loss", self.temp[f'{i}_loss'])
             # self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
@@ -146,11 +148,14 @@ class Tracker():
             if self.params.classify:
                 self.temp[f'{i}_correct'] = 0
 
-            self.temp[f'{i}_y_true'] = None
-            self.temp[f'{i}_y_pred'] = None
+            self.temp[f'{i}_y_true'] = []
+            self.temp[f'{i}_y_pred'] = []
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
+        self.printer.print(self.temp[f'{_type}_y_true'], main=False)
+        self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
+
         self.track_update.add(_type)
 
         # epoch内的迭代次数
@@ -168,21 +173,13 @@ class Tracker():
             self.temp[f'{_type}_correct'] += correct_count
 
             # 统计f1
-            if self.temp[f'{_type}_y_true'] is None:
-                self.temp[f'{_type}_y_true'] = target
-                self.temp[f'{_type}_y_pred'] = predicted_labels
-            else:
-                self.temp[f'{_type}_y_true'] = torch.cat([self.temp[f'{_type}_y_true'], target], dim=0)
-                self.temp[f'{_type}_y_pred'] = torch.cat([self.temp[f'{_type}_y_pred'], predicted_labels], dim=0)
+            self.temp[f'{_type}_y_true'].extend(target)
+            self.temp[f'{_type}_y_pred'].extend(predicted_labels)
 
         else:
             # 统计r2
-            if self.temp[f'{_type}_y_true'] is None:
-                self.temp[f'{_type}_y_true'] = target
-                self.temp[f'{_type}_y_pred'] = output
-            else:
-                self.temp[f'{_type}_y_true'] = torch.cat([self.temp[f'{_type}_y_true'], target], dim=0)
-                self.temp[f'{_type}_y_pred'] = torch.cat([self.temp[f'{_type}_y_pred'], output], dim=0)
+            self.temp[f'{_type}_y_true'].extend(target)
+            self.temp[f'{_type}_y_pred'].extend(output)
 
     def plot(self):
         if not self.accelerator.is_main_process:
