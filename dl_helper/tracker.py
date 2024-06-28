@@ -85,7 +85,9 @@ class Tracker():
             _num = _y_true.shape[0]
             if self.params.classify:
                 _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
-                _correct = torch.sum(_correct)    
+                _correct = torch.sum(_correct)   
+
+            self.accelerator.print('gather_for_metrics done')
             
             # 主进程计算data
             if self.accelerator.is_main_process:
