@@ -67,16 +67,16 @@ class Tracker():
         self.reset_temp()
 
     def update(self):
-        self.accelerator.print('update tracker...')
+        self.printer.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
             self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
             self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
 
-            # self.accelerator.wait_for_everyone()
-            # self.printer.print("loss", self.temp[f'{i}_loss'], main=False)
-            # self.printer.print("y_true", len(self.temp[f'{i}_y_true']), main=False)
-            # self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), main=False)
+            self.accelerator.wait_for_everyone()
+            self.printer.print("loss", self.temp[f'{i}_loss'])
+            self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
+            self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), self.temp[f'{i}_y_pred'])
 
             # 汇总所有设备上的数据
             self.accelerator.wait_for_everyone()
@@ -87,7 +87,7 @@ class Tracker():
                 _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
                 _correct = torch.sum(_correct)   
 
-            self.accelerator.print('gather_for_metrics done')
+            self.printer.print('gather_for_metrics done')
             
             # 主进程计算data
             if self.accelerator.is_main_process:
