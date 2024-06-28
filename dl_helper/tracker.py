@@ -63,45 +63,30 @@ class Tracker():
 
         # 计算变量
         self.temp = {}
+        self.temp['_loss'] = 0.0
+        self.temp['_num'] = 0
+        self.temp['_correct'] = 0
+
         self.reset_temp()
 
     def update(self):
-        self.printer.print('update tracker...')
         # 计算变量 -> data
         for i in self.track_update:
-            self.temp[f'{i}_y_true'] = torch.stack(self.temp[f'{i}_y_true'])
-            self.temp[f'{i}_y_pred'] = torch.stack(self.temp[f'{i}_y_pred'])
-
-            # self.accelerator.wait_for_everyone()
-            # self.printer.print("loss", self.temp[f'{i}_loss'])
-            # self.printer.print("y_true", len(self.temp[f'{i}_y_true']), self.temp[f'{i}_y_true'])
-            # self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), self.temp[f'{i}_y_true'])
-
-            # 汇总所有设备上的数据
-            self.accelerator.wait_for_everyone()
-            _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
-            _loss = torch.sum(_loss)
-            _num = _y_true.shape[0]
-            if self.params.classify:
-                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
-                _correct = torch.sum(_correct)   
-
-            self.printer.print('gather_for_metrics done')
-            
             # 主进程计算data
             if self.accelerator.is_main_process:
-                self.data[f'{i}_loss'].append((_loss / _num).cpu().item())
+                self.data[f'{i}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
 
                 if self.params.classify:
-                    self.data[f'{i}_acc'].append((_correct / _num).cpu().item())
+                    self.data[f'{i}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
                     self.data[f'{i}_f1'].append(
-                        f1_score(_y_true, _y_pred, average='weighted')
+                        f1_score(self.temp['_y_true'], self.temp['_y_pred'], average='weighted')
                     )
                 else:
-                    self.data[f'{i}_r2'].append(r2_score(_y_true, _y_pred, multioutput='variance_weighted'))
+                    self.data[f'{i}_r2'].append(r2_score(self.temp['_y_true'], self.temp['_y_pred'], multioutput='variance_weighted'))
 
             self.printer.print('cal done')
 
+        self.printer.print('update tracker...')
         if 'train' in self.track_update:
             self.printer.print('update train')
             # train 结束，指向验证阶段
@@ -154,8 +139,8 @@ class Tracker():
             if self.params.classify:
                 self.temp[f'{i}_correct'] = 0
 
-            self.temp[f'{i}_y_true'] = []
-            self.temp[f'{i}_y_pred'] = []
+            self.temp[f'{i}_y_true'] = None
+            self.temp[f'{i}_y_pred'] = None
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
@@ -179,13 +164,35 @@ class Tracker():
             self.temp[f'{_type}_correct'] += correct_count
 
             # 统计f1
-            self.temp[f'{_type}_y_true'].extend(target)
-            self.temp[f'{_type}_y_pred'].extend(predicted_labels)
+            # self.temp[f'{_type}_y_true'].extend(target)
+            # self.temp[f'{_type}_y_pred'].extend(predicted_labels)
+            if self.temp[f'{_type}_y_true'] is None:
+                self.temp[f'{_type}_y_true'] = target
+                self.temp[f'{_type}_y_pred'] = predicted_labels
+            else:
+                self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
+                self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], predicted_labels))
 
         else:
             # 统计r2
-            self.temp[f'{_type}_y_true'].extend(target)
-            self.temp[f'{_type}_y_pred'].extend(output)
+            # self.temp[f'{_type}_y_true'].extend(target)
+            # self.temp[f'{_type}_y_pred'].extend(output)
+            if self.temp[f'{_type}_y_true'] is None:
+                self.temp[f'{_type}_y_true'] = target
+                self.temp[f'{_type}_y_pred'] = output
+            else:
+                self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
+                self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], output))
+
+        # 汇总所有设备上的数据
+        self.accelerator.wait_for_everyone()
+        _loss, self.temp['_y_true'], self.temp['_y_pred'] = self.accelerator.gather_for_metrics((self.temp[f'{_type}_loss'], self.temp[f'{_type}_y_true'], self.temp[f'{_type}_y_pred']))
+        self.temp['_loss'] = torch.sum(_loss)
+        self.temp['_num'] += self.temp['_y_true'].shape[0]
+        if self.params.classify:
+            _correct = self.accelerator.gather_for_metrics(self.temp[f'{_type}_correct'])  
+            self.temp['_correct'] = torch.sum(_correct)   
+
 
     def plot(self):
         if not self.accelerator.is_main_process:
@@ -324,6 +331,9 @@ class Tracker():
 
     def load_state_dict(self, state_dict):
         self.__dict__.update(state_dict)
+
+        for i in self.temp:
+            self.temp[i].to(self.accelerator.device)
 
 
 if __name__ == '__main__':
