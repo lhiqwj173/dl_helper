@@ -79,13 +79,13 @@ class Tracker():
             self.printer.print("y_pred", len(self.temp[f'{i}_y_pred']), self.temp[f'{i}_y_pred'])
 
             # 汇总所有设备上的数据
-            self.accelerator.wait_for_everyone()
-            _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
-            _loss = torch.sum(_loss)
-            _num = _y_true.shape[0]
-            if self.params.classify:
-                _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
-                _correct = torch.sum(_correct)   
+            # self.accelerator.wait_for_everyone()
+            # _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{i}_loss'], self.temp[f'{i}_y_true'], self.temp[f'{i}_y_pred']))
+            # _loss = torch.sum(_loss)
+            # _num = _y_true.shape[0]
+            # if self.params.classify:
+            #     _correct = self.accelerator.gather_for_metrics(self.temp[f'{i}_correct'])  
+            #     _correct = torch.sum(_correct)   
 
             self.printer.print('gather_for_metrics done')
             
