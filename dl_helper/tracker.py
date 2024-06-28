@@ -350,10 +350,8 @@ class Tracker():
             self.temp[f'{i}_y_true'] = None
             self.temp[f'{i}_y_pred'] = None
 
-        self.printer.print(self.temp)
-
         for i in self.temp:
-            if self.temp[i]:
+            if isinstance(self.temp[i], torch.Tensor):
                 self.temp[i].to(self.accelerator.device)
 
 
