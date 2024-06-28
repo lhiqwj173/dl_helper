@@ -332,8 +332,16 @@ class Tracker():
     def load_state_dict(self, state_dict):
         self.__dict__.update(state_dict)
 
+        for i in ['train', 'val', 'test']:
+            self.temp[f'{i}_loss'] = 0.0
+            if self.params.classify:
+                self.temp[f'{i}_correct'] = 0
+            self.temp[f'{i}_y_true'] = None
+            self.temp[f'{i}_y_pred'] = None
+
         for i in self.temp:
-            self.temp[i].to(self.accelerator.device)
+            if self.temp[i]:
+                self.temp[i].to(self.accelerator.device)
 
 
 if __name__ == '__main__':
