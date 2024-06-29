@@ -279,7 +279,7 @@ def package_root(accelerator, params):
         compress_folder(params.root, zip_file, 9, inplace=False)
     accelerator.wait_for_everyone()
 
-def checkpoint(epoch, idx, accelerator, params):
+def checkpoint(epoch, idx, accelerator, params, printer):
     printer.print(f"[{epoch}][{idx}] checkpointing...")
     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
     package_root(params)
@@ -313,7 +313,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 缓存checkpoint
         if tracker.need_save:
             if idx % params.checkpointing_steps == 0:
-                checkpoint(epoch, idx + skip_steps, accelerator, params)
+                checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -352,7 +352,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 缓存checkpoint
             if checkpoint and tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
-                    checkpoint(epoch, idx + skip_steps, accelerator, params)
+                    checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
     # 追踪器，计算必要的数据
     tracker.update()
