@@ -282,7 +282,7 @@ def package_root(accelerator, params):
 def checkpoint(epoch, idx, accelerator, params, printer):
     printer.print(f"[{epoch}][{idx}] checkpointing...")
     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-    package_root(params)
+    package_root(accelerator, params)
     printer.print(f"[{epoch}][{idx}] checkpointing done")
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
@@ -537,7 +537,6 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    # 真实数据
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
 
