@@ -4,7 +4,7 @@ from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
 
 import copy
-
+import shutil
 import multiprocessing as mp
 
 from tqdm import tqdm
@@ -319,8 +319,8 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
         active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
 
     model.eval()
-    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
-        with torch.no_grad():
+    with torch.no_grad():
+        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
@@ -331,12 +331,18 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
             # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
 
-        # 缓存checkpoint
-        if tracker.need_save:
-            if idx % params.checkpointing_steps == 0:
-                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
-                accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+            # 缓存checkpoint
+            if tracker.need_save:
+                if idx % params.checkpointing_steps == 0:
+                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                    # 删除旧的 checkpoint
+                    folder = os.path.join(params.root, 'checkpoint')
+                    if os.path.exists(folder) and accelerator.is_main_process:
+                        os.remove(folder)
+                        shutil.rmtree(folder)
+                    accelerator.wait_for_everyone()
+                    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
