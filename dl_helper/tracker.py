@@ -148,8 +148,8 @@ class Tracker():
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
-        self.printer.print(self.temp[f'{_type}_y_true'], main=False)
-        self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
+        # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
+        # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
 
         self.track_update.add(_type)
 
