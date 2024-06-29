@@ -319,8 +319,8 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
         active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
 
     model.eval()
-    with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        with torch.no_grad():
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
@@ -331,12 +331,12 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
             # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
 
-            # 缓存checkpoint
-            if tracker.need_save:
-                if idx % params.checkpointing_steps == 0:
-                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
-                    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+        # 缓存checkpoint
+        if tracker.need_save:
+            if idx % params.checkpointing_steps == 0:
+                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
