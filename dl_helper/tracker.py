@@ -164,7 +164,7 @@ class Tracker():
         self.printer.print('sync track...')
         tensor_loss = torch.tensor(float(loss.item()), device=target.device)
         self.printer.print(f'device: {target.device}')
-        self.printer.print(f'loss: {loss} type: {type(loss)} devide: {loss.device}')
+        self.printer.print(f'loss: {loss} type: {type(loss)} devide: {loss.device} shape: {loss.shape}')
         self.printer.print(f'loss: {tensor_loss} type: {type(tensor_loss)}')
         self.printer.print(f'target: {target}')
         self.printer.print(f'predict: {predict}')
