@@ -468,14 +468,14 @@ def load_data(params, file, diff_length, data_map, down_freq=3, log=False):
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
-    # 每3个降采样
-    # 更长时间范围的样本数据
-    if down_freq > 1:
-        idxs = [i for i in range(0, len(x), 3)]
-        ids = [ids[i] for i in idxs]
-        mean_std = [mean_std[i] for i in idxs]
-        x = [x[i] for i in idxs]
-        y = [y[i] for i in idxs]
+    # # 每3个降采样
+    # # 更长时间范围的样本数据
+    # if down_freq > 1:
+    #     idxs = [i for i in range(0, len(x), 3)]
+    #     ids = [ids[i] for i in idxs]
+    #     mean_std = [mean_std[i] for i in idxs]
+    #     x = [x[i] for i in idxs]
+    #     y = [y[i] for i in idxs]
 
     # TODO a股数据内存占用过大
     # ids,mean_std, x, y, raw   : load 占用的内存：5.290GB
