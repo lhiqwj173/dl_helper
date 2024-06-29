@@ -49,10 +49,7 @@ class test(test_base):
         num_classes = 3
 
         # for debug
-        num_samples = 1000
-
-        if _type != 'train':
-            num_samples //= 3
+        num_samples = 64 * 3
 
         data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
