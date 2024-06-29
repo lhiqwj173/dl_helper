@@ -338,7 +338,6 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
                     # 删除旧的 checkpoint
                     folder = os.path.join(params.root, 'checkpoint')
                     if os.path.exists(folder) and accelerator.is_main_process:
-                        os.remove(folder)
                         shutil.rmtree(folder)
                         printer.print(f'rmtree {folder}')
                     print('wait')
