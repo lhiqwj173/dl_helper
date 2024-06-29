@@ -102,7 +102,7 @@ class Tracker():
             # 同步学习率
             self.printer.print('broadcast lr')
             cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
-            
+
             self.accelerator.wait_for_everyone()
             cur_lr = broadcast(cur_lr)
 
@@ -127,7 +127,8 @@ class Tracker():
                 self.need_save = True
 
         self.reset_temp()
-        self.printer.print(self.data)
+        for i in self.data:
+            self.printer.print(f"{i}: {self.data[i]}")
         self.step_count = 0
 
     def reset_temp(self):
