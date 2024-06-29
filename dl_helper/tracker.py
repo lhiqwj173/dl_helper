@@ -105,6 +105,7 @@ class Tracker():
             cur_lr = broadcast(cur_lr)
 
             # 在其他设备上应用学习率
+            self.printer.print('apply not main lr')
             if not self.accelerator.is_main_process:
                 self.scheduler.use_lr(cur_lr)
 
