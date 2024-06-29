@@ -303,7 +303,7 @@ class Dataset(torch.utils.data.Dataset):
 
         self.need_split_data_set = need_split_data_set
 
-        print(self.x_idx)
+        print(self.x_idx[0])
         self.input_shape = self.__getitem__(0)[0].shape
         # 增加一个batch维度
         self.input_shape = (1,) + self.input_shape
