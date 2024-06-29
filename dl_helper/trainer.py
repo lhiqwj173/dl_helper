@@ -500,7 +500,9 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
 
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
-    resume_from_checkpoint = len(os.listdir(checkpoint_folder)) > 0
+    checkpoint_files = os.listdir(checkpoint_folder)
+    resume_from_checkpoint = len(checkpoint_files) > 0
+    p.print(checkpoint_files)
     if resume_from_checkpoint:
         accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
         accelerator.load_state(checkpoint_folder)
