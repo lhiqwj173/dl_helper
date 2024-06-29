@@ -164,7 +164,8 @@ class Tracker():
         self.accelerator.wait_for_everyone()
         self.printer.print('sync track...')
 
-        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((torch.tensor(loss, device=target.device), target, predict))
+        loss = torch.tensor(loss, device=target.device)
+        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if self.params.classify:
             _correct = self.accelerator.gather_for_metrics(correct_count)  
 
