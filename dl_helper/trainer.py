@@ -17,6 +17,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
+
 if match_num_processes() ==8:
     from torch.nn.parallel import DistributedDataParallel as DDP
     import torch.distributed as dist
@@ -822,6 +823,7 @@ def test_func():
     val_dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data, target), batch_size=2, shuffle=True)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+    criterion = nn.CrossEntropyLoss()
 
     # 训练
     model, train_dataloader, val_dataloader, optimizer = acc.prepare(model, train_dataloader, val_dataloader, optimizer)
@@ -832,7 +834,7 @@ def test_func():
         for data, target in train_dataloader:
             optimizer.zero_grad()
             output = model(data)
-            loss = F.cross_entropy(output, target)
+            loss = criterion(output, target)
             acc.backward(loss)
             optimizer.step()
 
@@ -843,7 +845,7 @@ def test_func():
         with torch.no_grad():
             for data, target in val_dataloader:
                 output = model(data)
-                loss = F.cross_entropy(output, target)
+                loss = criterion(output, target)
 
                 acc.save_state('checkpoint')
 
