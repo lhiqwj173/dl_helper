@@ -828,6 +828,7 @@ def test_func():
     # 训练
     model, train_dataloader, val_dataloader, optimizer = acc.prepare(model, train_dataloader, val_dataloader, optimizer)
 
+    acc.print(f'开始训练')
     for i in range(10):
         # 训练
         model.train()
@@ -838,9 +839,9 @@ def test_func():
             acc.backward(loss)
             optimizer.step()
 
-            acc.print(f'{idx} train checkpoint...')
+            acc.print(f'{i} {idx} train checkpoint...')
             acc.save_state('checkpoint')
-            acc.print(f'{idx} train checkpoint done')
+            acc.print(f'{i} {idx} train checkpoint done')
 
         # 验证
         model.eval()
@@ -849,9 +850,9 @@ def test_func():
                 output = model(data)
                 loss = criterion(output, target)
 
-                acc.print(f'{idx} val checkpoint...')
+                acc.print(f'{i} {idx} val checkpoint...')
                 acc.save_state('checkpoint')
-                acc.print(f'{idx} val checkpoint done')
+                acc.print(f'{i} {idx} val checkpoint done')
 
 
 def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=None, **kwargs):
