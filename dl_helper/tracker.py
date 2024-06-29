@@ -84,6 +84,7 @@ class Tracker():
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
                 self.printer.print('cal data r2')
         
+        self.printer.print('wait 0', main=False)
         self.accelerator.wait_for_everyone()
         self.printer.print('update tracker...')
         if 'train' == self.track_update:
@@ -111,6 +112,7 @@ class Tracker():
             if not self.accelerator.is_main_process:
                 self.scheduler.use_lr(cur_lr)
 
+        self.printer.print('wait 1', main=False)
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
             self.printer.print('update val round')
@@ -126,8 +128,7 @@ class Tracker():
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
-        print('w')
-        self.printer.print('wait', main=False)
+        self.printer.print('wait 2', main=False)
         self.accelerator.wait_for_everyone()
         self.reset_temp()
         self.printer.print(self.data)
