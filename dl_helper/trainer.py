@@ -429,8 +429,8 @@ def produce_data(params, _type='train', fake_data=False):
         if _type != 'train':
             num_samples //= 6
 
-        data = torch.randn(num_samples, 40, 100)
-        # data = torch.randn(num_samples, 3, 64, 64)
+        # data = torch.randn(num_samples, 40, 100)
+        data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
         dataset = torch.utils.data.TensorDataset(data, target)
 
@@ -480,15 +480,17 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    train_loader = produce_data(params, 'train', fake_data)
-    val_loader = produce_data(params, 'val', fake_data)
+    # train_loader = produce_data(params, 'train', fake_data)
+    train_loader = produce_data(params, 'train', True)
+    # val_loader = produce_data(params, 'val', fake_data)
+    val_loader = produce_data(params, 'val', True)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
 
     if None is model:
-        # model = ResNet()
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        model = ResNet()
+        # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
