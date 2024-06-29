@@ -84,12 +84,9 @@ class Tracker():
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
                 self.printer.print('data r2')
 
-        # TODO fail
-        self.printer.print('cal done')
-
         self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            self.printer.print('update train')
+            self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
@@ -115,18 +112,20 @@ class Tracker():
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
+            self.printer.print('update val round')
             self.step_in_epoch = 0
             self.epoch_count += 1
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
-            self.printer.print('check need save')
+            self.printer.print('check if need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
+        self.accelerator.wait_for_everyone()
         self.printer.print('reset_temp')
         self.reset_temp()
         self.printer.print(self.data)
@@ -168,26 +167,20 @@ class Tracker():
             _correct = self.accelerator.gather_for_metrics(correct_count)  
 
         self.printer.print('main cal track...')
-        self.printer.print(f"self.temp['_y_true']: {self.temp['_y_true']}")
-        self.printer.print(f"self.temp['_y_pred']: {self.temp['_y_pred']}")
-        self.printer.print(f"self.temp['_loss']: {self.temp['_loss']}")
-        self.printer.print(f"self.temp['_num']: {self.temp['_num']}")
+        # self.printer.print(f"self.temp['_y_true']: {self.temp['_y_true']}")
+        # self.printer.print(f"self.temp['_y_pred']: {self.temp['_y_pred']}")
+        # self.printer.print(f"self.temp['_loss']: {self.temp['_loss']}")
+        # self.printer.print(f"self.temp['_num']: {self.temp['_num']}")
 
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
                 self.temp['_y_pred'] = _y_pred
             else:
-                self.printer.print(f"self.temp['_y_true']: {self.temp['_y_true']}")
-                self.printer.print(f"_y_true: {_y_true}")
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
-                self.printer.print('torch.cat y_true')
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
-                self.printer.print('torch.cat y_pred')
             self.temp['_loss'] += torch.sum(_loss)
-            self.printer.print('+= torch.sum(_loss')
             self.temp['_num'] += _y_true.shape[0]
-            self.printer.print('+= _y_true.shape[0]')
             if self.params.classify:
                 self.temp['_correct'] += torch.sum(_correct)   
 
