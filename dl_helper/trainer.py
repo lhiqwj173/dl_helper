@@ -269,13 +269,13 @@ def notebook_launcher(
 
 
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
     active_dataloader = train_loader
     if skip_steps > 0:
-        accelerator.print(f"[{epoch}] skipping train {skip_steps} steps.")
+        printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
         active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
 
     model.train()
@@ -297,9 +297,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 缓存checkpoint
         if tracker.need_save:
             if idx % params.checkpointing_steps == 0:
-                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                 accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -309,13 +309,13 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
-def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
     active_dataloader = val_data
     if skip_steps > 0:
-        accelerator.print(f"[{epoch}] skipping val {skip_steps} steps.")
+        printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
         active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
 
     model.eval()
@@ -334,15 +334,16 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
             # 缓存checkpoint
             if tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
-                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                     # 删除旧的 checkpoint
                     folder = os.path.join(params.root, 'checkpoint')
                     if os.path.exists(folder) and accelerator.is_main_process:
                         os.remove(folder)
                         shutil.rmtree(folder)
+                        printer.print(f'rmtree {folder}')
                     accelerator.wait_for_everyone()
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -352,7 +353,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
-def test_fn(params, model, criterion, test_data, accelerator, tracker):
+def test_fn(params, model, criterion, test_data, accelerator, tracker, printer):
     model.eval()
     with torch.no_grad():
         for idx, (data, target) in tqdm(enumerate(test_data), total=len(test_data), disable=not accelerator.is_main_process, desc=f'test model'):
@@ -517,10 +518,10 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     for epoch in range(tracker.epoch_count, params.epochs):
         # 训练
         if tracker.step_in_epoch == 0:
-            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker)
+            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p)
 
         # 验证
-        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker)
+        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p)
 
     # 释放 训练/验证 数据集 optimizer
     optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
@@ -530,7 +531,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     test_loader = accelerator.prepare(test_loader)
 
     # 测试
-    test_fn(params, model, criterion, test_loader, accelerator, tracker)
+    test_fn(params, model, criterion, test_loader, accelerator, tracker, p)
 
 def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     set_seed(42)
