@@ -271,17 +271,16 @@ def notebook_launcher(
 
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
-    # # 检查是否存在 step 记录
-    # skip_steps = tracker.step_count
+    # 检查是否存在 step 记录
+    skip_steps = tracker.step_count
 
-    # active_dataloader = train_loader
-    # if skip_steps > 0:
-    #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
-    #     active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
+    active_dataloader = train_loader
+    if skip_steps > 0:
+        printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
+        active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    # for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
-    for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
@@ -292,40 +291,37 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         accelerator.backward(loss)
         optimizer.step()
 
-        # # 追踪器 记录数据
-        # with torch.no_grad():
-        #     tracker.track(output, target, loss, 'train')
+        # 追踪器 记录数据
+        with torch.no_grad():
+            tracker.track(output, target, loss, 'train')
 
         # 缓存checkpoint
         if tracker.need_save:
             if idx % params.checkpointing_steps == 0:
-                # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
-                printer.print(f"[{epoch}][{idx}] checkpointing...")
+                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                 accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
-                printer.print(f"[{epoch}][{idx}] checkpointing done")
+                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
-    # # 追踪器，计算必要的数据
-    # tracker.update()
+    # 追踪器，计算必要的数据
+    tracker.update()
 
-    # # for debug
-    # accelerator.wait_for_everyone()
-    # if accelerator.is_main_process:
-    #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer):
-    # # 检查是否存在 step 记录
-    # skip_steps = tracker.step_count
+    # 检查是否存在 step 记录
+    skip_steps = tracker.step_count
 
-    # active_dataloader = val_data
-    # if skip_steps > 0:
-    #     printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
-    #     active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
+    active_dataloader = val_data
+    if skip_steps > 0:
+        printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
+        active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
 
     model.eval()
     with torch.no_grad():
-        # for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
-        for idx, (data, target) in tqdm(enumerate(val_data), total=len(val_data), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
@@ -333,25 +329,23 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             output = model(data)
             loss = criterion(output, target)
 
-            # # 追踪器 记录数据
-            # tracker.track(output, target, loss, 'val')
+            # 追踪器 记录数据
+            tracker.track(output, target, loss, 'val')
 
             # 缓存checkpoint
             if tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
-                    printer.print(f"[{epoch}][{idx}] checkpointing...")
-                    # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                    # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
-                    printer.print(f"[{epoch}][{idx}] checkpointing done")
+                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
-    # # 追踪器，计算必要的数据
-    # tracker.update()
+    # 追踪器，计算必要的数据
+    tracker.update()
 
-    # # for debug
-    # accelerator.wait_for_everyone()
-    # if accelerator.is_main_process:
-    #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer):
     model.eval()
@@ -417,37 +411,6 @@ def get_data_sampler(data_set):
 
     return train_sampler
 
-def produce_data(params, _type='train', fake_data=False):
-    if fake_data:
-        # 创建模拟数据
-        num_classes = 3
-
-        # for debug
-        num_samples = 272955
-        num_samples = 60000
-
-        if _type != 'train':
-            num_samples //= 6
-
-        # data = torch.randn(num_samples, 40, 100)
-        data = torch.randn(num_samples, 3, 64, 64)
-        target = torch.randint(0, num_classes, (num_samples,))
-        dataset = torch.utils.data.TensorDataset(data, target)
-
-        # 创建数据加载器
-        loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=params.batch_size,
-            drop_last=True,
-            shuffle=True if _type == 'train' else False,
-            # num_workers=4,
-        )
-    else:
-        # 真实数据
-        loader = test.get_data(_type, params)
-
-    return loader
-
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     set_seed(42)
@@ -480,17 +443,14 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    # train_loader = produce_data(params, 'train', fake_data)
-    train_loader = produce_data(params, 'train', True)
-    # val_loader = produce_data(params, 'val', fake_data)
-    val_loader = produce_data(params, 'val', True)
+    train_loader = test.get_data('train', params)
+    val_loader = test.get_data('val', params)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
 
     if None is model:
-        model = ResNet()
-        # model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        model = test.get_model()
 
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
@@ -529,7 +489,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
 
     # 准备测试数据
-    test_loader = produce_data(params, 'test', fake_data)
+    test_loader = test.get_data('test', params)
     test_loader = accelerator.prepare(test_loader)
 
     # 测试
