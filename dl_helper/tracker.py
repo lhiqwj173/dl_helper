@@ -102,6 +102,7 @@ class Tracker():
             # 同步学习率
             self.printer.print('broadcast lr')
             cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
+            
             self.accelerator.wait_for_everyone()
             cur_lr = broadcast(cur_lr)
 
@@ -110,8 +111,6 @@ class Tracker():
             if not self.accelerator.is_main_process:
                 self.scheduler.use_lr(cur_lr)
 
-        self.printer.print('wait 1', main=False)
-        self.accelerator.wait_for_everyone()
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
             self.printer.print('update val round')
@@ -127,8 +126,6 @@ class Tracker():
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
-        self.printer.print('wait 2', main=False)
-        self.accelerator.wait_for_everyone()
         self.reset_temp()
         self.printer.print(self.data)
         self.step_count = 0

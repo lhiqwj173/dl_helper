@@ -512,7 +512,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
             train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker)
 
         # 验证
-        val_fn(epoch, params, model, criterion, val_data, accelerator, tracker)
+        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker)
 
     # 释放 训练/验证 数据集 optimizer
     optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
