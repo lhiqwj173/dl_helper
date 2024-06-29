@@ -282,6 +282,7 @@ class Tracker():
 
             # 绘制学习率
             line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
+            self.printer.print(f'plot lr')
 
             # 添加图例
             ax1.legend(handles=ax1_handles)
@@ -301,7 +302,8 @@ class Tracker():
                 max_train_f1_x = data["train_f1"].index(max_train_f1)
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 # 测试集f1
-                t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#89BC7A')[0])
+                if data["test_f1"]:
+                    t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#89BC7A')[0])
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c='#8DE874')[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c='#57C838')[0])
