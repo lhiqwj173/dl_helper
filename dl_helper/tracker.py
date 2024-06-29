@@ -71,18 +71,18 @@ class Tracker():
         # 主进程计算data
         if self.accelerator.is_main_process:
             self.data[f'{self.track_update}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
-            self.printer.print('data loss')
+            self.printer.print('cal data loss')
 
             if self.params.classify:
                 self.data[f'{self.track_update}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
-                self.printer.print('data acc')
+                self.printer.print('cal data acc')
                 self.data[f'{self.track_update}_f1'].append(
                     f1_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), average='weighted')
                 )
-                self.printer.print('data f1')
+                self.printer.print('cal data f1')
             else:
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
-                self.printer.print('data r2')
+                self.printer.print('cal data r2')
 
         self.printer.print('update tracker...')
         if 'train' == self.track_update:
@@ -106,7 +106,7 @@ class Tracker():
             cur_lr = broadcast(cur_lr)
 
             # 在其他设备上应用学习率
-            self.printer.print('apply not main lr')
+            self.printer.print(f'apply not main lr -> {cur_lr}')
             if not self.accelerator.is_main_process:
                 self.scheduler.use_lr(cur_lr)
 
@@ -125,6 +125,7 @@ class Tracker():
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
+        self.printer.print('wait', main=False)
         self.accelerator.wait_for_everyone()
         self.printer.print('reset_temp')
         self.reset_temp()
