@@ -162,7 +162,7 @@ class Tracker():
 
         # 汇总所有设备上的数据
         self.printer.print('sync track...')
-        tensor_loss = torch.tensor(loss, device=target.device)
+        tensor_loss = torch.tensor(float(loss), device=target.device)
         self.printer.print(f'device: {target.device}')
         self.printer.print(f'loss: {loss} type: {type(loss)}')
         self.printer.print(f'loss: {tensor_loss} type: {type(tensor_loss)}')
