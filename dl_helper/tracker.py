@@ -331,7 +331,7 @@ class Tracker():
         
         for i in self.temp:
             if isinstance(self.temp[i], torch.Tensor):
-                self.temp[i].to(self.accelerator.device)
+                self.temp[i] = self.temp[i].to(self.accelerator.device)
 
 
 if __name__ == '__main__':
