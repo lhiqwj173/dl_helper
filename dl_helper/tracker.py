@@ -158,35 +158,25 @@ class Tracker():
         # 统计损失 tensor
         self.temp[f'{_type}_loss'] += loss
 
+        predict = output
         if self.params.classify:
             softmax_predictions = F.softmax(output, dim=1)
-            predicted_labels = torch.argmax(softmax_predictions, dim=1)
-            correct_count = torch.sum(predicted_labels == target)
+            predict = torch.argmax(softmax_predictions, dim=1)
+            correct_count = torch.sum(predict == target)
 
             # 统计acc
             self.temp[f'{_type}_correct'] += correct_count
 
-            # 统计f1
-            # self.temp[f'{_type}_y_true'].extend(target)
-            # self.temp[f'{_type}_y_pred'].extend(predicted_labels)
-            if self.temp[f'{_type}_y_true'] is None:
-                self.temp[f'{_type}_y_true'] = target
-                self.temp[f'{_type}_y_pred'] = predicted_labels
-            else:
-                self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
-                self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], predicted_labels))
-
+        # 统计f1
+        # 统计r2
+        if self.temp[f'{_type}_y_true'] is None:
+            self.temp[f'{_type}_y_true'] = target
+            self.temp[f'{_type}_y_pred'] = output
         else:
-            # 统计r2
-            # self.temp[f'{_type}_y_true'].extend(target)
-            # self.temp[f'{_type}_y_pred'].extend(output)
-            if self.temp[f'{_type}_y_true'] is None:
-                self.temp[f'{_type}_y_true'] = target
-                self.temp[f'{_type}_y_pred'] = output
-            else:
-                self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
-                self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], output))
-
+            self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
+            self.printer.print(f'torch.cat _y_true')
+            self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], output))
+            self.printer.print(f'torch.cat _y_pred')
 
         # 汇总所有设备上的数据
         self.accelerator.wait_for_everyone()

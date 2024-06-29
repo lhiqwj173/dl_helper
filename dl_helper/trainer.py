@@ -442,7 +442,7 @@ def produce_data(params, _type='train', fake_data=False):
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
     set_seed(42)
-    
+
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -816,6 +816,7 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=Non
         try:
             os.environ.pop('CLOUD_TPU_TASK_ID')
             os.environ.pop('TPU_PROCESS_ADDRESSES')
+            os.environ['ACCELERATE_DEBUG_MODE'] = '1'
         except:
             pass
 
