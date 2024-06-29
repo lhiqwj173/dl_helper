@@ -127,8 +127,12 @@ class Tracker():
                 self.need_save = True
 
         self.reset_temp()
+
+        self.printer.print(f"--------------------------")
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
+        self.printer.print(f"--------------------------")
+        
         self.step_count = 0
 
     def reset_temp(self):

@@ -299,6 +299,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             if idx % params.checkpointing_steps == 0:
                 accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                 accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+                accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -335,6 +336,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker):
                 if idx % params.checkpointing_steps == 0:
                     accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+                    accelerator.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
     # 追踪器，计算必要的数据
     tracker.update()
