@@ -178,7 +178,8 @@ class Tracker():
                 self.temp['_y_true'] = _y_true
                 self.temp['_y_pred'] = _y_pred
             else:
-                self.printer.print('torch.cat begin')
+                self.printer.print(f"self.temp['_y_true']: {self.temp['_y_true']}")
+                self.printer.print(f"_y_true: {_y_true}")
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.printer.print('torch.cat y_true')
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
