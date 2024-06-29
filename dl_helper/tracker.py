@@ -168,6 +168,11 @@ class Tracker():
             _correct = self.accelerator.gather_for_metrics(correct_count)  
 
         self.printer.print('main cal track...')
+        self.printer.print(f"self.temp['_y_true']: {self.temp['_y_true']}")
+        self.printer.print(f"self.temp['_y_pred']: {self.temp['_y_pred']}")
+        self.printer.print(f"self.temp['_loss']: {self.temp['_loss']}")
+        self.printer.print(f"self.temp['_num']: {self.temp['_num']}")
+
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
