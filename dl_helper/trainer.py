@@ -341,6 +341,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
                         os.remove(folder)
                         shutil.rmtree(folder)
                         printer.print(f'rmtree {folder}')
+                    print('wait')
                     accelerator.wait_for_everyone()
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
                     printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
