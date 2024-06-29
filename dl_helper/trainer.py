@@ -372,21 +372,6 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer):
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
-# 定义简单的 ResNet 模型
-class ResNet(nn.Module):
-    def __init__(self):
-        super(ResNet, self).__init__()
-        self.conv = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
-        self.relu = nn.ReLU()
-        self.fc = nn.Linear(64, 3)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.relu(out)
-        out = out.mean([2, 3])  # 平均池化
-        out = self.fc(out)
-        return out
-
 class printer():
     def __init__(self, lock, accelerator):
         self.lock = lock
@@ -412,7 +397,7 @@ def get_data_sampler(data_set):
     return train_sampler
 
 
-def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
 
     # 训练实例
@@ -495,7 +480,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, fake_data=False, tra
     # 测试
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p)
 
-def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
 
     # 训练实例
@@ -526,47 +511,9 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    if fake_data:
-        # TODO
-        # 创建模拟数据
-        num_classes = 3
-
-        # for debug
-        num_samples = 272955
-        num_samples = 60000
-
-        data = torch.randn(num_samples, 40, 100)
-        # data = torch.randn(num_samples, 3, 64, 64)
-        target = torch.randint(0, num_classes, (num_samples,))
-        train_dataset = torch.utils.data.TensorDataset(data, target)
-
-        # 创建数据加载器
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=params.batch_size,
-            drop_last=True,
-            shuffle=True,
-            # num_workers=4,
-        )
-
-        val_samples = int(num_samples / 6)
-        val_data = torch.randn(val_samples, 40, 100)
-        # val_data = torch.randn(val_samples, 3, 64, 64)
-        val_target = torch.randint(0, num_classes, (val_samples,))
-        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
-
-        # 创建数据加载器
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=params.batch_size,
-            drop_last=True,
-            shuffle=True,
-            # num_workers=4,
-        )
-    else:
-        # 真实数据
-        train_loader = test.get_data('train', params)
-        val_loader = test.get_data('val', params)
+    # 真实数据
+    train_loader = test.get_data('train', params)
+    val_loader = test.get_data('val', params)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
@@ -575,7 +522,6 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
         report_memory_usage(f'init train data done')
 
     if None is model:
-        # model = ResNet()
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     criterion = nn.CrossEntropyLoss()
@@ -626,7 +572,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, fake_data=False, train
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=False, train_param={}, model=None):
+def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     ddp = False
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
@@ -649,60 +595,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    if fake_data:
-        # TODO
-        # 创建模拟数据
-        num_classes = 3
-
-        # for debug
-        num_samples = 272955
-        num_samples = 100000
-
-        data = torch.randn(num_samples, 40, 100)
-        # data = torch.randn(num_samples, 3, 64, 64)
-        target = torch.randint(0, num_classes, (num_samples,))
-        train_dataset = torch.utils.data.TensorDataset(data, target)
-
-        train_sampler = torch.utils.data.distributed.DistributedSampler(
-            train_dataset,
-            num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
-            shuffle=True)
-
-        # 创建数据加载器
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=params.batch_size,
-            sampler=train_sampler,
-            drop_last=True
-            # shuffle=True,
-        )
-
-        val_samples = int(num_samples / 6)
-        val_data = torch.randn(val_samples, 40, 100)
-        # val_data = torch.randn(val_samples, 3, 64, 64)
-        val_target = torch.randint(0, num_classes, (val_samples,))
-        val_dataset = torch.utils.data.TensorDataset(val_data, val_target)
-
-        val_sampler = torch.utils.data.distributed.DistributedSampler(
-            val_dataset,
-            num_replicas=xm.xrt_world_size(),
-            rank=xm.get_ordinal(),
-            shuffle=True)
-
-        # 创建数据加载器
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=params.batch_size,
-            sampler=val_sampler,
-            drop_last=True
-            # shuffle=True,
-        )
-
-    else:
-        # 真实数据
-        train_loader = test.get_data('train', params, get_data_sampler)
-        val_loader = test.get_data('val', params, get_data_sampler)
+    # 真实数据
+    train_loader = test.get_data('train', params, get_data_sampler)
+    val_loader = test.get_data('val', params, get_data_sampler)
 
     xm.rendezvous("init train_loader")
     xm.master_print(f'dataset length: {len(train_loader.dataset)}')
@@ -715,7 +610,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     val_loader = pl.MpDeviceLoader(val_loader, device)
 
     if None is model:
-        # model = ResNet()
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
     model = model.to(device)
     if ddp:
@@ -823,7 +717,7 @@ def test_func():
                 acc.print(f'{i} {idx} val checkpoint done')
 
 
-def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=None, **kwargs):
+def run(test_class, *args, xla=False, train_param={}, model=None, **kwargs):
     num_processes = match_num_processes()
 
     # model = None
@@ -843,6 +737,6 @@ def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=Non
             pass
 
     if xla and num_processes == 8:
-        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), start_method='fork')     
+        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model), start_method='fork')     
     else:
-        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, fake_data, train_param, model), num_processes=num_processes)
+        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
