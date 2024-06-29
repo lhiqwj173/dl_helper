@@ -83,7 +83,8 @@ class Tracker():
             else:
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
                 self.printer.print('cal data r2')
-
+        
+        self.accelerator.wait_for_everyone()
         self.printer.print('update tracker...')
         if 'train' == self.track_update:
             self.printer.print('update train round')
@@ -127,7 +128,6 @@ class Tracker():
 
         self.printer.print('wait', main=False)
         self.accelerator.wait_for_everyone()
-        self.printer.print('reset_temp')
         self.reset_temp()
         self.printer.print(self.data)
         self.step_count = 0
