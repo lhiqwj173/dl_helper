@@ -162,13 +162,13 @@ class Tracker():
 
         # 汇总所有设备上的数据
         self.printer.print('sync track...')
-        loss = torch.tensor(loss, device=target.device)
-        self.printer.print(f'loss: {loss}')
+        tensor_loss = torch.tensor(loss, device=target.device)
+        self.printer.print(f'loss: {tensor_loss}')
         self.printer.print(f'target: {target}')
         self.printer.print(f'predict: {predict}')
 
         self.accelerator.wait_for_everyone()
-        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((tensor_loss, target, predict))
         if self.params.classify:
             _correct = self.accelerator.gather_for_metrics(correct_count)  
 
