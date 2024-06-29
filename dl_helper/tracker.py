@@ -84,8 +84,6 @@ class Tracker():
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
                 self.printer.print('cal data r2')
         
-        self.printer.print('wait 0', main=False)
-        self.accelerator.wait_for_everyone()
         self.printer.print('update tracker...')
         if 'train' == self.track_update:
             self.printer.print('update train round')
@@ -113,6 +111,7 @@ class Tracker():
                 self.scheduler.use_lr(cur_lr)
 
         self.printer.print('wait 1', main=False)
+        self.accelerator.wait_for_everyone()
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
             self.printer.print('update val round')

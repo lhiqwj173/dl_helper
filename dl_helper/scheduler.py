@@ -49,7 +49,7 @@ class ReduceLR_slow_loss():
     
     def use_lr(self, lr):
         for i, param_group in enumerate(self.optimizer.param_groups):
-            param_group['lr'] = new_lr   
+            param_group['lr'] = lr   
 
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
