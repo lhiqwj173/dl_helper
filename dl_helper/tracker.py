@@ -163,6 +163,7 @@ class Tracker():
         # 汇总所有设备上的数据
         self.printer.print('sync track...')
         tensor_loss = torch.unsqueeze(loss, 0)
+        self.printer.print(f'tensor_loss: {tensor_loss}')
         self.accelerator.wait_for_everyone()
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((tensor_loss, target, predict))
         if self.params.classify:
