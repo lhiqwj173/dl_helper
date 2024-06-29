@@ -299,9 +299,11 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 缓存checkpoint
         if tracker.need_save:
             if idx % params.checkpointing_steps == 0:
-                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                printer.print(f"[{epoch}][{idx}] checkpointing...")
                 accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                printer.print(f"[{epoch}][{idx}] checkpointing done")
 
     # # 追踪器，计算必要的数据
     # tracker.update()
@@ -337,9 +339,11 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 缓存checkpoint
             if tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
-                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
+                    printer.print(f"[{epoch}][{idx}] checkpointing...")
+                    # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                    # printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                    printer.print(f"[{epoch}][{idx}] checkpointing done")
 
     # # 追踪器，计算必要的数据
     # tracker.update()
