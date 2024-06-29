@@ -122,7 +122,7 @@ class Tracker():
             # 判断是否需要储存 训练数据
             self.printer.print('check need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
-            each_epoch_time_cost = last_time_hour / self.epoch_count
+            each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
