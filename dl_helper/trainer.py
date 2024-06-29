@@ -325,6 +325,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
 
+            model.eval()
             output = model(data)
             loss = criterion(output, target)
 
@@ -334,6 +335,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 缓存checkpoint
             if tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
+                    model.train()
                     printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
                     # 删除旧的 checkpoint
                     folder = os.path.join(params.root, 'checkpoint')
