@@ -280,7 +280,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     #     active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    # for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
@@ -321,7 +322,8 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        # for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        for idx, (data, target) in tqdm(enumerate(val_data), total=len(val_data), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
