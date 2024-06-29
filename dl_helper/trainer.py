@@ -803,6 +803,51 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, fake_data=F
     if xm.is_master_ordinal():
         report_memory_usage('all done')
 
+def test_func():
+    acc = Accelerator()
+    
+    # 线性模型
+    model = nn.Linear(10, 2)
+
+    # 模拟数据
+    data_length = 1000
+    data = torch.randn(data_length, 10)
+    target = torch.randint(0, 2, (data_length,))
+    train_dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data, target), batch_size=2, shuffle=True)
+
+    # validation
+    data_length = 100
+    data = torch.randn(data_length, 10)
+    target = torch.randint(0, 2, (data_length,))
+    val_dataloader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(data, target), batch_size=2, shuffle=True)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+
+    # 训练
+    model, train_dataloader, val_dataloader, optimizer = acc.prepare(model, train_dataloader, val_dataloader, optimizer)
+
+    for i in range(10):
+        # 训练
+        model.train()
+        for data, target in train_dataloader:
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.cross_entropy(output, target)
+            acc.backward(loss)
+            optimizer.step()
+
+            acc.save_state('checkpoint')
+
+        # 验证
+        model.eval()
+        with torch.no_grad():
+            for data, target in val_dataloader:
+                output = model(data)
+                loss = F.cross_entropy(output, target)
+
+                acc.save_state('checkpoint')
+
+
 def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=None, **kwargs):
     num_processes = match_num_processes()
 
