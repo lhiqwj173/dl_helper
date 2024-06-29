@@ -126,6 +126,7 @@ class Tracker():
             if free_time < each_epoch_time_cost * 1.2:
                 self.need_save = True
 
+        print('w')
         self.printer.print('wait', main=False)
         self.accelerator.wait_for_everyone()
         self.reset_temp()
