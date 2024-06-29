@@ -268,8 +268,6 @@ def notebook_launcher(
                 print("Launching training on CPU.")
             function(*args)
 
-
-
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count

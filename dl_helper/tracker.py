@@ -90,6 +90,7 @@ class Tracker():
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
+            lr_change = False
             if self.accelerator.is_main_process:
                 self.printer.print('scheduler.step')
 
@@ -98,18 +99,22 @@ class Tracker():
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
+                lr_change = self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]
 
             # 同步学习率
-            self.printer.print('broadcast lr')
-            cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
-
             self.accelerator.wait_for_everyone()
-            cur_lr = broadcast(cur_lr)
+            lr_change = broadcast(lr_change)
+            if lr_change:
+                self.printer.print('broadcast lr')
+                cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
-            # 在其他设备上应用学习率
-            self.printer.print(f'apply not main lr -> {cur_lr}')
-            if not self.accelerator.is_main_process:
-                self.scheduler.use_lr(cur_lr)
+                self.accelerator.wait_for_everyone()
+                cur_lr = broadcast(cur_lr)
+
+                # 在其他设备上应用学习率
+                self.printer.print(f'apply not main lr -> {cur_lr}')
+                if not self.accelerator.is_main_process:
+                    self.scheduler.use_lr(cur_lr)
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
@@ -132,7 +137,7 @@ class Tracker():
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
         self.printer.print(f"--------------------------")
-        
+
         self.step_count = 0
 
     def reset_temp(self):
