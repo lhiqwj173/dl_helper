@@ -216,7 +216,11 @@ class Params:
       self.init_learning_ratio = init_learning_ratio
       self.increase_ratio = increase_ratio
       self.data_set = data_set
-      self.data_parm = data_str2parm(data_set)
+
+      try:
+        self.data_parm = data_str2parm(data_set)
+      except:
+        self.data_parm = None
 
       self.classify = classify
       self.y_n = y_n
