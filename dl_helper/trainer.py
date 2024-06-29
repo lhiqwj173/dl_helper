@@ -831,23 +831,27 @@ def test_func():
     for i in range(10):
         # 训练
         model.train()
-        for data, target in train_dataloader:
+        for idx, (data, target) in enumerate(train_dataloader):
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
             acc.backward(loss)
             optimizer.step()
 
+            acc.print(f'{idx} train checkpoint...')
             acc.save_state('checkpoint')
+            acc.print(f'{idx} train checkpoint done')
 
         # 验证
         model.eval()
         with torch.no_grad():
-            for data, target in val_dataloader:
+            for idx, (data, target) in enumerate(val_dataloader):
                 output = model(data)
                 loss = criterion(output, target)
 
+                acc.print(f'{idx} val checkpoint...')
                 acc.save_state('checkpoint')
+                acc.print(f'{idx} val checkpoint done')
 
 
 def run(test_class, *args, fake_data=False, xla=False, train_param={}, model=None, **kwargs):
