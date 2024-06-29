@@ -77,11 +77,11 @@ class Tracker():
                 self.data[f'{self.track_update}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
                 self.printer.print('data acc')
                 self.data[f'{self.track_update}_f1'].append(
-                    f1_score(self.temp['_y_true'], self.temp['_y_pred'], average='weighted')
+                    f1_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), average='weighted')
                 )
                 self.printer.print('data f1')
             else:
-                self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'], self.temp['_y_pred'], multioutput='variance_weighted'))
+                self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
                 self.printer.print('data r2')
 
         # TODO fail
