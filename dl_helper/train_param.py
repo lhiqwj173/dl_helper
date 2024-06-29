@@ -191,14 +191,19 @@ class Params:
 
       describe='',
 
-      debug = False,seed = 42,amp=False
+      debug = False,seed = 42,amp='no'
   ):
       # 添加训练后缀 (训练设备/混合精度)
       run_device = get_gpu_info()
       self.train_title = f'{train_title}_{run_device}'
       self.root = f'{root}_{run_device}'
-      self.amp = amp
-      if self.amp and self.amp!='no':
+      
+      if amp not in ['no', 'fp8', 'fp16', 'bf16']:
+        self.amp = 'no'
+      else:
+        self.amp = amp
+
+      if self.amp in ['fp8', 'fp16', 'bf16']:
           self.train_title = f'{self.train_title }_{self.amp}'
           self.root = f'{self.root }_{self.amp}'
 
