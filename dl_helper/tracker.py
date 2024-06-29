@@ -194,127 +194,130 @@ class Tracker():
                 self.temp['_correct'] += torch.sum(_correct)   
 
     def plot(self):
-        if not self.accelerator.is_main_process:
-            return
+        if self.accelerator.is_main_process:
+            params = self.params
+            cost_hour = (time.time() - self.begin_time) / 3600
 
-        params = self.params
-        cost_hour = (time.time() - self.begin_time) / 3600
+            # x 数量
+            epochs = self.params.epochs
 
-        # x 数量
-        epochs = self.params.epochs
+            # 标准化数据，nan补气数据
+            data = self.data.copy()
+            for i in data:
+                if 'test' in i:
+                    data[i] = [data[i][-1]] * epochs if len(data[i]) else []
+                else:
+                    data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
 
-        # 标准化数据，nan补气数据
-        data = self.data.copy()
-        for i in data:
-            if 'test' in i:
-                data[i] = [data[i][-1]] * epochs
+            # 创建图形和坐标轴
+            fig, axs = None, None
+            ax1 = None
+            if params.classify:
+                # 分类模型
+                fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
+                ax1 = axs[0]
             else:
-                data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
+                fig, axs = plt.subplots(figsize=(15, 10))
+                ax1 = axs
 
-        # 创建图形和坐标轴
-        fig, axs = None, None
-        ax1 = None
-        if params.classify:
-            # 分类模型
-            fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
-            ax1 = axs[0]
-        else:
-            fig, axs = plt.subplots(figsize=(15, 10))
-            ax1 = axs
+            # 用于添加图例
+            ax1_handles = []
 
-        # 用于添加图例
-        ax1_handles = []
+            # 计算误差最低点
+            min_train_loss = min(data['train_loss'])
+            min_test_loss = min(data['val_loss'])
+            min_train_x = data['train_loss'].index(min_train_loss)
+            min_test_x = data['val_loss'].index(min_test_loss)
+            # 测试集损失
+            if data['test_loss']:
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='#B0C4DE')[0])
+            # 绘制loss曲线
+            ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='b')[0])
+            ax1_handles.append(ax1.plot(list(range(epochs)), data['val_loss'], label=f"validation loss {last_value(data['val_loss']):.4f}", c='#00BFFF')[0])
+            # 标记损失最低点
+            ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}'))
+            ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}'))
 
-        # 计算误差最低点
-        min_train_loss = min(data['train_loss'])
-        min_test_loss = min(data['val_loss'])
-        min_train_x = data['train_loss'].index(min_train_loss)
-        min_test_x = data['val_loss'].index(min_test_loss)
-        # 测试集损失
-        ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='#B0C4DE')[0])
-        # 绘制loss曲线
-        ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='b')[0])
-        ax1_handles.append(ax1.plot(list(range(epochs)), data['val_loss'], label=f"validation loss {last_value(data['val_loss']):.4f}", c='#00BFFF')[0])
-        # 标记损失最低点
-        ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}'))
-        ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}'))
+            if params.classify:
+                # 分类模型
+                # 计算acc最高点
+                max_train_acc = max(data['train_acc'])
+                max_test_acc = max(data['val_acc'])
+                max_train_acc_x = data['train_acc'].index(max_train_acc)
+                max_test_acc_x = data['val_acc'].index(max_test_acc)
+                # 测试集准确率
+                if data['test_acc']:
+                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_acc'], label=f"test acc {last_value(data['test_acc']):.4f}", c='#F5DEB3')[0]) 
+                # 绘制acc曲线
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_acc'], label=f"train acc {last_value(data['train_acc']):.4f}", c='r')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_acc'], label=f"validation acc {last_value(data['val_acc']):.4f}", c='#FFA07A')[0])
+                # 标记准确率最高点
+                ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='r',label=f'train acc max: {max_train_acc:.4f}'))
+                ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}'))
 
-        if params.classify:
-            # 分类模型
-            # 计算acc最高点
-            max_train_acc = max(data['train_acc'])
-            max_test_acc = max(data['val_acc'])
-            max_train_acc_x = data['train_acc'].index(max_train_acc)
-            max_test_acc_x = data['val_acc'].index(max_test_acc)
-            # 测试集准确率
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['test_acc'], label=f"test acc {last_value(data['test_acc']):.4f}", c='#F5DEB3')[0]) 
-            # 绘制acc曲线
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['train_acc'], label=f"train acc {last_value(data['train_acc']):.4f}", c='r')[0])
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['val_acc'], label=f"validation acc {last_value(data['val_acc']):.4f}", c='#FFA07A')[0])
-            # 标记准确率最高点
-            ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='r',label=f'train acc max: {max_train_acc:.4f}'))
-            ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}'))
+            else:
+                # 回归模型
+                # 计算r2最高点
+                max_train_r2 = max(data['train_r2'])
+                max_test_r2 = max(data['val_r2'])
+                max_train_r2_x = data['train_r2'].index(max_train_r2)
+                max_test_r2_x = data['val_r2'].index(max_test_r2)
+                # 测试集r2
+                if data['test_r2']:
+                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_r2'], label=f"test r2 {last_value(data['test_r2']):.4f}", c='#F5DEB3')[0])
+                # 绘制r2曲线
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_r2'], label=f"train r2 {last_value(data['train_r2']):.4f}", c='r')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_r2'], label=f"validation r2 {last_value(data['val_r2']):.4f}", c='#FFA07A')[0])
+                # 标记r2最高点
+                ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}'))
+                ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}'))
 
-        else:
-            # 回归模型
-            # 计算r2最高点
-            max_train_r2 = max(data['train_r2'])
-            max_test_r2 = max(data['val_r2'])
-            max_train_r2_x = data['train_r2'].index(max_train_r2)
-            max_test_r2_x = data['val_r2'].index(max_test_r2)
-            # 测试集r2
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['test_r2'], label=f"test r2 {last_value(data['test_r2']):.4f}", c='#F5DEB3')[0])
-            # 绘制r2曲线
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['train_r2'], label=f"train r2 {last_value(data['train_r2']):.4f}", c='r')[0])
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['val_r2'], label=f"validation r2 {last_value(data['val_r2']):.4f}", c='#FFA07A')[0])
-            # 标记r2最高点
-            ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}'))
-            ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}'))
+            # 创建右侧坐标轴
+            ax2 = ax1.twinx()
 
-        # 创建右侧坐标轴
-        ax2 = ax1.twinx()
+            # 绘制学习率
+            line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
 
-        # 绘制学习率
-        line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
+            # 添加图例
+            ax1.legend(handles=ax1_handles)
 
-        # 添加图例
-        ax1.legend(handles=ax1_handles)
+            # 显示横向和纵向的格线
+            ax1.grid(True)
+            ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
 
-        # 显示横向和纵向的格线
-        ax1.grid(True)
-        ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
+            # 图2
+            if params.classify:
+                # 分类模型
+                t2_handles = []
 
-        # 图2
-        if params.classify:
-            # 分类模型
-            t2_handles = []
+                # 计算f1最高点
+                max_train_f1 = max(data["train_f1"])
+                max_test_f1 = max(data["val_f1"])
+                max_train_f1_x = data["train_f1"].index(max_train_f1)
+                max_test_f1_x = data["val_f1"].index(max_test_f1)
+                # 测试集f1
+                t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#89BC7A')[0])
+                # 绘制f1曲线
+                t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c='#8DE874')[0])
+                t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c='#57C838')[0])
+                # 标记f1最高点
+                t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c='#8DE874',label=f'train f1 max: {max_train_f1:.4f}'))
+                t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c='#57C838',label=f'val f1 max: {max_test_f1:.4f}'))
 
-            # 计算f1最高点
-            max_train_f1 = max(data["train_f1"])
-            max_test_f1 = max(data["val_f1"])
-            max_train_f1_x = data["train_f1"].index(max_train_f1)
-            max_test_f1_x = data["val_f1"].index(max_test_f1)
-            # 测试集f1
-            t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#89BC7A')[0])
-            # 绘制f1曲线
-            t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c='#8DE874')[0])
-            t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c='#57C838')[0])
-            # 标记f1最高点
-            t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c='#8DE874',label=f'train f1 max: {max_train_f1:.4f}'))
-            t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c='#57C838',label=f'val f1 max: {max_test_f1:.4f}'))
+                axs[1].grid(True)
+                axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
+                axs[1].legend(handles=t2_handles)
 
-            axs[1].grid(True)
-            axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
-            axs[1].legend(handles=t2_handles)
+            title = f'{params.train_title}'
+            if params.describe:
+                title += f' | {params.describe}'
+            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f} hours'
+            plt.title(title)
 
-        title = f'{params.train_title}'
-        if params.describe:
-            title += f' | {params.describe}'
-        title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f} hours'
-        plt.title(title)
+            pic_file = os.path.join(params.root, f"{params.train_title}.png")
+            plt.savefig(pic_file)
 
-        pic_file = os.path.join(params.root, f"{params.train_title}.png")
-        plt.savefig(pic_file)
+        self.accelerator.wait_for_everyone()
 
     def state_dict(self):
         # self.params = params

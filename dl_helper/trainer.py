@@ -17,6 +17,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
+from py_ext.lzma import compress_folder
+
 
 if match_num_processes() ==8:
     from torch.nn.parallel import DistributedDataParallel as DDP
@@ -268,6 +270,21 @@ def notebook_launcher(
                 print("Launching training on CPU.")
             function(*args)
 
+def package_root(accelerator, params):
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        zip_file = f'{params.root}.7z'
+        if os.path.exists(zip_file):
+            os.remove(zip_file)
+        compress_folder(params.root, zip_file, 9, inplace=False)
+    accelerator.wait_for_everyone()
+
+def checkpoint(epoch, idx, accelerator, params):
+    printer.print(f"[{epoch}][{idx}] checkpointing...")
+    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+    package_root(params)
+    printer.print(f"[{epoch}][{idx}] checkpointing done")
+
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
@@ -296,9 +313,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 缓存checkpoint
         if tracker.need_save:
             if idx % params.checkpointing_steps == 0:
-                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
-                accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                checkpoint(epoch, idx + skip_steps, accelerator, params)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -308,7 +323,11 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
-def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer):
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, checkpoint=False):
+    """
+    异常模型在验证时checkpoint会报错, 默认不进行checkpoint
+    """
+
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
@@ -331,11 +350,9 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             tracker.track(output, target, loss, 'val')
 
             # 缓存checkpoint
-            if tracker.need_save:
+            if checkpoint and tracker.need_save:
                 if idx % params.checkpointing_steps == 0:
-                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing...")
-                    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-                    printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
+                    checkpoint(epoch, idx + skip_steps, accelerator, params)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -393,7 +410,6 @@ def get_data_sampler(data_set):
             shuffle=True)
 
     return train_sampler
-
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
@@ -468,6 +484,12 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         # 验证
         val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p)
 
+        # 绘图
+        tracker.plot()
+
+        # 打包
+        package_root(accelerator, params)
+
     # 释放 训练/验证 数据集 optimizer
     optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
 
@@ -477,6 +499,12 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
     # 测试
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p)
+
+    # 绘图
+    tracker.plot()
+
+    # 打包
+    package_root(accelerator, params)
 
 def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
