@@ -271,13 +271,13 @@ def notebook_launcher(
 
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
-    # 检查是否存在 step 记录
-    skip_steps = tracker.step_count
+    # # 检查是否存在 step 记录
+    # skip_steps = tracker.step_count
 
-    active_dataloader = train_loader
-    if skip_steps > 0:
-        printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
-        active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
+    # active_dataloader = train_loader
+    # if skip_steps > 0:
+    #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
+    #     active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
 
     model.train()
     for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
@@ -291,9 +291,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         accelerator.backward(loss)
         optimizer.step()
 
-        # 追踪器 记录数据
-        with torch.no_grad():
-            tracker.track(output, target, loss, 'train')
+        # # 追踪器 记录数据
+        # with torch.no_grad():
+        #     tracker.track(output, target, loss, 'train')
 
         # 缓存checkpoint
         if tracker.need_save:
@@ -302,22 +302,22 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
                 accelerator.save_state(os.path.join(params.root, 'checkpoint'))
                 printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
-    # 追踪器，计算必要的数据
-    tracker.update()
+    # # 追踪器，计算必要的数据
+    # tracker.update()
 
-    # for debug
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+    # # for debug
+    # accelerator.wait_for_everyone()
+    # if accelerator.is_main_process:
+    #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer):
-    # 检查是否存在 step 记录
-    skip_steps = tracker.step_count
+    # # 检查是否存在 step 记录
+    # skip_steps = tracker.step_count
 
-    active_dataloader = val_data
-    if skip_steps > 0:
-        printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
-        active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
+    # active_dataloader = val_data
+    # if skip_steps > 0:
+    #     printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
+    #     active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
 
     model.eval()
     with torch.no_grad():
@@ -329,8 +329,8 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             output = model(data)
             loss = criterion(output, target)
 
-            # 追踪器 记录数据
-            tracker.track(output, target, loss, 'val')
+            # # 追踪器 记录数据
+            # tracker.track(output, target, loss, 'val')
 
             # 缓存checkpoint
             if tracker.need_save:
@@ -339,13 +339,13 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
                     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
                     printer.print(f"[{epoch}][{idx + skip_steps}] checkpointing done")
 
-    # 追踪器，计算必要的数据
-    tracker.update()
+    # # 追踪器，计算必要的数据
+    # tracker.update()
 
-    # for debug
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
+    # # for debug
+    # accelerator.wait_for_everyone()
+    # if accelerator.is_main_process:
+    #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer):
     model.eval()
