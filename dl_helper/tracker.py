@@ -1,7 +1,7 @@
 """
 用于追踪训练过程评价指标
 """
-import time, math, os
+import time, math, os, copy
 from datetime import datetime
 import torch
 import torch.nn.functional as F
@@ -194,6 +194,7 @@ class Tracker():
                 self.temp['_correct'] += torch.sum(_correct)   
 
     def plot(self):
+        self.printer.print('plot...')
         if self.accelerator.is_main_process:
             params = self.params
             cost_hour = (time.time() - self.begin_time) / 3600
@@ -202,12 +203,13 @@ class Tracker():
             epochs = self.params.epochs
 
             # 标准化数据，nan补气数据
-            data = self.data.copy()
+            data = copy.deepcopy(self.data)
             for i in data:
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
+            self.printer.print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
