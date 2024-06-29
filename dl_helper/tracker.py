@@ -179,9 +179,13 @@ class Tracker():
                 self.temp['_y_pred'] = _y_pred
             else:
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
+                self.printer.print('torch.cat y_true')
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
+                self.printer.print('torch.cat y_pred')
             self.temp['_loss'] += torch.sum(_loss)
-            self.temp['_num'] += self.temp['_y_true'].shape[0]
+            self.printer.print('+= torch.sum(_loss')
+            self.temp['_num'] += _y_true.shape[0]
+            self.printer.print('+= _y_true.shape[0]')
             if self.params.classify:
                 self.temp['_correct'] += torch.sum(_correct)   
 
