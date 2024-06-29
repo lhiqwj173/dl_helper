@@ -59,7 +59,7 @@ class Tracker():
         self.data['lr'] = []
 
         # 跟新类别
-        self.track_update = set()
+        self.track_update = ''
 
         # 计算变量
         self.temp = {}
@@ -68,23 +68,27 @@ class Tracker():
 
     def update(self):
         # 计算变量 -> data
-        for i in self.track_update:
-            # 主进程计算data
-            if self.accelerator.is_main_process:
-                self.data[f'{i}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
+        # 主进程计算data
+        if self.accelerator.is_main_process:
+            self.data[f'{self.track_update}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
+            self.printer.print('data loss')
 
-                if self.params.classify:
-                    self.data[f'{i}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
-                    self.data[f'{i}_f1'].append(
-                        f1_score(self.temp['_y_true'], self.temp['_y_pred'], average='weighted')
-                    )
-                else:
-                    self.data[f'{i}_r2'].append(r2_score(self.temp['_y_true'], self.temp['_y_pred'], multioutput='variance_weighted'))
+            if self.params.classify:
+                self.data[f'{self.track_update}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
+                self.printer.print('data acc')
+                self.data[f'{self.track_update}_f1'].append(
+                    f1_score(self.temp['_y_true'], self.temp['_y_pred'], average='weighted')
+                )
+                self.printer.print('data f1')
+            else:
+                self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'], self.temp['_y_pred'], multioutput='variance_weighted'))
+                self.printer.print('data r2')
 
-            self.printer.print('cal done')
+        # TODO fail
+        self.printer.print('cal done')
 
         self.printer.print('update tracker...')
-        if 'train' in self.track_update:
+        if 'train' == self.track_update:
             self.printer.print('update train')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
@@ -109,13 +113,14 @@ class Tracker():
             if not self.accelerator.is_main_process:
                 self.scheduler.use_lr(cur_lr)
 
-        if 'val' in self.track_update:
+        if 'val' == self.track_update:
             # val 结束，重置为训练阶段
             self.step_in_epoch = 0
             self.epoch_count += 1
 
-        if 'test' not in self.track_update and self.accelerator.is_main_process:
+        if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
+            self.printer.print('check need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / self.epoch_count
             free_time = self.run_limit_hour - last_time_hour
@@ -129,16 +134,8 @@ class Tracker():
 
     def reset_temp(self):
         # 重置计算变量
-        self.track_update.clear()
+        self.track_update = ''
         self.temp = {}
-        for i in ['train', 'val', 'test']:
-            self.temp[f'{i}_loss'] = 0.0
-
-            if self.params.classify:
-                self.temp[f'{i}_correct'] = 0
-
-            self.temp[f'{i}_y_true'] = None
-            self.temp[f'{i}_y_pred'] = None
 
         self.temp['_loss'] = 0.0
         self.temp['_num'] = 0
@@ -151,40 +148,24 @@ class Tracker():
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
 
-        self.track_update.add(_type)
+        self.track_update = _type
 
         # epoch内的迭代次数
         self.step_count += 1
 
         # 统计损失 tensor
-        self.temp[f'{_type}_loss'] += loss
-
         predict = output
         if self.params.classify:
             softmax_predictions = F.softmax(output, dim=1)
             predict = torch.argmax(softmax_predictions, dim=1)
             correct_count = torch.sum(predict == target)
 
-            # 统计acc
-            self.temp[f'{_type}_correct'] += correct_count
-
-        # 统计f1
-        # 统计r2
-        if self.temp[f'{_type}_y_true'] is None:
-            self.temp[f'{_type}_y_true'] = target
-            self.temp[f'{_type}_y_pred'] = output
-        else:
-            self.temp[f'{_type}_y_true'] = torch.cat((self.temp[f'{_type}_y_true'], target))
-            self.printer.print(f'torch.cat _y_true')
-            self.temp[f'{_type}_y_pred'] = torch.cat((self.temp[f'{_type}_y_pred'], output))
-            self.printer.print(f'torch.cat _y_pred')
-
         # 汇总所有设备上的数据
         self.accelerator.wait_for_everyone()
         self.printer.print('sync track...')
-        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((self.temp[f'{_type}_loss'], self.temp[f'{_type}_y_true'], self.temp[f'{_type}_y_pred']))
+        _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if self.params.classify:
-            _correct = self.accelerator.gather_for_metrics(self.temp[f'{_type}_correct'])  
+            _correct = self.accelerator.gather_for_metrics(correct_count)  
 
         self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
@@ -336,14 +317,7 @@ class Tracker():
 
     def load_state_dict(self, state_dict):
         self.__dict__.update(state_dict)
-
-        for i in ['train', 'val', 'test']:
-            self.temp[f'{i}_loss'] = 0.0
-            if self.params.classify:
-                self.temp[f'{i}_correct'] = 0
-            self.temp[f'{i}_y_true'] = None
-            self.temp[f'{i}_y_pred'] = None
-
+        
         for i in self.temp:
             if isinstance(self.temp[i], torch.Tensor):
                 self.temp[i].to(self.accelerator.device)
