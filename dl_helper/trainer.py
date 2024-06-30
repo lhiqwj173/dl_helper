@@ -284,9 +284,8 @@ def package_root(accelerator, params):
             # 删除当前的训练文件，如果存在
             tg_del_file(ses, zip_file)
 
-            if upload:
-                # 上传到tg
-                tg_upload(ses, zip_file)
+            # 上传到tg
+            tg_upload(ses, zip_file)
 
     accelerator.wait_for_everyone()
 
