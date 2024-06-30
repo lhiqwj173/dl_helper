@@ -144,7 +144,7 @@ def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
     mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
-    scale_pct_change = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale-1# 变化率
+    # scale_pct_change = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale-1# 变化率
     # scale_pct_change *= mask
 
     # tensor *= (1 + scale_pct_change)
