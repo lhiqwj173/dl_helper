@@ -161,7 +161,7 @@ class Tracker():
         self.need_save = False
         self.need_save = True
         """
-        self.printer.print(f'train state:')
+        self.printer.print(f'[train state]')
         self.printer.print(f'begin time: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.begin_time))}')
         self.printer.print(f'epoch done: {self.epoch_count}')
         self.printer.print(f'step in epoch: {"train" if self.step_in_epoch == 0 else "val"}')
@@ -170,7 +170,7 @@ class Tracker():
         self.printer.print(f'need save: {self.need_save}')
 
         self.printer.print(f'')
-        self.printer.print(f'train temp:')
+        self.printer.print(f'[train temp]')
         for i in self.temp:
             if 'y' in i:
                 self.printer.print(f"{i}: {len(self.temp[i])}")
@@ -178,7 +178,7 @@ class Tracker():
                 self.printer.print(f"{i}: {self.temp[i]}")
 
         self.printer.print(f'')
-        self.printer.print(f'train data:')
+        self.printer.print(f'[train data]')
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
         self.printer.print(f"--------------------------")
