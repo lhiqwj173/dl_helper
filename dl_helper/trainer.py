@@ -442,7 +442,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         )
 
         # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
-        folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoints')
+        folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
         p.print(f'folder: {folder}')
         if os.path.exists(folder):
             wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
