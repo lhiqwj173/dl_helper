@@ -110,7 +110,7 @@ def random_mask(tensor, mask_prob=1e-4):
 
 # 定义随机缩放函数
 # 只对vol作用
-def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
     mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
@@ -126,8 +126,7 @@ def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
 
 # 定义随机缩放函数
 # 只对vol作用
-def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-
+def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     # 矩阵算法
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
