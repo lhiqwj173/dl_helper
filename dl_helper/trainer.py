@@ -325,7 +325,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             if idx % params.checkpointing_steps == 0:
                 checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
-        return
+        exit(0)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -509,7 +509,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         # 训练
         if tracker.step_in_epoch == 0:
             train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p)
-            return
             
         # 验证
         val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p)
