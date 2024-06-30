@@ -468,19 +468,19 @@ class cache():
         self.cost = time.time() - t0
 
 
-def load_data(params, file, diff_length, data_map, down_freq=3, log=False):
+def load_data(params, file, diff_length, data_map, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
-    # # 每3个降采样
-    # # 更长时间范围的样本数据
-    # if down_freq > 1:
-    #     idxs = [i for i in range(0, len(x), 3)]
-    #     ids = [ids[i] for i in idxs]
-    #     mean_std = [mean_std[i] for i in idxs]
-    #     x = [x[i] for i in idxs]
-    #     y = [y[i] for i in idxs]
+    # 每3个降采样
+    # 更长时间范围的样本数据
+    if params.down_freq > 1:
+        idxs = [i for i in range(0, len(x), 3)]
+        ids = [ids[i] for i in idxs]
+        mean_std = [mean_std[i] for i in idxs]
+        x = [x[i] for i in idxs]
+        y = [y[i] for i in idxs]
 
     # TODO a股数据内存占用过大
     # ids,mean_std, x, y, raw   : load 占用的内存：5.290GB
@@ -645,7 +645,7 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
         if count > max_num:
             break
 
-        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map, down_freq=0 if _type=='test' else 3)
+        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map)
         # report_memory_usage()
 
     if head_n == 0 and pct < 100 and pct > 0:

@@ -63,6 +63,9 @@ class test(test_base):
             # # 数据增强
             # random_scale=0.05, random_mask_row=0.7,
 
+            # 每3个样本取一个数据
+            down_freq=3,
+
             # 3分类
             classify=True,
             y_n=self.y_n, classify_y_idx=classify_idx, y_func=yfunc,

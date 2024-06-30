@@ -136,6 +136,9 @@ class Params:
   random_mask_row = 0
   random_scale = 0
 
+  # 数据降采样
+  down_freq = 0
+
   # 是否使用混合精度
   amp = ''
 
@@ -174,7 +177,7 @@ class Params:
       no_better_stop=0, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
 
       # 数据增强
-      random_mask=0, random_scale=0, random_mask_row=0, 
+      random_mask=0, random_scale=0, random_mask_row=0, down_freq=0,
 
       # 测试最优学习率
       init_learning_ratio = 0, increase_ratio = 0.2, 
@@ -216,6 +219,7 @@ class Params:
       self.random_mask = random_mask
       self.random_scale = random_scale
       self.random_mask_row = random_mask_row
+      self.down_freq = down_freq
       self.label_smoothing = label_smoothing
       self.weight_decay = weight_decay
       self.init_learning_ratio = init_learning_ratio
