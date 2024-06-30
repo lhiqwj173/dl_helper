@@ -291,9 +291,9 @@ def package_root(accelerator, params):
 
 def checkpoint(epoch, idx, accelerator, params, printer):
     printer.print(f"[{epoch}][{idx}] checkpointing...")
-    accelerator.wait_for_everyone()
     accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-    package_root(accelerator, params)
+    # package_root(accelerator, params)
+    accelerator.wait_for_everyone()
     printer.print(f"[{epoch}][{idx}] checkpointing done")
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
