@@ -504,6 +504,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     if resume_from_checkpoint:
         accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
         accelerator.load_state(checkpoint_folder)
+        # 输出
+        tracker.print_state()
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):

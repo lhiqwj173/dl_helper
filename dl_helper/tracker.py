@@ -132,12 +132,7 @@ class Tracker():
                 self.need_save = True
 
         self.reset_temp()
-
-        self.printer.print(f"--------------------------")
-        for i in self.data:
-            self.printer.print(f"{i}: {self.data[i]}")
-        self.printer.print(f"--------------------------")
-
+        self.print_state()
         self.step_count = 0
 
     def reset_temp(self):
@@ -150,6 +145,43 @@ class Tracker():
         self.temp['_correct'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
+
+    def print_state(self):
+        self.printer.print(f"--------------------------")
+
+        """
+        # 时间统计
+        self.begin_time = time.time()
+        self.epoch_count = 0
+        self.step_count = 0
+        # 每个epoch训练中的阶段
+        # 0: 训练 1: 验证
+        self.step_in_epoch = 0
+        self.run_limit_hour = 12 if  num_processes != 8 else 9
+        self.need_save = False
+        self.need_save = True
+        """
+        self.printer.print(f'train state:')
+        self.printer.print(f'begin time: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.begin_time))}')
+        self.printer.print(f'epoch done: {self.epoch_count}')
+        self.printer.print(f'step in epoch: {"train" if self.step_in_epoch == 0 else "val"}')
+        self.printer.print(f'step done: {self.step_count}')
+        self.printer.print(f'run limit hour: {self.run_limit_hour}')
+        self.printer.print(f'need save: {self.need_save}')
+
+        self.printer.print(f'')
+        self.printer.print(f'train temp:')
+        for i in self.temp:
+            if 'y' in i:
+                self.printer.print(f"{i}: {len(self.temp[i])}")
+            else:
+                self.printer.print(f"{i}: {self.temp[i]}")
+
+        self.printer.print(f'')
+        self.printer.print(f'train data:')
+        for i in self.data:
+            self.printer.print(f"{i}: {self.data[i]}")
+        self.printer.print(f"--------------------------")
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
@@ -338,7 +370,7 @@ class Tracker():
             'params',
             'accelerator',
             'scheduler',
-            'printer'
+            'printer',
         ]}
 
     def load_state_dict(self, state_dict):
