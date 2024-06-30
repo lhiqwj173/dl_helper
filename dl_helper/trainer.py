@@ -448,6 +448,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
     accelerator.wait_for_everyone()
+    return 
 
     # 调整参数
     if num_processes >= 2:
