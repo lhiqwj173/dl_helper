@@ -380,12 +380,10 @@ class Dataset(torch.utils.data.Dataset):
         #############################
 
         # 获取切片x
-        x = None
+        x = self.data[:, a:b, :].clone()
         if self.train and self.params.random_mask_row>0:
-            # 随机删除行，保持行数不变
-            x = random_mask_row(self.data[:, a-self.max_mask_num:b, :].clone(), a, b, self.params.random_mask_row)
-        else:
-            x = self.data[:, a:b, :].clone()
+            # 随机遮蔽行
+            x = random_mask_row(x, self.params.random_mask_row)
 
         #############################
         #############################
