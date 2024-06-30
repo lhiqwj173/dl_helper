@@ -142,8 +142,12 @@ def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
 def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     # 矩阵算法
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
+    
     # 只用vol_cols
-    mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
+    mask[:, :, vol_cols] = torch.where(torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob, True, False)
+
+    # 只用vol_cols
+    # mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
     # scale_pct_change = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale-1# 变化率
     # scale_pct_change *= mask
 
