@@ -98,9 +98,10 @@ def random_mask_row_0(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     return data[:, ~mask, :]
 
 # 按照 mask_prob 的概率随机遮盖时间点全部数据 -> 0
-def random_mask_row(tensor, mask_prob=0.5, max_mask_num=5):
-    mask = torch.rand(tensor.size()[:-1]) < mask_prob
-    return tensor * ~mask
+def random_mask_row(tensor, mask_prob=1e-4):
+    mask = torch.rand(tensor.size()[1]) < mask_prob
+    tensor[:, mask, :] = 0
+    return tensor
 
 # 定义随机遮挡函数
 def random_mask(tensor, mask_prob=1e-4):
