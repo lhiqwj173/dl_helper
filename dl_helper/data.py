@@ -384,6 +384,7 @@ class Dataset(torch.utils.data.Dataset):
         if self.train and self.params.random_mask_row>0:
             # 随机遮蔽行
             x = random_mask_row(x, self.params.random_mask_row)
+        check_nan(x)
 
         #############################
         #############################
@@ -398,11 +399,11 @@ class Dataset(torch.utils.data.Dataset):
         # 随机缩放
         if self.train and self.params.random_scale>0:
             x = random_scale(x, self.vol_cols, self.params.random_scale)
+        check_nan(x)
 
         # 随机mask
         if self.train and self.params.random_mask>0:
             x = random_mask(x, self.params.random_mask)
-
         check_nan(x)
 
         # #############################
