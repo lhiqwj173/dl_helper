@@ -170,14 +170,12 @@ class Tracker():
 
         # 汇总所有设备上的数据
         self.printer.print('sync track...')
-        
-        self.printer.print(f"{loss}")
-        self.printer.print(f"{target}")
-        self.printer.print(f"{predict}")
-        self.printer.print(f"{correct_count}")
-
         self.accelerator.wait_for_everyone()
-
+        
+        # self.printer.print(f"{loss}")
+        # self.printer.print(f"{target}")
+        # self.printer.print(f"{predict}")
+        # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if self.params.classify:
             _correct = self.accelerator.gather_for_metrics(correct_count)  
