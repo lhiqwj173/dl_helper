@@ -19,6 +19,7 @@ class test_base():
         assert self.para, 'should init param in __init__()'
         if self.debug:
             self.para.epochs = 2
+            self.para.debug = True
         return self.para
 
     # 初始化数据
