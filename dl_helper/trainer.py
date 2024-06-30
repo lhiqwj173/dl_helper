@@ -282,7 +282,7 @@ def package_root(accelerator, params):
 
         if not params.debug:
             # 删除当前的训练文件，如果存在
-            tg_del_file(ses, zip_file)
+            tg_del_file(ses, os.path.basename(zip_file))
 
             # 上传到tg
             tg_upload(ses, zip_file)
