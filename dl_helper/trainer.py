@@ -473,8 +473,10 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     train_loader = accelerator.prepare(train_loader)
     # active_dataloader = skip_first_batches(train_loader, 2)
     active_dataloader = train_loader
-    for i in (active_dataloader):
-        p.print(i)
+    for i in range(3):
+        p.print('------------------------')
+        for i in (active_dataloader):
+            p.print(i)
     # accelerator.wait_for_everyone()
     return
 
