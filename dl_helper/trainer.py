@@ -2,6 +2,7 @@ from dl_helper.train_param import match_num_processes
 from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
+from dl_helper.acc.data_loader import skip_first_batches
 
 import copy
 import shutil
@@ -456,7 +457,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     # for debug
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
-    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
+    active_dataloader = skip_first_batches(train_loader, 2)
     accelerator.wait_for_everyone()
     for i in (active_dataloader):
         p.print(i)
