@@ -299,6 +299,7 @@ def checkpoint(epoch, idx, accelerator, params, printer):
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
+    skip_steps = 2
 
     active_dataloader = train_loader
     if skip_steps > 0:
