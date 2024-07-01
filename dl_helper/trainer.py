@@ -467,13 +467,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         params.learning_rate *= num_processes
         p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
-    p.print(f'batch_size: {params.batch_size}')
-
-    # 临时额外的训练参数
-    if train_param:
-        for k, v in train_param.items():
-            setattr(params, k, v)
-
+    
     # for debug
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
@@ -482,6 +476,13 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         p.print(i)
     # accelerator.wait_for_everyone()
     return
+
+    p.print(f'batch_size: {params.batch_size}')
+
+    # 临时额外的训练参数
+    if train_param:
+        for k, v in train_param.items():
+            setattr(params, k, v)
 
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
