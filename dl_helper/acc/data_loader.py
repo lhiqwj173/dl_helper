@@ -2,7 +2,7 @@ import torch
 from accelerate import Accelerator
 from torch.utils.data import BatchSampler, DataLoader, IterableDataset
 from accelerate.state import AcceleratorState, DistributedType, GradientState, is_torch_xla_available
-from accelerate.data_loader import _PYTORCH_DATALOADER_KWARGS, DataLoaderDispatcher, DataLoaderShard
+from accelerate.data_loader import _PYTORCH_DATALOADER_KWARGS, DataLoaderDispatcher, DataLoaderShard, MpDeviceLoaderWrapper
 
 
 if is_torch_xla_available():
@@ -10,7 +10,7 @@ if is_torch_xla_available():
     from dl_helper.acc.parallel_loader import MpDeviceLoader
 
     # class MpDeviceLoaderWrapper(xpl.MpDeviceLoader):
-    class MpDeviceLoaderWrapper(MpDeviceLoader):
+    class MpDeviceLoaderWrapper2(MpDeviceLoader):
         """
         Wrapper for the xpl.MpDeviceLoader class that knows the total batch size.
 
@@ -169,6 +169,6 @@ def skip_first_batches(dataloader, num_batches=0):
             dataloader = DataLoader(dataset, batch_sampler=new_batch_sampler, **kwargs)
 
     if AcceleratorState().distributed_type == DistributedType.XLA:
-        return MpDeviceLoaderWrapper(dataloader, dataloader.device)
+        return MpDeviceLoaderWrapper2(dataloader, dataloader.device)
         
     return dataloader
