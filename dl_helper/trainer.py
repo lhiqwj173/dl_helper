@@ -490,14 +490,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
-
-    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-        model, optimizer, train_loader, val_loader, scheduler
-    )
-
-    p.print(f'prepare done')
-    p.print(f'each epoch step: {len(train_loader)}')
-
+    
     # for debug
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
@@ -507,6 +500,13 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         p.print(i)
     accelerator.wait_for_everyone()
     return
+
+    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+        model, optimizer, train_loader, val_loader, scheduler
+    )
+
+    p.print(f'prepare done')
+    p.print(f'each epoch step: {len(train_loader)}')
 
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
