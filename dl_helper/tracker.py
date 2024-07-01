@@ -173,7 +173,7 @@ class Tracker():
         self.printer.print(f'[train temp]')
         for i in self.temp:
             if 'y' in i:
-                self.printer.print(f"{i}: {len(self.temp[i])}")
+                self.printer.print(f"{i}: {len(self.temp[i]) if not None is self.temp[i] else None}")
             else:
                 self.printer.print(f"{i}: {self.temp[i]}")
 
@@ -181,7 +181,7 @@ class Tracker():
         self.printer.print(f'[train data]')
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
-            
+
         self.printer.print(f"------------tracker data------------")
 
     def track(self, output, target, loss, _type):
