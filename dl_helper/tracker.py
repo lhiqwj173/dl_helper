@@ -202,7 +202,7 @@ class Tracker():
             correct_count = torch.sum(predict == target)
 
         # 汇总所有设备上的数据
-        self.printer.print('sync track...')
+        # self.printer.print('sync track...')
         self.accelerator.wait_for_everyone()
         
         # self.printer.print(f"{loss}")
@@ -213,8 +213,7 @@ class Tracker():
         if self.params.classify:
             _correct = self.accelerator.gather_for_metrics(correct_count)  
 
-        self.printer.print('main cal track...')
-
+        # self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
