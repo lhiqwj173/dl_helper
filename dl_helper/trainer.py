@@ -438,7 +438,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     p = printer(lock, accelerator)
     
     # 检查下载tg训练文件
-    if not params.debug and accelerator.is_local_main_process:
+    if (not params.debug) and accelerator.is_local_main_process:
         tg_download(
             ses,
             f'{params.train_title}.7z',
