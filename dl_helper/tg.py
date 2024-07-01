@@ -336,7 +336,7 @@ def progress_cb(current, total):
         t = 0
 
 async def get_channel_entity(client, name):
-    name = 'dl_dataset'
+    name = 'dl_data'
     
     # 匹配channel
     async for dialog in client.iter_dialogs():
@@ -403,20 +403,20 @@ async def _download_dataset(client, dataset_name, dst_folder, channel_name):
 
     return await _handle_massage(client, dataset_name, download_func, channel_name)
 
-async def tg_download_async(session, dataset_name, dst_folder='', channel_name = 'dl_dataset' ):
+async def tg_download_async(session, dataset_name, dst_folder='', channel_name = 'dl_data' ):
     """ 返回成功/失败 """
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
         return await _download_dataset(client, dataset_name, dst_folder, channel_name)
 
-async def tg_del_file_async(session, file_name, channel_name = 'dl_dataset' ):
+async def tg_del_file_async(session, file_name, channel_name = 'dl_data' ):
     # 创建客户端
     client = TelegramClient(StringSession(session), 1, '1')
     async with client:
         return await _del_file(client, file_name, channel_name)
 
-async def tg_upload_async(session, filepath, channel_name = 'dl_dataset' ):
+async def tg_upload_async(session, filepath, channel_name = 'dl_data' ):
     filepath = filepath.replace('\\', '/')
 
     # 创建客户端
@@ -456,13 +456,13 @@ def run_async_func(func, *args, **kwargs):
 
     return rets[0]
 
-def tg_download(session, dataset_name, dst_folder='', channel_name = 'dl_dataset' ):
+def tg_download(session, dataset_name, dst_folder='', channel_name = 'dl_data' ):
     return run_async_func(tg_download_async, session, dataset_name, dst_folder, channel_name)
 
-def tg_del_file(session, file_name, channel_name = 'dl_dataset' ):
+def tg_del_file(session, file_name, channel_name = 'dl_data' ):
     return run_async_func(tg_del_file_async, session, file_name, channel_name)
 
-def tg_upload(session, filepath, channel_name = 'dl_dataset' ):
+def tg_upload(session, filepath, channel_name = 'dl_data' ):
     return run_async_func(tg_upload_async, session, filepath, channel_name)
 
 if __name__ == '__main__':

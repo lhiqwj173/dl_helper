@@ -46,10 +46,10 @@ class test(test_base):
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
-            'data_rate': (8, 3, 1),
-            'total_hours': int(24),
             # 'data_rate': (8, 3, 1),
-            # 'total_hours': int(24*12),
+            # 'total_hours': int(24),
+            'data_rate': (8, 3, 1),
+            'total_hours': int(24*12),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
@@ -63,8 +63,8 @@ class test(test_base):
             # # 数据增强
             # random_scale=0.05, random_mask_row=0.7,
 
-            # 每3个样本取一个数据
-            down_freq=3,
+            # 每4个样本取一个数据
+            down_freq=4,
 
             # 3分类
             classify=True,
