@@ -480,6 +480,16 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
     if None is model:
         model = test.get_model()
+        
+    # for debug
+    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
+    train_loader = accelerator.prepare(train_loader)
+    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
+    accelerator.wait_for_everyone()
+    for i in (active_dataloader):
+        p.print(i)
+    accelerator.wait_for_everyone()
+    return
 
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
@@ -490,16 +500,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
-    
-    # for debug
-    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
-    accelerator.wait_for_everyone()
-    for i in (active_dataloader):
-        p.print(i)
-    accelerator.wait_for_everyone()
-    return
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler
