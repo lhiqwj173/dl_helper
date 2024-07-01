@@ -121,6 +121,6 @@ def skip_first_batches(dataloader, num_batches=0):
             dataloader = DataLoader(dataset, batch_sampler=new_batch_sampler, **kwargs)
 
     if AcceleratorState().distributed_type == DistributedType.XLA:
-        return MpDeviceLoaderWrapper2(dataloader, dataloader.device)
+        return MpDeviceLoaderWrapper(dataloader, dataloader.device)
         
     return dataloader
