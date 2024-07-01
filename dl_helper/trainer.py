@@ -20,7 +20,7 @@ from torch.utils.data.sampler import RandomSampler
 
 from py_ext.lzma import compress_folder
 from py_ext.wechat import wx
-from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
+# from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
 ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
 
 if match_num_processes() ==8:
