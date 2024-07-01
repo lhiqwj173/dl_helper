@@ -414,6 +414,7 @@ def skip_first_batches_0(dataloader, num_batches=0):
 
 
 def skip_first_batches(dataloader, num_batches, accelerator):
+    accelerator.print(f'skip_first_batches {num_batches}')
     for _ in range(num_batches):
         # 在此处执行跳过指定批次的操作
         next(iter(dataloader))
