@@ -480,7 +480,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     active_dataloader = skip_first_batches(train_loader, 2)
     for i in (active_dataloader):
         p.print(i)
-    accelerator.wait_for_everyone()
+    # accelerator.wait_for_everyone()
     return
 
     train_loader = test.get_data('train', params)
