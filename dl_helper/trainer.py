@@ -474,9 +474,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    train_loader = test.get_data('train', params)
-    val_loader = test.get_data('val', params)
-
     # for debug
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
@@ -485,6 +482,9 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         p.print(i)
     accelerator.wait_for_everyone()
     return
+
+    train_loader = test.get_data('train', params)
+    val_loader = test.get_data('val', params)
 
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
