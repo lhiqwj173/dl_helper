@@ -792,7 +792,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
         try:
             os.environ.pop('CLOUD_TPU_TASK_ID')
             os.environ.pop('TPU_PROCESS_ADDRESSES')
-            os.environ['ACCELERATE_DEBUG_MODE'] = '1'
+            # os.environ['ACCELERATE_DEBUG_MODE'] = '1'
         except:
             pass
 
