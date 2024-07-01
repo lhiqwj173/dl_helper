@@ -453,7 +453,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     #         wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
     #         p.print(f"使用tg缓存文件继续训练")
     #         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
-    accelerator.wait_for_everyone()
+    # accelerator.wait_for_everyone()
 
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
