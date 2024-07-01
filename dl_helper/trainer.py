@@ -453,6 +453,16 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             p.print(f"使用tg缓存文件继续训练")
             shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
+    # for debug
+    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
+    train_loader = accelerator.prepare(train_loader)
+    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
+    accelerator.wait_for_everyone()
+    for i in (active_dataloader):
+        p.print(i)
+    accelerator.wait_for_everyone()
+    return
+
     # 调整参数
     if num_processes >= 2:
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
@@ -471,16 +481,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     if train_param:
         for k, v in train_param.items():
             setattr(params, k, v)
-
-    # for debug
-    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
-    accelerator.wait_for_everyone()
-    for i in (active_dataloader):
-        p.print(i)
-    accelerator.wait_for_everyone()
-    return
 
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
