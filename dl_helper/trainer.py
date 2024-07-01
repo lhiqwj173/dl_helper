@@ -300,12 +300,11 @@ def checkpoint(epoch, idx, accelerator, params, printer):
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
-    skip_steps = 2
 
     active_dataloader = train_loader
     if skip_steps > 0:
         printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
-        active_dataloader = accelerator.skip_first_batches(train_loader, skip_steps)
+        active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
     for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
@@ -349,7 +348,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     active_dataloader = val_data
     if skip_steps > 0:
         printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
-        active_dataloader = accelerator.skip_first_batches(val_data, skip_steps)
+        active_dataloader = skip_first_batches(val_data, skip_steps)
 
     model.eval()
     with torch.no_grad():
@@ -467,19 +466,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         params.learning_rate *= num_processes
         p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
-    
-    # for debug
-    train_loader = torch.utils.data.DataLoader(list(range(64*5)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = skip_first_batches(train_loader, 2)
-    # active_dataloader = train_loader
-    for i in range(3):
-        p.print('------------------------')
-        for i in (active_dataloader):
-            p.print(i)
-    # accelerator.wait_for_everyone()
-    return
-
     p.print(f'batch_size: {params.batch_size}')
 
     # 临时额外的训练参数
@@ -505,8 +491,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
-
-
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler
