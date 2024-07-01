@@ -438,14 +438,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
 
-    train_loader = torch.utils.data.DataLoader(list(range(64)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
-    for i in (active_dataloader):
-        p.print(i)
-
-    return
-
     # 检查下载tg训练文件
     if not params.debug and accelerator.is_local_main_process:
         tg_download(
@@ -481,6 +473,13 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     if train_param:
         for k, v in train_param.items():
             setattr(params, k, v)
+
+    train_loader = torch.utils.data.DataLoader(list(range(64)), batch_size=2)
+    train_loader = accelerator.prepare(train_loader)
+    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
+    for i in (active_dataloader):
+        p.print(i)
+    return
 
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
