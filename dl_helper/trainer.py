@@ -477,6 +477,15 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
 
+    # for debug
+    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
+    train_loader = accelerator.prepare(train_loader)
+    active_dataloader = skip_first_batches(train_loader, 2)
+    for i in (active_dataloader):
+        p.print(i)
+    accelerator.wait_for_everyone()
+    return
+
     p.print(f'dataset length: {len(train_loader.dataset)}')
     p.print(f'dataloader length: {len(train_loader)}')
 
@@ -488,16 +497,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = ReduceLR_slow_loss(optimizer)
 
-
-    # for debug
-    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = skip_first_batches(train_loader, 2)
-    for i in (active_dataloader):
-        p.print(i)
-    accelerator.wait_for_everyone()
-    return
-    
     # 训练跟踪
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
