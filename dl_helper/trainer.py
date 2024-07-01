@@ -308,27 +308,26 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
-        pass
-        # # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-        # if not params.classify and len(target.shape) == 1:
-        #     target = target.unsqueeze(1)
+        # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+        if not params.classify and len(target.shape) == 1:
+            target = target.unsqueeze(1)
             
-        # optimizer.zero_grad()
-        # output = model(data)
-        # loss = criterion(output, target)
-        # accelerator.backward(loss)
-        # optimizer.step()
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        accelerator.backward(loss)
+        optimizer.step()
 
-        # # 追踪器 记录数据
-        # with torch.no_grad():
-        #     tracker.track(output, target, loss, 'train')
+        # 追踪器 记录数据
+        with torch.no_grad():
+            tracker.track(output, target, loss, 'train')
 
-        # # 缓存checkpoint
-        # if tracker.need_save:
-        #     if idx % params.checkpointing_steps == 0:
-        #         checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
+        # 缓存checkpoint
+        if tracker.need_save:
+            if idx % params.checkpointing_steps == 0:
+                checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
-        # sys.exit(0)
+        sys.exit(0)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -438,31 +437,31 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
     
-    # # 检查下载tg训练文件
-    # if not params.debug and accelerator.is_local_main_process:
-    #     tg_download(
-    #         ses,
-    #         f'{params.train_title}.7z',
-    #         '/kaggle/working/tg'
-    #     )
+    # 检查下载tg训练文件
+    if not params.debug and accelerator.is_local_main_process:
+        tg_download(
+            ses,
+            f'{params.train_title}.7z',
+            '/kaggle/working/tg'
+        )
 
-    #     # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
-    #     folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
-    #     p.print(f'folder: {folder}')
-    #     if os.path.exists(folder):
-    #         wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
-    #         p.print(f"使用tg缓存文件继续训练")
-    #         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
+        # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
+        folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
+        p.print(f'folder: {folder}')
+        if os.path.exists(folder):
+            wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
+            p.print(f"使用tg缓存文件继续训练")
+            shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
-    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = accelerator.skip_first_batches(train_loader, 2)
-    accelerator.wait_for_everyone()
-    for i in (active_dataloader):
-        p.print(i)
-    accelerator.wait_for_everyone()
-    return
-
+    # for debug
+    # train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
+    # train_loader = accelerator.prepare(train_loader)
+    # active_dataloader = accelerator.skip_first_batches(train_loader, 2)
+    # accelerator.wait_for_everyone()
+    # for i in (active_dataloader):
+    #     p.print(i)
+    # accelerator.wait_for_everyone()
+    # return
 
     # 调整参数
     if num_processes >= 2:
