@@ -438,21 +438,21 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
     
-    # 检查下载tg训练文件
-    if not params.debug and accelerator.is_local_main_process:
-        tg_download(
-            ses,
-            f'{params.train_title}.7z',
-            '/kaggle/working/tg'
-        )
+    # # 检查下载tg训练文件
+    # if not params.debug and accelerator.is_local_main_process:
+    #     tg_download(
+    #         ses,
+    #         f'{params.train_title}.7z',
+    #         '/kaggle/working/tg'
+    #     )
 
-        # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
-        folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
-        p.print(f'folder: {folder}')
-        if os.path.exists(folder):
-            wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
-            p.print(f"使用tg缓存文件继续训练")
-            shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
+    #     # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
+    #     folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
+    #     p.print(f'folder: {folder}')
+    #     if os.path.exists(folder):
+    #         wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
+    #         p.print(f"使用tg缓存文件继续训练")
+    #         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
     # accelerator.wait_for_everyone()
 
     train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
