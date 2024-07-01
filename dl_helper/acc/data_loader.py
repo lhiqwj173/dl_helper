@@ -1,4 +1,5 @@
 import torch
+import itertools
 from accelerate import Accelerator
 from torch.utils.data import BatchSampler, DataLoader, IterableDataset
 from accelerate.state import AcceleratorState, DistributedType, GradientState, is_torch_xla_available
@@ -173,10 +174,8 @@ def skip_first_batches_0(dataloader, num_batches=0):
         
     return dataloader
 
-
-def skip_first_batches(dataloader, num_batches, accelerator):
-    accelerator.print(f'skip_first_batches {num_batches}')
-    for _ in range(num_batches):
-        # 在此处执行跳过指定批次的操作
-        next(iter(dataloader))
-    return dataloader
+def skip_first_batches(dataloader, num_batches):
+    print(f'skip_first_batches {num_batches}')
+    it = iter(dataloader)
+    next(itertools.islice(it, num_batches, num_batches), None)  # 跳过前 n 个元素
+    return it
