@@ -474,7 +474,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         for k, v in train_param.items():
             setattr(params, k, v)
 
-    train_loader = torch.utils.data.DataLoader(list(range(64)), batch_size=2)
+    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
     active_dataloader = accelerator.skip_first_batches(train_loader, 2)
     for i in (active_dataloader):
