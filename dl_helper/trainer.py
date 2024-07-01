@@ -455,17 +455,17 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             p.print(f"使用tg缓存文件继续训练")
             shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
 
-    # # 调整参数
-    # if num_processes >= 2:
-    #     # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
-    #     b = params.batch_size
-    #     params.batch_size //= num_processes
-    #     p.print(f'batch_size: {b} -> {params.batch_size}')
+    # 调整参数
+    if num_processes >= 2:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        b = params.batch_size
+        params.batch_size //= num_processes
+        p.print(f'batch_size: {b} -> {params.batch_size}')
     
-    #     # 调整lr
-    #     l = params.learning_rate
-    #     params.learning_rate *= num_processes
-    #     p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        # 调整lr
+        l = params.learning_rate
+        params.learning_rate *= num_processes
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     
     # for debug
