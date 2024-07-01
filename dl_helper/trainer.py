@@ -493,6 +493,15 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
 
+    # for debug
+    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
+    train_loader = accelerator.prepare(train_loader)
+    active_dataloader = skip_first_batches(train_loader, 2)
+    for i in (active_dataloader):
+        p.print(i)
+    accelerator.wait_for_everyone()
+    return
+
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler
     )
@@ -508,15 +517,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         accelerator.load_state(checkpoint_folder)
         # 输出
         tracker.print_state()
-
-    # for debug
-    train_loader = torch.utils.data.DataLoader(list(range(64*10)), batch_size=2)
-    train_loader = accelerator.prepare(train_loader)
-    active_dataloader = skip_first_batches(train_loader, 2)
-    for i in (active_dataloader):
-        p.print(i)
-    accelerator.wait_for_everyone()
-    return
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
