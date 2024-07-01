@@ -466,8 +466,6 @@ def tg_upload(session, filepath, channel_name = 'dl_data' ):
     return run_async_func(tg_upload_async, session, filepath, channel_name)
 
 if __name__ == '__main__':
-    ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
-    
     # res = tg_download(ses, 'tdx-a.7z', r'C:\Users\lh\Desktop\temp')
     # res = tg_download(ses, 'tdx-a.7z')
 

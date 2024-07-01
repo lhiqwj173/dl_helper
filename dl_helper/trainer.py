@@ -21,7 +21,11 @@ from torch.utils.data.sampler import RandomSampler
 from py_ext.lzma import compress_folder
 from py_ext.wechat import wx
 from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
-ses = '1BVtsOKABu6pKio99jf7uqjfe5FMXfzPbEDzB1N5DFaXkEu5Og5dJre4xg4rbXdjRQB7HpWw7g-fADK6AVDnw7nZ1ykiC5hfq-IjDVPsMhD7Sffuv0lTGa4-1Dz2MktHs3e_mXpL1hNMFgNm5512K1BWQvij3xkoiHGKDqXLYzbzeVMr5e230JY7yozEZRylDB_AuFeBGDjLcwattWnuX2mnTZWgs-lS1A_kZWomGl3HqV84UsoJlk9b-GAbzH-jBunsckkjUijri6OBscvzpIWO7Kgq0YzxJvZe_a1N8SFG3Gbuq0mIOkN3JNKGTmYLjTClQd2PIJuFSxzYFPQJwXIWZlFg0O2U='
+from dl_helper.alist import alist
+
+ses = os.environ.get('TG_SESSION')
+user = os.environ.get('ALIST_USER')
+pwd = os.environ.get('ALIST_PWD')
 
 if match_num_processes() ==8:
     from torch.nn.parallel import DistributedDataParallel as DDP
@@ -281,12 +285,15 @@ def package_root(accelerator, params):
             os.remove(zip_file)
         compress_folder(params.root, zip_file, 9, inplace=False)
 
-        # if not params.debug:
-        #     # 删除当前的训练文件，如果存在
-        #     tg_del_file(ses, os.path.basename(zip_file))
+        if not params.debug:
+            # # 删除当前的训练文件，如果存在
+            # tg_del_file(ses, os.path.basename(zip_file))
+            # # 上传到tg
+            # tg_upload(ses, zip_file)
 
-        #     # 上传到tg
-        #     tg_upload(ses, zip_file)
+            # 上传更新到alist
+            client = alist(user, pwd)
+            client.upload(zip_file, '/train_data/')
 
     accelerator.wait_for_everyone()
 
@@ -435,7 +442,27 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
     
-    # 检查下载tg训练文件
+    # 检查下载训练文件
+    if (not params.debug) and accelerator.is_local_main_process:
+        p.print('check alist download')
+        
+        client = alist(user, pwd)
+        try:
+            client.download(f'/train_data/{params.train_title}.7z', 'alist/')
+            # 解压文件
+            _file = f'alist/{params.train_title}.7z'
+            decompress(_file)
+            folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
+            if os.path.exists(folder):
+                wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
+                p.print(f"使用alist缓存文件继续训练")
+                shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+        except:
+            pass
+
+    return
+
+    ## 检查下载tg训练文件
     # if (not params.debug) and accelerator.is_local_main_process:
     #     p.print('check tg download')
     #     tg_download(
