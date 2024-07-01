@@ -147,7 +147,7 @@ class Tracker():
         self.temp['_y_pred'] = None
 
     def print_state(self):
-        self.printer.print(f"--------------------------")
+        self.printer.print(f"------------tracker data------------")
 
         """
         # 时间统计
@@ -181,7 +181,8 @@ class Tracker():
         self.printer.print(f'[train data]')
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
-        self.printer.print(f"--------------------------")
+            
+        self.printer.print(f"------------tracker data------------")
 
     def track(self, output, target, loss, _type):
         assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'

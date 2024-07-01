@@ -305,7 +305,6 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if skip_steps > 0:
         printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
         active_dataloader = skip_first_batches(train_loader, skip_steps)
-        printer.print(len(active_dataloader))
 
     model.train()
     for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
