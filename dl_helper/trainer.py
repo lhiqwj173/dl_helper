@@ -471,8 +471,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     # for debug
     train_loader = torch.utils.data.DataLoader(list(range(64*5)), batch_size=2)
     train_loader = accelerator.prepare(train_loader)
-    # active_dataloader = skip_first_batches(train_loader, 2)
-    active_dataloader = train_loader
+    active_dataloader = skip_first_batches(train_loader, 2)
+    # active_dataloader = train_loader
     for i in range(3):
         p.print('------------------------')
         for i in (active_dataloader):
