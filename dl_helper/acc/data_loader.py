@@ -2,7 +2,7 @@ import torch
 from accelerate import Accelerator
 from torch.utils.data import BatchSampler, DataLoader, IterableDataset
 from accelerate.state import AcceleratorState, DistributedType, GradientState, is_torch_xla_available
-from accelerate.data_loader import _PYTORCH_DATALOADER_KWARGS, MpDeviceLoaderWrapper, DataLoaderDispatcher
+from accelerate.data_loader import _PYTORCH_DATALOADER_KWARGS, MpDeviceLoaderWrapper, DataLoaderDispatcher, DataLoaderShard
 
 class SkipBatchSampler(BatchSampler):
     """
