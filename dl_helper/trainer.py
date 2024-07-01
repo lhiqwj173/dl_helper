@@ -318,14 +318,14 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         accelerator.backward(loss)
         optimizer.step()
 
-        # 追踪器 记录数据
-        with torch.no_grad():
-            tracker.track(output, target, loss, 'train')
+        # # 追踪器 记录数据
+        # with torch.no_grad():
+        #     tracker.track(output, target, loss, 'train')
 
-        # 缓存checkpoint
-        if tracker.need_save:
-            if idx % params.checkpointing_steps == 0:
-                checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
+        # # 缓存checkpoint
+        # if tracker.need_save:
+        #     if idx % params.checkpointing_steps == 0:
+        #         checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
         sys.exit(0)
 
