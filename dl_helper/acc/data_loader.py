@@ -336,7 +336,7 @@ class SkipDataLoader(DataLoader):
                 yield batch
 
 
-def skip_first_batches(dataloader, num_batches=0):
+def skip_first_batches_0(dataloader, num_batches=0):
     """
     Creates a `torch.utils.data.DataLoader` that will efficiently skip the first `num_batches`.
     """
@@ -410,4 +410,11 @@ def skip_first_batches(dataloader, num_batches=0):
     if AcceleratorState().distributed_type == DistributedType.XLA:
         return MpDeviceLoaderWrapper2(dataloader, dataloader.device)
         
+    return dataloader
+
+
+def skip_first_batches(dataloader, num_batches, accelerator):
+    for _ in range(num_batches):
+        # 在此处执行跳过指定批次的操作
+        next(iter(dataloader))
     return dataloader
