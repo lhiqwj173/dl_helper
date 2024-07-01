@@ -308,15 +308,16 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
-        # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-        if not params.classify and len(target.shape) == 1:
-            target = target.unsqueeze(1)
+        pass
+        # # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+        # if not params.classify and len(target.shape) == 1:
+        #     target = target.unsqueeze(1)
             
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
-        accelerator.backward(loss)
-        optimizer.step()
+        # optimizer.zero_grad()
+        # output = model(data)
+        # loss = criterion(output, target)
+        # accelerator.backward(loss)
+        # optimizer.step()
 
         # # 追踪器 记录数据
         # with torch.no_grad():
