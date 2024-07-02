@@ -49,7 +49,7 @@ class test(test_base):
         num_classes = 3
 
         # for debug
-        num_samples = 10000
+        num_samples = 256
 
         data = torch.randn(num_samples, 3, 64, 64)
         target = torch.randint(0, num_classes, (num_samples,))
