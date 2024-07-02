@@ -739,26 +739,26 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 with lock:
                     print(f"[{index}] [{epoch}] loss.backward()")
 
-            if xm.is_master_ordinal():
-                # xm.master_print("write IR and HLO")
-                with open('IR.txt', 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_text([loss]))
-                    f.write('\n\n')
+            # if xm.is_master_ordinal():
+            #     # xm.master_print("write IR and HLO")
+            #     with open('IR.txt', 'a') as f:
+            #         f.write(xla._XLAC._get_xla_tensors_text([loss]))
+            #         f.write('\n\n')
 
-                with open('HLO.txt', 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
-                    f.write('\n\n')
-            xm.rendezvous("write IR and HLO")
-
-            if print_step:
-                with lock:
-                    print_step = False
-                    print(f"[{index}] [{epoch}] write IR and HLO")
+            #     with open('HLO.txt', 'a') as f:
+            #         f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
+            #         f.write('\n\n')
+            # xm.rendezvous("write IR and HLO")
 
             if ddp:
                 optimizer.step()
             else:
                 xm.optimizer_step(optimizer)
+
+            if print_step:
+                with lock:
+                    print_step = False
+                    print(f"[{index}] [{epoch}] step")
 
         if xm.is_master_ordinal():
             with open('master_ordinal_train.txt', 'a') as f:
