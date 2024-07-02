@@ -425,7 +425,6 @@ class printer():
 def get_data_sampler(data_set, _type):
     train_sampler = None
     if xm.xrt_world_size() > 1:
-        print(f'分布式数据分配: {xm.xrt_world_size()}')
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             data_set,
             num_replicas=xm.xrt_world_size(),
