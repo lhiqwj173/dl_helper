@@ -723,6 +723,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
+        with lock:
+            print(f"[{index}] [{epoch}] train begin ")
         for data, target in train_loader:
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -772,9 +774,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
         xm.rendezvous("val done")
         if xm.is_master_ordinal():
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
-
-        with lock:
-            print(f"[{index}] [{epoch}] val done ")
 
     if xm.is_master_ordinal():
         with open('master_ordinal_epoch.txt', 'a') as f:
