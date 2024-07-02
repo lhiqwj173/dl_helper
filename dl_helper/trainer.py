@@ -749,7 +749,10 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             else:
                 xm.optimizer_step(optimizer)
 
-        xm.master_print(met.metrics_report())
+        if xm.is_master_ordinal():
+            with open('master_ordinal_train.txt', 'a') as f:
+                f.write(met.metrics_report())
+                f.write('\n\n')
 
         scheduler.step()
         xm.rendezvous("train done")
@@ -771,6 +774,10 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if xm.is_master_ordinal():
+        with open('master_ordinal_epoch.txt', 'a') as f:
+            f.write(met.metrics_report())
+            f.write('\n\n')
+
         report_memory_usage('all done')
 
 def test_func():
