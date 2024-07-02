@@ -453,15 +453,18 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             client.download(f'/train_data/{params.train_title}.7z', 'alist/')
             p.print(f'download {_file}')
             # 解压文件
-            decompress(_file)
-            p.print(f'decompress {_file}')
-            # move 
-            folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
-            p.print(f'checkpoint folder {folder}')
-            if os.path.exists(folder):
-                wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
-                p.print(f"使用alist缓存文件继续训练")
-                shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+            try:
+                decompress(_file)
+                p.print(f'decompress {_file}')
+                # move 
+                folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
+                p.print(f'checkpoint folder {folder}')
+                if os.path.exists(folder):
+                    wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
+                    p.print(f"使用alist缓存文件继续训练")
+                    shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+            except Exception as e:
+                raise e
         except:
             pass
 
