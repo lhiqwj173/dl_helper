@@ -772,8 +772,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
         xm.rendezvous("val done")
         if xm.is_master_ordinal():
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
-            
-        xm.rendezvous("val done")
+
+        print(f"{index} val done")
 
     if xm.is_master_ordinal():
         with open('master_ordinal_epoch.txt', 'a') as f:
