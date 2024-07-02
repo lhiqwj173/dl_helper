@@ -126,7 +126,7 @@ def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
 
 # 定义随机缩放函数
 # 只对vol作用
-def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     # 矩阵算法
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
@@ -136,6 +136,22 @@ def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1
 
     tensor *= (1 + scale_pct_change)
     return tensor
+
+# 定义随机缩放函数
+# 只对vol作用
+def random_scale(tensor, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+    one = torch.ones_like(tensor, dtype=torch.bool)
+    zero = torch.zeros_like(tensor, dtype=torch.bool)
+
+    mask = torch.rand_like(tensor)
+    mask = torch.where(mask < scale_prob, one, zero)
+
+    # 只用vol_cols
+    vol_cond = torch.tensor([[False, True] * 20], device=tensor.device)
+    mask = torch.where(vol_cond, mask, zero)
+
+    scale = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale
+    return torch.where(mask, scale * tensor, tensor)
 
 class ResumeSample():
     """
@@ -655,8 +671,6 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
         head_n = int(len(x) * (pct / 100))
 
     if head_n > 0:
-        # if log:
-        #     logger.debug(f"控制样本数量 -> {head_n} / {len(x)}")
         data_map['raw'] = data_map['raw'].iloc[:head_n, :]
         to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
 
