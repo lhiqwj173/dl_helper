@@ -30,7 +30,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'aa.7z',
-            learning_rate=0.00013, batch_size=8, epochs=3,
+            learning_rate=0.00013, batch_size=64, epochs=3,
 
             # 3分类
             classify=True,
