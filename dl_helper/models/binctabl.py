@@ -3,6 +3,10 @@ import torch.nn as nn
 import math
 from dl_helper.models.tabl import BL_layer, TABL_layer
 
+from dl_helper.train_param import tpu_available
+if tpu_available():
+  import torch_xla.core.xla_model as xm
+
 class BiN(nn.Module):
   def __init__(self, d1, t1):
         super().__init__()
@@ -35,7 +39,9 @@ class BiN(nn.Module):
 
   def forward(self, x):
 
-    #if the two scalars are negative then we setting them to 0
+    #if the two scalars are negative then we setting them to 0 
+    if tpu_available():
+      xm.mark_step()
     if (self.y1[0] < 0): 
         y1 = torch.Tensor(1,).to(x.device)
         self.y1 = nn.Parameter(y1)
@@ -55,7 +61,8 @@ class BiN(nn.Module):
     std = torch.reshape(std, (std.shape[0], std.shape[1], 1))
 
     #it can be possible that the std of some temporal slices is 0, and this produces inf values, so we have to set them to one
-    std[std < 1e-4] = 1            
+    # std[std < 1e-4] = 1            
+    std = torch.where(std < 1e-4, torch.ones_like(std), std)
 
     diff = x - (x2@(T2.T))
     Z2 = diff / (std@(T2.T))
@@ -145,19 +152,23 @@ class m_bin_ctabl(nn.Module):
     #first of all we pass the input to the BiN layer, then we use the C(TABL) architecture
     x = self.BiN(x)
 
-    self.max_norm_(self.BL.W1.data)
-    self.max_norm_(self.BL.W2.data)
+    if tpu_available():
+      xm.mark_step()
+    with torch.no_grad():
+      self.max_norm_(self.BL.W1.data)
+      self.max_norm_(self.BL.W2.data)
+      self.max_norm_(self.BL2.W1.data)
+      self.max_norm_(self.BL2.W2.data)
+      self.max_norm_(self.TABL.W1.data)
+      self.max_norm_(self.TABL.W.data)
+      self.max_norm_(self.TABL.W2.data)
+
     x = self.BL(x)
     x = self.dropout(x)
-    
-    self.max_norm_(self.BL2.W1.data)
-    self.max_norm_(self.BL2.W2.data)
+
     x = self.BL2(x)
     x = self.dropout(x)
 
-    self.max_norm_(self.TABL.W1.data)
-    self.max_norm_(self.TABL.W.data)
-    self.max_norm_(self.TABL.W2.data)
     x = self.TABL(x)
 
     # in: (1, 40, 100)
@@ -174,12 +185,11 @@ class m_bin_ctabl(nn.Module):
     return x
 
   def max_norm_(self, w):
-    with torch.no_grad():
-      if (torch.linalg.matrix_norm(w) > 10.0):
-        norm = torch.linalg.matrix_norm(w)
-        desired = torch.clamp(norm, min=0.0, max=10.0)
-        w *= (desired / (1e-8 + norm))   
-    
+    if (torch.linalg.matrix_norm(w) > 10.0):
+      norm = torch.linalg.matrix_norm(w)
+      desired = torch.clamp(norm, min=0.0, max=10.0)
+      w *= (desired / (1e-8 + norm))   
+  
 if __name__ == "__main__":
     
     from torchinfo import summary   

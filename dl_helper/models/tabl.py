@@ -1,6 +1,10 @@
 import torch
 import torch.nn as nn
 
+from dl_helper.train_param import tpu_available
+if tpu_available():
+  import torch_xla.core.xla_model as xm
+
 class TABL_layer(nn.Module):
 
     def __init__(self, d2, d1, t1, t2):
@@ -32,12 +36,14 @@ class TABL_layer(nn.Module):
     def forward(self, X):
         
         #maintaining the weight parameter between 0 and 1.
-        if (self.l[0] < 0): 
+        if tpu_available():
+          xm.mark_step()
+        if (self.l[0] < 0):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)
           nn.init.constant_(self.l, 0.0)
 
-        if (self.l[0] > 1): 
+        if (self.l[0] > 1):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)
           nn.init.constant_(self.l, 1.0)

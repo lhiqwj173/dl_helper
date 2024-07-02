@@ -25,8 +25,12 @@ from datetime import datetime
 import multiprocessing
 import subprocess, os
 
+tpu = False
+
 def get_gpu_info():
     if 'TPU_WORKER_ID' in os.environ:
+        global tpu
+        tpu = True
         _run_device = 'TPU'
 
     elif 'CUDA_VERSION' in os.environ:
@@ -43,6 +47,7 @@ def get_gpu_info():
         _run_device = 'CPU'
 
     return _run_device
+get_gpu_info()
 
 def match_num_processes():
     device = get_gpu_info()
@@ -54,6 +59,9 @@ def match_num_processes():
         return 1
     else:
         return 0
+
+def tpu_available():
+    return tpu
 
 def data_parm2str(parm):
     # return f"pred_{parm['predict_n']}_pass_{parm['pass_n']}_y_{parm['y_n']}_bd_{parm['begin_date'].replace('-', '_')}_dr_{'@'.join([str(i) for i in parm['data_rate']])}_th_{parm['total_hours']}_s_{parm['symbols']}_t_{parm['target'].replace(' ', '')}"

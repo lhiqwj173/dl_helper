@@ -693,7 +693,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     train_loader = test.get_data('train', params, get_data_sampler)
     val_loader = test.get_data('val', params, get_data_sampler)
 
-    xm.rendezvous("init train_loader")
+    xm.rendezvous("init train_loader")# mark_step
     xm.master_print(f'dataset length: {len(train_loader.dataset)}')
     xm.master_print(f'dataloader length: {len(train_loader)}')
 
@@ -725,7 +725,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     for epoch in range(params.epochs):
         model.train()
 
-        for data, target in train_loader:
+        for data, target in train_loader:# mark_step
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
@@ -744,21 +744,21 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 with open(os.path.join(params.root, 'HLO.txt'), 'a') as f:
                     f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
                     f.write('\n\n')
-            xm.rendezvous("write IR and HLO")
+            xm.rendezvous("write IR and HLO")# mark_step
 
             if ddp:
                 optimizer.step()
             else:
                 xm.optimizer_step(optimizer)
 
-        xm.rendezvous("train done")
+        xm.rendezvous("train done")# mark_step
         if xm.is_master_ordinal():
             with open(os.path.join(params.root, 'metrics.txt'), 'a') as f:
                 f.write(met.metrics_report())
                 f.write('\n\n')
 
         scheduler.step()
-        xm.rendezvous("train done")
+        xm.rendezvous("train done")# mark_step
         if xm.is_master_ordinal():
             report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
@@ -772,7 +772,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 output = model(data)
                 loss = criterion(output, target)
 
-        xm.rendezvous("val done")
+        xm.rendezvous("val done")# mark_step
         if xm.is_master_ordinal():
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 

@@ -415,7 +415,7 @@ class Dataset(torch.utils.data.Dataset):
 
         # 随机缩放
         if self.train and self.params.random_scale>0:
-            x = random_scale(x, self.vol_cols, self.params.random_scale)
+            x = random_scale(x, self.params.random_scale)
         check_nan(x)
 
         # 随机mask
