@@ -721,7 +721,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
-        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not xm.is_master_ordinal()):
+        for data, target in train_loader:
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
@@ -743,7 +743,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
         model.eval()
         with torch.no_grad():
-            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not xm.is_master_ordinal()):
+            for data, target in val_loader:
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
                 if not params.classify and len(target.shape) == 1:
                     target = target.unsqueeze(1)
