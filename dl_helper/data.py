@@ -63,7 +63,7 @@ def convert_float16_2_32(df):
 # 随机选择 max_mask_num 的行数
 # 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 105
-def random_mask_row_0(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
+def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     need_length = end-begin
     assert need_length+max_mask_num <= tensor.shape[1], f"need_length:{need_length} max_mask_num:{max_mask_num} tensor.shape:{tensor.shape}"
 
@@ -98,7 +98,7 @@ def random_mask_row_0(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     return data[:, ~mask, :]
 
 # 按照 mask_prob 的概率随机遮盖时间点全部数据 -> 0
-def random_mask_row(tensor, mask_prob=1e-4):
+def random_mask_row_0(tensor, mask_prob=1e-4):
     mask = torch.rand(tensor.size()[1]) < mask_prob
     tensor[:, mask, :] = 0
     return tensor
@@ -126,7 +126,7 @@ def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
 
 # 定义随机缩放函数
 # 只对vol作用
-def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
     # 矩阵算法
     mask = torch.zeros(tensor.size(), dtype=torch.bool)
     # 只用vol_cols
@@ -135,23 +135,6 @@ def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
     scale_pct_change *= mask
 
     tensor *= (1 + scale_pct_change)
-    return tensor
-
-# 定义随机缩放函数
-# 只对vol作用
-def random_scale(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-    # 矩阵算法
-    mask = torch.zeros(tensor.size(), dtype=torch.bool)
-    
-    # 只用vol_cols
-    mask[:, :, vol_cols] = torch.where(torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob, True, False)
-
-    # 只用vol_cols
-    # mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
-    # scale_pct_change = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale-1# 变化率
-    # scale_pct_change *= mask
-
-    # tensor *= (1 + scale_pct_change)
     return tensor
 
 class ResumeSample():
