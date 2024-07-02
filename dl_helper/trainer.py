@@ -724,7 +724,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     for epoch in range(params.epochs):
         model.train()
 
-        print_step = True
         for data, target in train_loader:
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -734,10 +733,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             output = model(data)
             loss = criterion(output, target)
             loss.backward()
-
-            if print_step:
-                with lock:
-                    print(f"[{index}] [{epoch}] loss.backward()")
 
             # if xm.is_master_ordinal():
             #     # xm.master_print("write IR and HLO")
@@ -755,10 +750,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             else:
                 xm.optimizer_step(optimizer)
 
-            if print_step:
-                with lock:
-                    print_step = False
-                    print(f"[{index}] [{epoch}] step")
+        with lock:
+            print(f"[{index}] [{epoch}] train done")
+        xm.rendezvous("train done")
 
         if xm.is_master_ordinal():
             with open('master_ordinal_train.txt', 'a') as f:
