@@ -37,6 +37,8 @@ if match_num_processes() ==8:
     from torch_xla import runtime as xr
     from torch_xla.amp import autocast, GradScaler
     import torch_xla.debug.metrics as met
+    import pt_xla_profiler
+
     try:
       from torch_xla.amp import syncfree
     except ImportError:
@@ -721,63 +723,67 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     xm.master_print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
-    for epoch in range(params.epochs):
-        model.train()
+    with pt_xla_profiler.profiler.profiler_scope() as profiler:
+        for epoch in range(params.epochs):
+            model.train()
 
-        for data, target in train_loader:
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
-
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            loss.backward()
-
-            if xm.is_master_ordinal():
-                # xm.master_print("write IR and HLO")
-                with open('IR.txt', 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_text([loss]))
-                    f.write('\n\n')
-
-                with open('HLO.txt', 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
-                    f.write('\n\n')
-            xm.rendezvous("write IR and HLO")
-
-            if ddp:
-                optimizer.step()
-            else:
-                xm.optimizer_step(optimizer)
-
-        xm.rendezvous("train done")
-        if xm.is_master_ordinal():
-            with open('master_ordinal_train.txt', 'a') as f:
-                f.write(met.metrics_report())
-                f.write('\n\n')
-
-            with open('short_master_ordinal_train.txt', 'a') as f:
-                f.write(met.short_metrics_report())
-                f.write('\n\n')
-
-        scheduler.step()
-        xm.rendezvous("train done")
-        if xm.is_master_ordinal():
-            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
-
-        model.eval()
-        with torch.no_grad():
-            for data, target in val_loader:
+            for data, target in train_loader:
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
                 if not params.classify and len(target.shape) == 1:
                     target = target.unsqueeze(1)
 
+                optimizer.zero_grad()
                 output = model(data)
                 loss = criterion(output, target)
+                loss.backward()
 
-        xm.rendezvous("val done")
+                if xm.is_master_ordinal():
+                    # xm.master_print("write IR and HLO")
+                    with open('IR.txt', 'a') as f:
+                        f.write(xla._XLAC._get_xla_tensors_text([loss]))
+                        f.write('\n\n')
+
+                    with open('HLO.txt', 'a') as f:
+                        f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
+                        f.write('\n\n')
+                xm.rendezvous("write IR and HLO")
+
+                if ddp:
+                    optimizer.step()
+                else:
+                    xm.optimizer_step(optimizer)
+
+            xm.rendezvous("train done")
+            if xm.is_master_ordinal():
+                with open('master_ordinal_train.txt', 'a') as f:
+                    f.write(met.metrics_report())
+                    f.write('\n\n')
+
+                with open('short_master_ordinal_train.txt', 'a') as f:
+                    f.write(met.short_metrics_report())
+                    f.write('\n\n')
+
+            scheduler.step()
+            xm.rendezvous("train done")
+            if xm.is_master_ordinal():
+                report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+
+            model.eval()
+            with torch.no_grad():
+                for data, target in val_loader:
+                    # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                    if not params.classify and len(target.shape) == 1:
+                        target = target.unsqueeze(1)
+
+                    output = model(data)
+                    loss = criterion(output, target)
+
+            xm.rendezvous("val done")
+            if xm.is_master_ordinal():
+                report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
+
         if xm.is_master_ordinal():
-            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
+            profiler.export_file('profile.prof')
 
     if xm.is_master_ordinal():
         with open('master_ordinal_epoch.txt', 'a') as f:
