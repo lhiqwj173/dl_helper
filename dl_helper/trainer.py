@@ -723,15 +723,25 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
-        with lock:
-            print(f"[{index}] [{epoch}] train begin ")
+
+        print_step = True
         for data, target in train_loader:
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
 
+            if print_step:
+                with lock:
+                    print(f"[{index}] [{epoch}] data, target")
+
             optimizer.zero_grad()
             output = model(data)
+
+            if print_step:
+                with lock:
+                    print_step = False
+                    print(f"[{index}] [{epoch}] model(data)")
+
             loss = criterion(output, target)
             loss.backward()
 
