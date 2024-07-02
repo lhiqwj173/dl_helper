@@ -422,7 +422,7 @@ class printer():
             else:
                 print(head, *msg, **kwargs)
 
-def get_data_sampler(data_set):
+def get_data_sampler(data_set, _type):
     train_sampler = None
     if xm.xrt_world_size() > 1:
         print(f'分布式数据分配: {xm.xrt_world_size()}')
@@ -430,7 +430,8 @@ def get_data_sampler(data_set):
             data_set,
             num_replicas=xm.xrt_world_size(),
             rank=xm.get_ordinal(),
-            shuffle=True)
+            shuffle=True if _type == 'train' else False
+            )
 
     return train_sampler
 

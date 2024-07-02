@@ -716,7 +716,13 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     if not None is data_sample_getter_func:
         train_sampler = data_sample_getter_func(dataset_test)
 
-    data_loader = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=params.batch_size, sampler=train_sampler, num_workers=params.workers, pin_memory=True if params.workers>0 else False,drop_last=True)
+    data_loader = torch.utils.data.DataLoader(
+        dataset=dataset_test, 
+        batch_size=params.batch_size, 
+        sampler=train_sampler, 
+        shuffle=False if not None is train_sampler else True if _type == 'train' else False,
+        num_workers=params.workers, 
+        pin_memory=True if params.workers>0 else False,drop_last=True)
     del dataset_test
 
     return data_loader

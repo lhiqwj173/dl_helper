@@ -55,12 +55,17 @@ class test(test_base):
         target = torch.randint(0, num_classes, (num_samples,))
         dataset = torch.utils.data.TensorDataset(data, target)
 
+        train_sampler = None
+        if not None is data_sample_getter_func:
+            train_sampler = data_sample_getter_func(dataset_test)
+
         # 创建数据加载器
         loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=params.batch_size,
+            sampler=train_sampler,
             drop_last=True,
-            shuffle=True if _type == 'train' else False,
+            shuffle=False if not None is train_sampler else True if _type == 'train' else False,
         )
 
         return loader
