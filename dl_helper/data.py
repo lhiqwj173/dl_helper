@@ -63,7 +63,7 @@ def convert_float16_2_32(df):
 # 随机选择 max_mask_num 的行数
 # 按照 mask_prob 的概率进行遮盖
 # tensor 为原始的数据，没有切片 目前应该shape[1] == 105
-def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
+def random_mask_row_0(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     need_length = end-begin
     assert need_length+max_mask_num <= tensor.shape[1], f"need_length:{need_length} max_mask_num:{max_mask_num} tensor.shape:{tensor.shape}"
 
@@ -97,11 +97,20 @@ def random_mask_row(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
     # 删除行
     return data[:, ~mask, :]
 
-# 按照 mask_prob 的概率随机遮盖时间点全部数据 -> 0
-def random_mask_row_0(tensor, mask_prob=1e-4):
-    mask = torch.rand(tensor.size()[1]) < mask_prob
-    tensor[:, mask, :] = 0
-    return tensor
+def random_mask_row(tensor, need_length):
+    # 实际的时间长度
+    length = tensor.shape[1]
+    to_del_rows = length - need_length# 需要删除掉的行数
+    if to_del_rows <= 0:
+        return tensor
+
+    # 随机选择行索引
+    rows = torch.sort(torch.multinomial(torch.ones(length, device=tensor.device), need_length, replacement=False))[0]
+    # rows = torch.randperm(length)[:to_del_rows]
+
+    # 删除行
+    # return tensor[:, rows, :]
+    return torch.index_select(tensor, 1, rows)
 
 # 定义随机遮挡函数
 def random_mask(tensor, mask_prob=1e-4):
@@ -393,7 +402,7 @@ class Dataset(torch.utils.data.Dataset):
         # 获取切片x
         if self.train and self.params.random_mask_row>0:
             # 随机遮蔽行
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), self.time_length)
         else:
             x = self.data[:, a:b, :].clone()
 
