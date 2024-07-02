@@ -36,6 +36,7 @@ if match_num_processes() ==8:
     import torch_xla.distributed.parallel_loader as pl
     from torch_xla import runtime as xr
     from torch_xla.amp import autocast, GradScaler
+    import torch_xla.debug.metrics as met
     try:
       from torch_xla.amp import syncfree
     except ImportError:
