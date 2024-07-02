@@ -699,6 +699,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
     if xm.is_master_ordinal():
         report_memory_usage(f'init train data done')
+        os.makedirs(params.root, exist_ok=True)
 
     train_loader = pl.MpDeviceLoader(train_loader, device)
     val_loader = pl.MpDeviceLoader(val_loader, device)
@@ -736,11 +737,11 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
             if xm.is_master_ordinal():
                 # xm.master_print("write IR and HLO")
-                with open('IR.txt', 'a') as f:
+                with open(os.path.join(params.root, 'IR.txt'), 'a') as f:
                     f.write(xla._XLAC._get_xla_tensors_text([loss]))
                     f.write('\n\n')
 
-                with open('HLO.txt', 'a') as f:
+                with open(os.path.join(params.root, 'HLO.txt'), 'a') as f:
                     f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
                     f.write('\n\n')
             xm.rendezvous("write IR and HLO")
@@ -752,12 +753,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
         xm.rendezvous("train done")
         if xm.is_master_ordinal():
-            with open('master_ordinal_train.txt', 'a') as f:
+            with open(os.path.join(params.root, 'metrics.txt'), 'a') as f:
                 f.write(met.metrics_report())
-                f.write('\n\n')
-
-            with open('master_ordinal_train.txt', 'a') as f:
-                f.write(met.short_metrics_report())
                 f.write('\n\n')
 
         scheduler.step()
@@ -780,7 +777,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if xm.is_master_ordinal():
-        with open('master_ordinal_epoch.txt', 'a') as f:
+        with open(os.path.join(params.root, 'master_ordinal_epoch.txt'), 'a') as f:
             f.write(met.metrics_report())
             f.write('\n\n')
 
