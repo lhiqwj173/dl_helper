@@ -741,6 +741,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 with open('HLO.txt', 'a') as f:
                     f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
                     f.write('\n\n')
+            xm.rendezvous("write IR and HLO")
 
             if ddp:
                 optimizer.step()
