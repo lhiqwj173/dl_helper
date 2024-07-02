@@ -667,7 +667,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
         report_memory_usage('all done')
 
 def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
-    ddp = True
+    ddp = False
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
 
