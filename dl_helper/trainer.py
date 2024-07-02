@@ -752,6 +752,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
         xm.rendezvous("train done")
         if xm.is_master_ordinal():
+            print(met.metrics_report())
             with open('master_ordinal_train.txt', 'a') as f:
                 f.write(met.metrics_report())
                 f.write('\n\n')
