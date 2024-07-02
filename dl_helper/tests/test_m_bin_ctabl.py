@@ -87,7 +87,7 @@ class test(test_base):
         num_classes = 3
 
         # for debug
-        num_samples = 6000
+        num_samples = 12000
 
         if _type != 'train':
             num_samples //= 3
