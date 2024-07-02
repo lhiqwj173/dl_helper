@@ -730,20 +730,14 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
 
-            if print_step:
-                with lock:
-                    print(f"[{index}] [{epoch}] data, target")
-
             optimizer.zero_grad()
             output = model(data)
+            loss = criterion(output, target)
+            loss.backward()
 
             if print_step:
                 with lock:
-                    print_step = False
-                    print(f"[{index}] [{epoch}] model(data)")
-
-            loss = criterion(output, target)
-            loss.backward()
+                    print(f"[{index}] [{epoch}] loss.backward()")
 
             if xm.is_master_ordinal():
                 # xm.master_print("write IR and HLO")
@@ -755,6 +749,11 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                     f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
                     f.write('\n\n')
             xm.rendezvous("write IR and HLO")
+
+            if print_step:
+                with lock:
+                    print_step = False
+                    print(f"[{index}] [{epoch}] write IR and HLO")
 
             if ddp:
                 optimizer.step()
