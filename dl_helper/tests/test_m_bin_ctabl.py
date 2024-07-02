@@ -98,7 +98,7 @@ class test(test_base):
 
         train_sampler = None
         if not None is data_sample_getter_func:
-            train_sampler = data_sample_getter_func(dataset)
+            train_sampler = data_sample_getter_func(dataset, _type)
 
         # 创建数据加载器
         loader = torch.utils.data.DataLoader(

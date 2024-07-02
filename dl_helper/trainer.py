@@ -733,6 +733,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             loss = criterion(output, target)
             loss.backward()
 
+            print(torch_xla._XLAC._get_xla_tensors_text([loss]))
+            print(torch_xla._XLAC._get_xla_tensors_hlo([loss]))
+
             if ddp:
                 optimizer.step()
             else:

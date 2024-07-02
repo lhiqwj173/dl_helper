@@ -714,7 +714,7 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
 
     train_sampler = None
     if not None is data_sample_getter_func:
-        train_sampler = data_sample_getter_func(dataset_test)
+        train_sampler = data_sample_getter_func(dataset_test, _type)
 
     data_loader = torch.utils.data.DataLoader(
         dataset=dataset_test, 
