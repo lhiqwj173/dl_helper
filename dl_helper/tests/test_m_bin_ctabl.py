@@ -89,9 +89,6 @@ class test(test_base):
         # for debug
         num_samples = 16384
 
-        if _type != 'train':
-            num_samples //= 3
-
         data = torch.randn(num_samples, 40, 100)
         target = torch.randint(0, num_classes, (num_samples,))
         dataset = torch.utils.data.TensorDataset(data, target)
