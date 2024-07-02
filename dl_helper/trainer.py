@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
-from py_ext.lzma import compress_folder
+from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
 from dl_helper.alist import alist
