@@ -733,7 +733,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             loss.backward()
 
             if xm.is_master_ordinal():
-                xm.master_print("write IR and HLO")
+                # xm.master_print("write IR and HLO")
                 with open('IR.txt', 'a') as f:
                     f.write(xla._XLAC._get_xla_tensors_text([loss]))
                     f.write('\n\n')
@@ -747,6 +747,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 optimizer.step()
             else:
                 xm.optimizer_step(optimizer)
+
+        xm.master_print(met.metrics_report())
 
         scheduler.step()
         xm.rendezvous("train done")
