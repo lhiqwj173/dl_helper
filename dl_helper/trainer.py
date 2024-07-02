@@ -337,6 +337,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     # 追踪器，计算必要的数据
     tracker.update()
 
+    # 缓存checkpoint
+    checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
+
     # for debug
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
