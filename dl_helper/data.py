@@ -140,18 +140,14 @@ def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale
 # 定义随机缩放函数
 # 只对vol作用
 def random_scale(tensor, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-    one = torch.ones_like(tensor, dtype=torch.bool)
-    zero = torch.zeros_like(tensor, dtype=torch.bool)
-
-    mask = torch.rand_like(tensor)
-    mask = torch.where(mask < scale_prob, one, zero)
+    mask = torch.rand_like(tensor) < scale_prob
 
     # 只用vol_cols
     vol_cond = torch.tensor([[False, True] * 20], device=tensor.device)
-    mask = torch.where(vol_cond, mask, zero)
+    mask = torch.where(vol_cond, mask, torch.tensor(False, device=tensor.device))
 
-    scale = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale
-    return torch.where(mask, scale * tensor, tensor)
+    new_tensor = (torch.rand(tensor.size())*(max_scale-min_scale)+min_scale) * tensor
+    return torch.where(mask, new_tensor, tensor)
 
 class ResumeSample():
     """
