@@ -760,7 +760,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 f.write(met.short_metrics_report())
                 f.write('\n\n')
 
-            xm.collect_metrics()  # 收集并打印 profiler 数据
+            # xm.collect_metrics()  # 收集并打印 profiler 数据
 
         scheduler.step()
         xm.rendezvous("train done")
