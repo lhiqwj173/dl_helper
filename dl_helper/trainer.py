@@ -702,7 +702,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     val_loader = pl.MpDeviceLoader(val_loader, device)
 
     if None is model:
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+        model = test.get_model()
     model = model.to(device)
     if ddp:
         if xr.using_pjrt():
