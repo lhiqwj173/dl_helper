@@ -395,10 +395,12 @@ class Dataset(torch.utils.data.Dataset):
         #############################
 
         # 获取切片x
-        x = self.data[:, a:b, :].clone()
         if self.train and self.params.random_mask_row>0:
             # 随机遮蔽行
-            x = random_mask_row(x, self.params.random_mask_row)
+            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), a, b, self.params.random_mask_row)
+        else:
+            x = self.data[:, a:b, :].clone()
+
         check_nan(x)
 
         #############################
