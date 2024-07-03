@@ -157,6 +157,7 @@ class m_bin_ctabl(nn.Module):
 
     # if tpu_available():
     #   xm.mark_step()
+    xm.mark_step()
     with torch.no_grad():
       self.max_norm_(self.BL.W1.data)
       self.max_norm_(self.BL.W2.data)
@@ -188,7 +189,6 @@ class m_bin_ctabl(nn.Module):
     return x
 
   def max_norm_(self, w):
-    xm.mark_step()
     if (torch.linalg.matrix_norm(w) > 10.0):
       norm = torch.linalg.matrix_norm(w)
       desired = torch.clamp(norm, min=0.0, max=10.0)
