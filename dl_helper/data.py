@@ -436,8 +436,8 @@ class Dataset(torch.utils.data.Dataset):
         # #############################
         # #############################
 
-        print(x.device)
-        raise
+        # print(x.device)
+        # raise
 
         # return x, (self.y[index], self.ids[index])
         if self.params.cnn:
