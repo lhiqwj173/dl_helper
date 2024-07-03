@@ -203,10 +203,10 @@ class m_bin_ctabl(nn.Module):
   #     norm = torch.linalg.matrix_norm(w)
   #     desired = torch.clamp(norm, min=0.0, max=10.0)
   #     w *= (desired / (1e-8 + norm))   
-    def max_norm_(self, p):
-      norm = torch.linalg.matrix_norm(p.data)
-      desired = torch.clamp(norm, min=0.0, max=10.0)
-      p.data.mul_(torch.where(norm > 10.0, desired / (1e-8 + norm), torch.tensor(1., device=p.data.device)) )
+  def max_norm_(self, p):
+    norm = torch.linalg.matrix_norm(p.data)
+    desired = torch.clamp(norm, min=0.0, max=10.0)
+    p.data.mul_(torch.where(norm > 10.0, desired / (1e-8 + norm), torch.tensor(1., device=p.data.device)) )
   
 if __name__ == "__main__":
     
