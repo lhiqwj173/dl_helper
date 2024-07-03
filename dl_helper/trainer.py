@@ -666,7 +666,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
     if accelerator.is_main_process:
         report_memory_usage('all done')
 
-def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
+def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None, if_tqdm=False):
     ddp = False
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
@@ -725,7 +725,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     for epoch in range(params.epochs):
         model.train()
 
-        for data, target in train_loader:# mark_step
+        activate_loader = train_loader if not if_tqdm else tqdm(train_loader, total=len(train_loader), disable=not xm.is_master_ordinal())
+        for data, target in activate_loader:# mark_step
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
@@ -764,7 +765,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
         model.eval()
         with torch.no_grad():
-            for data, target in val_loader:
+            activate_loader = val_loader if not if_tqdm else tqdm(val_loader, total=len(val_loader), disable=not xm.is_master_ordinal())
+            for data, target in activate_loader:# mark_step
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
                 if not params.classify and len(target.shape) == 1:
                     target = target.unsqueeze(1)
@@ -857,7 +859,9 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
             pass
 
     if mode=='xla' and num_processes == 8:
-        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model), start_method='fork')     
+        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, False), start_method='fork')     
+    elif mode=='xla_tqdm' and num_processes == 8:
+        xmp.spawn(run_fn_xla_tqdm, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
     elif mode == 'simple':
         notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     else:
