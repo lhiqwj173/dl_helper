@@ -49,6 +49,7 @@ class BiN(nn.Module):
         self.y1 = nn.Parameter(y1)
         nn.init.constant_(self.y1, 0.01)
 
+    xm.mark_step()
     if (self.y2[0] < 0): 
         y2 = torch.Tensor(1,).to(x.device)
         self.y2 = nn.Parameter(y2)
