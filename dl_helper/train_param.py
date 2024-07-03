@@ -26,6 +26,22 @@ import multiprocessing
 import subprocess, os
 
 tpu = False
+in_kaggle = False
+in_colab = False
+
+def is_kaggle():
+    return in_kaggle
+
+def is_colab():
+    return in_colab
+
+def cloud_platform():
+    global in_kaggle, in_colab
+    if any(key.startswith("KAGGLE") for key in os.environ.keys()):
+        in_kaggle = True
+    elif "IPython" in sys.modules:
+        in_colab = "google.colab" in str(sys.modules["IPython"].get_ipython())
+cloud_platform()
 
 def get_gpu_info():
     if 'TPU_WORKER_ID' in os.environ:

@@ -1,4 +1,4 @@
-from dl_helper.train_param import match_num_processes
+from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker
 from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
@@ -667,7 +667,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
         report_memory_usage('all done')
 
 def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None, if_tqdm=False):
-    ddp = False
+    ddp = True if is_kaggle() else False
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
 
