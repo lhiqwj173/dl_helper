@@ -40,9 +40,10 @@ class BiN(nn.Module):
   def forward(self, x):
 
     #if the two scalars are negative then we setting them to 0 
-    if tpu_available():
-      xm.mark_step()
+    # if tpu_available():
+    #   xm.mark_step()
 
+    xm.mark_step()
     if (self.y1[0] < 0): 
         y1 = torch.Tensor(1,).to(x.device)
         self.y1 = nn.Parameter(y1)
@@ -153,8 +154,8 @@ class m_bin_ctabl(nn.Module):
     #first of all we pass the input to the BiN layer, then we use the C(TABL) architecture
     x = self.BiN(x)
 
-    if tpu_available():
-      xm.mark_step()
+    # if tpu_available():
+    #   xm.mark_step()
     with torch.no_grad():
       self.max_norm_(self.BL.W1.data)
       self.max_norm_(self.BL.W2.data)
@@ -186,6 +187,7 @@ class m_bin_ctabl(nn.Module):
     return x
 
   def max_norm_(self, w):
+    xm.mark_step()
     if (torch.linalg.matrix_norm(w) > 10.0):
       norm = torch.linalg.matrix_norm(w)
       desired = torch.clamp(norm, min=0.0, max=10.0)
