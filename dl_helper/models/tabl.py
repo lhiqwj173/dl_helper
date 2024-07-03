@@ -38,13 +38,15 @@ class TABL_layer(nn.Module):
         #maintaining the weight parameter between 0 and 1.
         # if tpu_available():
         #   xm.mark_step()
-        xm.mark_step()
+        # xm.mark_step()
+        xm.rendezvous("d")# mark_step
         if (self.l[0] < 0):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)
           nn.init.constant_(self.l, 0.0)
 
-        xm.mark_step()
+        # xm.mark_step()
+        xm.rendezvous("e")# mark_step
         if (self.l[0] > 1):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)

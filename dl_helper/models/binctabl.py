@@ -43,13 +43,15 @@ class BiN(nn.Module):
     # if tpu_available():
     #   xm.mark_step()
 
-    xm.mark_step()
+    # xm.mark_step()
+    xm.rendezvous("a")# mark_step
     if (self.y1[0] < 0): 
         y1 = torch.Tensor(1,).to(x.device)
         self.y1 = nn.Parameter(y1)
         nn.init.constant_(self.y1, 0.01)
 
-    xm.mark_step()
+    # xm.mark_step()
+    xm.rendezvous("b")# mark_step
     if (self.y2[0] < 0): 
         y2 = torch.Tensor(1,).to(x.device)
         self.y2 = nn.Parameter(y2)
@@ -157,7 +159,8 @@ class m_bin_ctabl(nn.Module):
 
     # if tpu_available():
     #   xm.mark_step()
-    xm.mark_step()
+    # xm.mark_step()
+    xm.rendezvous("c")# mark_step
     with torch.no_grad():
       self.max_norm_(self.BL.W1.data)
       self.max_norm_(self.BL.W2.data)
