@@ -699,6 +699,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
     if xm.is_master_ordinal():
         report_memory_usage(f'init train data done')
+        if not os.path.exists(params.root):
+            shutil.rmtree(params.root, ignore_errors=True)
         os.makedirs(params.root, exist_ok=True)
 
     train_loader = pl.MpDeviceLoader(train_loader, device)
@@ -782,6 +784,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
         with open(os.path.join(params.root, 'master_ordinal_epoch.txt'), 'a') as f:
             f.write(met.metrics_report())
             f.write('\n\n')
+
+        compress_folder(params.root, os.path.join(params.root, '7z'), 9, inplace=False)
 
         report_memory_usage('all done')
 
