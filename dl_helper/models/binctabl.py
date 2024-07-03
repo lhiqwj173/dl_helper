@@ -48,15 +48,10 @@ class BiN(nn.Module):
         self.y1 = nn.Parameter(y1)
         nn.init.constant_(self.y1, 0.01)
 
-    # xm.mark_step()
-    xm.rendezvous("b")# mark_step
     if (self.y2[0] < 0): 
         y2 = torch.Tensor(1,).to(x.device)
         self.y2 = nn.Parameter(y2)
         nn.init.constant_(self.y2, 0.01)
-
-    if tpu_available():
-      xm.mark_step()
 
     #normalization along the temporal dimensione 
     T2 = torch.ones([self.t1, 1]).to(x.device)
@@ -168,8 +163,6 @@ class m_bin_ctabl(nn.Module):
       self.max_norm_(self.TABL.W1.data)
       self.max_norm_(self.TABL.W.data)
       self.max_norm_(self.TABL.W2.data)
-    if tpu_available():
-      xm.mark_step()
 
     x = self.BL(x)
     x = self.dropout(x)

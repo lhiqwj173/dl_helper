@@ -38,7 +38,7 @@ class TABL_layer(nn.Module):
         #maintaining the weight parameter between 0 and 1.
         if tpu_available():
           xm.mark_step()
-          
+
         if (self.l[0] < 0):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)
@@ -48,9 +48,6 @@ class TABL_layer(nn.Module):
           l = torch.Tensor(1,)
           self.l = nn.Parameter(l)
           nn.init.constant_(self.l, 1.0)
-
-        if tpu_available():  
-          xm.mark_step()
 
         #modelling the dependence along the first mode of X while keeping the temporal order intact (7)
         X = self.W1 @ X
