@@ -785,7 +785,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             f.write(met.metrics_report())
             f.write('\n\n')
 
-        compress_folder(params.root, params.root + '7z', 9, inplace=False)
+        compress_folder(params.root, params.root + '.7z', 9, inplace=False)
 
         report_memory_usage('all done')
 
