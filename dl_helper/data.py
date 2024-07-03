@@ -436,6 +436,9 @@ class Dataset(torch.utils.data.Dataset):
         # #############################
         # #############################
 
+        print(x.device)
+        raise
+
         # return x, (self.y[index], self.ids[index])
         if self.params.cnn:
             # x:[channel, pass_n, feature] -> [1, 100, 40/6/46]
