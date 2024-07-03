@@ -31,7 +31,6 @@ def get_gpu_info():
     if 'TPU_WORKER_ID' in os.environ:
         global tpu
         tpu = True
-        print(f'tpu -> True')
         _run_device = 'TPU'
 
     elif 'CUDA_VERSION' in os.environ:

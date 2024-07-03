@@ -41,8 +41,6 @@ class BiN(nn.Module):
 
     #if the two scalars are negative then we setting them to 0 
     if tpu_available():
-      xm.master_print(f'mark_step')
-      raise
       xm.mark_step()
 
     if (self.y1[0] < 0): 
