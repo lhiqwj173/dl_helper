@@ -40,11 +40,9 @@ class BiN(nn.Module):
   def forward(self, x):
 
     #if the two scalars are negative then we setting them to 0 
-    # if tpu_available():
-    #   xm.mark_step()
+    if tpu_available():
+      xm.mark_step()
 
-    # xm.mark_step()
-    xm.rendezvous("a")# mark_step
     if (self.y1[0] < 0): 
         y1 = torch.Tensor(1,).to(x.device)
         self.y1 = nn.Parameter(y1)
@@ -56,6 +54,9 @@ class BiN(nn.Module):
         y2 = torch.Tensor(1,).to(x.device)
         self.y2 = nn.Parameter(y2)
         nn.init.constant_(self.y2, 0.01)
+
+    if tpu_available():
+      xm.mark_step()
 
     #normalization along the temporal dimensione 
     T2 = torch.ones([self.t1, 1]).to(x.device)
@@ -157,10 +158,8 @@ class m_bin_ctabl(nn.Module):
     #first of all we pass the input to the BiN layer, then we use the C(TABL) architecture
     x = self.BiN(x)
 
-    # if tpu_available():
-    #   xm.mark_step()
-    # xm.mark_step()
-    xm.rendezvous("c")# mark_step
+    if tpu_available():
+      xm.mark_step()
     with torch.no_grad():
       self.max_norm_(self.BL.W1.data)
       self.max_norm_(self.BL.W2.data)
@@ -169,6 +168,8 @@ class m_bin_ctabl(nn.Module):
       self.max_norm_(self.TABL.W1.data)
       self.max_norm_(self.TABL.W.data)
       self.max_norm_(self.TABL.W2.data)
+    if tpu_available():
+      xm.mark_step()
 
     x = self.BL(x)
     x = self.dropout(x)
