@@ -38,22 +38,23 @@ class BiN(nn.Module):
         nn.init.constant_(self.y2, 0.5)
 
   def forward(self, x):
-
     #if the two scalars are negative then we setting them to 0 
     # if tpu_available():
     #   xm.mark_step()
+    # xm.mark_step()
+    # if (self.y1[0] < 0): 
+    #     y1 = torch.Tensor(1,).to(x.device)
+    #     self.y1 = nn.Parameter(y1)
+    #     nn.init.constant_(self.y1, 0.01)
 
-    xm.mark_step()
-    if (self.y1[0] < 0): 
-        y1 = torch.Tensor(1,).to(x.device)
-        self.y1 = nn.Parameter(y1)
-        nn.init.constant_(self.y1, 0.01)
+    # xm.mark_step()
+    # if (self.y2[0] < 0): 
+    #     y2 = torch.Tensor(1,).to(x.device)
+    #     self.y2 = nn.Parameter(y2)
+    #     nn.init.constant_(self.y2, 0.01)
 
-    xm.mark_step()
-    if (self.y2[0] < 0): 
-        y2 = torch.Tensor(1,).to(x.device)
-        self.y2 = nn.Parameter(y2)
-        nn.init.constant_(self.y2, 0.01)
+    self.y1.data = torch.where(self.y1.data < 0, torch.tensor([0.01], device=self.x.device), self.y1.data)
+    self.y2.data = torch.where(self.y2.data < 0, torch.tensor([0.01], device=self.x.device), self.y2.data)
 
     #normalization along the temporal dimensione 
     T2 = torch.ones([self.t1, 1]).to(x.device)
@@ -157,15 +158,24 @@ class m_bin_ctabl(nn.Module):
 
     # if tpu_available():
     #   xm.mark_step()
-    xm.mark_step()
+    # xm.mark_step()
+    # with torch.no_grad():
+    #   self.max_norm_(self.BL.W1.data)
+    #   self.max_norm_(self.BL.W2.data)
+    #   self.max_norm_(self.BL2.W1.data)
+    #   self.max_norm_(self.BL2.W2.data)
+    #   self.max_norm_(self.TABL.W1.data)
+    #   self.max_norm_(self.TABL.W.data)
+    #   self.max_norm_(self.TABL.W2.data)
+
     with torch.no_grad():
-      self.max_norm_(self.BL.W1.data)
-      self.max_norm_(self.BL.W2.data)
-      self.max_norm_(self.BL2.W1.data)
-      self.max_norm_(self.BL2.W2.data)
-      self.max_norm_(self.TABL.W1.data)
-      self.max_norm_(self.TABL.W.data)
-      self.max_norm_(self.TABL.W2.data)
+      self.max_norm_(self.BL.W1)
+      self.max_norm_(self.BL.W2)
+      self.max_norm_(self.BL2.W1)
+      self.max_norm_(self.BL2.W2)
+      self.max_norm_(self.TABL.W1)
+      self.max_norm_(self.TABL.W)
+      self.max_norm_(self.TABL.W2)
 
     x = self.BL(x)
     x = self.dropout(x)
@@ -188,11 +198,15 @@ class m_bin_ctabl(nn.Module):
     
     return x
 
-  def max_norm_(self, w):
-    if (torch.linalg.matrix_norm(w) > 10.0):
-      norm = torch.linalg.matrix_norm(w)
+  # def max_norm_(self, w):
+  #   if (torch.linalg.matrix_norm(w) > 10.0):
+  #     norm = torch.linalg.matrix_norm(w)
+  #     desired = torch.clamp(norm, min=0.0, max=10.0)
+  #     w *= (desired / (1e-8 + norm))   
+    def max_norm_(self, p):
+      norm = torch.linalg.matrix_norm(p.data)
       desired = torch.clamp(norm, min=0.0, max=10.0)
-      w *= (desired / (1e-8 + norm))   
+      p.data.mul_(torch.where(norm > 10.0, desired / (1e-8 + norm), torch.tensor(1., device=p.data.device)) )
   
 if __name__ == "__main__":
     
