@@ -738,17 +738,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             loss = criterion(output, target)
             loss.backward()
 
-            if xm.is_master_ordinal():
-                # xm.master_print("write IR and HLO")
-                with open(os.path.join(params.root, 'IR.txt'), 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_text([loss]))
-                    f.write('\n\n')
-
-                with open(os.path.join(params.root, 'HLO.txt'), 'a') as f:
-                    f.write(xla._XLAC._get_xla_tensors_hlo([loss]))
-                    f.write('\n\n')
-            xm.rendezvous("write IR and HLO")# mark_step
-
             if ddp:
                 optimizer.step()
             else:
@@ -756,9 +745,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
         xm.rendezvous("train done")# mark_step
         if xm.is_master_ordinal():
-            with open(os.path.join(params.root, 'metrics.txt'), 'a') as f:
+            with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
                 f.write(met.metrics_report())
-                f.write('\n\n')
+                f.write('\n---------------------------------------------\n')
 
         scheduler.step()
         xm.rendezvous("train done")# mark_step
@@ -781,9 +770,12 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if xm.is_master_ordinal():
-        with open(os.path.join(params.root, 'master_ordinal_epoch.txt'), 'a') as f:
+        with open(os.path.join(params.root, 'metrics_report_epoch.txt'), 'a') as f:
             f.write(met.metrics_report())
-            f.write('\n\n')
+
+        if os.path.exists('hlo'):
+            # 移动到 params.root
+            shutil.copytree('hlo', os.path.join(params.root, 'hlo'))
 
         compress_folder(params.root, params.root + '.7z', 9, inplace=False)
 
