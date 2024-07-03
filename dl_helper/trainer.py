@@ -861,7 +861,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
     if mode=='xla' and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, False), start_method='fork')     
     elif mode=='xla_tqdm' and num_processes == 8:
-        xmp.spawn(run_fn_xla_tqdm, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
+        xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
     elif mode == 'simple':
         notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     else:
