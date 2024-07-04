@@ -305,7 +305,7 @@ def checkpoint(epoch, idx, accelerator, params, printer):
     accelerator.wait_for_everyone()
     printer.print(f"[{epoch}][{idx}] checkpointing done")
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
@@ -315,7 +315,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+        # 预处理
+        data, target = trans(batch, train=True)
+
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
@@ -346,7 +349,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
-def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, checkpoint=False):
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans, checkpoint=False):
     """
     异常模型在验证时checkpoint会报错, 默认不进行checkpoint
     """
@@ -361,7 +364,9 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+            data, target = trans(batch)
+            
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(targets.shape) == 1:
                 targets = targets.unsqueeze(1)
@@ -385,10 +390,12 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
-def test_fn(params, model, criterion, test_data, accelerator, tracker, printer):
+def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
     model.eval()
     with torch.no_grad():
-        for idx, (data, target) in tqdm(enumerate(test_data), total=len(test_data), disable=not accelerator.is_main_process, desc=f'test model'):
+        for idx, batch in tqdm(enumerate(test_data), total=len(test_data), disable=not accelerator.is_main_process, desc=f'test model'):
+            data, target = trans(batch)
+
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
@@ -535,6 +542,9 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     p.print(f'prepare done')
     p.print(f'each epoch step: {len(train_loader)}')
 
+    # 数据增强
+    trans = test.get_transform(accelerator.device)
+
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
     resume_from_checkpoint = os.path.exists(checkpoint_folder)
@@ -548,10 +558,10 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     for epoch in range(tracker.epoch_count, params.epochs):
         # 训练
         if tracker.step_in_epoch == 0:
-            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p)
+            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
             
         # 验证
-        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p)
+        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
         # 绘图
         tracker.plot()
@@ -567,7 +577,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     test_loader = accelerator.prepare(test_loader)
 
     # 测试
-    test_fn(params, model, criterion, test_loader, accelerator, tracker, p)
+    test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 绘图
     tracker.plot()
