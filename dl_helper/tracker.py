@@ -90,7 +90,7 @@ class Tracker():
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
-            lr_change = False
+            lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
                 self.printer.print('scheduler.step')
 
@@ -99,12 +99,13 @@ class Tracker():
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
-                lr_change = self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]
+                if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
+                    lr_change += 1
 
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
-            if lr_change:
+            if lr_change.item() == 1:
                 self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
