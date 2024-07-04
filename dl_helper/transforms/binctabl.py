@@ -17,10 +17,10 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
+        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int)
         for i in range(self.batch_size):
             # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
-            self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length)[:self.time_length])[0]
+            self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
         self.rand_cols = self.rand_cols.unsqueeze(1).expand(-1, self.num_rows, -1)
 
         # 用于random_scale
