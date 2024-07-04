@@ -728,9 +728,14 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
 
-    for batch in train_loader:
-        xm.master_print(f'epoch {epoch} step {len(batch)}')
-        raise
+    batch = next(iter(train_loader))
+    xm.master_print(f'batch shape: {batch[0].shape}')
+    xm.master_print(f'batch shape: {batch[1].shape}')
+    xm.master_print(f'batch shape: {batch[2].shape}')
+
+    # for batch in train_loader:
+    #     xm.master_print(f'epoch {epoch} step {len(batch)}')
+    #     raise
     
     # 训练循环
     for epoch in range(params.epochs):
