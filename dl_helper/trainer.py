@@ -767,9 +767,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 f.write('\n---------------------------------------------\n')
 
         scheduler.step()
-        xm.rendezvous("train done")# mark_step
-        if xm.is_master_ordinal():
-            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+        # xm.rendezvous("train done")# mark_step
+        # if xm.is_master_ordinal():
+        #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
         model.eval()
         with torch.no_grad():
