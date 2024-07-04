@@ -41,30 +41,31 @@ class transform():
         return torch.where(self.rand_scales, new_tensor, tensor)
 
     def __call__(self, batch, train=False):
-        x, y, mean_std = batch
+        with torch.no_grad():
+            x, y, mean_std = batch
 
-        # not cnn -> (batchsize, 40, 100)
-        x = torch.transpose(x, 1, 2)
+            # not cnn -> (batchsize, 40, 100)
+            x = torch.transpose(x, 1, 2)
 
-        # random_mask_row
-        if train and self.param.random_mask_row:
-            x = self.random_mask_row(x)
-        else:
-            if self.raw_time_length > self.time_length:
-                x = x[:, :, -self.time_length:]
+            # random_mask_row
+            if train and self.param.random_mask_row:
+                x = self.random_mask_row(x)
+            else:
+                if self.raw_time_length > self.time_length:
+                    x = x[:, :, -self.time_length:]
 
-        # 调整价格
-        mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
-        x = torch.where(~self.vol_cond, x / mp, x)
-        # 标准化
-        x -= mean_std[:, :, :1]
-        x /= mean_std[:, :, 1:]
+            # 调整价格
+            mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
+            x = torch.where(~self.vol_cond, x / mp, x)
+            # 标准化
+            x -= mean_std[:, :, :1]
+            x /= mean_std[:, :, 1:]
 
-        # random_scale
-        if train and self.param.random_scale>0:
-            x = self.random_scale(x)
+            # random_scale
+            if train and self.param.random_scale>0:
+                x = self.random_scale(x)
 
-        return x, y
+            return x, y
 
 if __name__ == '__main__':
     from dl_helper.tests.test_m_bin_ctabl_real_data import test
