@@ -494,8 +494,6 @@ class Dataset(torch.utils.data.Dataset):
         # logger.debug('del data_map > raw / mean_std')
         # report_memory_usage()
 
-        self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
-
         # 训练数据集
         self.train = train
 
@@ -573,7 +571,7 @@ class Dataset(torch.utils.data.Dataset):
         """
         # 切片范围
         a, b = self.x_idx[index]
-        x = self.data[:, a:b, :]
+        x = self.data[a:b, :]
 
         #############################
         # 1. 部分截取

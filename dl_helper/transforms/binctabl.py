@@ -44,7 +44,7 @@ class transform():
         x, y, mean_std = batch
 
         # not cnn -> (batchsize, 40, 100)
-        x = torch.transpose(torch.squeeze(x, dim=1), 1, 2)
+        x = torch.transpose(x, 1, 2)
 
         # random_mask_row
         if train and self.param.random_mask_row:
