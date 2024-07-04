@@ -17,7 +17,7 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int)
+        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int64)
         for i in range(self.batch_size):
             # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
             self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
