@@ -36,7 +36,7 @@ if match_num_processes() ==8:
     import torch_xla.distributed.parallel_loader as pl
     from torch_xla import runtime as xr
     from torch_xla.amp import autocast, GradScaler
-    # import torch_xla.debug.metrics as met
+    import torch_xla.debug.metrics as met
     try:
       from torch_xla.amp import syncfree
     except ImportError:
@@ -727,15 +727,18 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
 
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
+
+    for batch in activate_loader:
+        xm.master_print(f'epoch {epoch} step {len(batch)}')
+        raise
     
     # 训练循环
     for epoch in range(params.epochs):
         model.train()
 
         activate_loader = train_loader if not if_tqdm else tqdm(train_loader, total=len(train_loader), disable=not xm.is_master_ordinal())
-        # for batch in activate_loader:# mark_step
-        for data, target, a in activate_loader:# mark_step
-            # data, target = trans(batch, train=True)
+        for batch in activate_loader:# mark_step
+            data, target = trans(batch, train=True)
 
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -752,10 +755,10 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 xm.optimizer_step(optimizer)
 
         xm.rendezvous("train done")# mark_step
-        # if xm.is_master_ordinal():
-        #     with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
-        #         f.write(met.metrics_report())
-        #         f.write('\n---------------------------------------------\n')
+        if xm.is_master_ordinal():
+            with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
+                f.write(met.metrics_report())
+                f.write('\n---------------------------------------------\n')
 
         scheduler.step()
         xm.rendezvous("train done")# mark_step
@@ -779,8 +782,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
             report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if xm.is_master_ordinal():
-        # with open(os.path.join(params.root, 'metrics_report_epoch.txt'), 'a') as f:
-        #     f.write(met.metrics_report())
+        with open(os.path.join(params.root, 'metrics_report_epoch.txt'), 'a') as f:
+            f.write(met.metrics_report())
 
         if os.path.exists('hlo'):
             # 移动到 params.root
