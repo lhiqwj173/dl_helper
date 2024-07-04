@@ -695,6 +695,12 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     train_loader = test.get_data('train', params, get_data_sampler)
     val_loader = test.get_data('val', params, get_data_sampler)
 
+    batch = next(iter(train_loader))
+    xm.master_print(f'batch shape: {batch[0].shape}')
+    xm.master_print(f'batch shape: {batch[1].shape}')
+    xm.master_print(f'batch shape: {batch[2].shape}')
+    raise
+
     xm.rendezvous("init train_loader")# mark_step
     xm.master_print(f'dataset length: {len(train_loader.dataset)}')
     xm.master_print(f'dataloader length: {len(train_loader)}')
