@@ -51,7 +51,7 @@ class transform():
             x = self.random_mask_row(x)
         else:
             if self.raw_time_length > self.time_length:
-                x = x[:, -self.time_length:,:]
+                x = x[:, :, -self.time_length:]
 
         # 调整价格
         mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
