@@ -669,6 +669,7 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
 def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None, if_tqdm=False):
     ddp = True if is_kaggle() else False
     xm.master_print(f'ddp: {ddp}')
+    xm.master_print(f'if_tqdm: {if_tqdm}')
 
     dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
