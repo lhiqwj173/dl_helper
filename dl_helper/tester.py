@@ -2,6 +2,7 @@
 训练的基类
 """
 from dl_helper.data import read_data
+from dl_helper.transforms.base import transform
 
 import torch
 import torch.nn as nn
@@ -46,3 +47,6 @@ class test_base():
         assert self.para, 'should init param in __init__()'
         return torch.optim.AdamW(
             model.parameters(), lr=self.para.learning_rate, weight_decay=self.para.weight_decay)
+
+    def get_transform(self, device):
+        return transform()

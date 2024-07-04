@@ -23,7 +23,7 @@ data_set: 数据集
 import torch
 from datetime import datetime
 import multiprocessing
-import subprocess, os
+import subprocess, os, sys
 
 tpu = False
 in_kaggle = False

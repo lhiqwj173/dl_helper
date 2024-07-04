@@ -531,17 +531,6 @@ class Dataset(torch.utils.data.Dataset):
                 data_map['x'] = [data_map['x'][i] for i in idx]
                 data_map['y'] = [data_map['y'][i] for i in idx]
                 self.mean_std = [self.mean_std[i] for i in idx]
-        # else:
-        #     # 回归数据集
-        #     # y 可能为nan
-        #     idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
-        #     # 过滤nan
-        #     data_map['y'] = [data_map['y'][i] for i in idxs]
-        #     data_map['x'] = [data_map['x'][i] for i in idxs]
-        #     self.mean_std = [self.mean_std[i] for i in idxs]
-        #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
-
-        # report_memory_usage()
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
@@ -574,35 +563,17 @@ class Dataset(torch.utils.data.Dataset):
         # 增加一个batch维度
         self.input_shape = (1,) + self.input_shape
 
-        # if self.log:
-        #     logger.debug(f'数据集初始化完毕')
-        # report_memory_usage()
-
     def __len__(self):
         """Denotes the total number of samples"""
         return self.length
 
     def __getitem__(self, index):
-        """Generates samples of data"""
-        # #############################
-        # # 测试用
-        # #############################
-        # return torch.randn(40, 100), 0
-        # #############################
-        # #############################
-        
+        """Generates samples of data
+        x, y, mean_std
+        """
         # 切片范围
         a, b = self.x_idx[index]
-
-        # 截断数据 b向上截取
-        # a=3, b=6
-        # 3, 4, 5
-        # self.time_length=2
-        # 4, 5
-        # a -> 4
-        ab_length = b-a
-        if ab_length > self.time_length:
-            a += (ab_length-self.time_length)
+        x = self.data[:, a:b, :]
 
         #############################
         # 1. 部分截取
@@ -622,57 +593,7 @@ class Dataset(torch.utils.data.Dataset):
         else:
             mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
-        #############################
-        # 2. 全部使用，在读取数据的部分作截取操作
-        #############################
-
-        # 获取切片x
-        if self.train and self.params.random_mask_row>0:
-            # 随机遮蔽行
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), self.time_length)
-        else:
-            x = self.data[:, a:b, :].clone()
-
-        check_nan(x)
-
-        #############################
-        #############################
-        # mid_price
-        mid = (x[0, -1, 0] + x[0, -1, 2]) / 2
-
-        # 价格标准化
-        x[0, :, self.price_cols] /= mid
-        x[0, :, :] -= mean_std[:, 0]
-        x[0, :, :] /= mean_std[:, 1]
-
-        # 随机缩放
-        if self.train and self.params.random_scale>0:
-            x = random_scale(x, self.params.random_scale)
-        check_nan(x)
-
-        # 随机mask
-        if self.train and self.params.random_mask>0:
-            x = random_mask(x, self.params.random_mask)
-        check_nan(x)
-
-        # #############################
-        # # 测试用
-        # #############################
-        # # x = self.data[:, a:b, :].clone()
-        # x = self.data[:, a:b, :]
-        # #############################
-        # #############################
-
-        # print(x.device)
-        # raise
-
-        # return x, (self.y[index], self.ids[index])
-        if self.params.cnn:
-            # x:[channel, pass_n, feature] -> [1, 100, 40/6/46]
-            return x, self.y[index]
-        else:
-            # x:[feature, pass_n] -> [40/6/46, 100]
-            return x[0].permute(1, 0), self.y[index]
+        return x, self.y[index], mean_std
 
 
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):

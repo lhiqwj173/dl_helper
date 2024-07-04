@@ -5,6 +5,7 @@ from dl_helper.train_param import Params
 
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
+from dl_helper.transforms.binctabl import transform
 
 def yfunc_target_long_short(x):
     # long/ short
@@ -80,3 +81,6 @@ class test(test_base):
     # 返回一个 torch model
     def get_model(self):
         return m_bin_ctabl(60, 40, 100, 40, 120, 10, self.y_n, 1)
+
+    def get_transform(self, device):
+        return transform(device, self.para, 105)
