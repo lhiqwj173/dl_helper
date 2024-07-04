@@ -80,3 +80,6 @@ class test(test_base):
     # 返回一个 torch model
     def get_model(self):
         return m_bin_ctabl(60, 40, 100, 40, 120, 10, self.y_n, 1)
+
+    def get_transform(self, device):
+        return transform(device, self.para, 105)
