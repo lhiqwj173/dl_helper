@@ -723,10 +723,10 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
-    trans = test.get_transform(device)
-    xm.master_print(f'vol_cond: {trans.vol_cond.device}')
-    xm.master_print(f'rand_cols: {trans.rand_cols.device}')
-    xm.master_print(f'rand_scales: {trans.rand_scales.device}')
+    # trans = test.get_transform(device)
+    # xm.master_print(f'vol_cond: {trans.vol_cond.device}')
+    # xm.master_print(f'rand_cols: {trans.rand_cols.device}')
+    # xm.master_print(f'rand_scales: {trans.rand_scales.device}')
 
     batch = next(iter(train_loader))
     xm.master_print(f'batch shape: {batch[0].shape}')
