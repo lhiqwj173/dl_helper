@@ -35,6 +35,7 @@ def report_memory_usage(msg=''):
     memory_usage = psutil.virtual_memory()
     print(f"{msg} CPU 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
     tpu_mem_info = xm.get_memory_info(xm.xla_device())
+    print(tpu_mem_info)
     tpu_used = tpu_mem_info["kb_total"] - tpu_mem_info["kb_free"]
     print(f"{msg} TPU 内存占用：{tpu_used/1024**3:.3f}GB/{tpu_mem_info['kb_total']/1024**3:.3f}GB")
 
