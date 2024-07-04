@@ -724,7 +724,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     trans = test.get_transform(device)
-    xm.master_print(f'trans: {trans.vol_cond}')
+    xm.master_print(f'vol_cond: {trans.vol_cond.device}')
+    xm.master_print(f'rand_cols: {trans.rand_cols.device}')
+    xm.master_print(f'rand_scales: {trans.rand_scales.device}')
 
     batch = next(iter(train_loader))
     xm.master_print(f'batch shape: {batch[0].shape}')
