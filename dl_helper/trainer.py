@@ -723,7 +723,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
-    # trans = test.get_transform(device)
+    trans = test.get_transform(device)
 
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
@@ -733,8 +733,9 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
         model.train()
 
         activate_loader = train_loader if not if_tqdm else tqdm(train_loader, total=len(train_loader), disable=not xm.is_master_ordinal())
-        for batch in activate_loader:# mark_step
-            data, target = trans(batch, train=True)
+        # for batch in activate_loader:# mark_step
+        for data, target, a in activate_loader:# mark_step
+            # data, target = trans(batch, train=True)
 
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
