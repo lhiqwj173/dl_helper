@@ -18,15 +18,6 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        # self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device)
-        # self.rand_cols = torch.empty(self.batch_size, self.time_length, device=self.device)
-        # print(self.rand_cols.dtype)
-        # if not tpu_available():
-        #     self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int64)
-        # else:
-        #     self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
-
-        # self.rand_cols = torch.zeros(self.batch_size, self.time_length)
         self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device)
         for i in range(self.batch_size):
             r = torch.randperm(self.raw_time_length,  device='cpu')[:self.time_length].sort().values
