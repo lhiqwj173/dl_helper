@@ -544,8 +544,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
     # 数据增强
     trans = test.get_transform(accelerator.device)
-    p.print(next(iter(train_loader))[0].shape)
-    p.print('pritn done')
 
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
@@ -736,6 +734,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     trans = test.get_transform(device)
+    p.print(next(iter(train_loader))[0].shape)
 
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
