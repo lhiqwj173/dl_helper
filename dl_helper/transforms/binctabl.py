@@ -18,8 +18,11 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        _dtype = torch.int64 if not tpu_available() else torch.int32
-        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=_dtype)
+        if not tpu_available():
+            self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int64)
+        else:
+            self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
+
         for i in range(self.batch_size):
             # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
             self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
