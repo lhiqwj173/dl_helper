@@ -734,7 +734,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     trans = test.get_transform(device)
-    p.print(next(iter(train_loader))[0].shape)
+    xm.master_print(next(iter(train_loader))[0].shape)
 
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
