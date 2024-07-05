@@ -681,7 +681,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     xm.master_print(f'ddp: {ddp}')
     xm.master_print(f'if_tqdm: {if_tqdm}')
 
-    dist.init_process_group('xla', init_method='xla://')
+    # dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
 
     # 训练实例
@@ -734,7 +734,6 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     trans = test.get_transform(device)
-    xm.master_print(next(iter(train_loader))[0].shape)
 
     xm.master_print(f'prepare done')
     xm.master_print(f'each epoch step: {len(train_loader)}')
