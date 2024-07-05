@@ -50,4 +50,4 @@ class test(test_base):
             sampler=sampler,
         )
 
-        return loader
+        return train_loader
