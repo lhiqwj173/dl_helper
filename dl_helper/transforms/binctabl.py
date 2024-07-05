@@ -26,7 +26,8 @@ class transform():
         # else:
         #     self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
 
-        self.rand_cols = torch.zeros(self.batch_size, self.time_length)
+        # self.rand_cols = torch.zeros(self.batch_size, self.time_length)
+        self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device, dtype=torch.int64)
         # for i in range(self.batch_size):
         #     self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
         self.rand_cols = self.rand_cols.unsqueeze(1).expand(-1, self.num_rows, -1)
