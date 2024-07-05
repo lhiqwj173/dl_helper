@@ -33,9 +33,7 @@ class test(test_base):
 
         self.img_dim = 224
         self.batch_size = 128
-        self.num_steps = 300
-        self.num_epochs = 30
-        self.train_dataset_len = 25600 # Roughly the size of Imagenet dataset.
+        self.train_dataset_len = 3069 # Roughly the size of Imagenet dataset.
 
         data = torch.zeros(self.train_dataset_len, 3, self.img_dim, self.img_dim)
         target = torch.zeros(self.train_dataset_len, dtype=torch.int64)
