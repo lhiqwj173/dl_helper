@@ -18,7 +18,7 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device)
+        # self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device)
         # self.rand_cols = torch.empty(self.batch_size, self.time_length, device=self.device)
         # print(self.rand_cols.dtype)
         # if not tpu_available():
@@ -26,10 +26,10 @@ class transform():
         # else:
         #     self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
 
-        for i in range(self.batch_size):
-            # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
-            self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
-        self.rand_cols = self.rand_cols.unsqueeze(1).expand(-1, self.num_rows, -1)
+        # for i in range(self.batch_size):
+        #     # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
+        #     self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
+        # self.rand_cols = self.rand_cols.unsqueeze(1).expand(-1, self.num_rows, -1)
 
         # 用于random_scale
         self.rand_scales = torch.rand(self.batch_size, self.num_rows, self.time_length, device=self.device) < scale_prob
