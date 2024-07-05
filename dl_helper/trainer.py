@@ -544,6 +544,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
     # 数据增强
     trans = test.get_transform(accelerator.device)
+    p.print(next(iter(train_loader))[0].shape)
 
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
