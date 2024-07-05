@@ -27,7 +27,7 @@ class test(test_base):
 
         title = f'test_resnet_v{self.idx}'
         self.img_dim = 224
-        self.img_dim = 64
+        # self.img_dim = 64
 
         # 实例化 参数对象
         self.para = Params(
