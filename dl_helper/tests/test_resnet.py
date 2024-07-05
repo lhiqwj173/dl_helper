@@ -10,9 +10,9 @@ import torch.nn as nn
 class ResNet(nn.Module):
     def __init__(self):
         super(ResNet, self).__init__()
-        self.conv = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
+        self.conv = nn.Conv2d(3, 224, kernel_size=3, stride=1, padding=1)
         self.relu = nn.ReLU()
-        self.fc = nn.Linear(64, 3)
+        self.fc = nn.Linear(224, 3)
 
     def forward(self, x):
         out = self.conv(x)
@@ -47,11 +47,12 @@ class test(test_base):
 
         # 创建模拟数据
         num_classes = 3
+        img_dim = 224
 
         # for debug
-        num_samples = 30720
+        num_samples = 3069
 
-        data = torch.randn(num_samples, 3, 64, 64)
+        data = torch.randn(num_samples, 3, img_dim, img_dim)
         target = torch.randint(0, num_classes, (num_samples,))
         dataset = torch.utils.data.TensorDataset(data, target)
 
