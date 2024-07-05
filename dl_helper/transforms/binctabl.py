@@ -19,6 +19,7 @@ class transform():
 
         # 用于random_mask_row
         self.rand_cols = torch.randint(0, 1, (self.batch_size, self.time_length), device=self.device)
+        print(self.rand_cols.dtype)
         # if not tpu_available():
         #     self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=torch.int64)
         # else:
