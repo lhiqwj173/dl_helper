@@ -8,11 +8,11 @@ import torch.nn as nn
 
 # 定义简单的 ResNet 模型
 class ResNet(nn.Module):
-    def __init__(self):
+    def __init__(self, img_dim):
         super(ResNet, self).__init__()
-        self.conv = nn.Conv2d(3, 224, kernel_size=3, stride=1, padding=1)
+        self.conv = nn.Conv2d(3, img_dim, kernel_size=3, stride=1, padding=1)
         self.relu = nn.ReLU()
-        self.fc = nn.Linear(224, 3)
+        self.fc = nn.Linear(img_dim, 3)
 
     def forward(self, x):
         out = self.conv(x)
@@ -26,6 +26,8 @@ class test(test_base):
         super().__init__(*args, **kwargs)
 
         title = f'test_resnet_v{self.idx}'
+        self.img_dim = 224
+        self.img_dim = 64
 
         # 实例化 参数对象
         self.para = Params(
@@ -39,7 +41,7 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        return ResNet()
+        return ResNet(self.img_dim)
 
     # 初始化数据
     # 返回一个 torch dataloader
@@ -47,12 +49,11 @@ class test(test_base):
 
         # 创建模拟数据
         num_classes = 3
-        img_dim = 224
-
+        
         # for debug
         num_samples = 3069
 
-        data = torch.randn(num_samples, 3, img_dim, img_dim)
+        data = torch.randn(num_samples, 3, self.img_dim, self.img_dim)
         target = torch.randint(0, num_classes, (num_samples,))
         dataset = torch.utils.data.TensorDataset(data, target)
 
