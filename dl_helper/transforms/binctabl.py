@@ -1,4 +1,5 @@
 import torch
+from dl_helper.train_param import tpu_available
 
 class transform():
     def __init__(self, device, param, raw_time_length, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
@@ -17,7 +18,8 @@ class transform():
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
-        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device)
+        _dtype = torch.int64 if not tpu_available() else torch.int32
+        self.rand_cols = torch.zeros(self.batch_size, self.time_length, device=self.device, dtype=_dtype)
         for i in range(self.batch_size):
             # self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
             self.rand_cols[i] = torch.sort(torch.randperm(self.raw_time_length, device=self.device)[:self.time_length])[0]
