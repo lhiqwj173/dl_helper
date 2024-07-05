@@ -681,7 +681,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     xm.master_print(f'ddp: {ddp}')
     xm.master_print(f'if_tqdm: {if_tqdm}')
 
-    # dist.init_process_group('xla', init_method='xla://')
+    dist.init_process_group('xla', init_method='xla://')
     device = xm.xla_device()
 
     # 训练实例
