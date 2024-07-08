@@ -3,7 +3,7 @@ import torch_xla.utils.utils as xu
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
 
-import time
+import time, sys
 import psutil
 import itertools
 
@@ -20,7 +20,7 @@ def report_memory_usage(msg=''):
 
 class TrainResNetBase():
 
-  def __init__(self):
+  def __init__(self, batch_size=128):
     self.img_dim = 224
     self.batch_size = 128
     self.num_epochs = 50
@@ -56,7 +56,8 @@ class TrainResNetBase():
 
     for epoch in range(1, self.num_epochs + 1):
       self.train_loop_fn(self.train_device_loader, epoch)
-      report_memory_usage(f'epoch {epoch}')
+      if epoch % 5 == 0:
+        report_memory_usage(f'epoch {epoch}')
 
     xm.master_print('train end {}'.format(
         time.strftime('%l:%M%p %Z on %b %d, %Y')))
@@ -64,5 +65,12 @@ class TrainResNetBase():
 
 
 if __name__ == '__main__':
-  base = TrainResNetBase()
+  batch_size = 128
+
+  args = sys.argv
+  for i in range(1, len(args)):
+    if args[i] == '--batch_size':
+      batch_size = int(args[i + 1])
+
+  base = TrainResNetBase(batch_size)
   base.start_training()
