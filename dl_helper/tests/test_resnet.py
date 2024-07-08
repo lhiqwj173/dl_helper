@@ -17,7 +17,7 @@ class ResNet(nn.Module):
     def forward(self, x):
         out = self.conv(x)
         out = self.relu(out)
-        out = out.mean([2, 3])  # 平均池化
+        out = out.mean([2, 3])
         out = self.fc(out)
         return out
 
