@@ -23,7 +23,7 @@ class TrainResNetBase():
   def __init__(self):
     self.img_dim = 224
     self.batch_size = 128
-    self.num_epochs = 1
+    self.num_epochs = 50
     self.train_dataset_len = 12000  # Roughly the size of Imagenet dataset.
     # For the purpose of this example, we are going to use fake data.
     train_loader = xu.SampleGenerator(
