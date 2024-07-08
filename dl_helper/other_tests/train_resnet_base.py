@@ -13,7 +13,7 @@ import torch.optim as optim
 import torch.nn as nn
 
 def report_memory_usage(msg=''):
-  if xm.is_main_process():
+  if xm.is_master_ordinal():
     memory_usage = psutil.virtual_memory()
     print(f"{msg} CPU 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
