@@ -100,6 +100,136 @@ class TrainResNetBase():
 
 
 if __name__ == '__main__':
+  """
+  === Batch Size: 2 ===
+  train begin  1:46AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：2.9% (7.589GB/334.562GB)
+  epoch 10 CPU 内存占用：3.0% (7.807GB/334.562GB)
+  epoch 15 CPU 内存占用：3.1% (8.001GB/334.562GB)
+  epoch 20 CPU 内存占用：3.1% (8.115GB/334.562GB)
+  epoch 25 CPU 内存占用：3.1% (8.187GB/334.562GB)
+  epoch 30 CPU 内存占用：3.2% (8.312GB/334.562GB)
+  epoch 35 CPU 内存占用：3.2% (8.449GB/334.562GB)
+  epoch 40 CPU 内存占用：3.2% (8.551GB/334.562GB)
+  epoch 45 CPU 内存占用：3.3% (8.667GB/334.562GB)
+  epoch 50 CPU 内存占用：3.3% (8.797GB/334.562GB)
+  train end  3:14AM UTC on Jul 09, 2024
+
+  === Batch Size: 2 ===
+  === Batch Size: 4 ===
+  train begin  3:14AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.3% (8.709GB/334.562GB)
+  epoch 10 CPU 内存占用：3.3% (8.854GB/334.562GB)
+  epoch 15 CPU 内存占用：3.3% (8.918GB/334.562GB)
+  epoch 20 CPU 内存占用：3.4% (9.038GB/334.562GB)
+  epoch 25 CPU 内存占用：3.4% (9.071GB/334.562GB)
+  epoch 30 CPU 内存占用：3.4% (9.137GB/334.562GB)
+  epoch 35 CPU 内存占用：3.4% (9.201GB/334.562GB)
+  epoch 40 CPU 内存占用：3.5% (9.365GB/334.562GB)
+  epoch 45 CPU 内存占用：3.5% (9.318GB/334.562GB)
+  epoch 50 CPU 内存占用：3.5% (9.364GB/334.562GB)
+  train end  3:58AM UTC on Jul 09, 2024
+
+  === Batch Size: 4 ===
+  === Batch Size: 8 ===
+  train begin  3:58AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.2% (8.328GB/334.562GB)
+  epoch 10 CPU 内存占用：3.2% (8.378GB/334.562GB)
+  epoch 15 CPU 内存占用：3.2% (8.399GB/334.562GB)
+  epoch 20 CPU 内存占用：3.2% (8.420GB/334.562GB)
+  epoch 25 CPU 内存占用：3.2% (8.431GB/334.562GB)
+  epoch 30 CPU 内存占用：3.2% (8.414GB/334.562GB)
+  epoch 35 CPU 内存占用：3.2% (8.428GB/334.562GB)
+  epoch 40 CPU 内存占用：3.2% (8.454GB/334.562GB)
+  epoch 45 CPU 内存占用：3.2% (8.433GB/334.562GB)
+  epoch 50 CPU 内存占用：3.2% (8.481GB/334.562GB)
+  train end  4:21AM UTC on Jul 09, 2024
+
+  === Batch Size: 8 ===
+  === Batch Size: 16 ===
+  train begin  4:21AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.3% (8.653GB/334.562GB)
+  epoch 10 CPU 内存占用：3.3% (8.802GB/334.562GB)
+  epoch 15 CPU 内存占用：3.3% (8.897GB/334.562GB)
+  epoch 20 CPU 内存占用：3.4% (9.116GB/334.562GB)
+  epoch 25 CPU 内存占用：3.4% (9.198GB/334.562GB)
+  epoch 30 CPU 内存占用：3.4% (9.275GB/334.562GB)
+  epoch 35 CPU 内存占用：3.5% (9.446GB/334.562GB)
+  epoch 40 CPU 内存占用：3.5% (9.529GB/334.562GB)
+  epoch 45 CPU 内存占用：3.5% (9.601GB/334.562GB)
+  epoch 50 CPU 内存占用：3.6% (9.749GB/334.562GB)
+  train end  4:33AM UTC on Jul 09, 2024
+
+  === Batch Size: 16 ===
+  === Batch Size: 32 ===
+  train begin  4:33AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.6% (9.889GB/334.562GB)
+  epoch 10 CPU 内存占用：4.0% (11.087GB/334.562GB)
+  epoch 15 CPU 内存占用：4.2% (11.853GB/334.562GB)
+  epoch 20 CPU 内存占用：4.6% (13.112GB/334.562GB)
+  epoch 25 CPU 内存占用：5.0% (14.337GB/334.562GB)
+  epoch 30 CPU 内存占用：5.2% (15.002GB/334.562GB)
+  epoch 35 CPU 内存占用：5.2% (15.099GB/334.562GB)
+  epoch 40 CPU 内存占用：5.5% (16.232GB/334.562GB)
+  epoch 45 CPU 内存占用：6.0% (17.682GB/334.562GB)
+  epoch 50 CPU 内存占用：6.3% (18.744GB/334.562GB)
+  train end  4:43AM UTC on Jul 09, 2024
+
+  === Batch Size: 32 ===
+  === Batch Size: 64 ===
+  train begin  4:43AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.3% (8.660GB/334.562GB)
+  epoch 10 CPU 内存占用：3.3% (8.661GB/334.562GB)
+  epoch 15 CPU 内存占用：3.3% (8.670GB/334.562GB)
+  epoch 20 CPU 内存占用：3.3% (8.651GB/334.562GB)
+  epoch 25 CPU 内存占用：3.3% (8.698GB/334.562GB)
+  epoch 30 CPU 内存占用：3.3% (8.640GB/334.562GB)
+  epoch 35 CPU 内存占用：3.3% (8.658GB/334.562GB)
+  epoch 40 CPU 内存占用：3.3% (8.668GB/334.562GB)
+  epoch 45 CPU 内存占用：3.3% (8.671GB/334.562GB)
+  epoch 50 CPU 内存占用：3.3% (8.670GB/334.562GB)
+  train end  4:52AM UTC on Jul 09, 2024
+
+  === Batch Size: 64 ===
+  === Batch Size: 128 ===
+  train begin  4:52AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.3% (8.822GB/334.562GB)
+  epoch 10 CPU 内存占用：3.3% (8.790GB/334.562GB)
+  epoch 15 CPU 内存占用：3.3% (8.775GB/334.562GB)
+  epoch 20 CPU 内存占用：3.3% (8.770GB/334.562GB)
+  epoch 25 CPU 内存占用：3.3% (8.813GB/334.562GB)
+  epoch 30 CPU 内存占用：3.3% (8.835GB/334.562GB)
+  epoch 35 CPU 内存占用：3.3% (8.830GB/334.562GB)
+  epoch 40 CPU 内存占用：3.3% (8.822GB/334.562GB)
+  epoch 45 CPU 内存占用：3.3% (8.799GB/334.562GB)
+  epoch 50 CPU 内存占用：3.3% (8.792GB/334.562GB)
+  train end  5:00AM UTC on Jul 09, 2024
+
+  === Batch Size: 128 ===
+  === Batch Size: 256 ===
+  train begin  5:00AM UTC on Jul 09, 2024
+  epoch 5 CPU 内存占用：3.3% (8.808GB/334.562GB)
+  epoch 10 CPU 内存占用：3.3% (8.739GB/334.562GB)
+  epoch 15 CPU 内存占用：3.3% (8.792GB/334.562GB)
+  epoch 20 CPU 内存占用：3.3% (8.747GB/334.562GB)
+  epoch 25 CPU 内存占用：3.3% (8.776GB/334.562GB)
+  epoch 30 CPU 内存占用：3.3% (8.808GB/334.562GB)
+  epoch 35 CPU 内存占用：3.3% (8.776GB/334.562GB)
+  epoch 40 CPU 内存占用：3.3% (8.809GB/334.562GB)
+  epoch 45 CPU 内存占用：3.3% (8.756GB/334.562GB)
+  epoch 50 CPU 内存占用：3.3% (8.783GB/334.562GB)
+  train end  5:08AM UTC on Jul 09, 2024
+
+  === Batch Size: 256 ===
+  === Batch Size: 512 ===
+  train begin  5:08AM UTC on Jul 09, 2024
+
+  === Batch Size: 512 ===
+  === Batch Size: 1024 ===
+  train begin  5:09AM UTC on Jul 09, 2024
+
+  === Batch Size: 1024 ===
+  """
   batch_size = 128
   normal_data=False
 
