@@ -38,7 +38,7 @@ class TrainResNetBase():
 
     self.img_dim = 224
     self.num_epochs = 50
-    self.train_dataset_len = 12000  # Roughly the size of Imagenet dataset.
+    self.train_dataset_len = 12000 // 2  # Roughly the size of Imagenet dataset.
     
     if not self.normal_data:
       train_loader = xu.SampleGenerator(
