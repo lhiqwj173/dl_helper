@@ -783,9 +783,10 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
                 output = model(data)
                 loss = criterion(output, target)
 
-        xm.rendezvous("val done")# mark_step
-        if xm.is_master_ordinal():
-            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
+        if epoch % 10 == 0:
+            xm.rendezvous("val done")# mark_step
+            if xm.is_master_ordinal():
+                report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
 
     if xm.is_master_ordinal():
         with open(os.path.join(params.root, 'metrics_report_epoch.txt'), 'a') as f:
