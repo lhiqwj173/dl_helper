@@ -354,7 +354,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         # 缓存checkpoint
         if tracker.need_save:
-            if idx % params.checkpointing_steps == 0:
+            if idx>0 and idx % params.checkpointing_steps == 0:
                 checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
     # 追踪器，计算必要的数据
@@ -399,7 +399,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
             # 缓存checkpoint
             if checkpoint and tracker.need_save:
-                if idx % params.checkpointing_steps == 0:
+                if idx>0 and idx % params.checkpointing_steps == 0:
                     checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
     # 追踪器，计算必要的数据
