@@ -71,28 +71,28 @@ class Tracker():
         # 主进程计算data
         if self.accelerator.is_main_process:
             self.data[f'{self.track_update}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
-            self.printer.print('cal data loss')
+            # self.printer.print('cal data loss')
 
             if self.params.classify:
                 self.data[f'{self.track_update}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
-                self.printer.print('cal data acc')
+                # self.printer.print('cal data acc')
                 self.data[f'{self.track_update}_f1'].append(
                     f1_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), average='weighted')
                 )
-                self.printer.print('cal data f1')
+                # self.printer.print('cal data f1')
             else:
                 self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
-                self.printer.print('cal data r2')
+                # self.printer.print('cal data r2')
         
-        self.printer.print('update tracker...')
+        # self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            self.printer.print('update train round')
+            # self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
-                self.printer.print('scheduler.step')
+                # self.printer.print('scheduler.step')
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
@@ -106,7 +106,7 @@ class Tracker():
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
             if lr_change.item() == 1:
-                self.printer.print('broadcast lr')
+                # self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
                 self.accelerator.wait_for_everyone()
@@ -119,13 +119,13 @@ class Tracker():
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
-            self.printer.print('update val round')
+            # self.printer.print('update val round')
             self.step_in_epoch = 0
             self.epoch_count += 1
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
-            self.printer.print('check if need save')
+            # self.printer.print('check if need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
@@ -228,7 +228,7 @@ class Tracker():
                 self.temp['_correct'] += torch.sum(_correct)   
 
     def plot(self):
-        self.printer.print('plot...')
+        # self.printer.print('plot...')
         if self.accelerator.is_main_process:
             params = self.params
             cost_hour = (time.time() - self.begin_time) / 3600
@@ -358,7 +358,7 @@ class Tracker():
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            self.printer.print(f'plot done: {pic_file}')
+            # self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
 

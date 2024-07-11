@@ -318,10 +318,10 @@ def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
 
     # 开始checkpoint
     if need_checkpoint.item() == 1:
-        printer.print(f"[{epoch}][{idx}] checkpointing...")
+        # printer.print(f"[{epoch}][{idx}] checkpointing...")
         accelerator.save_state(os.path.join(params.root, 'checkpoint'))
         package_root(accelerator, params)
-        printer.print(f"[{epoch}][{idx}] checkpointing done")
+        # printer.print(f"[{epoch}][{idx}] checkpointing done")
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans):
     # 检查是否存在 step 记录
