@@ -301,16 +301,15 @@ def package_root(accelerator, params):
 
 last_checkpoint_time = 0
 def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
+    global last_checkpoint_time
     if need_check:
         # 判断是否需要checkpoint
-        global last_checkpoint_time
         need_checkpoint = torch.tensor(0, device=accelerator.device)
         if accelerator.is_main_process:
             # 20 min
             t = time.time()
             if t - last_checkpoint_time >= 60*20:
                 need_checkpoint += 1
-                last_checkpoint_time = t
         accelerator.wait_for_everyone()
         need_checkpoint = broadcast(need_checkpoint)
     else:
@@ -318,6 +317,7 @@ def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
 
     # 开始checkpoint
     if need_checkpoint.item() == 1:
+        last_checkpoint_time = time.time()
         # printer.print(f"[{epoch}][{idx}] checkpointing...")
         accelerator.save_state(os.path.join(params.root, 'checkpoint'))
         package_root(accelerator, params)
