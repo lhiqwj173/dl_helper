@@ -359,8 +359,8 @@ class Tracker():
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            # self.printer.print(f'plot done: {pic_file}')
 
+        self.printer.print(f'plot done: {pic_file}')
         self.accelerator.wait_for_everyone()
 
     def state_dict(self):
