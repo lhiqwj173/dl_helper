@@ -43,6 +43,7 @@ if match_num_processes() ==8:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 from accelerate import Accelerator
+from accelerate.utils import broadcast
 from accelerate.state import AcceleratorState, PartialState
 from accelerate.utils import (
     PrecisionType,
