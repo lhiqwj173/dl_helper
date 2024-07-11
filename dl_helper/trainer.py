@@ -298,12 +298,29 @@ def package_root(accelerator, params):
 
     accelerator.wait_for_everyone()
 
-def checkpoint(epoch, idx, accelerator, params, printer):
-    printer.print(f"[{epoch}][{idx}] checkpointing...")
-    accelerator.save_state(os.path.join(params.root, 'checkpoint'))
-    # package_root(accelerator, params)
-    accelerator.wait_for_everyone()
-    printer.print(f"[{epoch}][{idx}] checkpointing done")
+last_checkpoint_time = 0
+def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
+    if need_check:
+        # 判断是否需要checkpoint
+        global last_checkpoint_time
+        need_checkpoint = torch.tensor(0, device=self.accelerator.device)
+        if accelerator.is_main_process:
+            # 20 min
+            t = time.time()
+            if t - last_checkpoint_time >= 60*20:
+                need_checkpoint += 1
+                last_checkpoint_time = t
+        accelerator.wait_for_everyone()
+        need_checkpoint = broadcast(need_checkpoint)
+    else:
+        need_checkpoint = torch.tensor(1, device=self.accelerator.device)
+
+    # 开始checkpoint
+    if need_checkpoint.item() == 1:
+        printer.print(f"[{epoch}][{idx}] checkpointing...")
+        accelerator.save_state(os.path.join(params.root, 'checkpoint'))
+        package_root(accelerator, params)
+        printer.print(f"[{epoch}][{idx}] checkpointing done")
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans):
     # 检查是否存在 step 记录
@@ -315,7 +332,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    # for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
+    for idx, batch in enumerate(active_dataloader):
         # 预处理
         data, target = trans(batch, train=True)
 
@@ -342,7 +360,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     tracker.update()
 
     # 缓存checkpoint
-    checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
+    checkpoint(epoch, idx + skip_steps, accelerator, params, printer, False)
 
     # for debug
     accelerator.wait_for_everyone()
@@ -364,7 +382,8 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
     model.eval()
     with torch.no_grad():
-        for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        # for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
+        for idx, batch in enumerate(active_dataloader):
             data, target = trans(batch)
             
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
