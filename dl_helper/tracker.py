@@ -70,7 +70,8 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
-            self.data[f'{self.track_update}_loss'].append((self.temp['_loss'] / self.temp['_num']).cpu().item())
+            # TODO
+            self.data[f'{self.track_update}_loss'].append(torch.mean(self.temp['_loss']).cpu().item())
             # self.printer.print('cal data loss')
 
             if self.params.classify:
@@ -142,7 +143,7 @@ class Tracker():
         self.temp = {}
 
         self.temp['_loss'] = 0.0
-        self.temp['_num'] = 0
+        self.temp['_num'] = None
         self.temp['_correct'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
@@ -219,10 +220,11 @@ class Tracker():
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
                 self.temp['_y_pred'] = _y_pred
+                self.temp['_loss'] = _loss
             else:
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
-            self.temp['_loss'] += torch.sum(_loss)
+                self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             self.temp['_num'] += _y_true.shape[0]
             if self.params.classify:
                 self.temp['_correct'] += torch.sum(_correct)   
