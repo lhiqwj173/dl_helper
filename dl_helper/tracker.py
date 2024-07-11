@@ -70,7 +70,6 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
-            # TODO
             self.data[f'{self.track_update}_loss'].append(torch.mean(self.temp['_loss']).cpu().item())
             # self.printer.print('cal data loss')
 
@@ -142,8 +141,8 @@ class Tracker():
         self.track_update = ''
         self.temp = {}
 
-        self.temp['_loss'] = 0.0
-        self.temp['_num'] = None
+        self.temp['_loss'] = None
+        self.temp['_num'] = 0
         self.temp['_correct'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
