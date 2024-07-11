@@ -133,7 +133,7 @@ class Tracker():
                 self.need_save = True
 
         self.reset_temp()
-        self.print_state()
+        # self.print_state()
         self.step_count = 0
 
     def reset_temp(self):
