@@ -137,16 +137,17 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
+            self.printer.print('record data done')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            # self.printer.print('update train round')
+            self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
-                # self.printer.print('scheduler.step')
+                self.printer.print('scheduler.step')
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
@@ -164,7 +165,7 @@ class Tracker():
                 xm.mark_step()
 
             if lr_change.item() == 1:
-                # self.printer.print('broadcast lr')
+                self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
                 self.accelerator.wait_for_everyone()
@@ -177,13 +178,13 @@ class Tracker():
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
-            # self.printer.print('update val round')
+            self.printer.print('update val round')
             self.step_in_epoch = 0
             self.epoch_count += 1
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
-            # self.printer.print('check if need save')
+            self.printer.print('check if need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
