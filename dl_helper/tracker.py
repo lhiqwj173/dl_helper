@@ -113,12 +113,12 @@ class Tracker():
                 self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
-                f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass')
+                f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'])
                 self.printer.print('weighted_f1')
             else:
                 # 计算方差加权 R2
-                r2_score = R2Score(multioutput='variance_weighted')
+                r2_score = R2Score(multioutput='variance_weighted').to(self.temp['_y_pred'].device)
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
                 self.printer.print('variance_weighted_r2')
         
