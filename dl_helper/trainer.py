@@ -531,12 +531,11 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         params.learning_rate *= num_processes
         p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
-    p.print(f'batch_size: {params.batch_size}')
-
     # 临时额外的训练参数
     if train_param:
         for k, v in train_param.items():
             setattr(params, k, v)
+            p.print(f'{k}-> {v}')
 
     train_loader = test.get_data('train', params)
     val_loader = test.get_data('val', params)
