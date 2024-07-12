@@ -747,7 +747,7 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
     data_path = params.data_folder
 
     # 数据集参数
-    target_parm = params.data_parm
+    target_parm = data_str2parm(params.data_set)
 
     # 获取数据分段
     files = []

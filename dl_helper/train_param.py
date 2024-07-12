@@ -176,7 +176,6 @@ class Params:
   increase_ratio=0.2
 
   data_set = ''
-  data_parm = None
   y_n = 0
   use_trade = False
   use_pk = True
@@ -248,12 +247,8 @@ class Params:
       self.weight_decay = weight_decay
       self.init_learning_ratio = init_learning_ratio
       self.increase_ratio = increase_ratio
-      self.data_set = data_set
 
-      try:
-        self.data_parm = data_str2parm(data_set)
-      except:
-        self.data_parm = None
+      self.data_set = data_set
 
       self.classify = classify
       self.y_n = y_n
