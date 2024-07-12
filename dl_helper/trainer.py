@@ -324,7 +324,7 @@ def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
         package_root(accelerator, params)
         # printer.print(f"[{epoch}][{idx}] checkpointing done")
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, checkpoint=False):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
@@ -354,7 +354,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             tracker.track(output, target, loss, 'train')
 
         # 缓存checkpoint
-        if tracker.need_save:
+        if checkpoint and tracker.need_save:
             if idx>0 and idx % params.checkpointing_steps == 0:
                 checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
