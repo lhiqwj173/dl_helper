@@ -765,6 +765,7 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     xm.master_print(f'each epoch step: {len(train_loader)}')
     
     # 训练循环
+    xm.master_print(f'epochs: {params.epochs}')
     for epoch in range(params.epochs):
         model.train()
 
