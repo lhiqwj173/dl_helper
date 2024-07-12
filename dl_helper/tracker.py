@@ -361,7 +361,6 @@ class Tracker():
             plt.savefig(pic_file)
             # self.printer.print(f'plot done: {pic_file}')
 
-        self.printer.print(f'plot done')
         self.accelerator.wait_for_everyone()
 
     def state_dict(self):

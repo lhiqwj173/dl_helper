@@ -605,6 +605,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
     # 打包
     package_root(accelerator, params)
+    accelerator.wait_for_everyone()
 
 def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
