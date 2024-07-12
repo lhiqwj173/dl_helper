@@ -137,7 +137,6 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
-            self.printer.print('记录数据')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
@@ -194,6 +193,7 @@ class Tracker():
         self.reset_temp()
         # self.print_state()
         self.step_count = 0
+        self.printer.print('update done')
 
     def reset_temp(self):
         # 重置计算变量
