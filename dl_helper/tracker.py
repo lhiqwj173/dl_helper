@@ -206,7 +206,7 @@ class Tracker():
         # self.printer.print('sync track...')
         self.accelerator.wait_for_everyone()
         
-        self.printer.print(f"{loss}")
+        self.printer.print(f"{loss}, {type(loss)}")
         self.printer.print(f"{target}")
         self.printer.print(f"{predict}")
         self.printer.print(f"{correct_count}")
