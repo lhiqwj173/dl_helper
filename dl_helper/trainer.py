@@ -297,7 +297,7 @@ def package_root(accelerator, params):
             client = alist(user, pwd)
             client.upload(zip_file, '/train_data/')
 
-    print('package_root done')
+    # print('package_root done')
     accelerator.wait_for_everyone()
 
 last_checkpoint_time = 0
