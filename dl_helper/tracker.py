@@ -20,6 +20,22 @@ def last_value(data):
             return data[i]
     raise ValueError("没有找到非nan值")
 
+class Tracker_None():
+    def __init__(self, *args, **kwargs):
+        self.epoch_count = 0
+        self.step_in_epoch = 0
+        self.step_count = 0
+        self.need_save = False
+
+    def plot(self):
+        pass
+
+    def update(self):
+        pass
+
+    def track(self, *args, **kwargs):
+        pass
+
 class Tracker():
     def __init__(self, params, accelerator, scheduler, num_processes, printer):
         # 时间统计
@@ -70,6 +86,7 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
+            
             self.data[f'{self.track_update}_loss'].append(torch.mean(self.temp['_loss']).cpu().item())
             # self.printer.print('cal data loss')
 
@@ -186,7 +203,7 @@ class Tracker():
         self.printer.print(f"------------tracker data------------")
 
     def track(self, output, target, loss, _type):
-        assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
+        # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
 

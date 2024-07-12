@@ -1,5 +1,5 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
-from dl_helper.tracker import Tracker
+from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
 from dl_helper.acc.data_loader import skip_first_batches
@@ -463,6 +463,7 @@ def get_data_sampler(data_set, _type):
 
     return train_sampler
 
+
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
     set_seed(42)
 
@@ -551,10 +552,13 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = ReduceLR_slow_loss(optimizer)
 
-    # 训练跟踪
-    tracker = Tracker(params, accelerator, scheduler, num_processes, p)
-    # 新增到 状态 管理
-    accelerator.register_for_checkpointing(tracker)
+    # # 训练跟踪
+    # tracker = Tracker(params, accelerator, scheduler, num_processes, p)
+    # # 新增到 状态 管理
+    # accelerator.register_for_checkpointing(tracker)
+
+    # TEST
+    tracker = Tracker_None()
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler
