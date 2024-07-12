@@ -652,7 +652,7 @@ def load_data(params, file, diff_length, data_map, log=False):
     # 每3个降采样
     # 更长时间范围的样本数据
     if params.down_freq > 1:
-        idxs = [i for i in range(0, len(x), 3)]
+        idxs = [i for i in range(0, len(x), params.down_freq)]
         ids = [ids[i] for i in idxs]
         mean_std = [mean_std[i] for i in idxs]
         x = [x[i] for i in idxs]
