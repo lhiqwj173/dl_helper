@@ -551,13 +551,13 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = ReduceLR_slow_loss(optimizer)
 
-    # # 训练跟踪
-    # tracker = Tracker(params, accelerator, scheduler, num_processes, p)
-    # # 新增到 状态 管理
-    # accelerator.register_for_checkpointing(tracker)
+    # 训练跟踪
+    tracker = Tracker(params, accelerator, scheduler, num_processes, p)
+    # 新增到 状态 管理
+    accelerator.register_for_checkpointing(tracker)
 
-    # TEST
-    tracker = Tracker_None()
+    # # TEST
+    # tracker = Tracker_None()
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
         model, optimizer, train_loader, val_loader, scheduler
