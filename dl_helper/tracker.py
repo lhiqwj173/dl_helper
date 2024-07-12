@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from accelerate.utils import broadcast
 
-from train_param import tpu_available
+from dl_helper.train_param import tpu_available
 if tpu_available():
     import torch_xla.core.xla_model as xm
 
