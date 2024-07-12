@@ -324,7 +324,7 @@ def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
         package_root(accelerator, params)
         # printer.print(f"[{epoch}][{idx}] checkpointing done")
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, checkpoint=False):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=False):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
@@ -354,7 +354,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             tracker.track(output, target, loss, 'train')
 
         # 缓存checkpoint
-        if checkpoint and tracker.need_save:
+        if need_checkpoint and tracker.need_save:
             if idx>0 and idx % params.checkpointing_steps == 0:
                 checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
@@ -369,7 +369,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if accelerator.is_main_process:
         report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
-def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans, checkpoint=False):
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans, need_checkpoint=False):
     """
     异常模型在验证时checkpoint会报错, 默认不进行checkpoint
     """
@@ -399,7 +399,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             tracker.track(output, target, loss, 'val')
 
             # 缓存checkpoint
-            if checkpoint and tracker.need_save:
+            if need_checkpoint and tracker.need_save:
                 if idx>0 and idx % params.checkpointing_steps == 0:
                     checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
 
