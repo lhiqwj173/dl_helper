@@ -156,10 +156,12 @@ class Tracker():
                 self.scheduler.step(self.data['train_loss'])
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1
+            self.printer.print('step done')
 
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
+            self.printer.print('lr_change')
 
             if tpu_available():
                 xm.mark_step()
