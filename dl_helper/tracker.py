@@ -5,13 +5,16 @@ import time, math, os, copy
 from datetime import datetime
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import f1_score
-from sklearn.metrics import r2_score
+from torchmetrics import F1Score, R2Score
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from accelerate.utils import broadcast
+
+from train_param import tpu_available
+if tpu_available():
+    import torch_xla.core.xla_model as xm
 
 def last_value(data):
     """返回最后一个非nan值"""
@@ -20,6 +23,20 @@ def last_value(data):
             return data[i]
     raise ValueError("没有找到非nan值")
 
+def cal_balance_acc(y_pred, y_true, y_n):
+    unique_labels = [torch.tensor(i, device=y_pred.device) for i in range(y_n)]
+    recall_values = []
+
+    for label in unique_labels:
+        true_positives = torch.sum((y_true == label) & (y_pred == label))
+        false_negatives = torch.sum((y_true == label) & (y_pred != label))
+        recall = true_positives / (true_positives + false_negatives)
+        recall_values.append(recall)
+
+    # 计算均衡 ACC
+    balanced_acc = torch.mean(torch.stack(recall_values))
+    return balanced_acc
+    
 class Tracker_None():
     def __init__(self, *args, **kwargs):
         self.epoch_count = 0
@@ -58,18 +75,18 @@ class Tracker():
         self.data = {}
         for i in ['train', 'val', 'test']:
             # 训练损失
-            self.data[f'{i}_loss'] = []
+            self.data[f'{i}_loss'] = None
 
             if params.classify: 
                 # 分类模型 acc
-                self.data[f'{i}_acc'] = []
+                self.data[f'{i}_acc'] = None
 
                 # 暂时只使用加权f1
-                self.data[f'{i}_f1'] = []
+                self.data[f'{i}_f1'] = None
             else:
                 # 回归模型 r2
                 # 暂时只使用加权r2
-                self.data[f'{i}_r2'] = []
+                self.data[f'{i}_r2'] = None
 
         # 训练学习率
         self.data['lr'] = []
@@ -86,21 +103,38 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
-            
-            self.data[f'{self.track_update}_loss'].append(torch.mean(self.temp['_loss']).cpu().item())
-            # self.printer.print('cal data loss')
-
+            # 计算数据
+            _loss = torch.mean(self.temp['_loss'])
             if self.params.classify:
-                self.data[f'{self.track_update}_acc'].append((self.temp['_correct'] / self.temp['_num']).cpu().item())
-                # self.printer.print('cal data acc')
-                self.data[f'{self.track_update}_f1'].append(
-                    f1_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), average='weighted')
+                # 改用 Balanced Accuracy
+                balance_acc = cal_balance_acc(
+                    self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 )
-                # self.printer.print('cal data f1')
+                
+                # 计算加权 F1 分数
+                f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass')
+                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'])
             else:
-                self.data[f'{self.track_update}_r2'].append(r2_score(self.temp['_y_true'].to('cpu').numpy(), self.temp['_y_pred'].to('cpu').numpy(), multioutput='variance_weighted'))
-                # self.printer.print('cal data r2')
+                # 计算方差加权 R2
+                r2_score = R2Score(multioutput='variance_weighted')
+                variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
         
+            # 记录数据
+            if self.data[f'{self.track_update}_loss'] is None:
+                self.data[f'{self.track_update}_loss'] = _loss
+                if self.params.classify:
+                    self.data[f'{self.track_update}_acc'] = balance_acc
+                    self.data[f'{self.track_update}_f1'] = weighted_f1
+                else:
+                    self.data[f'{self.track_update}_r2'] = variance_weighted_r2
+            else:
+                self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
+                if self.params.classify:
+                    self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
+                    self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
+                else:
+                    self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
+
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
             # self.printer.print('update train round')
@@ -122,6 +156,10 @@ class Tracker():
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
+
+            if tpu_available():
+                xm.mark_step()
+
             if lr_change.item() == 1:
                 # self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
@@ -160,7 +198,6 @@ class Tracker():
 
         self.temp['_loss'] = None
         self.temp['_num'] = 0
-        self.temp['_correct'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
 
@@ -217,7 +254,6 @@ class Tracker():
         if self.params.classify:
             softmax_predictions = F.softmax(output, dim=1)
             predict = torch.argmax(softmax_predictions, dim=1)
-            correct_count = torch.sum(predict == target)
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')
@@ -228,8 +264,6 @@ class Tracker():
         # self.printer.print(f"{predict}")
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
-        if self.params.classify:
-            _correct = self.accelerator.gather_for_metrics(correct_count)  
 
         # self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
@@ -242,8 +276,6 @@ class Tracker():
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             self.temp['_num'] += _y_true.shape[0]
-            if self.params.classify:
-                self.temp['_correct'] += torch.sum(_correct)   
 
     def plot(self):
         # self.printer.print('plot...')
@@ -255,8 +287,10 @@ class Tracker():
             epochs = self.params.epochs
 
             # 标准化数据，nan补气数据
-            data = copy.deepcopy(self.data)
-            for i in data:
+            data = {}
+            for i in self.data:
+                data[i] = self.data[i].cpu().tolist()
+
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
