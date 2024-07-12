@@ -110,14 +110,17 @@ class Tracker():
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 )
+                self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass')
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'])
+                self.printer.print('weighted_f1')
             else:
                 # 计算方差加权 R2
                 r2_score = R2Score(multioutput='variance_weighted')
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
+                self.printer.print('variance_weighted_r2')
         
             # 记录数据
             if self.data[f'{self.track_update}_loss'] is None:
@@ -134,6 +137,7 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
+            self.printer.print('记录数据')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
