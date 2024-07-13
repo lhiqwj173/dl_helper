@@ -122,9 +122,9 @@ class Tracker():
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
                 # self.printer.print('variance_weighted_r2')
         
-            self.printer.print(f'_loss: {_loss.shape}')
-            self.printer.print(f'balance_acc: {balance_acc.shape}')
-            self.printer.print(f'weighted_f1: {weighted_f1.shape}')
+            # self.printer.print(f'_loss: {_loss.shape}')
+            # self.printer.print(f'balance_acc: {balance_acc.shape}')
+            # self.printer.print(f'weighted_f1: {weighted_f1.shape}')
 
             # 记录数据
             if self.data[f'{self.track_update}_loss'] is None:
@@ -304,13 +304,12 @@ class Tracker():
             for i in self.data:
                 data[i] = self.data[i].cpu().tolist()
 
-                print(i, self.data[i], data[i])
-
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
-            # self.printer.print(data)
+
+            self.printer.print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
@@ -333,14 +332,14 @@ class Tracker():
             min_test_x = data['val_loss'].index(min_test_loss)
             # 测试集损失
             if data['test_loss']:
-                ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='#B0C4DE')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='b', linestyle='--')[0])
             # 绘制loss曲线
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='b')[0])
-            ax1_handles.append(ax1.plot(list(range(epochs)), data['val_loss'], label=f"validation loss {last_value(data['val_loss']):.4f}", c='#00BFFF')[0])
+            ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='#7070FF')[0])
+            ax1_handles.append(ax1.plot(list(range(epochs)), data['val_loss'], label=f"validation loss {last_value(data['val_loss']):.4f}", c='b')[0])
             # 标记损失最低点
-            ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='b',label=f'train loss min: {min_train_loss:.4f}'))
-            ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='#00BFFF',label=f'validation loss min: {min_test_loss:.4f}'))
-            # self.printer.print(f'plot loss')
+            ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='#7070FF',label=f'train loss min: {min_train_loss:.4f}'))
+            ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='b',label=f'validation loss min: {min_test_loss:.4f}'))
+            self.printer.print(f'plot loss')
 
             if params.classify:
                 # 分类模型
@@ -351,14 +350,14 @@ class Tracker():
                 max_test_acc_x = data['val_acc'].index(max_test_acc)
                 # 测试集准确率
                 if data['test_acc']:
-                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_acc'], label=f"test acc {last_value(data['test_acc']):.4f}", c='#F5DEB3')[0]) 
+                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_acc'], label=f"test acc {last_value(data['test_acc']):.4f}", c='r', linestyle='--')[0]) 
                 # 绘制acc曲线
-                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_acc'], label=f"train acc {last_value(data['train_acc']):.4f}", c='r')[0])
-                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_acc'], label=f"validation acc {last_value(data['val_acc']):.4f}", c='#FFA07A')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_acc'], label=f"train acc {last_value(data['train_acc']):.4f}", c='#FF7E7E')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_acc'], label=f"validation acc {last_value(data['val_acc']):.4f}", c='r')[0])
                 # 标记准确率最高点
-                ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='r',label=f'train acc max: {max_train_acc:.4f}'))
-                ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='#FFA07A',label=f'validation acc max: {max_test_acc:.4f}'))
-                # self.printer.print(f'plot acc')
+                ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='#FF7E7E',label=f'train acc max: {max_train_acc:.4f}'))
+                ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='r',label=f'validation acc max: {max_test_acc:.4f}'))
+                self.printer.print(f'plot acc')
 
             else:
                 # 回归模型
@@ -369,27 +368,30 @@ class Tracker():
                 max_test_r2_x = data['val_r2'].index(max_test_r2)
                 # 测试集r2
                 if data['test_r2']:
-                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_r2'], label=f"test r2 {last_value(data['test_r2']):.4f}", c='#F5DEB3')[0])
+                    ax1_handles.append(ax1.plot(list(range(epochs)), data['test_r2'], label=f"test r2 {last_value(data['test_r2']):.4f}", c='r', linestyle='--')[0])
                 # 绘制r2曲线
-                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_r2'], label=f"train r2 {last_value(data['train_r2']):.4f}", c='r')[0])
-                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_r2'], label=f"validation r2 {last_value(data['val_r2']):.4f}", c='#FFA07A')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['train_r2'], label=f"train r2 {last_value(data['train_r2']):.4f}", c='#FF7E7E')[0])
+                ax1_handles.append(ax1.plot(list(range(epochs)), data['val_r2'], label=f"validation r2 {last_value(data['val_r2']):.4f}", c='r')[0])
                 # 标记r2最高点
-                ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='r',label=f'train r2 max: {max_train_r2:.4f}'))
-                ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='#FFA07A',label=f'validation r2 max: {max_test_r2:.4f}'))
-                # self.printer.print(f'plot r2')
+                ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='#FF7E7E',label=f'train r2 max: {max_train_r2:.4f}'))
+                ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='r',label=f'validation r2 max: {max_test_r2:.4f}'))
+                self.printer.print(f'plot r2')
 
             # 创建右侧坐标轴
             ax2 = ax1.twinx()
 
             # 绘制学习率
             line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
-            # self.printer.print(f'plot lr')
+            self.printer.print(f'plot lr')
 
             # 添加图例
             ax1.legend(handles=ax1_handles)
 
-            # 显示横向和纵向的格线
-            ax1.grid(True)
+            # 启用次刻度
+            ax1.minorticks_on()
+
+            # 启用网格线，并设置淡显的风格
+            ax1.grid(True, which='both', alpha=0.3)
             ax1.set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
 
             # 图2
@@ -412,10 +414,14 @@ class Tracker():
                 t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c='#8DE874',label=f'train f1 max: {max_train_f1:.4f}'))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c='#57C838',label=f'val f1 max: {max_test_f1:.4f}'))
 
-                axs[1].grid(True)
+                # 启用次刻度
+                axs[1].minorticks_on()
+
+                # 启用网格线，并设置淡显的风格
+                axs[1].grid(True, which='both', alpha=0.3)
                 axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
                 axs[1].legend(handles=t2_handles)
-                # self.printer.print(f'plot f1 score')
+                self.printer.print(f'plot f1 score')
 
             title = f'{params.train_title}'
             if params.describe:
@@ -425,7 +431,7 @@ class Tracker():
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            # self.printer.print(f'plot done: {pic_file}')
+            self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
 
