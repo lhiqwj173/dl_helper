@@ -122,6 +122,10 @@ class Tracker():
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
                 # self.printer.print('variance_weighted_r2')
         
+            self.printer.print(f'_loss: {_loss.shape}')
+            self.printer.print(f'balance_acc: {balance_acc.shape}')
+            self.printer.print(f'weighted_f1: {weighted_f1.shape}')
+
             # 记录数据
             if self.data[f'{self.track_update}_loss'] is None:
                 self.data[f'{self.track_update}_loss'] = _loss
@@ -300,7 +304,7 @@ class Tracker():
             for i in self.data:
                 data[i] = self.data[i].cpu().tolist()
 
-                print(i, data[i])
+                print(i, self.data[i], data[i])
 
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
