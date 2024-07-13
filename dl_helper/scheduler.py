@@ -6,7 +6,7 @@ if tpu_available():
 
 # 当训练的损失序列区域平缓时，减低学习率
 class ReduceLR_slow_loss():
-    def __init__(self, optimizer, min_pct=-0.00005, patience=10, factor=0.1, min_lr=0, eps=1e-8, debug=False):
+    def __init__(self, optimizer, min_pct=-0.00005, patience=20, factor=0.1, min_lr=0, eps=1e-8, debug=False):
         self.optimizer = optimizer
 
         self.min_pct = min_pct
