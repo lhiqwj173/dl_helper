@@ -19,7 +19,7 @@ class ReduceLR_slow_loss():
         self.debug = debug
 
     def step(self, array_loss):
-        print('step')
+        # print('step')
         if self.wait > 0:
             self.wait -= 1
             return
@@ -38,20 +38,20 @@ class ReduceLR_slow_loss():
         #     print('pass')
 
         # 改用torch
-        print(array_loss.shape)
+        # print(array_loss.shape)
         if array_loss.shape[0] < self.patience+1:
             return
 
         # 计算损失均线
-        print(array_loss)
+        # print(array_loss)
         loss_ma = array_loss.unfold(dimension=0, size=self.patience, step=1).mean(dim=1)
-        print(loss_ma)
+        # print(loss_ma)
         # 计算均线变动率
         loss_pct_change = loss_ma[1:] / loss_ma[:-1] - 1
-        print(loss_pct_change)
+        # print(loss_pct_change)
         # 判断是否满足减少学习率条件
         match = (loss_pct_change >= self.min_pct)
-        print(match)
+        # print(match)
 
         if tpu_available():
             xm.mark_step()

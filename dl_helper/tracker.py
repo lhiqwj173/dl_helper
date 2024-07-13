@@ -110,17 +110,17 @@ class Tracker():
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 )
-                self.printer.print('balance_acc')
+                # self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'])
-                self.printer.print('weighted_f1')
+                # self.printer.print('weighted_f1')
             else:
                 # 计算方差加权 R2
                 r2_score = R2Score(multioutput='variance_weighted').to(self.temp['_y_pred'].device)
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
-                self.printer.print('variance_weighted_r2')
+                # self.printer.print('variance_weighted_r2')
         
             # 记录数据
             if self.data[f'{self.track_update}_loss'] is None:
@@ -137,40 +137,39 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
-            self.printer.print('record data done')
-            self.printer.print(self.data[f'{self.track_update}_loss'].shape)
+            # self.printer.print('record data done')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            self.printer.print('update train round')
+            # self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
-                self.printer.print('scheduler.step')
+                # self.printer.print('scheduler.step')
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
-                self.printer.print('append lr')
+                # self.printer.print('append lr')
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
-                self.printer.print('step done')
+                # self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1
-            self.printer.print('step done')
+            # self.printer.print('step done')
 
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
-            self.printer.print('lr_change')
+            # self.printer.print('lr_change')
 
             if tpu_available():
                 xm.mark_step()
 
             if lr_change.item() == 1:
-                self.printer.print('broadcast lr')
+                # self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
                 self.accelerator.wait_for_everyone()
@@ -183,13 +182,13 @@ class Tracker():
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
-            self.printer.print('update val round')
+            # self.printer.print('update val round')
             self.step_in_epoch = 0
             self.epoch_count += 1
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
-            self.printer.print('check if need save')
+            # self.printer.print('check if need save')
             last_time_hour = ((time.time() - self.begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
@@ -199,7 +198,7 @@ class Tracker():
         self.reset_temp()
         # self.print_state()
         self.step_count = 0
-        self.printer.print('update done')
+        # self.printer.print('update done')
 
     def reset_temp(self):
         # 重置计算变量
