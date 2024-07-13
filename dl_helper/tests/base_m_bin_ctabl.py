@@ -24,7 +24,7 @@ def yfunc_target_simple(x):
         return 2
 
 class test(test_base):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, target_type=2, **kwargs):
         super().__init__(*args, **kwargs)
 
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
@@ -37,7 +37,7 @@ class test(test_base):
         ):
             vars.append((classify_idx, name, yfunc))
 
-        classify_idx, targrt_name, yfunc = vars[2]
+        classify_idx, targrt_name, yfunc = vars[target_type]
         self.y_n = 3
 
         batch_n = 16
