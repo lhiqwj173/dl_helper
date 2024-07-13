@@ -406,7 +406,7 @@ class Tracker():
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 # 测试集f1
                 if data["test_f1"]:
-                    t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#89BC7A')[0])
+                    t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#57C838', linestyle='--')[0])
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c='#8DE874')[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c='#57C838')[0])
@@ -419,6 +419,8 @@ class Tracker():
 
                 # 启用网格线，并设置淡显的风格
                 axs[1].grid(True, which='both', alpha=0.3)
+                # 取消y轴的次刻度
+                axs[1].yaxis.set_minor_locator(ticker.NullLocator())
                 axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
                 axs[1].legend(handles=t2_handles)
                 self.printer.print(f'plot f1 score')
