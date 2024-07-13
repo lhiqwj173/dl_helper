@@ -151,6 +151,7 @@ class Tracker():
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
+                self.printer.print('append lr')
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
