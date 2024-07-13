@@ -406,10 +406,10 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     # 追踪器，计算必要的数据
     tracker.update()
 
-    # # for debug
-    # accelerator.wait_for_everyone()
-    # if accelerator.is_main_process:
-    #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
     model.eval()
