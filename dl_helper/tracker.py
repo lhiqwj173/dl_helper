@@ -300,6 +300,8 @@ class Tracker():
             for i in self.data:
                 data[i] = self.data[i].cpu().tolist()
 
+                print(i, data[i])
+
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
