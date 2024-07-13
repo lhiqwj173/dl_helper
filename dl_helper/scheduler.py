@@ -40,11 +40,15 @@ class ReduceLR_slow_loss():
         if array_loss.size()[0] < self.patience+1:
             return
         # 计算损失均线
+        print(array_loss)
         loss_ma = array_loss.unfold(dimension=0, size=self.patience, step=1).mean(dim=1)
+        print(loss_ma)
         # 计算均线变动率
         loss_pct_change = loss_ma[1:] / loss_ma[:-1] - 1
+        print(loss_pct_change)
         # 判断是否满足减少学习率条件
         match = (loss_pct_change >= self.min_pct)
+        print(match)
 
         if tpu_available():
             xm.mark_step()
