@@ -578,7 +578,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         # 输出
         tracker.print_state()
 
-    need_xla_metrics_report = os.environ.get('XLA_METRICS_REPORT') == '1'
+    need_xla_metrics_report = os.environ.get('XLA_METRICS_REPORT', "0") == '1'
+    p.print(f'need_xla_metrics_report :{need_xla_metrics_report}')
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
