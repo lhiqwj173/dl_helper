@@ -105,6 +105,7 @@ class Tracker():
         if self.accelerator.is_main_process:
             # 计算数据
             _loss = torch.mean(self.temp['_loss'])
+            self.printer.print(self.temp['_loss'].shape, _loss.shape)
             if self.params.classify:
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
