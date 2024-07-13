@@ -302,6 +302,7 @@ class Tracker():
             # 标准化数据，nan补气数据
             data = {}
             for i in self.data:
+                self.printer.print(i)
                 data[i] = self.data[i].cpu().tolist() if not None is self.data[i] else []
 
                 if 'test' in i:

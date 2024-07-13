@@ -589,6 +589,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
         # 绘图
         tracker.plot()
+        p.print(f'plot done')
 
         # 打包
         package_root(accelerator, params)
