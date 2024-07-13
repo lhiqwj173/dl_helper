@@ -109,12 +109,12 @@ class Tracker():
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
-                )
+                ).unsqueeze(0)
                 # self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
-                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'])
+                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
                 # self.printer.print('weighted_f1')
             else:
                 # 计算方差加权 R2
