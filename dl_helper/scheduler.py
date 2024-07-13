@@ -19,6 +19,7 @@ class ReduceLR_slow_loss():
         self.debug = debug
 
     def step(self, array_loss):
+        print('step')
         if self.wait > 0:
             self.wait -= 1
             return
@@ -37,8 +38,10 @@ class ReduceLR_slow_loss():
         #     print('pass')
 
         # 改用torch
+        print(array_loss.shape)
         if array_loss.shape[0] < self.patience+1:
             return
+
         # 计算损失均线
         print(array_loss)
         loss_ma = array_loss.unfold(dimension=0, size=self.patience, step=1).mean(dim=1)
