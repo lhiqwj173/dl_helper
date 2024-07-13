@@ -138,6 +138,7 @@ class Tracker():
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
             self.printer.print('record data done')
+            self.printer.print(self.data[f'{self.track_update}_loss'].shape)
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
