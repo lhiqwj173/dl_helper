@@ -302,8 +302,7 @@ class Tracker():
             # 标准化数据，nan补气数据
             data = {}
             for i in self.data:
-                self.printer.print(i, type(self.data[i]))
-                data[i] = self.data[i].cpu().tolist() if not None is self.data[i] else []
+                data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
