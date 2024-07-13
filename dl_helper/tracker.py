@@ -309,7 +309,7 @@ class Tracker():
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
 
-            self.printer.print(data)
+            # self.printer.print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
@@ -339,7 +339,7 @@ class Tracker():
             # 标记损失最低点
             ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='#7070FF',label=f'train loss min: {min_train_loss:.4f}'))
             ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='b',label=f'validation loss min: {min_test_loss:.4f}'))
-            self.printer.print(f'plot loss')
+            # self.printer.print(f'plot loss')
 
             if params.classify:
                 # 分类模型
@@ -357,7 +357,7 @@ class Tracker():
                 # 标记准确率最高点
                 ax1_handles.append(ax1.scatter(max_train_acc_x, max_train_acc, c='#FF7E7E',label=f'train acc max: {max_train_acc:.4f}'))
                 ax1_handles.append(ax1.scatter(max_test_acc_x, max_test_acc, c='r',label=f'validation acc max: {max_test_acc:.4f}'))
-                self.printer.print(f'plot acc')
+                # self.printer.print(f'plot acc')
 
             else:
                 # 回归模型
@@ -375,14 +375,14 @@ class Tracker():
                 # 标记r2最高点
                 ax1_handles.append(ax1.scatter(max_train_r2_x, max_train_r2, c='#FF7E7E',label=f'train r2 max: {max_train_r2:.4f}'))
                 ax1_handles.append(ax1.scatter(max_test_r2_x, max_test_r2, c='r',label=f'validation r2 max: {max_test_r2:.4f}'))
-                self.printer.print(f'plot r2')
+                # self.printer.print(f'plot r2')
 
             # 创建右侧坐标轴
             ax2 = ax1.twinx()
 
             # 绘制学习率
             line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
-            self.printer.print(f'plot lr')
+            # self.printer.print(f'plot lr')
 
             # 添加图例
             ax1.legend(handles=ax1_handles)
@@ -420,10 +420,10 @@ class Tracker():
                 # 启用网格线，并设置淡显的风格
                 axs[1].grid(True, which='both', alpha=0.3)
                 # 取消y轴的次刻度
-                axs[1].yaxis.set_minor_locator(ticker.NullLocator())
+                axs[1].yaxis.set_minor_locator(plt.NullLocator())
                 axs[1].set_xlim(-1, epochs+1)  # 设置 x 轴显示范围从 0 开始到最大值
                 axs[1].legend(handles=t2_handles)
-                self.printer.print(f'plot f1 score')
+                # self.printer.print(f'plot f1 score')
 
             title = f'{params.train_title}'
             if params.describe:
@@ -433,7 +433,7 @@ class Tracker():
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            self.printer.print(f'plot done: {pic_file}')
+            # self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
 
