@@ -154,6 +154,7 @@ class Tracker():
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
+                self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1
             self.printer.print('step done')
