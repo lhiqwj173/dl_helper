@@ -577,12 +577,20 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         accelerator.load_state(checkpoint_folder)
         # 输出
         tracker.print_state()
+
+    need_xla_metrics_report = os.environ.get('XLA_METRICS_REPORT') == '1'
     
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
         # 训练
         if tracker.step_in_epoch == 0:
             train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+
+        if need_xla_metrics_report and xm.is_master_ordinal():
+            xm.rendezvous("train done")# mark_step
+            with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
+                f.write(met.metrics_report())
+                f.write('\n---------------------------------------------\n')
             
         # 验证
         val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
