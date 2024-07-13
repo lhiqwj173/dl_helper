@@ -37,7 +37,7 @@ class ReduceLR_slow_loss():
         #     print('pass')
 
         # 改用torch
-        if array_loss.size()[0] < self.patience+1:
+        if array_loss.shape[0] < self.patience+1:
             return
         # 计算损失均线
         print(array_loss)
