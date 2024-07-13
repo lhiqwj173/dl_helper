@@ -364,10 +364,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     # 缓存checkpoint
     checkpoint(epoch, idx + skip_steps, accelerator, params, printer, False)
 
-    # for debug
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+    # # for debug
+    # accelerator.wait_for_everyone()
+    # if accelerator.is_main_process:
+    #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans, need_checkpoint=False):
     """
@@ -406,10 +406,10 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     # 追踪器，计算必要的数据
     tracker.update()
 
-    # for debug
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
+    # # for debug
+    # accelerator.wait_for_everyone()
+    # if accelerator.is_main_process:
+    #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
     model.eval()
@@ -589,7 +589,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
 
         # 绘图
         tracker.plot()
-        p.print(f'plot done')
 
         # 打包
         package_root(accelerator, params)
