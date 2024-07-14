@@ -168,7 +168,7 @@ class DistributedSampler(Sampler):
         return iter(indices)
 
     def __len__(self):
-        return self.num_samples
+        return 0
     
 class DataLoaderDevice(DataLoader):
     def __init__(self, *args, device=None, **kwargs):
