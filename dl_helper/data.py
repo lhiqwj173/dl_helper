@@ -182,7 +182,6 @@ class DistributedSampler(Sampler):
         else:
             indices = list(range(data_length))
 
-        print(len(self.dataset))
         return iter(indices)
 
     
