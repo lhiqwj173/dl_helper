@@ -170,11 +170,8 @@ class DistributedSampler(Sampler):
         else:
             indices = list(range(len(self.dataset)))
 
-        print(f'indices: {indices}')
         return iter(indices)
 
-    def __len__(self):
-        return 0
     
 class DataLoaderDevice(DataLoader):
     def __init__(self, *args, device=None, **kwargs):
@@ -183,7 +180,12 @@ class DataLoaderDevice(DataLoader):
         
     def __iter__(self):
         for batch in super().__iter__():
-            yield batch.to(self.device)
+            if isinstance(batch, torch.Tensor):
+                yield batch.to(self.device)
+            elif isinstance(batch, list):
+                yield [x.to(self.device) if isinstance(x, torch.Tensor) else x for x in batch]
+            else:
+                raise Exception(f'未支持的类型: {type(batch)}')
 
 class Dataset_0(torch.utils.data.Dataset): 
     """Characterizes a dataset for PyTorch"""
@@ -529,9 +531,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
     def load_data(self):
         """从 队列中 加载数据"""
-        if not None is self.q:
-            data_map = self.q.get()
-            self._load_data_map(data_map)
+        data_map = self.q.get()
+        self._load_data_map(data_map)
 
     def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         """多进程 初始化数据 放在 队列中"""
