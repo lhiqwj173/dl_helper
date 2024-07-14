@@ -825,6 +825,7 @@ class DistributedSampler(Sampler):
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
+        self.mini_epoch_indices_ramain -= 1
         self.dataset.load_data()
 
         # 同步数据长度
