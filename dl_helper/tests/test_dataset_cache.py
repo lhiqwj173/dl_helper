@@ -21,7 +21,8 @@ def test_fn(lock, _type='cache'):
         'test',
         'test',
         dataset_name,
-        0.001,64,data_folder='/kaggle/input/lh-q-bin-data-20240629'
+        0.001,64,data_folder='/kaggle/input/lh-q-bin-data-20240629',
+        epochs=5
     )
 
     dataset = Dataset_cahce(param, 'train')
@@ -36,10 +37,10 @@ def test_fn(lock, _type='cache'):
         for epoch in range(param.epochs):
             count = 0
             for mini in range(sampler.mini_epoch):
-                pprint(f'mini_epoch {mini}')
+                pprint(lock, device, f'mini_epoch {mini}')
                 for data in dataloader:
                     count += 1
-            pprint(lock, f'epoch {epoch} count {count}')
+            pprint(lock, device, f'epoch {epoch} count {count}')
 
     else:
         # 手动加载数据
@@ -55,7 +56,7 @@ def test_fn(lock, _type='cache'):
             count = 0
             for data in dataloader:
                 count += 1
-            pprint(lock, f'epoch {epoch} count {count}')
+            pprint(lock, device, f'epoch {epoch} count {count}')
 
 
 def run():
