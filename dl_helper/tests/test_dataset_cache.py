@@ -1,5 +1,6 @@
 from torch.utils.data import DataLoader
 import multiprocessing as mp
+import time
 
 from dl_helper.trainer import notebook_launcher
 from dl_helper.data import DistributedSampler, Dataset_cahce
@@ -41,6 +42,10 @@ def test_fn(lock, _type='cache'):
             pprint(lock, f'epoch {epoch} count {count}')
 
     else:
+        # 手动加载数据
+        data_map = dataset._parse_data_map(dataset.files)
+        dataset._load_data_map(data_map)
+
         dataloader = DataLoader(
             dataset,
             64, False
@@ -58,7 +63,9 @@ def run():
 
     for _type in ['cache', 'normal']:
         print('-------------------', _type, '---------------------')
+        t = time.time()
         notebook_launcher(test_fn, (lock, _type), num_processes=2)
+        print(f'耗时: {(time.time() - t) / 60:.3f} min')
         print('-------------------', _type, '---------------------')
 
 
