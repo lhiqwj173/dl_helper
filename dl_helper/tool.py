@@ -1,6 +1,8 @@
 import psutil, pickle, torch, os
 from py_ext.wechat import wx
 from dl_helper.train_param import logger, match_num_processes
+import datetime
+import multiprocessing as mp
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
