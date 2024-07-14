@@ -32,9 +32,9 @@ def test_fn(lock, _type='cache'):
             64, False, sampler=sampler
         )
 
-        for epoch in param.epochs:
+        for epoch in range(param.epochs):
             count = 0
-            for mini in sampler.mini_epoch:
+            for mini in range(sampler.mini_epoch):
                 pprint(f'mini_epoch {mini}')
                 for data in dataloader:
                     count += 1
@@ -46,7 +46,7 @@ def test_fn(lock, _type='cache'):
             64, False
         )
 
-        for epoch in param.epochs:
+        for epoch in range(param.epochs):
             count = 0
             for data in dataloader:
                 count += 1
