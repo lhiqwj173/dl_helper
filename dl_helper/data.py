@@ -540,7 +540,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        print(f'put mini_epoch data_map')
+        print(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
     def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -564,7 +564,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
-            print(f'put {i} mini_epoch data_map')
+            print(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
     def _parse_data_map(self, file_name_list):
         # 1.0 读取原始数据
