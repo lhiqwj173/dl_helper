@@ -461,7 +461,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             self.files = self.files[begin_idx:end_idx]
 
         # 读取一个文件，判断是否需要拆分数据集
-        _,mean_std, _, _, _ = pickle.load(open(self.files[0], 'rb'))
+        _,mean_std, _, _, _ = pickle.load(open(os.path.join(self.params.data_folder, self.files[0]), 'rb'))
         self.need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
 
         # 区分价量列
