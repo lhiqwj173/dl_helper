@@ -128,7 +128,7 @@ class ResumeSample():
         return self.size
 
 class DistributedSampler(Sampler):
-    def __init__(self, dataset, world_size, rank,shuffle=False, mini_dataset_length=10):
+    def __init__(self, dataset, accelerator,shuffle=False, mini_dataset_length=10):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
@@ -139,8 +139,11 @@ class DistributedSampler(Sampler):
 
         self.dataset = dataset
         self.shuffle = shuffle
-        self.world_size = world_size
-        self.rank = rank = rank
+
+        self.accelerator = accelerator
+        self.world_size = accelerator.num_processes
+        self.rank = accelerator.process_index
+
         self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
@@ -164,10 +167,16 @@ class DistributedSampler(Sampler):
 
         self.dataset.load_data()
 
+        # 同步数据长度
+        data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
+        self.accelerator.wait_for_everyone()
+        data_length = self.accelerator.gather_for_metrics(data_length)
+        data_length = torch.max(data_length)
+
         if self.shuffle:
-            indices = list(torch.randperm(len(self.dataset)))
+            indices = list(torch.randperm(data_length))
         else:
-            indices = list(range(len(self.dataset)))
+            indices = list(range(data_length))
 
         print(len(self.dataset))
         return iter(indices)
