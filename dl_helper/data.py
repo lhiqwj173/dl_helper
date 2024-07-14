@@ -568,7 +568,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 读取分段合并
         diff_length = 0
-        count = 0
 
         # 最终数据
         data_map = {
@@ -580,10 +579,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         }
 
         for file in files:
-            count += 1
-            if count > max_num:
-                break
-
             diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map)
             # report_memory_usage()
 
