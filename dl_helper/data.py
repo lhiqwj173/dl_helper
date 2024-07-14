@@ -144,8 +144,14 @@ class DistributedSampler(Sampler):
         self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        self.mini_epoch_file_indices = []
+        if self.shuffle:
+            self.mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+        else:
+            self.mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
         print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+
+        self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+        self.dataset.load_data()
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
@@ -502,16 +508,19 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 增加一个batch维度
         self.input_shape = (1, self.time_length, 40 if self.params.use_pk else 6 if self.params.use_trade else 46)
 
-        # 如果是val/test，直接读取数据
-        if _type in ['val', 'test']:
-            # 从文件中读取 data_map
-            data_map = self._parse_data_map(self.files)
-            # 整理初始化 data_map
-            self._load_data_map(data_map)
-            self.q = None
-        else:
-            # 存放 data_mape 
-            self.q = queue.Queue(maxsize=1)
+        # # 如果是val/test，直接读取数据
+        # if _type in ['val', 'test']:
+        #     # 从文件中读取 data_map
+        #     data_map = self._parse_data_map(self.files)
+        #     # 整理初始化 data_map
+        #     self._load_data_map(data_map)
+        #     self.q = None
+        # else:
+        #     # 存放 data_mape 
+        #     self.q = queue.Queue(maxsize=1)
+
+        self.q = queue.Queue(maxsize=1)
+
 
     def init_data_thread_start(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         print('启动初始化线程')
