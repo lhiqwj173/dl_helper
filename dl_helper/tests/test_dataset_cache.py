@@ -5,6 +5,8 @@ import time, os, psutil,datetime
 from dl_helper.trainer import notebook_launcher
 from dl_helper.data import DistributedSampler, Dataset_cahce
 from dl_helper.train_param import Params
+from dl_helper.tool import printer
+
 from accelerate import Accelerator
 
 def report_memory_usage(msg=''):
