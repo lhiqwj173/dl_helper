@@ -1,23 +1,18 @@
 from torch.utils.data import DataLoader
 import multiprocessing as mp
-import time, os, psutil
+import time, os, psutil,datetime
 
 from dl_helper.trainer import notebook_launcher
 from dl_helper.data import DistributedSampler, Dataset_cahce
 from dl_helper.train_param import Params
 from accelerate import Accelerator
 
-
-def pprint(lock, *args):
-    with lock:
-        print(*args)
-
-def report_memory_usage(lock, msg=''):
+def report_memory_usage(msg=''):
     memory_usage = psutil.virtual_memory()
-    pprint(lock, f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+    p.print(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
 
-def test_fn(lock, _type='cache'):
+def test_fn(_type='cache'):
     acc = Accelerator()
     device = acc.device
 
@@ -43,13 +38,13 @@ def test_fn(lock, _type='cache'):
         for epoch in range(param.epochs):
             count = 0
             for mini in range(sampler.mini_epoch):
-                pprint(lock, device, f'mini_epoch {mini}')
+                p.print(device, f'mini_epoch {mini}')
                 for data in dataloader:
                     count += 1
-            pprint(lock, device, f'epoch {epoch} count {count}')
+            p.print(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
-                report_memory_usage(lock, f'epoch {epoch} done')
+                report_memory_usage(f'epoch {epoch} done')
 
     else:
         # 手动加载数据
@@ -65,14 +60,15 @@ def test_fn(lock, _type='cache'):
             count = 0
             for data in dataloader:
                 count += 1
-            pprint(lock, device, f'epoch {epoch} count {count}')
+            p.print(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
-                report_memory_usage(lock, f'epoch {epoch} done')
+                report_memory_usage(f'epoch {epoch} done')
 
 
 def run():
     lock = mp.Lock()
+    p = printer()
 
     for _type in ['cache', 'normal']:
         print('-------------------', _type, '---------------------')
