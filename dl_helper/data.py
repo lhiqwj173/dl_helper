@@ -168,7 +168,8 @@ class DistributedSampler(Sampler):
         self.dataset.load_data()
 
         # 同步数据长度
-        data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
+        # data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
+        data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
         print(f'data_length 0: {data_length}')
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
