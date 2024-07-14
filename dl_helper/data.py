@@ -144,7 +144,7 @@ class DistributedSampler(Sampler):
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
 
-        self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
+        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
         if self.shuffle:
