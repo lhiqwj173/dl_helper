@@ -532,6 +532,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
+        print('get data_map')
         self._load_data_map(data_map)
 
     def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
