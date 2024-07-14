@@ -75,7 +75,7 @@ def run():
     for _type in ['cache', 'normal']:
         print('-------------------', _type, '---------------------')
         t = time.time()
-        notebook_launcher(test_fn, (lock, _type), num_processes=1)
+        notebook_launcher(test_fn, (_type, ), num_processes=1)
         print(f'耗时: {(time.time() - t) / 60:.3f} min')
         print('-------------------', _type, '---------------------')
 
