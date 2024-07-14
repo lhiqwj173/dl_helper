@@ -72,14 +72,11 @@ def test_fn(_type='cache'):
 
 
 def run():
-    lock = mp.Lock()
-    p = printer()
-
     for _type in ['cache', 'normal']:
-        print('-------------------', _type, '---------------------')
+        log('-------------------', _type, '---------------------')
         t = time.time()
         notebook_launcher(test_fn, (_type, ), num_processes=1)
-        print(f'耗时: {(time.time() - t) / 60:.3f} min')
-        print('-------------------', _type, '---------------------')
+        log(f'耗时: {(time.time() - t) / 60:.3f} min')
+        log('-------------------', _type, '---------------------')
 
 
