@@ -151,7 +151,6 @@ class DistributedSampler(Sampler):
         print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
 
         self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
-        # self.dataset.load_data()
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束

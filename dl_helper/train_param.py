@@ -9,6 +9,8 @@ root: 项目路径
 epochs: 训练轮数
 batch_size: 批次大小
 learning_rate: 学习率
+lr_scheduler_class: 学习率调度类
+learning_rate_scheduler_patience: 学习率衰减延迟
 warm_up_epochs: warm up 数
 no_better_stop: 早停参数
 random_mask: 随机遮蔽

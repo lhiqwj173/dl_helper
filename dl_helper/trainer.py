@@ -1,8 +1,8 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
-from dl_helper.scheduler import ReduceLR_slow_loss
 from dl_helper.tool import report_memory_usage
 from dl_helper.acc.data_loader import skip_first_batches
+
 
 import copy
 import shutil
@@ -549,7 +549,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    scheduler = ReduceLR_slow_loss(optimizer, patience=params.learning_rate_scheduler_patience)
+    scheduler = test.get_lr_scheduler(optimizer, params)
 
     # 训练跟踪
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)

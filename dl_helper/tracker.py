@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 
 from accelerate.utils import broadcast
 
+from dl_helper.scheduler import ReduceLR_slow_loss
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 from dl_helper.train_param import tpu_available
 if tpu_available():
     import torch_xla.core.xla_model as xm
@@ -158,7 +161,11 @@ class Tracker():
                 # self.printer.print('append lr')
 
                 # 更新 学习率
-                self.scheduler.step(self.data['train_loss'])
+                if isinstance(self.scheduler, ReduceLR_slow_loss):
+                    self.scheduler.step(self.data['train_loss'])
+                elif isinstance(self.scheduler, ReduceLROnPlateau):
+                    self.scheduler.step(self.data['train_loss'][-1])
+
                 # self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1

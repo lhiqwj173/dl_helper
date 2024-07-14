@@ -4,6 +4,8 @@ from dl_helper.train_param import Params
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
+from dl_helper.scheduler import ReduceLR_slow_loss
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 def yfunc_target_long_short(x):
     # long/ short
@@ -24,9 +26,10 @@ def yfunc_target_simple(x):
         return 2
 
 class test(test_base):
-    def __init__(self, *args, target_type=2, **kwargs):
+    def __init__(self, *args, target_type=2, lr_scheduler_class='ReduceLR_slow_loss', **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.lr_scheduler_class = lr_scheduler_class
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         vars = []
@@ -82,3 +85,11 @@ class test(test_base):
 
     def get_transform(self, device):
         return transform(device, self.para, 105)
+
+    def get_lr_scheduler(self, optimizer, params, *args, **kwargs):
+        if 'ReduceLR_slow_loss' == self.lr_scheduler_class:
+            lr_scheduler_class = ReduceLR_slow_loss
+        elif 'ReduceLROnPlateau' == self.lr_scheduler_class:
+            lr_scheduler_class = ReduceLROnPlateau
+
+        return lr_scheduler_class(optimizer, *args, patience=params.learning_rate_scheduler_patience, **kwargs)
