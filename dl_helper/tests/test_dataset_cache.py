@@ -15,7 +15,7 @@ def test_fn(lock, _type='cache'):
     acc = Accelerator()
     device = acc.device
 
-    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_4@1@1_th_12_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
+    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_10@1@1_th_80_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
 
     param = Params(
         'test',
@@ -28,7 +28,7 @@ def test_fn(lock, _type='cache'):
     dataset = Dataset_cahce(param, 'train')
 
     if _type == 'cache':
-        sampler = DistributedSampler(dataset, acc, shuffle=True)
+        sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
         dataloader = DataLoader(
             dataset,
             64, False, sampler=sampler
