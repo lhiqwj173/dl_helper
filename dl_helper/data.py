@@ -144,14 +144,17 @@ class DistributedSampler(Sampler):
         self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        self.mini_epoch_file_indices = torch.arange(self.mini_epoch * self.mini_dataset_length)
+        self.mini_epoch_file_indices = []
         print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
-        if len(self.mini_epoch_file_indices) == 0 and self.shuffle:
-            self.mini_epoch_file_indices = torch.randperm(self.mini_epoch * self.mini_dataset_length)
-            print(f'new mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+        if len(self.mini_epoch_file_indices) == 0:
+            if self.shuffle:
+                self.mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+                print(f'new mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+            else:
+                self.mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
         self.dataset.load_data()
