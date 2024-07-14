@@ -582,21 +582,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map)
             # report_memory_usage()
 
-        if head_n == 0 and pct < 100 and pct > 0:
-            head_n = int(len(x) * (pct / 100))
-
-        if head_n > 0:
-            data_map['raw'] = data_map['raw'].iloc[:head_n, :]
-            to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
-
-            data_map['x'] = [data_map['x'][i] for i in range(len(data_map['x'])) if i not in to_del_idx]
-            data_map['y'] = [data_map['y'][i] for i in range(len(data_map['y'])) if i not in to_del_idx]
-            data_map['mean_std'] = [data_map['mean_std'][i] for i in range(len(data_map['mean_std'])) if i not in to_del_idx]
-            data_map['ids'] = [data_map['ids'][i] for i in range(len(data_map['ids'])) if i not in to_del_idx]
-
-        if not need_id:
-            data_map['ids'].clear()
-
         # if log:
         #     logger.debug(f"恢复成 float32")
         data_map['raw'] = convert_float16_2_32(data_map['raw'])
