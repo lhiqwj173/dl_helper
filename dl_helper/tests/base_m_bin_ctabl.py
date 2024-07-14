@@ -4,8 +4,7 @@ from dl_helper.train_param import Params
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
-from dl_helper.scheduler import ReduceLR_slow_loss
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau
 
 def yfunc_target_long_short(x):
     # long/ short

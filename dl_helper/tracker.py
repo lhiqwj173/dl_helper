@@ -161,10 +161,7 @@ class Tracker():
                 # self.printer.print('append lr')
 
                 # 更新 学习率
-                if isinstance(self.scheduler, ReduceLR_slow_loss):
-                    self.scheduler.step(self.data['train_loss'])
-                elif isinstance(self.scheduler, ReduceLROnPlateau):
-                    self.scheduler.step(self.data['train_loss'][-1])
+                self.scheduler.step(self.data['train_loss'])
 
                 # self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:

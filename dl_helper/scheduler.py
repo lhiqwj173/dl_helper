@@ -1,8 +1,18 @@
 import pandas as pd
+from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
+
 from dl_helper.train_param import tpu_available
 if tpu_available():
     import torch_xla.core.xla_model as xm
 
+class ReduceLROnPlateau(_ReduceLROnPlateau):
+    def step(self, loss_array):
+        loss = loss_array[-1]
+        super().step(loss)
+
+    def use_lr(self, lr):
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            param_group['lr'] = lr   
 
 # 当训练的损失序列区域平缓时，减低学习率
 class ReduceLR_slow_loss():
