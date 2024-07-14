@@ -453,6 +453,7 @@ class Tracker():
         self.__dict__.update(state_dict)
         
         for i in self.temp:
+            self.printer.print(i, type(state_dict[i]), state_dict[i])
             if isinstance(self.temp[i], torch.Tensor):
                 self.temp[i] = self.temp[i].to(self.accelerator.device)
 

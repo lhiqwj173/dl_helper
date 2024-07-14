@@ -549,7 +549,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
     optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    scheduler = ReduceLR_slow_loss(optimizer)
+    scheduler = ReduceLR_slow_loss(optimizer, patience=params.learning_rate_scheduler_patience)
 
     # 训练跟踪
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
@@ -577,6 +577,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         accelerator.load_state(checkpoint_folder)
         # 输出
         tracker.print_state()
+
+    raise
 
     need_xla_metrics_report = os.environ.get('XLA_METRICS_REPORT', "0") == '1'
     p.print(f'need_xla_metrics_report :{need_xla_metrics_report}')

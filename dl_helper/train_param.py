@@ -145,6 +145,7 @@ class Params:
 
   # learning_rate
   learning_rate = 0.001
+  learning_rate_scheduler_patience = 20
 
   # warm up 数
   warm_up_epochs = 3
@@ -204,6 +205,9 @@ class Params:
 
       # 测试最优学习率
       init_learning_ratio = 0, increase_ratio = 0.2, 
+
+      # 学习率衰退延迟
+      learning_rate_scheduler_patience = 20,
 
       # 使用回归数据集参数
       classify = False,cnn=False,
