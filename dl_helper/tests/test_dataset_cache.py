@@ -51,7 +51,7 @@ def test_fn(_type='cache'):
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
 
-    else:
+    elif _type == 'normal':
         # 手动加载数据
         data_map = dataset._parse_data_map(dataset.files)
         dataset._load_data_map(data_map)
@@ -60,11 +60,31 @@ def test_fn(_type='cache'):
             dataset,
             64, False
         )
+        dataloader = acc.prepare(dataloader)
 
         for epoch in range(param.epochs):
             count = 0
             for data in dataloader:
                 count += 1
+            log(device, f'epoch {epoch} count {count}')
+
+            if acc.is_main_process:
+                report_memory_usage(f'epoch {epoch} done')
+
+    elif _type == 'acc':
+        sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
+        dataloader = DataLoader(
+            dataset,
+            64, False, sampler=sampler
+        )
+        dataloader = acc.prepare(dataloader)
+
+        for epoch in range(param.epochs):
+            count = 0
+            for mini in range(sampler.mini_epoch):
+                log(device, f'mini_epoch {mini}')
+                for data in dataloader:
+                    count += 1
             log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
