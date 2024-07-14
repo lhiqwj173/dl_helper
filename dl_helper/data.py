@@ -145,7 +145,7 @@ class DistributedSampler(Sampler):
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
         self.mini_epoch_file_indices = torch.arange(self.mini_epoch * self.mini_dataset_length)
-        print(f'mini_epoch: {self.mini_epoch}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+        print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
