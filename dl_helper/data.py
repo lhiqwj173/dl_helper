@@ -143,7 +143,7 @@ class DistributedSampler(Sampler):
         self.rank = rank = rank
         self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
 
-        self.mini_epoch = self.dataset.files // self.mini_dataset_length
+        self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
         self.mini_epoch_file_indices = torch.arange(self.mini_epoch * self.mini_dataset_length)
 
     def __iter__(self):
