@@ -56,12 +56,9 @@ def test_fn(lock, _type='cache'):
 def run():
     lock = mp.Lock()
 
-    print('-------------------cache---------------------')
-    notebook_launcher(test_fn, (lock, 'cache'), num_nodes=2)
-    print('-------------------cache---------------------')
-
-    print('-------------------normal---------------------')
-    notebook_launcher(test_fn, (lock, 'normal'), num_nodes=2)
-    print('-------------------normal---------------------')
+    for _type in ['cache', 'normal']:
+        print('-------------------', _type, '---------------------')
+        notebook_launcher(test_fn, (lock, _type), num_processes=2)
+        print('-------------------', _type, '---------------------')
 
 
