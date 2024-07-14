@@ -3,7 +3,12 @@ import os, math
 import pickle
 import numpy as np
 import pandas as pd
+import threading
+import queue
+
 import torch
+from torch.utils.data import Dataset, DataLoader, Sampler
+
 import random
 import datetime
 from tqdm import tqdm
@@ -12,6 +17,7 @@ from pympler import asizeof
 # import gc
 from dl_helper.train_param import logger, data_parm2str, data_str2parm
 from dl_helper.tool import report_memory_usage, check_nan
+
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -58,105 +64,6 @@ def convert_float16_2_32(df):
             df[col] = df[col].astype('float32')
 
     return df
-
-# 具有随机shape 影响速度，暂时弃用
-# 随机选择 max_mask_num 的行数
-# 按照 mask_prob 的概率进行遮盖
-# tensor 为原始的数据，没有切片 目前应该shape[1] == 105
-def random_mask_row_0(tensor, begin, end, mask_prob=0.5, max_mask_num=5):
-    need_length = end-begin
-    assert need_length+max_mask_num <= tensor.shape[1], f"need_length:{need_length} max_mask_num:{max_mask_num} tensor.shape:{tensor.shape}"
-
-    # 实际的 begin，end
-    length = tensor.shape[1]
-    begin, end = length-need_length , length
-
-    # 随机选择 max_mask_num 行
-    rows = random.sample(range(need_length), max_mask_num)
-
-    # 选择随机的行删除
-    rows_mask = torch.rand(max_mask_num) < mask_prob
-    del_count = torch.sum(rows_mask).item()
-
-    # print(f"删除行数: {del_count}")
-    if del_count == 0:
-        # 不需要删除
-        return tensor[:, begin:end, :]
-
-    # print(f'del_count: {del_count}')
-    mask = torch.zeros(need_length+del_count, dtype=torch.bool)
-    mask[[i+del_count for i in rows]] = rows_mask
-
-    # 需要删除
-    # 在行起始位置补充
-    begin -= del_count
-
-    # 切片
-    data = tensor[:, begin:end, :]
-
-    # 删除行
-    return data[:, ~mask, :]
-
-def random_mask_row(tensor, need_length):
-    # 实际的时间长度
-    length = tensor.shape[1]
-    to_del_rows = length - need_length# 需要删除掉的行数
-    if to_del_rows <= 0:
-        return tensor
-
-    # 随机选择行索引
-    rows = torch.sort(torch.multinomial(torch.ones(length, device=tensor.device), need_length, replacement=False))[0]
-    # rows = torch.randperm(length)[:to_del_rows]
-
-    # 删除行
-    # return tensor[:, rows, :]
-    return torch.index_select(tensor, 1, rows)
-
-# 定义随机遮挡函数
-def random_mask(tensor, mask_prob=1e-4):
-    mask = torch.rand(tensor.size()) < mask_prob
-    return tensor * ~mask
-
-# 定义随机缩放函数
-# 只对vol作用
-def random_scale_0(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-    mask = torch.zeros(tensor.size(), dtype=torch.bool)
-    # 只用vol_cols
-    mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
-    
-    scale_num = mask.sum().item()
-    if scale_num == 0:
-        return tensor
-
-    scale = torch.rand(scale_num)*(max_scale-min_scale)+min_scale
-    tensor[mask] *= scale
-
-    return tensor
-
-# 定义随机缩放函数
-# 只对vol作用
-def random_scale_1(tensor, vol_cols, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-    # 矩阵算法
-    mask = torch.zeros(tensor.size(), dtype=torch.bool)
-    # 只用vol_cols
-    mask[:, :, vol_cols] = torch.rand(tensor.size()[0], tensor.size()[1], len(vol_cols)) < scale_prob
-    scale_pct_change = torch.rand(tensor.size())*(max_scale-min_scale)+min_scale-1# 变化率
-    scale_pct_change *= mask
-
-    tensor *= (1 + scale_pct_change)
-    return tensor
-
-# 定义随机缩放函数
-# 只对vol作用
-def random_scale(tensor, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
-    mask = torch.rand_like(tensor) < scale_prob
-
-    # 只用vol_cols
-    vol_cond = torch.tensor([[False, True] * 20], device=tensor.device)
-    mask = torch.where(vol_cond, mask, torch.tensor(False, device=tensor.device))
-
-    new_tensor = (torch.rand(tensor.size())*(max_scale-min_scale)+min_scale) * tensor
-    return torch.where(mask, new_tensor, tensor)
 
 class ResumeSample():
     """
@@ -219,6 +126,53 @@ class ResumeSample():
 
     def __len__(self):
         return self.size
+
+class DistributedSampler(Sampler):
+    def __init__(self, dataset, world_size, rank,shuffle=False, mini_dataset_length=10):
+        """
+        mini_dataset_length:
+            每次分片加载数据集的长度
+            每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
+        
+        """
+        assert isinstance(dataset, Dataset_cahce), 'only support Dataset_cahce'
+
+        self.dataset = dataset
+        self.shuffle = shuffle
+        self.world_size = world_size
+        self.rank = rank = rank
+        self.mini_dataset_length = (mini_dataset_length // world_size) * world_size
+
+        self.mini_epoch = self.dataset.files // self.mini_dataset_length
+        self.mini_epoch_file_indices = torch.arange(self.mini_epoch * self.mini_dataset_length)
+
+    def __iter__(self):
+        # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
+        if len(self.mini_epoch_file_indices) == 0 and self.shuffle:
+            self.mini_epoch_file_indices = torch.randperm(self.mini_epoch * self.mini_dataset_length)
+            self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+
+        self.dataset.load_data()
+
+        if self.shuffle:
+            indices = list(torch.randperm(len(self.dataset)))
+        else:
+            indices = list(range(len(self.dataset)))
+
+        print(f'indices: {indices}')
+        return iter(indices)
+
+    def __len__(self):
+        return self.num_samples
+    
+class DataLoaderDevice(DataLoader):
+    def __init__(self, *args, device=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.device = device
+        
+    def __iter__(self):
+        for batch in super().__iter__():
+            yield batch.to(self.device)
 
 class Dataset_0(torch.utils.data.Dataset): 
     """Characterizes a dataset for PyTorch"""
@@ -447,6 +401,290 @@ class Dataset_0(torch.utils.data.Dataset):
             # x:[feature, pass_n] -> [40/6/46, 100]
             return x[0].permute(1, 0), self.y[index]
 
+class Dataset_cahce(torch.utils.data.Dataset): 
+    """
+    不会主动load数据
+    """
+    def __init__(self, params, _type, log=False):
+        """Initialization"""
+        self.log = log
+        self.params = params
+        self.type = _type# 数据类型 train/val/test
+
+        # 根据数据类型 整理 待读取的数据文件列表、
+        data_path = self.params.data_folder
+        data_set_files = sorted([i for i in os.listdir(data_path)])
+
+        # 数据集参数
+        target_parm = data_str2parm(params.data_set)
+
+        # 当前数据类型的所有可读取数据文件列表
+        self.files = []
+        # 判断数据名类型
+        _type_in_dataname = False
+        for file in data_set_files:
+            if _type in file:
+                _type_in_dataname = True
+                break
+
+        if _type_in_dataname:
+            # 按照数据类型读取数据集
+            for file in data_set_files:
+                if _type in file:
+                    self.files.append(file)
+            self.files.sort()
+        else:
+            # 按照日期读取回归数据集
+            begin_date = ''
+            totals = 0
+            if len(data_set_files[0]) == 12:
+                # a股数据集 20240313.pkl
+                begin_date = target_parm['begin_date'].replace('-', '') + '.pkl'
+                totals = target_parm['total_hours'] // 24
+            else:
+                # 数字货币数据集 20240427_10.pkl
+                begin_date = target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
+                totals = target_parm['total_hours'] // 2
+
+            self.files = data_set_files[data_set_files.index(begin_date):]
+
+            # 初始化各个部分的 begin end
+            _rate_sum = sum(target_parm['data_rate'])
+            idx = 0 if _type=='train' else 1 if _type=='val' else 2
+
+            # 起始索引，以begin_date为0索引
+            begin_idx = 0
+            for i in range(idx):
+                begin_idx += int(totals * (target_parm['data_rate'][i] / _rate_sum))
+            end_idx = int(totals * (target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
+
+            self.files = self.files[begin_idx:end_idx]
+
+        # 读取一个文件，判断是否需要拆分数据集
+        _,mean_std, _, _, _ = pickle.load(open(self.files[0], 'rb'))
+        self.need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
+
+        # 区分价量列
+        self.price_cols = [i*2 for i in range(20)]
+        self.vol_cols = [i*2+1 for i in range(20)]
+
+        if not self.need_split_data_set:
+            # if self.log:
+            #     logger.debug("使用全部数据")
+            if params.use_trade:
+                self.price_cols += [42, 45]
+                self.vol_cols += [40, 41, 43, 44]
+
+        else:
+            # 使用部分截取
+            if (params.use_pk and params.use_trade):
+                raise Exception('no use')
+
+            elif params.use_pk:
+                # if self.log:
+                #     logger.debug("只使用盘口数据")
+                pass
+
+            elif params.use_trade:
+                # if self.log:
+                #     logger.debug("只使用交易数据")
+                self.price_cols = [2, 5]
+                self.vol_cols = [0, 1, 3, 4]
+
+        # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
+        self.time_length = int(params.data_set.split('_')[3])
+
+        # 增加一个batch维度
+        self.input_shape = (1, self.time_length, 40 if self.params.use_pk else 6 if self.params.use_trade else 46)
+
+        # 如果是val/test，直接读取数据
+        if _type in ['val', 'test']:
+            # 从文件中读取 data_map
+            data_map = self._parse_data_map(self.files)
+            # 整理初始化 data_map
+            self._load_data_map(data_map)
+            self.q = None
+        else:
+            # 存放 data_mape 
+            self.q = queue.Queue(maxsize=1)
+
+    def init_data_thread_start(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
+        # 启动初始化线程
+        producer_thread = threading.Thread(target=self._init_data, args=(_mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
+        producer_thread.start()
+
+    def load_data(self):
+        """从 队列中 加载数据"""
+        if not None is self.q:
+            data_map = self.q.get()
+            self._load_data_map(data_map)
+
+    def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
+        """多进程 初始化数据 放在 队列中"""
+
+        # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
+        # 作为本次迭代 mini_epoch 使用的文件序号
+        mini_epoch_file_indices = copy.deepcopy(_mini_epoch_file_indices)
+
+        for i in range(mini_epoch):
+            file_indices = mini_epoch_file_indices[:mini_dataset_length]
+            mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
+            files = [self.files[i] for i in file_indices]
+
+            # 每个设备负责的实际数据idx，会被真实的load进内存
+            each_files_num = len(files) // world_size 
+            offset = each_files_num * rank
+            # 根据偏移分片 初始化 dataset 数据，而非全部数据
+            files = files[offset:offset+each_files_num]
+
+            data_map = self._parse_data_map(files)
+            self.q.put(data_map)
+
+    def _parse_data_map(self, file_name_list):
+        # 1.0 读取原始数据
+        data_path = self.params.data_folder
+
+        # 数据集参数
+        target_parm = data_str2parm(self.params.data_set)
+
+        # 获取数据分段
+        files = [i for i in file_name_list if i in self.files]
+
+        # 读取分段合并
+        diff_length = 0
+        count = 0
+
+        # 最终数据
+        data_map = {
+            'ids': [],
+            'mean_std': [],
+            'x': [],
+            'y': [],
+            'raw': pd.DataFrame()
+        }
+
+        for file in files:
+            count += 1
+            if count > max_num:
+                break
+
+            diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map)
+            # report_memory_usage()
+
+        if head_n == 0 and pct < 100 and pct > 0:
+            head_n = int(len(x) * (pct / 100))
+
+        if head_n > 0:
+            data_map['raw'] = data_map['raw'].iloc[:head_n, :]
+            to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
+
+            data_map['x'] = [data_map['x'][i] for i in range(len(data_map['x'])) if i not in to_del_idx]
+            data_map['y'] = [data_map['y'][i] for i in range(len(data_map['y'])) if i not in to_del_idx]
+            data_map['mean_std'] = [data_map['mean_std'][i] for i in range(len(data_map['mean_std'])) if i not in to_del_idx]
+            data_map['ids'] = [data_map['ids'][i] for i in range(len(data_map['ids'])) if i not in to_del_idx]
+
+        if not need_id:
+            data_map['ids'].clear()
+
+        # if log:
+        #     logger.debug(f"恢复成 float32")
+        data_map['raw'] = convert_float16_2_32(data_map['raw'])
+        # report_memory_usage()
+
+        # 检查数值异常
+        assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+
+        # 2.0 数据初始化
+        data_map['data'] = torch.from_numpy(data_map['raw'].values)
+        del data_map['raw']
+
+        # 分类训练集 数据平衡
+        if self.params.classify:
+            if self.type == 'train':
+                labels = set(data_map['y'])
+                sy = pd.Series(data_map['y'])
+                min_num = sy.value_counts().min()
+
+                idx = []
+                for label in labels:
+                    origin_idx = sy[sy == label].index
+
+                    if len(origin_idx) > min_num:
+                        idx += np.random.choice(origin_idx,
+                                                min_num, replace=False).tolist()
+                    else:
+                        idx += origin_idx.tolist()
+
+                # 排序
+                idx.sort()
+
+                data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
+                data_map['x'] = [data_map['x'][i] for i in idx]
+                data_map['y'] = [data_map['y'][i] for i in idx]
+                data_map['mean_std'] = [data_map['mean_std'][i] for i in idx]
+        
+        # 标签类型
+        data_map['y'] = torch.tensor(np.array(data_map['y']), dtype=torch.int64 if self.params.classify else torch.float)
+
+        return data_map
+
+    def _load_data_map(self, data_map):
+        self.data = data_map['data']
+        del data_map['data']
+
+        self.mean_std = data_map['mean_std']
+        del data_map['mean_std']
+
+        # id
+        self.ids = data_map['ids']
+        del data_map['ids']
+        
+        # 数据长度
+        self.length = len(data_map['x'])
+
+        # x 切片索引
+        self.x_idx = data_map['x']
+        del data_map['x']
+        # x = torch.tensor(np.array(x), dtype=torch.float)
+
+        # y
+        self.y = data_map['y']
+        del data_map['y']
+        
+        data_map.clear()
+
+    def __len__(self):
+        """Denotes the total number of samples"""
+        return self.length
+
+    def __getitem__(self, index):
+        """Generates samples of data
+        x, y, mean_std
+        """
+        # 切片范围
+        a, b = self.x_idx[index]
+        x = self.data[a:b, :]
+
+        #############################
+        # 1. 部分截取
+        #############################
+        if self.need_split_data_set:
+            # 使用部分截取 xa, xb
+            xa, xb = 0, 46
+            if self.params.use_pk and self.params.use_trade:
+                raise Exception('no use')
+            elif self.params.use_pk:
+                xb = 40
+            elif self.params.use_trade:
+                xa = 40
+
+            # 截取mean_std
+            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
+        else:
+            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
+
+        return x, self.y[index], mean_std
+
 class Dataset(torch.utils.data.Dataset): 
     """Characterizes a dataset for PyTorch"""
 
@@ -593,7 +831,6 @@ class Dataset(torch.utils.data.Dataset):
 
         return x, self.y[index], mean_std
 
-
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     # 索引数组
@@ -642,7 +879,6 @@ class cache():
         t0 = time.time()
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
-
 
 def load_data(params, file, diff_length, data_map, log=False):
     # report_memory_usage('begin')
