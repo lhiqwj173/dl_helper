@@ -1,21 +1,27 @@
 from torch.utils.data import DataLoader
 import multiprocessing as mp
-import time
+import time, os, psutil
 
 from dl_helper.trainer import notebook_launcher
 from dl_helper.data import DistributedSampler, Dataset_cahce
 from dl_helper.train_param import Params
 from accelerate import Accelerator
 
+
 def pprint(lock, *args):
     with lock:
         print(*args)
+
+def report_memory_usage(lock, msg=''):
+    memory_usage = psutil.virtual_memory()
+    pprint(lock, f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+
 
 def test_fn(lock, _type='cache'):
     acc = Accelerator()
     device = acc.device
 
-    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_10@1@1_th_80_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
+    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_10@1@1_th_36_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
 
     param = Params(
         'test',
@@ -42,6 +48,9 @@ def test_fn(lock, _type='cache'):
                     count += 1
             pprint(lock, device, f'epoch {epoch} count {count}')
 
+            if acc.is_main_process:
+                report_memory_usage(lock, f'epoch {epoch} done')
+
     else:
         # 手动加载数据
         data_map = dataset._parse_data_map(dataset.files)
@@ -57,6 +66,9 @@ def test_fn(lock, _type='cache'):
             for data in dataloader:
                 count += 1
             pprint(lock, device, f'epoch {epoch} count {count}')
+
+            if acc.is_main_process:
+                report_memory_usage(lock, f'epoch {epoch} done')
 
 
 def run():
