@@ -135,7 +135,7 @@ class DistributedSampler(Sampler):
             每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
         
         """
-        assert isinstance(dataset, Dataset_cahce), 'only support Dataset_cahce'
+        assert isinstance(dataset, Dataset_cahce), f'only support Dataset_cahce, get {type(dataset)}'
 
         self.dataset = dataset
         self.shuffle = shuffle
