@@ -129,63 +129,7 @@ class ResumeSample():
     def __len__(self):
         return self.size
 
-class DistributedSampler(Sampler):
-    def __init__(self, dataset, accelerator,shuffle=False, mini_dataset_length=10):
-        """
-        mini_dataset_length:
-            每次分片加载数据集的长度
-            每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
-        
-        """
-        assert isinstance(dataset, dl_helper.data.Dataset_cahce), f'only support Dataset_cahce, get {type(dataset)}'
-
-        self.dataset = dataset
-        self.shuffle = shuffle
-
-        self.accelerator = accelerator
-        self.world_size = accelerator.num_processes
-        self.rank = accelerator.process_index
-
-        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size
-
-        self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        self.mini_epoch_indices_ramain = self.mini_epoch
-        if self.shuffle:
-            mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-        else:
-            mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
-
-        self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
-
-    def __iter__(self):
-        # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
-        if self.mini_epoch_indices_ramain == 0:
-            self.mini_epoch_indices_ramain = self.mini_epoch
-            if self.shuffle:
-                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
-            else:
-                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-            self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
-
-        self.dataset.load_data()
-
-        # 同步数据长度
-        # data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
-        data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
-        self.accelerator.wait_for_everyone()
-        data_length = self.accelerator.gather_for_metrics(data_length)
-        data_length = torch.min(data_length)
-
-        if self.shuffle:
-            indices = list(torch.randperm(data_length))
-        else:
-            indices = list(range(data_length))
-
-        return iter(indices)
-
-    
+ 
 class DataLoaderDevice(DataLoader):
     def __init__(self, *args, device=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -841,6 +785,64 @@ class Dataset(torch.utils.data.Dataset):
 
         return x, self.y[index], mean_std
 
+class DistributedSampler(Sampler):
+    def __init__(self, dataset, accelerator,shuffle=False, mini_dataset_length=10):
+        """
+        mini_dataset_length:
+            每次分片加载数据集的长度
+            每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
+        
+        """
+        assert isinstance(dataset, Dataset_cahce), f'only support Dataset_cahce, get {type(dataset)}'
+
+        self.dataset = dataset
+        self.shuffle = shuffle
+
+        self.accelerator = accelerator
+        self.world_size = accelerator.num_processes
+        self.rank = accelerator.process_index
+
+        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size
+
+        self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
+        self.mini_epoch_indices_ramain = self.mini_epoch
+        if self.shuffle:
+            mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+        else:
+            mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
+
+        self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+
+    def __iter__(self):
+        # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
+        if self.mini_epoch_indices_ramain == 0:
+            self.mini_epoch_indices_ramain = self.mini_epoch
+            if self.shuffle:
+                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+                log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
+            else:
+                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+            self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+
+        self.dataset.load_data()
+
+        # 同步数据长度
+        # data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
+        data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
+        self.accelerator.wait_for_everyone()
+        data_length = self.accelerator.gather_for_metrics(data_length)
+        data_length = torch.min(data_length)
+
+        if self.shuffle:
+            indices = list(torch.randperm(data_length))
+        else:
+            indices = list(range(data_length))
+
+        return iter(indices)
+
+   
+   
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     # 索引数组
