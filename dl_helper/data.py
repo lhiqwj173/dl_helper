@@ -147,23 +147,25 @@ class DistributedSampler(Sampler):
         self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
+        self.mini_epoch_indices_ramain = self.mini_epoch
         if self.shuffle:
-            self.mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+            mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
-            self.mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        printer().print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+            mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+        printer().print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
 
-        self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+        self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
-        if len(self.mini_epoch_file_indices) == 0:
+        if self.mini_epoch_indices_ramain == 0:
+            self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
-                self.mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                printer().print(f'new mini_epoch_file_indices: {self.mini_epoch_file_indices}')
+                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+                printer().print(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
             else:
-                self.mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-            self.dataset.init_data_thread_start(self.mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+            self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
         self.dataset.load_data()
 
@@ -533,8 +535,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.q = queue.Queue(maxsize=1)
 
 
-    def init_data_thread_start(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        producer_thread = threading.Thread(target=self._init_data, args=(_mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
+    def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
+        printer().print(f'init_data_thread_start {rank}')
+        producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def load_data(self):
@@ -543,12 +546,11 @@ class Dataset_cahce(torch.utils.data.Dataset):
         printer().print(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
-    def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
+    def _init_data(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         """多进程 初始化数据 放在 队列中"""
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
-        mini_epoch_file_indices = copy.deepcopy(_mini_epoch_file_indices)
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
