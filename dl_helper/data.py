@@ -171,7 +171,7 @@ class DistributedSampler(Sampler):
         data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
-        data_length = torch.max(data_length)
+        data_length = torch.min(data_length)
 
         if self.shuffle:
             indices = list(torch.randperm(data_length))
