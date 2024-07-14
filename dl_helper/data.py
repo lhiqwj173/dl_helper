@@ -534,14 +534,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
 
     def init_data_thread_start(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        print('启动初始化线程')
         producer_thread = threading.Thread(target=self._init_data, args=(_mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        print('get data_map')
         self._load_data_map(data_map)
 
     def _init_data(self, _mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -561,7 +559,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            print(files)
+            print(f"读取文件: {files}")
 
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
