@@ -5,13 +5,16 @@ import time, os, psutil,datetime
 from dl_helper.trainer import notebook_launcher
 from dl_helper.data import DistributedSampler, Dataset_cahce
 from dl_helper.train_param import Params
-from dl_helper.tool import printer
 
 from accelerate import Accelerator
 
+from py_ext.tool import log, init_logger
+
+init_logger('test', True)
+
 def report_memory_usage(msg=''):
     memory_usage = psutil.virtual_memory()
-    p.print(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+    log(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
 
 def test_fn(_type='cache'):
@@ -40,10 +43,10 @@ def test_fn(_type='cache'):
         for epoch in range(param.epochs):
             count = 0
             for mini in range(sampler.mini_epoch):
-                p.print(device, f'mini_epoch {mini}')
+                log(device, f'mini_epoch {mini}')
                 for data in dataloader:
                     count += 1
-            p.print(device, f'epoch {epoch} count {count}')
+            log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
@@ -62,7 +65,7 @@ def test_fn(_type='cache'):
             count = 0
             for data in dataloader:
                 count += 1
-            p.print(device, f'epoch {epoch} count {count}')
+            log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')

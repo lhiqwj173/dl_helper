@@ -1,33 +1,8 @@
 import psutil, pickle, torch, os
 from py_ext.wechat import wx
 from dl_helper.train_param import logger, match_num_processes
-import datetime
-import multiprocessing as mp
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
-
-class printer():
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls, *args, **kwargs)
-        return cls._instance
-
-    def __init__(self):
-        self.q = mp.Queue()
-        t = mp.Process(target=self._print_fn)
-        t.start()
-
-    def _print_fn(self):
-        while True: 
-            msg = self.q.get()
-            if msg is None:
-                break
-            print(f'[{datetime.datetime.now()}]',*msg)
-
-    def print(*msg):
-        self.q.put(msg)
 
 def check_nan(data, **kwargs):
     if torch.isnan(data).any().item() or torch.isinf(data).any().item():

@@ -16,7 +16,7 @@ from collections.abc import Iterable
 from pympler import asizeof
 # import gc
 from dl_helper.train_param import logger, data_parm2str, data_str2parm
-from dl_helper.tool import report_memory_usage, check_nan, printer
+from dl_helper.tool import report_memory_usage, check_nan
 
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
@@ -152,7 +152,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        printer().print(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
+        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
@@ -162,7 +162,7 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                printer().print(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
+                log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
@@ -536,14 +536,14 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        printer().print(f'init_data_thread_start {rank}')
+        log(f'init_data_thread_start {rank}')
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        printer().print(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+        log(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
     def _init_data(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -562,11 +562,11 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            printer().print(f"读取文件: {files}")
+            log(f"读取文件: {files}")
 
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
-            printer().print(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+            log(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
     def _parse_data_map(self, file_name_list):
         # 1.0 读取原始数据
