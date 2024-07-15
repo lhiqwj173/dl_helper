@@ -21,7 +21,7 @@ def test_fn(_type='cache'):
     acc = Accelerator()
     device = acc.device
 
-    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_10@1@1_th_36_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
+    dataset_name = 'pred_10@20@30_pass_100_y_3_bd_2024_05_01_dr_16@1@1_th_36_s_ETHFDUSD@ETHUSDT@BTCFDUSD@BTCUSDT_t_10_target_mid_std_5d.7z'
 
     param = Params(
         'test',
@@ -92,7 +92,7 @@ def test_fn(_type='cache'):
 
 
 def run():
-    for _type in ['cache', 'normal', 'acc']:
+    for _type in ['cache', 'normal']:
         log('-------------------', _type, '---------------------')
         t = time.time()
         notebook_launcher(test_fn, (_type, ), num_processes=2)
