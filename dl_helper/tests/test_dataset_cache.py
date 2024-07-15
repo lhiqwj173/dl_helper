@@ -10,7 +10,7 @@ from accelerate import Accelerator
 
 from py_ext.tool import log, init_logger
 
-init_logger('test', True)
+init_logger('test', True, 'DEBUG')
 
 def report_memory_usage(msg=''):
     memory_usage = psutil.virtual_memory()
