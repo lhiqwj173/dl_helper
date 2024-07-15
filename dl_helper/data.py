@@ -589,7 +589,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
         return data_map
 
     def _load_data_map(self, data_map):
-        self.data = data_map['raw']
+        if isinstance(data_map['raw'] , pd.DataFrame):
+            self.data = torch.from_numpy(data_map['raw'].values)
+        else:
+            self.data = data_map['raw']
         del data_map['raw']
 
         self.mean_std = data_map['mean_std']
