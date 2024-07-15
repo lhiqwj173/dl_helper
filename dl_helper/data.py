@@ -375,9 +375,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
     """
     不会主动load数据
     """
-    def __init__(self, params, _type, device=None, log=False):
+    def __init__(self, params, _type, device=None):
         """Initialization"""
-        self.log = log
         self.params = params
         self.type = _type# 数据类型 train/val/test
         self.device = device
@@ -442,8 +441,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.vol_cols = [i*2+1 for i in range(20)]
 
         if not self.need_split_data_set:
-            # if self.log:
-            #     logger.debug("使用全部数据")
             if params.use_trade:
                 self.price_cols += [42, 45]
                 self.vol_cols += [40, 41, 43, 44]
@@ -454,13 +451,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 raise Exception('no use')
 
             elif params.use_pk:
-                # if self.log:
-                #     logger.debug("只使用盘口数据")
                 pass
 
             elif params.use_trade:
-                # if self.log:
-                #     logger.debug("只使用交易数据")
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
