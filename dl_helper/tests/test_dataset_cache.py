@@ -92,10 +92,10 @@ def test_fn(_type='cache'):
 
 
 def run():
-    for _type in ['cache', 'normal']:
+    for _type in ['cache', 'normal', 'acc']:
         log('-------------------', _type, '---------------------')
         t = time.time()
-        notebook_launcher(test_fn, (_type, ), num_processes=1)
+        notebook_launcher(test_fn, (_type, ), num_processes=2)
         log(f'耗时: {(time.time() - t) / 60:.3f} min')
         log('-------------------', _type, '---------------------')
 
