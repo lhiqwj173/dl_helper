@@ -508,7 +508,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            log(f"读取文件: {files}")
+            # log(f"读取文件: {files}")
 
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
@@ -820,7 +820,8 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
+                log(f'new mini_epoch_file_indices')
+                # log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
