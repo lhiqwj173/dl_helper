@@ -18,7 +18,7 @@ from pympler import asizeof
 from dl_helper.train_param import logger, data_parm2str, data_str2parm
 from dl_helper.tool import report_memory_usage, check_nan
 
-from py_ext.tool import log
+from py_ext.tool import log, debug
 
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
