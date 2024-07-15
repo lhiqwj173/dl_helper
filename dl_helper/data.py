@@ -951,7 +951,6 @@ def load_data(params, file, diff_length, data_map, device=None, log=False):
             # 直接放在 device 中
             # raw = torch.from_numpy(raw.values).to(device).float()
             raw = torch.tensor(raw.values, dtype=torch.float32).to(device)
-            print(raw.dtype)
             if None is data_map['raw']:
                 data_map['raw'] = raw
             else:
@@ -1109,16 +1108,15 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     if not need_id:
         data_map['ids'].clear()
 
-    # if log:
-    #     logger.debug(f"恢复成 float32")
-    # data_map['raw'] = convert_float16_2_32(data_map['raw'])
-    # report_memory_usage()
-
-    # 检查数值异常
-    # assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
-    has_nan = torch.isnan(data_map['raw']).any()
-    has_inf = torch.isinf(data_map['raw']).any()
-    assert not has_nan and not has_inf, '数值异常'
+    if None is device:
+        data_map['raw'] = convert_float16_2_32(data_map['raw'])
+        # 检查数值异常
+        assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+    else:
+        # 检查数值异常
+        has_nan = torch.isnan(data_map['raw']).any()
+        has_inf = torch.isinf(data_map['raw']).any()
+        assert not has_nan and not has_inf, '数值异常'
     
     # # fake
     # num_classes = 3
