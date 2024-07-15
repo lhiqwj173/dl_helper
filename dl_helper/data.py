@@ -944,7 +944,7 @@ def load_data(params, file, diff_length, data_map, device, log=False):
         # raw = reduce_mem_usage(raw)
         # data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
         # 直接放在 device 中
-        raw = torch.from_numpy(raw.values, dtype=torch.float32).to(device)
+        raw = torch.from_numpy(raw.values).to(device).float()
         print(raw.dtype)
         if None is data_map['raw']:
             data_map['raw'] = raw
