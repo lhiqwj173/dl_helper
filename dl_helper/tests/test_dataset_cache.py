@@ -63,6 +63,38 @@ def test_fn(_type='cache'):
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
 
+    if _type == 'val':
+        dataset = Dataset_cahce(param, 'val', device)
+        sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
+        dataloader = DataLoader(
+            dataset,
+            64, False, sampler=sampler
+        )
+
+        for epoch in range(param.epochs):
+            count = 0
+            for mini in range(sampler.mini_epoch):
+                print_caost_time = True
+                t0 = time.time()
+
+                log(device, f'mini_epoch {mini}')
+                for data in dataloader:
+                    if print_caost_time:
+                        print_caost_time = False
+                        _t = time.time()
+                        acc.print(f'加载数据，耗时: {(_t - t0):.3f} s')
+                        t0 = _t
+                        
+                    count += 1
+
+                acc.wait_for_everyone()
+                acc.print(f'数据遍历完毕 耗时: {time.time() - t0:.3f} s')
+
+            log(device, f'epoch {epoch} count {count}')
+
+            if acc.is_main_process:
+                report_memory_usage(f'epoch {epoch} done')
+
     elif 'normal' in _type:
         # 手动加载数据
         if 'gpu' in _type:
