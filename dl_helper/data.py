@@ -899,7 +899,7 @@ class cache():
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
 
-def load_data(params, file, diff_length, data_map, device, log=False):
+def load_data(params, file, diff_length, data_map, device=None, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
@@ -941,15 +941,22 @@ def load_data(params, file, diff_length, data_map, device, log=False):
     # 1. 不做截取操作 在dataset中截取
     ###################################################
     if not need_split_data_set:
-        # raw = reduce_mem_usage(raw)
-        # data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
-        # 直接放在 device 中
-        raw = torch.from_numpy(raw.values).to(device).float()
-        print(raw.dtype)
-        if None is data_map['raw']:
-            data_map['raw'] = raw
+        if None is device:
+            raw = reduce_mem_usage(raw)
+            if None is data_map['raw']:
+                data_map['raw'] = raw
+            else:
+                data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
         else:
-            data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
+            # 直接放在 device 中
+            # raw = torch.from_numpy(raw.values).to(device).float()
+            raw = torch.tensor(raw.values, dtype=torch.float32).to(device)
+            print(raw.dtype)
+            if None is data_map['raw']:
+                data_map['raw'] = raw
+            else:
+                data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
+
         length = len(raw)
         # report_memory_usage('concat raw')
 
@@ -967,16 +974,21 @@ def load_data(params, file, diff_length, data_map, device, log=False):
         elif params.use_trade:
             xa = 40
 
-        # raw2 = raw.iloc[:, xa:xb].copy()
-        # raw2 = reduce_mem_usage(raw2)
-        # data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
-
-        # 直接放在 device 中
-        raw2 = torch.from_numpy(raw.iloc[:, xa:xb].values).to(device)
-        if None is data_map['raw']:
-            data_map['raw'] = raw2
+        if None is device:
+            raw2 = raw.iloc[:, xa:xb].copy()
+            raw2 = reduce_mem_usage(raw2)
+            if None is data_map['raw']:
+                data_map['raw'] = raw2
+            else:
+                data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
         else:
-            data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0)
+            # 直接放在 device 中
+            # raw2 = torch.from_numpy(raw.iloc[:, xa:xb].values).to(device)
+            raw2 = torch.tensor(raw.iloc[:, xa:xb].values, dtype=torch.float32).to(device)
+            if None is data_map['raw']:
+                data_map['raw'] = raw2
+            else:
+                data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0)
 
         length = len(raw2)
 
@@ -1013,7 +1025,7 @@ def load_data(params, file, diff_length, data_map, device, log=False):
 
     return diff_length, need_split_data_set
 
-def read_data(_type, params, device, max_num=10000, need_id=False, log=False, data_sample_getter_func=None):
+def read_data(_type, params, device=None, max_num=10000, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
 
     # 数据集参数
