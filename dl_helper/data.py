@@ -29,7 +29,6 @@ def reduce_mem_usage(df):
         to reduce memory usage.        
     """
     start_mem = df.memory_usage().sum() / 1024**2
-    # logger.debug('Memory usage of dataframe is {:.2f} MB'.format(start_mem))
 
     for col in df.columns:
         col_type = df[col].dtype
@@ -430,8 +429,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             self.files = self.files[begin_idx:end_idx]
 
-        log(self.files)
-
         # 读取一个文件，判断是否需要拆分数据集
         _,mean_std, _, _, _ = pickle.load(open(os.path.join(self.params.data_folder, self.files[0]), 'rb'))
         self.need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
@@ -478,14 +475,14 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        log(f'init_data_thread_start {rank}')
+        debug(f'init_data_thread_start {rank}')
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        log(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+        debug(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
     def _init_data(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -493,23 +490,24 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
+        debug(f"读取文件 0: {self.files}")
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
             mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
             files = [self.files[i] for i in file_indices]
-            log(f"读取文件 0: {files}")
+            debug(f"读取文件 1: {files}")
 
             # 每个设备负责的实际数据idx，会被真实的load进内存
             each_files_num = len(files) // world_size 
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            log(f"读取文件 1: {files}")
+            debug(f"读取文件 2: {files}")
 
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
-            log(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+            debug(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
     def _parse_data_map(self, file_name_list):
         # 1.0 读取原始数据
@@ -536,11 +534,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         for file in files:
             diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
-
-        # if log:
-        #     logger.debug(f"恢复成 float32")
-        # data_map['raw'] = convert_float16_2_32(data_map['raw'])
-        # report_memory_usage()
 
         # 检查数值异常
         if isinstance(data_map['raw'], pd.DataFrame):
