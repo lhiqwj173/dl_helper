@@ -31,9 +31,8 @@ def test_fn(_type='cache'):
         epochs=5
     )
 
-    dataset = Dataset_cahce(param, 'train', device)
-
     if _type == 'cache':
+        dataset = Dataset_cahce(param, 'train', device)
         sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
         dataloader = DataLoader(
             dataset,
@@ -66,6 +65,7 @@ def test_fn(_type='cache'):
 
     elif _type == 'normal':
         # 手动加载数据
+        dataset = Dataset_cahce(param, 'train', None)
         data_map = dataset._parse_data_map(dataset.files)
         dataset._load_data_map(data_map)
 

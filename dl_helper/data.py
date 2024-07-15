@@ -375,7 +375,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
     """
     不会主动load数据
     """
-    def __init__(self, params, _type, device, log=False):
+    def __init__(self, params, _type, device=None, log=False):
         """Initialization"""
         self.log = log
         self.params = params
