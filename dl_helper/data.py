@@ -546,11 +546,13 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # data_map['raw'] = convert_float16_2_32(data_map['raw'])
         # report_memory_usage()
 
-        # # 检查数值异常
-        # assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
-        has_nan = torch.isnan(data_map['raw']).any()
-        has_inf = torch.isinf(data_map['raw']).any()
-        assert not has_nan and not has_inf, '数值异常'
+        # 检查数值异常
+        if isinstance(data_map['raw'], pd.DataFrame):
+            assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+        else:
+            has_nan = torch.isnan(data_map['raw']).any()
+            has_inf = torch.isinf(data_map['raw']).any()
+            assert not has_nan and not has_inf, '数值异常'
 
         # 2.0 数据初始化
         # data_map['data'] = torch.from_numpy(data_map['raw'].values)
@@ -681,8 +683,10 @@ class Dataset(torch.utils.data.Dataset):
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
-        # self.data = torch.from_numpy(data_map['raw'].values)
-        self.data = data_map['raw']
+        if isinstance(data_map['raw'] , pd.DataFrame):
+            self.data = torch.from_numpy(data_map['raw'].values)
+        else:
+            self.data = data_map['raw']
         del data_map['raw']
 
         self.mean_std = data_map['mean_std']
