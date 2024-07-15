@@ -91,12 +91,12 @@ def test_fn(_type='cache'):
                 report_memory_usage(f'epoch {epoch} done')
 
 
-def run():
-    for _type in ['cache', 'normal']:
-        log('-------------------', _type, '---------------------')
-        t = time.time()
-        notebook_launcher(test_fn, (_type, ), num_processes=2)
-        log(f'耗时: {(time.time() - t) / 60:.3f} min')
-        log('-------------------', _type, '---------------------')
+def run(_type):
+    # for _type in ['cache', 'normal']:
+    log('-------------------', _type, '---------------------')
+    t = time.time()
+    notebook_launcher(test_fn, (_type, ), num_processes=2)
+    log(f'耗时: {(time.time() - t) / 60:.3f} min')
+    log('-------------------', _type, '---------------------')
 
 
