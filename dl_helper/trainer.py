@@ -1031,5 +1031,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
     elif mode == 'simple':
         notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+    elif mode == 'cache_data':
+        notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     else:
         notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
