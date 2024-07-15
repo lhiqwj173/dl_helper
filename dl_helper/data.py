@@ -815,7 +815,7 @@ class DistributedSampler(Sampler):
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
     def __iter__(self):
-        # 如果 mini_epoch_file_indices 为空，重新生成，说明也该epoch训练结束
+        # 如果 mini_epoch_file_indices 为0，需要重新生成，说明该epoch训练结束
         if self.mini_epoch_indices_ramain == 0:
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:

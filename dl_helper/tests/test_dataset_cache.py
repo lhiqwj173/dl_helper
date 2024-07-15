@@ -43,9 +43,20 @@ def test_fn(_type='cache'):
         for epoch in range(param.epochs):
             count = 0
             for mini in range(sampler.mini_epoch):
+                print_caost_time = True
+                t0 = time.time()
+
                 log(device, f'mini_epoch {mini}')
                 for data in dataloader:
+                    if print_caost_time:
+                        print_caost_time = False
+                        acc.print(f'加载数据，耗时: {(time.time() - t0)/60:.3f} min')
+                        
                     count += 1
+
+                acc.wait_for_everyone()
+                acc.print(f'数据遍历完毕')
+
             log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
@@ -63,13 +74,23 @@ def test_fn(_type='cache'):
         dataloader = acc.prepare(dataloader)
 
         for epoch in range(param.epochs):
+            print_caost_time = True
+            t0 = time.time()
             count = 0
             for data in dataloader:
+                if print_caost_time:
+                    print_caost_time = False
+                    acc.print(f'加载数据，耗时: {(time.time() - t0)/60:.3f} min')
+
                 count += 1
+
+            acc.wait_for_everyone()
+            acc.print(f'数据遍历完毕')
             log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
+            acc.wait_for_everyone()
 
     elif _type == 'acc':
         sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
@@ -89,6 +110,7 @@ def test_fn(_type='cache'):
 
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
+            acc.wait_for_everyone()
 
 
 def run(_type):
