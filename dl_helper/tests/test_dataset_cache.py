@@ -63,9 +63,12 @@ def test_fn(_type='cache'):
             if acc.is_main_process:
                 report_memory_usage(f'epoch {epoch} done')
 
-    elif _type == 'normal':
+    elif 'normal' in _type:
         # 手动加载数据
-        dataset = Dataset_cahce(param, 'train', None)
+        if 'gpu' in _type:
+            dataset = Dataset_cahce(param, 'train', device)
+        else:
+            dataset = Dataset_cahce(param, 'train', None)
         data_map = dataset._parse_data_map(dataset.files)
         dataset._load_data_map(data_map)
 
