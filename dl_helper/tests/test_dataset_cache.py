@@ -50,12 +50,14 @@ def test_fn(_type='cache'):
                 for data in dataloader:
                     if print_caost_time:
                         print_caost_time = False
-                        acc.print(f'加载数据，耗时: {(time.time() - t0):.3f} s')
+                        _t = time.time()
+                        acc.print(f'加载数据，耗时: {(_t - t0):.3f} s')
+                        t0 = _t
                         
                     count += 1
 
                 acc.wait_for_everyone()
-                acc.print(f'数据遍历完毕')
+                acc.print(f'数据遍历完毕 {len(dataloader)} 耗时: {time.time() - t0:.3f} s')
 
             log(device, f'epoch {epoch} count {count}')
 
@@ -80,12 +82,14 @@ def test_fn(_type='cache'):
             for data in dataloader:
                 if print_caost_time:
                     print_caost_time = False
-                    acc.print(f'加载数据，耗时: {(time.time() - t0):.3f} s')
+                    _t = time.time()
+                    acc.print(f'加载数据，耗时: {(_t - t0):.3f} s')
+                    t0 = _t
 
                 count += 1
 
             acc.wait_for_everyone()
-            acc.print(f'数据遍历完毕')
+            acc.print(f'数据遍历完毕 {len(dataloader)} 耗时: {time.time() - t0:.3f} s')
             log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
