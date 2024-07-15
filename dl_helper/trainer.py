@@ -550,6 +550,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             for mini_epoch in range(train_loader.sampler.mini_epoch):
                 # 训练
                 train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans, need_checkpoint=False)
+                p.print(f'mini_epoch {mini_epoch} done')
             checkpoint(epoch, accelerator, params, printer, False)
 
         # 验证
