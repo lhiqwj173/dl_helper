@@ -500,6 +500,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             # 每个设备负责的实际数据idx，会被真实的load进内存
             each_files_num = len(files) // world_size 
+            assert each_files_num > 0, f'each device wait read files: 0'
+            
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
