@@ -468,6 +468,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 增加一个batch维度
         self.input_shape = (1, self.time_length, 40 if self.params.use_pk else 6 if self.params.use_trade else 46)
 
+        self.q = queue.Queue(maxsize=1)
+        
         # # 如果是val/test，直接读取数据
         # if _type in ['val', 'test']:
         #     # 从文件中读取 data_map
@@ -478,8 +480,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # else:
         #     # 存放 data_mape 
         #     self.q = queue.Queue(maxsize=1)
-
-        self.q = queue.Queue(maxsize=1)
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -798,15 +798,13 @@ class Dataset(torch.utils.data.Dataset):
         return x, self.y[index], mean_std
 
 class DistributedSampler(Sampler):
-    def __init__(self, dataset, accelerator,shuffle=False, mini_dataset_length=10):
+    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=10):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
             每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
-        
         """
         # assert isinstance(dataset, Dataset_cahce), f'only support {Dataset_cahce}, get {type(dataset)}'
-
         self.dataset = dataset
         self.shuffle = shuffle
 
@@ -814,7 +812,8 @@ class DistributedSampler(Sampler):
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
 
-        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size
+        # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
+        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size  if dataset.type == 'train' else len(self.dataset.files)
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
         self.mini_epoch_indices_ramain = self.mini_epoch

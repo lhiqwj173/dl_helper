@@ -301,7 +301,7 @@ def package_root(accelerator, params):
     accelerator.wait_for_everyone()
 
 last_checkpoint_time = 0
-def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
+def checkpoint(epoch, accelerator, params, printer, need_check=True):
     global last_checkpoint_time
     if need_check:
         # 判断是否需要checkpoint
@@ -319,23 +319,20 @@ def checkpoint(epoch, idx, accelerator, params, printer, need_check=True):
     # 开始checkpoint
     if need_checkpoint.item() == 1:
         last_checkpoint_time = time.time()
-        # printer.print(f"[{epoch}][{idx}] checkpointing...")
         accelerator.save_state(os.path.join(params.root, 'checkpoint'))
         package_root(accelerator, params)
-        # printer.print(f"[{epoch}][{idx}] checkpointing done")
 
-def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=False):
+def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
 
     active_dataloader = train_loader
-    if skip_steps > 0:
-        printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
-        active_dataloader = skip_first_batches(train_loader, skip_steps)
+    # if skip_steps > 0:
+    #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
+    #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    # for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch train'):
-    for idx, batch in enumerate(active_dataloader):
+    for batch in active_dataloader:
         # 预处理
         data, target = trans(batch, train=True)
 
@@ -353,23 +350,19 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         with torch.no_grad():
             tracker.track(output, target, loss, 'train')
 
-        # 缓存checkpoint
-        if need_checkpoint and tracker.need_save:
-            if idx>0 and idx % params.checkpointing_steps == 0:
-                checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
-
     # 追踪器，计算必要的数据
     tracker.update()
 
     # 缓存checkpoint
-    checkpoint(epoch, idx + skip_steps, accelerator, params, printer, False)
+    if need_checkpoint:
+        checkpoint(epoch, accelerator, params, printer, False)
 
     # # for debug
     # accelerator.wait_for_everyone()
     # if accelerator.is_main_process:
     #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
-def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans, need_checkpoint=False):
+def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans):
     """
     异常模型在验证时checkpoint会报错, 默认不进行checkpoint
     """
@@ -378,14 +371,13 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     skip_steps = tracker.step_count
 
     active_dataloader = val_data
-    if skip_steps > 0:
-        printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
-        active_dataloader = skip_first_batches(val_data, skip_steps)
+    # if skip_steps > 0:
+    #     printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
+    #     active_dataloader = skip_first_batches(val_data, skip_steps)
 
     model.eval()
     with torch.no_grad():
-        # for idx, batch in tqdm(enumerate(active_dataloader), total=len(active_dataloader), disable=not accelerator.is_main_process, desc=f'[{epoch}] epoch validating'):
-        for idx, batch in enumerate(active_dataloader):
+        for batch in active_dataloader:
             data, target = trans(batch)
             
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
@@ -398,11 +390,6 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
 
-            # 缓存checkpoint
-            if need_checkpoint and tracker.need_save:
-                if idx>0 and idx % params.checkpointing_steps == 0:
-                    checkpoint(epoch, idx + skip_steps, accelerator, params, printer)
-
     # 追踪器，计算必要的数据
     tracker.update()
 
@@ -414,7 +401,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
     model.eval()
     with torch.no_grad():
-        for idx, batch in tqdm(enumerate(test_data), total=len(test_data), disable=not accelerator.is_main_process, desc=f'test model'):
+        for batch in test_data:
             data, target = trans(batch)
 
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
@@ -462,6 +449,136 @@ def get_data_sampler(data_set, _type):
             )
 
     return train_sampler
+
+def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
+    set_seed(42)
+
+    # 训练实例
+    test = test_class(*args, **kwargs)
+
+    # 训练参数
+    params = test.get_param()
+
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    p = printer(lock, accelerator)
+    
+    # 检查下载训练文件
+    if (not params.debug) and accelerator.is_local_main_process:
+        p.print('check alist download')
+        
+        client = alist(user, pwd)
+        try:
+            _file = f'alist/{params.train_title}.7z'
+            # 下载文件
+            client.download(f'/train_data/{params.train_title}.7z', 'alist/')
+            p.print(f'download {_file}')
+
+        except:
+            pass
+
+        if os.path.exists(_file):
+            # 解压文件
+            decompress(_file)
+            p.print(f'decompress {_file}')
+            # move 
+            folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
+            p.print(f'checkpoint folder {folder}')
+            if os.path.exists(folder):
+                wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
+                p.print(f"使用alist缓存文件继续训练")
+                shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+
+    # 调整参数
+    if num_processes >= 2:
+        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+        b = params.batch_size
+        params.batch_size //= num_processes
+        p.print(f'batch_size: {b} -> {params.batch_size}')
+    
+        # 调整lr
+        l = params.learning_rate
+        params.learning_rate *= num_processes
+        p.print(f'learning_rate: {l} -> {params.learning_rate}')
+
+    # 临时额外的训练参数
+    if train_param:
+        for k, v in train_param.items():
+            setattr(params, k, v)
+            p.print(f'{k}-> {v}')
+
+    train_loader = test.get_cache_data('train', params, accelerator)
+    val_loader = test.get_cache_data('val', params, accelerator)
+
+    p.print(f'dataset length: {len(train_loader.dataset)}')
+    p.print(f'dataloader length: {len(train_loader)}')
+
+    if None is model:
+        model = test.get_model()
+
+    criterion = nn.CrossEntropyLoss()
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    scheduler = test.get_lr_scheduler(optimizer, params)
+
+    # 训练跟踪
+    tracker = Tracker(params, accelerator, scheduler, num_processes, p)
+    # 新增到 状态 管理
+    accelerator.register_for_checkpointing(tracker)
+
+    # # TEST
+    # tracker = Tracker_None()
+
+    # 不需要准备数据
+    model, optimizer, scheduler = accelerator.prepare(
+        model, optimizer, scheduler
+    )
+
+    p.print(f'prepare done')
+
+    # 数据增强
+    trans = test.get_transform(accelerator.device)
+
+    # 读取可能存在的训练数据（继续训练）
+    checkpoint_folder = os.path.join(params.root, 'checkpoint')
+    resume_from_checkpoint = os.path.exists(checkpoint_folder)
+    if resume_from_checkpoint:
+        accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
+        accelerator.load_state(checkpoint_folder)
+        # 输出
+        tracker.print_state()
+    
+    # 训练循环
+    for epoch in range(tracker.epoch_count, params.epochs):
+        if tracker.step_in_epoch == 0:
+            for mini_epoch in range(train_loader.sampler.mini_epoch):
+                # 训练
+                train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans, need_checkpoint=False)
+            checkpoint(epoch, accelerator, params, printer, False)
+
+        # 验证
+        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
+
+        # 绘图
+        tracker.plot()
+
+        # 打包
+        package_root(accelerator, params)
+
+    # 释放 训练/验证 数据集 optimizer
+    optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
+
+    # 准备测试数据
+    test_loader = test.get_cache_data('test', params, accelerator)
+
+    # 测试
+    test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
+
+    # 绘图
+    tracker.plot()
+
+    # 打包
+    package_root(accelerator, params)
+    accelerator.wait_for_everyone()
 
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):

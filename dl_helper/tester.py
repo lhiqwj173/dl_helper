@@ -1,11 +1,12 @@
 """
 训练的基类
 """
-from dl_helper.data import read_data
+from dl_helper.data import read_data, Dataset_cahce, DistributedSampler
 from dl_helper.transforms.base import transform
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 class test_base():
     def __init__(self, idx, data_folder='', amp='no', debug=False):
@@ -26,9 +27,19 @@ class test_base():
     # 初始化数据
     # 返回一个 torch dataloader
     def get_data(self, _type, params, data_sample_getter_func=None):
-        if self.debug:
-            return read_data(_type = _type, params=params, max_num=1, data_sample_getter_func = data_sample_getter_func)
         return read_data(_type = _type, params=params, data_sample_getter_func = data_sample_getter_func)
+
+    # 返回 局部缓存的数据
+    # 按需读取数据，节省内存
+    # 效率略低
+    def get_cache_data(self, _type, params, accelerator):
+        dataset = Dataset_cahce(params, _type, accelerator.device)
+        sampler = DistributedSampler(dataset, accelerator, shuffle=True if _type == 'train' else False)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=params.batch_size, sampler=sampler
+        )
+        return dataloader
 
     # 初始化模型
     # 返回一个 torch model
