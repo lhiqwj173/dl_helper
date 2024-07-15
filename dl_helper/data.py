@@ -849,6 +849,7 @@ class DistributedSampler(Sampler):
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
         self.mini_epoch_indices_ramain -= 1
+        debug('dataset.load_data wait')
         self.dataset.load_data()
         debug('dataset.load_data done')
 
