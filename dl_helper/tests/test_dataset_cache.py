@@ -31,7 +31,7 @@ def test_fn(_type='cache'):
         epochs=5
     )
 
-    dataset = Dataset_cahce(param, 'train')
+    dataset = Dataset_cahce(param, 'train', device)
 
     if _type == 'cache':
         sampler = DistributedSampler(dataset, acc, shuffle=True, mini_dataset_length=5)
