@@ -475,7 +475,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        debug(f'init_data_thread_start {rank}')
+        debug(f'init_data_thread_start {rank} {self.type}')
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 

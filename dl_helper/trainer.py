@@ -509,9 +509,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     train_loader = test.get_cache_data('train', params, accelerator)
     val_loader = test.get_cache_data('val', params, accelerator)
 
-    p.print(f'dataset length: {len(train_loader.dataset)}')
-    p.print(f'dataloader length: {len(train_loader)}')
-
     if None is model:
         model = test.get_model()
 
