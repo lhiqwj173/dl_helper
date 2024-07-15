@@ -50,7 +50,7 @@ def test_fn(_type='cache'):
                 for data in dataloader:
                     if print_caost_time:
                         print_caost_time = False
-                        acc.print(f'加载数据，耗时: {(time.time() - t0)/60:.3f} min')
+                        acc.print(f'加载数据，耗时: {(time.time() - t0):.3f} s')
                         
                     count += 1
 
@@ -80,7 +80,7 @@ def test_fn(_type='cache'):
             for data in dataloader:
                 if print_caost_time:
                     print_caost_time = False
-                    acc.print(f'加载数据，耗时: {(time.time() - t0)/60:.3f} min')
+                    acc.print(f'加载数据，耗时: {(time.time() - t0):.3f} s')
 
                 count += 1
 
@@ -117,7 +117,7 @@ def run(_type):
     # for _type in ['cache', 'normal']:
     log('-------------------', _type, '---------------------')
     t = time.time()
-    notebook_launcher(test_fn, (_type, ), num_processes=2)
+    notebook_launcher(test_fn, (_type, ), num_processes=1)
     log(f'耗时: {(time.time() - t) / 60:.3f} min')
     log('-------------------', _type, '---------------------')
 
