@@ -501,7 +501,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             # 每个设备负责的实际数据idx，会被真实的load进内存
             each_files_num = len(files) // world_size 
             assert each_files_num > 0, f'each device wait read files: 0'
-            
+
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
@@ -788,8 +788,27 @@ class Dataset(torch.utils.data.Dataset):
 
         return x, self.y[index], mean_std
 
+def find_nearest_mini_dataset_length(a, b, world_size):
+    if a % b == 0:
+        return b
+    
+    # 求++
+    c = b
+    while(a % c != 0 or c%world_size!=0):
+        c+=1
+    
+    # 求--
+    d = b
+    while(a % d != 0 or d%world_size!=0):
+        d-=1
+        
+    if (c-b) < (b-d):
+        return c
+    else:
+        return d
+
 class DistributedSampler(Sampler):
-    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=6):
+    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=10):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
@@ -804,7 +823,9 @@ class DistributedSampler(Sampler):
         self.rank = accelerator.process_index
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
-        self.mini_dataset_length = (mini_dataset_length // self.world_size) * self.world_size  if dataset.type == 'train' else len(self.dataset.files)
+        mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
+        self.mini_dataset_length = mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
+        assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
         self.mini_epoch_indices_ramain = self.mini_epoch
@@ -812,7 +833,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
+        debug(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
@@ -822,8 +843,7 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                log(f'new mini_epoch_file_indices')
-                # log(f'new mini_epoch_file_indices: {mini_epoch_file_indices}')
+                debug(f'new mini_epoch_file_indices')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
