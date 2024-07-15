@@ -798,7 +798,7 @@ class Dataset(torch.utils.data.Dataset):
         return x, self.y[index], mean_std
 
 class DistributedSampler(Sampler):
-    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=10):
+    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=6):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
