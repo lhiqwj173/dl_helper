@@ -479,7 +479,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         #     # 存放 data_mape 
         #     self.q = queue.Queue(maxsize=1)
 
-        self.q = queue.Queue(maxsize=3)
+        self.q = queue.Queue(maxsize=1)
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
