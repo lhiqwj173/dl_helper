@@ -375,11 +375,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
     """
     不会主动load数据
     """
-    def __init__(self, params, _type, log=False):
+    def __init__(self, params, _type, device, log=False):
         """Initialization"""
         self.log = log
         self.params = params
         self.type = _type# 数据类型 train/val/test
+        self.device = device
 
         # 根据数据类型 整理 待读取的数据文件列表、
         data_path = self.params.data_folder
@@ -533,24 +534,27 @@ class Dataset_cahce(torch.utils.data.Dataset):
             'mean_std': [],
             'x': [],
             'y': [],
-            'raw': pd.DataFrame()
+            'raw': None
         }
 
         for file in files:
-            diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map)
+            diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
         # if log:
         #     logger.debug(f"恢复成 float32")
-        data_map['raw'] = convert_float16_2_32(data_map['raw'])
+        # data_map['raw'] = convert_float16_2_32(data_map['raw'])
         # report_memory_usage()
 
-        # 检查数值异常
-        assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+        # # 检查数值异常
+        # assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+        has_nan = torch.isnan(data_map['raw']).any()
+        has_inf = torch.isinf(data_map['raw']).any()
+        assert not has_nan and not has_inf, '数值异常'
 
         # 2.0 数据初始化
-        data_map['data'] = torch.from_numpy(data_map['raw'].values)
-        del data_map['raw']
+        # data_map['data'] = torch.from_numpy(data_map['raw'].values)
+        # del data_map['raw']
 
         # 分类训练集 数据平衡
         if self.params.classify:
@@ -583,8 +587,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         return data_map
 
     def _load_data_map(self, data_map):
-        self.data = data_map['data']
-        del data_map['data']
+        self.data = data_map['raw']
+        del data_map['raw']
 
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
@@ -677,7 +681,8 @@ class Dataset(torch.utils.data.Dataset):
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
-        self.data = torch.from_numpy(data_map['raw'].values)
+        # self.data = torch.from_numpy(data_map['raw'].values)
+        self.data = data_map['raw']
         del data_map['raw']
 
         self.mean_std = data_map['mean_std']
@@ -894,7 +899,7 @@ class cache():
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
 
-def load_data(params, file, diff_length, data_map, log=False):
+def load_data(params, file, diff_length, data_map, device, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
@@ -936,8 +941,14 @@ def load_data(params, file, diff_length, data_map, log=False):
     # 1. 不做截取操作 在dataset中截取
     ###################################################
     if not need_split_data_set:
-        raw = reduce_mem_usage(raw)
-        data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+        # raw = reduce_mem_usage(raw)
+        # data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+        # 直接放在 device 中
+        raw = torch.from_numpy(raw.values).to(device)
+        if None is data_map['raw']:
+            data_map['raw'] = raw
+        else:
+            data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
         length = len(raw)
         # report_memory_usage('concat raw')
 
@@ -955,9 +966,17 @@ def load_data(params, file, diff_length, data_map, log=False):
         elif params.use_trade:
             xa = 40
 
-        raw2 = raw.iloc[:, xa:xb].copy()
-        raw2 = reduce_mem_usage(raw2)
-        data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
+        # raw2 = raw.iloc[:, xa:xb].copy()
+        # raw2 = reduce_mem_usage(raw2)
+        # data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
+
+        # 直接放在 device 中
+        raw2 = torch.from_numpy(raw.iloc[:, xa:xb].values).to(device)
+        if None is data_map['raw']:
+            data_map['raw'] = raw2
+        else:
+            data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0)
+
         length = len(raw2)
 
     ###################################################
@@ -993,7 +1012,7 @@ def load_data(params, file, diff_length, data_map, log=False):
 
     return diff_length, need_split_data_set
 
-def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, log=False, data_sample_getter_func=None):
+def read_data(_type, params, device, max_num=10000, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
 
     # 数据集参数
@@ -1063,7 +1082,7 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
         'mean_std': [],
         'x': [],
         'y': [],
-        'raw': pd.DataFrame()
+        'raw': None
     }
 
     for file in files:
@@ -1071,31 +1090,22 @@ def read_data(_type, params, max_num=10000, head_n=0, pct=100, need_id=False, lo
         if count > max_num:
             break
 
-        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map)
+        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map, device)
         # report_memory_usage()
-
-    if head_n == 0 and pct < 100 and pct > 0:
-        head_n = int(len(x) * (pct / 100))
-
-    if head_n > 0:
-        data_map['raw'] = data_map['raw'].iloc[:head_n, :]
-        to_del_idx = [i for i in range(len(data_map['x'])) if data_map['x'][i][-1] > head_n]
-
-        data_map['x'] = [data_map['x'][i] for i in range(len(data_map['x'])) if i not in to_del_idx]
-        data_map['y'] = [data_map['y'][i] for i in range(len(data_map['y'])) if i not in to_del_idx]
-        data_map['mean_std'] = [data_map['mean_std'][i] for i in range(len(data_map['mean_std'])) if i not in to_del_idx]
-        data_map['ids'] = [data_map['ids'][i] for i in range(len(data_map['ids'])) if i not in to_del_idx]
 
     if not need_id:
         data_map['ids'].clear()
 
     # if log:
     #     logger.debug(f"恢复成 float32")
-    data_map['raw'] = convert_float16_2_32(data_map['raw'])
+    # data_map['raw'] = convert_float16_2_32(data_map['raw'])
     # report_memory_usage()
 
     # 检查数值异常
-    assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+    # assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+    has_nan = torch.isnan(data_map['raw']).any()
+    has_inf = torch.isinf(data_map['raw']).any()
+    assert not has_nan and not has_inf, '数值异常'
     
     # # fake
     # num_classes = 3

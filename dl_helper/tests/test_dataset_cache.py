@@ -57,7 +57,7 @@ def test_fn(_type='cache'):
                     count += 1
 
                 acc.wait_for_everyone()
-                acc.print(f'数据遍历完毕 {len(dataloader)} 耗时: {time.time() - t0:.3f} s')
+                acc.print(f'数据遍历完毕 耗时: {time.time() - t0:.3f} s')
 
             log(device, f'epoch {epoch} count {count}')
 
@@ -89,7 +89,7 @@ def test_fn(_type='cache'):
                 count += 1
 
             acc.wait_for_everyone()
-            acc.print(f'数据遍历完毕 {len(dataloader)} 耗时: {time.time() - t0:.3f} s')
+            acc.print(f'数据遍历完毕 耗时: {time.time() - t0:.3f} s')
             log(device, f'epoch {epoch} count {count}')
 
             if acc.is_main_process:
