@@ -45,8 +45,9 @@ class transform():
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
-            debug(x.shape, y.shape, mean_std.shape)
-            debug(x.device, y.device, mean_std.device)
+            debug('x', x.shape, x.device)
+            debug('y', y.shape, y.device)
+            debug('mean_std', mean_std.shape, mean_std.device)
 
             # not cnn -> (batchsize, 40, 100)
             x = torch.transpose(x, 1, 2)
