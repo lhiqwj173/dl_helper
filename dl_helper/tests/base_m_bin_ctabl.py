@@ -49,7 +49,7 @@ class test(test_base):
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
-            'total_hours': int(24*10),
+            'total_hours': int(24*20),
             'symbols': '@'.join(symbols),
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
