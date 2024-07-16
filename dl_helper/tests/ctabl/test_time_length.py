@@ -24,7 +24,7 @@ def yfunc_target_simple(x):
         return 2
 
 class test(test_base):
-    def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLR_slow_loss', **kwargs):
+    def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
 
         self.lr_scheduler_class = lr_scheduler_class
