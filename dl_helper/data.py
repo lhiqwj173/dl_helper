@@ -849,19 +849,14 @@ class DistributedSampler(Sampler):
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
         self.mini_epoch_indices_ramain -= 1
-        debug('dataset.load_data wait')
         self.dataset.load_data()
-        debug('dataset.load_data done')
 
         # 同步数据长度
         # data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
         data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
-        debug(f'data_length 0: {data_length}')
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
-        debug(f'data_length 1: {data_length}')
         data_length = torch.min(data_length)
-        debug(f'data_length 2: {data_length}')
 
         if self.shuffle:
             indices = list(torch.randperm(data_length))

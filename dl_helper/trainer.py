@@ -333,25 +333,37 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     for batch in active_dataloader:
+        print('batch')
+        
         # 预处理
         data, target = trans(batch, train=True)
+        print('trans')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
+        print('unsqueeze')
             
         optimizer.zero_grad()
+        print('zero_grad')
         output = model(data)
+        print('model')
         loss = criterion(output, target)
+        print('criterion')
         accelerator.backward(loss)
+        print('backward')
         optimizer.step()
+        print('step')
 
         # 追踪器 记录数据
         with torch.no_grad():
+            print('track')
             tracker.track(output, target, loss, 'train')
+            print('track done')
 
     # 追踪器，计算必要的数据
     tracker.update()
+    print('update')
 
     # 缓存checkpoint
     if need_checkpoint:
