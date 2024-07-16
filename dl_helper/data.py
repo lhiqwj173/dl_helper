@@ -790,7 +790,7 @@ class Dataset(torch.utils.data.Dataset):
         return x, self.y[index], mean_std
 
 def find_nearest_mini_dataset_length(a, b, world_size):
-    if a % b == 0:
+    if a % b == 0 and b%world_size == 0:
         return b
     
     # 求++
@@ -809,7 +809,7 @@ def find_nearest_mini_dataset_length(a, b, world_size):
         return d
 
 class DistributedSampler(Sampler):
-    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=10):
+    def __init__(self, dataset, accelerator, shuffle=False, mini_dataset_length=16):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
@@ -825,6 +825,7 @@ class DistributedSampler(Sampler):
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
+        info(f'mini_dataset_length: {mini_dataset_length}')
         self.mini_dataset_length = mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 

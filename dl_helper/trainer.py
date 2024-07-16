@@ -1036,7 +1036,6 @@ def test_func():
                 acc.save_state('checkpoint')
                 acc.print(f'{i} {idx} val checkpoint done')
 
-
 def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
     """
     mode: xla / normal / simple
