@@ -18,6 +18,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
+from py_ext.tool import log, debug
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
@@ -333,11 +334,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     for batch in active_dataloader:
-        print('batch')
-        
         # 预处理
         data, target = trans(batch, train=True)
-        debug('trans')
+        debug('trans done')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
