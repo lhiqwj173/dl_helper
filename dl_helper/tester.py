@@ -39,6 +39,7 @@ class test_base():
         dataloader = DataLoaderDevice(
             dataset,
             batch_size=params.batch_size, sampler=sampler,
+            drop_last=True,
             device=accelerator.device
         )
         return dataloader
