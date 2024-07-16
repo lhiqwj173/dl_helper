@@ -360,7 +360,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             tracker.track(output, target, loss, 'train')
             debug('track done')
 
-        log('step')
+    log('batch done')
 
     # 追踪器，计算必要的数据
     tracker.update()
