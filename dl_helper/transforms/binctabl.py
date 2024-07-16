@@ -54,6 +54,8 @@ class transform():
 
             # random_mask_row
             if train and self.param.random_mask_row:
+                if x.shape[2] > self.raw_time_length:
+                    x = x[:, :, -self.raw_time_length:]
                 x = self.random_mask_row(x)
             else:
                 if self.raw_time_length > self.time_length:
