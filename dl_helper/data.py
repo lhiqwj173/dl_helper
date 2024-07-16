@@ -825,7 +825,7 @@ class DistributedSampler(Sampler):
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
-        info(f'mini_dataset_length: {mini_dataset_length}')
+        log(f'mini_dataset_length: {mini_dataset_length}')
         self.mini_dataset_length = mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
