@@ -471,6 +471,20 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
     if accelerator.is_main_process:
         report_memory_usage(f"test done")       
 
+def save_model_fn(params, model, accelerator, input_shape):
+    accelerator.wait_for_everyone()
+    accelerator.save_model(model, os.path.join(params.root, 'model'))
+    model = accelerator.unwrap_model(model)
+    if accelerator.is_local_main_process:
+        onnex_model_save_path = os.path.join(params.root, f'model.onnx')
+        # 导出onnx
+        try:
+            torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
+            input_names=['input'], output_names=['output'])
+        except:
+            logger.debug('导出onnx失败')
+            logger.debug(f"模型的设备：{next(model.parameters()).device}")
+            logger.debug(f"数据的设备：{torch.randn(input_shape).to(accelerator.device).device}")
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
@@ -616,6 +630,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
     # 测试
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
+
+    # 保存模型
+    save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
     # 绘图
     tracker.plot()
@@ -1051,7 +1068,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
     mode: xla / normal / simple
     """
     num_processes = match_num_processes()
-    num_processes = 1
+    # num_processes = 1
 
     # model = None
     # if num_processes == 8:

@@ -458,9 +458,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
 
-        # 增加一个batch维度
-        self.input_shape = (1, self.time_length, 40 if self.params.use_pk else 6 if self.params.use_trade else 46)
-
         self.q = queue.Queue(maxsize=1)
         
         # # 如果是val/test，直接读取数据
@@ -834,7 +831,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
+        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
