@@ -46,6 +46,7 @@ class transform():
         with torch.no_grad():
             x, y, mean_std = batch
             debug(x.shape, y.shape, mean_std.shape)
+            debug(x.device, y.device, mean_std.device)
 
             # not cnn -> (batchsize, 40, 100)
             x = torch.transpose(x, 1, 2)
