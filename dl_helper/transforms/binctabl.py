@@ -62,9 +62,9 @@ class transform():
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
             debug('mp',mp.shape)
             x = torch.where(~self.vol_cond, x / mp, x)
-            debug('x 0',x.shape)
+            debug('x 0',x.shape, x.device)
             # 标准化
-            debug('mean',mean_std[:, :, :1].shape)
+            debug('mean',mean_std[:, :, :1].shape, mean_std.device)
             x -= mean_std[:, :, :1]
             debug('x 1',x.shape)
             debug('std',mean_std[:, :, 1:].shape)
