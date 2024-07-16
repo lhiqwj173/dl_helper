@@ -824,9 +824,8 @@ class DistributedSampler(Sampler):
         self.rank = accelerator.process_index
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
-        mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
-        log(f'mini_dataset_length: {mini_dataset_length}')
-        self.mini_dataset_length = mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
+        _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
+        self.mini_dataset_length = _mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
@@ -835,7 +834,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        debug(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
+        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}, mini_epoch_file_indices: {mini_epoch_file_indices}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
@@ -868,7 +867,6 @@ class DistributedSampler(Sampler):
         return iter(indices)
 
    
-
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     # 索引数组
