@@ -51,7 +51,7 @@ class test(test_base):
         num_classes = 3
         
         # for debug
-        num_samples = 30690
+        num_samples = 3069
 
         data = torch.randn(num_samples, 3, self.img_dim, self.img_dim)
         target = torch.randint(0, num_classes, (num_samples,))

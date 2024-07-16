@@ -20,6 +20,8 @@ from dl_helper.tool import report_memory_usage, check_nan
 
 from py_ext.tool import log, debug
 
+from accelerate.data_loader import DataLoaderStateMixin
+
 
 tz_beijing = pytz.timezone('Asia/Shanghai')
 
@@ -128,7 +130,7 @@ class ResumeSample():
     def __len__(self):
         return self.size
 
-class DataLoaderDevice(DataLoader):
+class DataLoaderDevice(DataLoader, DataLoaderStateMixin):
     def __init__(self, *args, device=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.device = device
