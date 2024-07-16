@@ -51,7 +51,7 @@ class test(test_base):
         num_classes = 3
         
         # for debug
-        num_samples = 3069
+        num_samples = 30690
 
         data = torch.randn(num_samples, 3, self.img_dim, self.img_dim)
         target = torch.randint(0, num_classes, (num_samples,))
@@ -71,3 +71,21 @@ class test(test_base):
         )
 
         return loader
+
+    def get_cache_data(self, _type, params, accelerator):
+        world_size = accelerator.num_processes
+        rank = accelerator.process_index
+
+        def get_data_sampler(data_set, _type):
+            train_sampler = None
+            if world_size > 1:
+                train_sampler = torch.utils.data.distributed.DistributedSampler(
+                    data_set,
+                    num_replicas=world_size,
+                    rank=rank,
+                    shuffle=True if _type == 'train' else False
+                    )
+
+            return train_sampler
+
+        return self.get_data(_type, params, get_data_sampler)

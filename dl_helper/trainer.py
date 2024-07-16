@@ -3,7 +3,6 @@ from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tool import report_memory_usage
 from dl_helper.acc.data_loader import skip_first_batches
 
-
 import copy
 import shutil
 import multiprocessing as mp
