@@ -1,7 +1,7 @@
 """
 训练的基类
 """
-from dl_helper.data import read_data, Dataset_cahce, DistributedSampler
+from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
 
 import torch
@@ -35,9 +35,10 @@ class test_base():
     def get_cache_data(self, _type, params, accelerator):
         dataset = Dataset_cahce(params, _type, accelerator.device)
         sampler = DistributedSampler(dataset, accelerator, shuffle=True if _type == 'train' else False)
-        dataloader = DataLoader(
+        dataloader = DataLoaderDevice(
             dataset,
-            batch_size=params.batch_size, sampler=sampler
+            batch_size=params.batch_size, sampler=sampler,
+            device=accelerator.device
         )
         return dataloader
 

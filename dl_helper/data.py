@@ -128,7 +128,6 @@ class ResumeSample():
     def __len__(self):
         return self.size
 
- 
 class DataLoaderDevice(DataLoader):
     def __init__(self, *args, device=None, **kwargs):
         super().__init__(*args, **kwargs)
