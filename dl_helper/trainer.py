@@ -334,7 +334,12 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     log('batch begin')
+    report = True
     for batch in active_dataloader:
+        if report:
+            report = False
+            log('load data done')
+        
         # 预处理
         data, target = trans(batch, train=True)
         # debug('trans done')
