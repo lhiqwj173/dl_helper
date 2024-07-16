@@ -333,26 +333,27 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
+    log('batch begin')
     for batch in active_dataloader:
         # 预处理
         data, target = trans(batch, train=True)
-        debug('trans done')
+        # debug('trans done')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
-        debug('unsqueeze')
+        # debug('unsqueeze')
             
         optimizer.zero_grad()
-        debug('zero_grad')
+        # debug('zero_grad')
         output = model(data)
-        debug('model')
+        # debug('model')
         loss = criterion(output, target)
-        debug('criterion')
+        # debug('criterion')
         accelerator.backward(loss)
-        debug('backward')
+        # debug('backward')
         optimizer.step()
-        debug('step')
+        # debug('step')
 
         # 追踪器 记录数据
         with torch.no_grad():
@@ -521,6 +522,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
     train_loader = test.get_cache_data('train', params, accelerator)
     val_loader = test.get_cache_data('val', params, accelerator)
+    p.print(f'data init')
 
     if None is model:
         model = test.get_model()

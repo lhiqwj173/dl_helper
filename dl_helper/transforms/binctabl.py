@@ -45,9 +45,9 @@ class transform():
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
-            debug('x', x.shape, x.device)
-            debug('y', y.shape, y.device)
-            debug('mean_std', mean_std.shape, mean_std.device)
+            # debug('x', x.shape, x.device)
+            # debug('y', y.shape, y.device)
+            # debug('mean_std', mean_std.shape, mean_std.device)
 
             # not cnn -> (batchsize, 40, 100)
             x = torch.transpose(x, 1, 2)
@@ -58,26 +58,26 @@ class transform():
             else:
                 if self.raw_time_length > self.time_length:
                     x = x[:, :, -self.time_length:]
-            debug('random_mask_row')
+            # debug('random_mask_row')
 
             # 调整价格
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
-            debug('mp',mp.shape)
+            # debug('mp',mp.shape)
             x = torch.where(~self.vol_cond, x / mp, x)
-            debug('x 0',x.shape, x.device)
+            # debug('x 0',x.shape, x.device)
             # 标准化
-            debug('mean',mean_std[:, :, :1].shape, mean_std.device)
+            # debug('mean',mean_std[:, :, :1].shape, mean_std.device)
             x -= mean_std[:, :, :1]
-            debug('x 1',x.shape)
-            debug('std',mean_std[:, :, 1:].shape)
+            # debug('x 1',x.shape)
+            # debug('std',mean_std[:, :, 1:].shape)
             x /= mean_std[:, :, 1:]
-            debug('x 2',x.shape)
-            debug('std done')
+            # debug('x 2',x.shape)
+            # debug('std done')
 
             # random_scale
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
-            debug('random_scale')
+            # debug('random_scale')
 
             return x, y
 
