@@ -1,5 +1,6 @@
 import torch
 from dl_helper.train_param import tpu_available
+from py_ext.tool import debug
 
 class transform():
     def __init__(self, device, param, raw_time_length, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
@@ -44,6 +45,7 @@ class transform():
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
+            debug(x.shape, y.shape, mean_std.shape)
 
             # not cnn -> (batchsize, 40, 100)
             x = torch.transpose(x, 1, 2)
@@ -54,6 +56,7 @@ class transform():
             else:
                 if self.raw_time_length > self.time_length:
                     x = x[:, :, -self.time_length:]
+            debug('random_mask_row')
 
             # 调整价格
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
@@ -61,10 +64,12 @@ class transform():
             # 标准化
             x -= mean_std[:, :, :1]
             x /= mean_std[:, :, 1:]
+            debug('std')
 
             # random_scale
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
+            debug('random_scale')
 
             return x, y
 
