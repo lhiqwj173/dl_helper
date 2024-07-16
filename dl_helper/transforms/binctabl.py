@@ -60,15 +60,17 @@ class transform():
 
             # 调整价格
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
-            debug('0',mp.shape)
+            debug('mp',mp.shape)
             x = torch.where(~self.vol_cond, x / mp, x)
-            debug('1',x.shape)
+            debug('x 0',x.shape)
             # 标准化
+            debug('mean',mean_std[:, :, :1].shape)
             x -= mean_std[:, :, :1]
-            debug('2',x.shape)
+            debug('x 1',x.shape)
+            debug('std',mean_std[:, :, 1:].shape)
             x /= mean_std[:, :, 1:]
-            debug('3',x.shape)
-            debug('std')
+            debug('x 2',x.shape)
+            debug('std done')
 
             # random_scale
             if train and self.param.random_scale>0:
