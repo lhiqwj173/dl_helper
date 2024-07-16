@@ -85,10 +85,3 @@ class test(test_base):
     def get_transform(self, device):
         return transform(device, self.para, 105)
 
-    def get_lr_scheduler(self, optimizer, params, *args, **kwargs):
-        if 'ReduceLR_slow_loss' == self.lr_scheduler_class:
-            lr_scheduler_class = ReduceLR_slow_loss
-        elif 'ReduceLROnPlateau' == self.lr_scheduler_class:
-            lr_scheduler_class = ReduceLROnPlateau
-
-        return lr_scheduler_class(optimizer, *args, patience=params.learning_rate_scheduler_patience, **kwargs)

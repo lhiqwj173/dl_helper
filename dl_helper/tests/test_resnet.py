@@ -89,3 +89,5 @@ class test(test_base):
             return train_sampler
 
         return self.get_data(_type, params, get_data_sampler)
+
+    def 
