@@ -332,40 +332,25 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
-    log('batch begin')
-    report = True
     for batch in active_dataloader:
-        if report:
-            report = False
-            log('load data done')
-        
         # 预处理
         data, target = trans(batch, train=True)
-        # debug('trans done')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
-        # debug('unsqueeze')
             
         optimizer.zero_grad()
-        # debug('zero_grad')
         output = model(data)
-        # debug('model')
         loss = criterion(output, target)
-        # debug('criterion')
         accelerator.backward(loss)
-        # debug('backward')
         optimizer.step()
-        # debug('step')
 
         # 追踪器 记录数据
         with torch.no_grad():
             debug('track')
             tracker.track(output, target, loss, 'train')
             debug('track done')
-
-    log('batch done')
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -379,6 +364,42 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     # accelerator.wait_for_everyone()
     # if accelerator.is_main_process:
     #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+
+def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
+    # 检查是否存在 step 记录
+    skip_steps = tracker.step_count
+
+    active_dataloader = train_loader
+    model.train()
+    for mini_epoch in range(active_dataloader.sampler.mini_epoch):
+        # 训练
+        for batch in active_dataloader:
+            # 预处理
+            data, target = trans(batch, train=True)
+
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify and len(target.shape) == 1:
+                target = target.unsqueeze(1)
+                
+            optimizer.zero_grad()
+            output = model(data)
+            loss = criterion(output, target)
+            accelerator.backward(loss)
+            optimizer.step()
+
+            # 追踪器 记录数据
+            with torch.no_grad():
+                debug('track')
+                tracker.track(output, target, loss, 'train')
+                debug('track done')
+
+    # 追踪器，计算必要的数据
+    tracker.update()
+    debug('update')
+
+    # 缓存checkpoint
+    if need_checkpoint:
+        checkpoint(epoch, accelerator, params, printer, False)
 
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans):
     """
@@ -566,11 +587,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 训练循环
     for epoch in range(tracker.epoch_count, params.epochs):
         if tracker.step_in_epoch == 0:
-            for mini_epoch in range(train_loader.sampler.mini_epoch):
-                # 训练
-                train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans, need_checkpoint=False)
-                p.print(f'mini_epoch {mini_epoch} done')
-            checkpoint(epoch, accelerator, params, printer, False)
+            train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
         # 验证
         val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)

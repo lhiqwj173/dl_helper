@@ -61,6 +61,7 @@ class Tracker():
         # 时间统计
         self.begin_time = time.time()
         self.epoch_count = 0
+        self.mini_epoch_count = 0
         self.step_count = 0
         # 每个epoch训练中的阶段
         # 0: 训练 1: 验证
@@ -102,7 +103,10 @@ class Tracker():
 
         self.reset_temp()
 
-    def update(self):
+    def update_mini_batch(self):
+        self.mini_epoch_count += 1
+
+    def update(self, test_dataloader=None):
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
@@ -194,6 +198,31 @@ class Tracker():
             self.step_in_epoch = 0
             self.epoch_count += 1
 
+        if 'test' == self.track_update:
+            # 保存测试数据预测结果
+            ids = test_dataloader.dataset.ids# code_timestamp: btcusdt_1710289478588
+            all_predictions = self.temp['_y_pred'].to('cpu')
+            all_targets = self.temp['_y_true'].to('cpu')
+
+            # 按标的分类预测
+            datas = {}
+            for i in range(self.temp['_y_pred'].shape[0]):
+                symbol, timestamp = ids[i].split('_')
+                if symbol not in datas:
+                    datas[symbol] = []
+                datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
+
+            # 储存预测结果
+            # symbol_begin_end.csv
+            for symbol in datas:
+                data_list = datas[symbol]
+                begin = data_list[0][0]
+                end = data_list[-1][0]
+                with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                    f.write('timestamp,target,predict\n')
+                    for timestamp, target, pre,  in data_list:
+                        f.write(f'{timestamp},{target},{pre}\n')
+
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
             # self.printer.print('check if need save')
@@ -220,7 +249,6 @@ class Tracker():
 
     def print_state(self):
         self.printer.print(f"------------tracker data------------")
-
         """
         # 时间统计
         self.begin_time = time.time()
