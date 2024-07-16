@@ -1025,6 +1025,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
     mode: xla / normal / simple
     """
     num_processes = match_num_processes()
+    num_processes = 1
 
     # model = None
     # if num_processes == 8:
