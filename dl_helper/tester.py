@@ -3,6 +3,7 @@
 """
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
+from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau
 
 import torch
 import torch.nn as nn
