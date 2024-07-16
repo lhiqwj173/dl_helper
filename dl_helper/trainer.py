@@ -337,33 +337,33 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         
         # 预处理
         data, target = trans(batch, train=True)
-        print('trans')
+        debug('trans')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
-        print('unsqueeze')
+        debug('unsqueeze')
             
         optimizer.zero_grad()
-        print('zero_grad')
+        debug('zero_grad')
         output = model(data)
-        print('model')
+        debug('model')
         loss = criterion(output, target)
-        print('criterion')
+        debug('criterion')
         accelerator.backward(loss)
-        print('backward')
+        debug('backward')
         optimizer.step()
-        print('step')
+        debug('step')
 
         # 追踪器 记录数据
         with torch.no_grad():
-            print('track')
+            debug('track')
             tracker.track(output, target, loss, 'train')
-            print('track done')
+            debug('track done')
 
     # 追踪器，计算必要的数据
     tracker.update()
-    print('update')
+    debug('update')
 
     # 缓存checkpoint
     if need_checkpoint:
