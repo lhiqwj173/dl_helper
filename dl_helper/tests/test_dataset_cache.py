@@ -10,8 +10,6 @@ from accelerate import Accelerator
 
 from py_ext.tool import log, init_logger
 
-init_logger('test', True, 'DEBUG')
-
 def report_memory_usage(msg=''):
     memory_usage = psutil.virtual_memory()
     log(f"{msg} 内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
