@@ -281,6 +281,8 @@ class Tracker():
         # self.printer.print(f"{predict}")
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+        if len(_loss.shape) == 0:
+            _loss = _loss.unsqueeze(0)
 
         # self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
