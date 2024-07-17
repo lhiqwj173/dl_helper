@@ -621,6 +621,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         # 绘图
         tracker.plot()
 
+        if epoch % 30 == 0:
+            # 保存模型
+            save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+
         # 打包
         package_root(accelerator, params)
 

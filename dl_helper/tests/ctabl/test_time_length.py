@@ -81,7 +81,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'target={targrt_name}',
+            describe=f'model_ts={self.model_t}',
             amp=self.amp
         )
 
