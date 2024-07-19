@@ -87,7 +87,7 @@ class test(test_base):
         ]
         self.model_t = model_t_vars[self.idx]
 
-        title = f'binctabl_pass_n_{self.model_t[0]}'
+        title = f'binctabl_pass_n_v2_{self.model_t[0]}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': self.model_t[0],
