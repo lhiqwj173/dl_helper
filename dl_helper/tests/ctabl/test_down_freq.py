@@ -24,10 +24,10 @@ down_freq
 
 ##########################################
 down_freq 
-    2
-    3
+    5 G
     4
-    5
+    3
+    2
 
 
 """
@@ -71,7 +71,7 @@ class test(test_base):
         batch_n = 16
 
         down_freqq_vars = [
-            3, 4, 5
+            3, 4, 5, 10, 15
         ]
         self.down_freq = down_freqq_vars[self.idx]
 
