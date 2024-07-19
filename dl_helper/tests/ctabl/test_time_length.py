@@ -5,6 +5,34 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 
+"""
+epochs
+    100
+    200 X
+
+target_type
+    1
+    2 X
+
+lr_scheduler_class
+    ReduceLR_slow_loss X
+    ReduceLROnPlateau 
+
+down_freq 
+    2
+    1 X
+
+##########################################
+pass_n
+    100
+    80 
+    60 X
+    40 X
+    20 X
+
+
+"""
+
 def yfunc_target_long_short(x):
     # long/ short
     x1, x2 = x

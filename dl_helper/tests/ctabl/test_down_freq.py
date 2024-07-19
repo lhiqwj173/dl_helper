@@ -15,12 +15,20 @@ target_type
     2 X
 
 lr_scheduler_class
-    ReduceLR_slow_loss
-    ReduceLROnPlateau X 
+    ReduceLR_slow_loss X
+    ReduceLROnPlateau 
 
 down_freq 
     2
     1 X
+
+##########################################
+down_freq 
+    2
+    3
+    4
+    5
+
 
 """
 
@@ -43,7 +51,7 @@ def yfunc_target_simple(x):
         return 2
 
 class test(test_base):
-    def __init__(self, *args, target_type=2, lr_scheduler_class='ReduceLR_slow_loss', **kwargs):
+    def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
 
         self.lr_scheduler_class = lr_scheduler_class
@@ -61,7 +69,13 @@ class test(test_base):
         self.y_n = 3
 
         batch_n = 16
-        title = f'binctabl_{targrt_name}_v{self.idx}'
+
+        down_freqq_vars = [
+            3, 4, 5
+        ]
+        self.down_freq = down_freqq_vars[self.idx]
+
+        title = f'binctabl_down_freq_{self.down_freq}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
@@ -83,7 +97,7 @@ class test(test_base):
             random_scale=0.05, random_mask_row=1,
 
             # 每2个样本取一个数据
-            down_freq=2,
+            down_freq=self.down_freq,
 
             # 3分类
             classify=True,
@@ -91,7 +105,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'target={targrt_name}',
+            describe=f'',
             amp=self.amp
         )
 
