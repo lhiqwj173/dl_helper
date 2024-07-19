@@ -247,14 +247,14 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col(const py::array_t<T> 
     size_t __idx = 0;
     size_t _idx = 0;
     T base_price;
-    for (int col_idx = 0; col_idx < cols; col_idx++)
+    for (size_t col_idx = 0; col_idx < cols; col_idx++)
     {
         v.clear();
         sum = 0.0;
 
         if (order == Order::ROW_MAJOR)
         {
-            for (int i = pass_n - 1; i < rows; i++)
+            for (size_t i = pass_n - 1; i < rows; i++)
             {
                 _idx = i * cols + col_idx;
 
@@ -273,7 +273,7 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col(const py::array_t<T> 
         {
             __idx = col_idx * rows;
 
-            for (int i = pass_n - 1; i < rows; i++)
+            for (size_t i = pass_n - 1; i < rows; i++)
             {
                 _idx = __idx + i;
 
@@ -283,6 +283,121 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col(const py::array_t<T> 
                 {
                     v.push_back(func(ptr[_idx - row_idx], base_price));
                     sum += v.back();
+                }
+            }
+        }
+
+        res.push_back(_cal_std<T>(v, sum));
+    }
+
+    return res;
+}
+
+template <typename T>
+struct array_info
+{
+    std::size_t rows;
+    std::size_t cols;
+    T *ptr;
+    Order order;
+};
+
+// 使用list 储存数据
+// 计算输入价格数据的均值方差
+// 使用mid_price输入 作为 midprice
+// 所有数据调整成与 midprice 的数值，根据 func
+// 按列顺序返回 均值方差
+template <typename T>
+std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, const std::vector<py::array_t<T>> &mid_price, int pass_n, std::function<T(const T &, const T &)> func)
+{
+    std::vector<array_info<T>> ptrs;
+    for (auto &df : df_array)
+    {
+        py::buffer_info info = df.request();
+        T *ptr = static_cast<T *>(info.ptr);
+        std::size_t rows = info.shape[0];
+        std::size_t cols = info.shape[1];
+
+        // py::print("rows", rows, "cols", cols);
+        Order order = check_order(info);
+        if (order == Order::UNKNOWN)
+        {
+            py::print("unknown order");
+            std::abort();
+        }
+
+        array_info<T> array_obj;
+        array_obj.cols = cols;
+        array_obj.rows = rows;
+        array_obj.ptr = ptr;
+        array_obj.order = order;
+
+        ptrs.push_back(array_obj);
+    }
+
+    std::vector<T *> mid_price_ptrs;
+    for (auto &df : mid_price)
+    {
+        py::buffer_info info = df.request();
+        T *ptr = static_cast<T *>(info.ptr);
+        mid_price_ptrs.push_back(ptr);
+    }
+
+    std::vector<std::tuple<T, T>> res;
+
+    std::list<T> v;
+
+    T sum = 0.0;
+    size_t size = 0;
+    size_t __idx = 0;
+    size_t _idx = 0;
+    T base_price;
+    const std::size_t cols = ptrs[0].cols;
+    for (size_t col_idx = 0; col_idx < cols; col_idx++)
+    {
+        v.clear();
+        sum = 0.0;
+
+        int idx = 0;
+        for (auto &array_obj : ptrs)
+        {
+            const std::size_t rows = array_obj.rows;
+            T *ptr = array_obj.ptr;
+            const Order order = array_obj.order;
+            T *ptr_mid_price = mid_price_ptrs[idx++];
+
+            if (order == Order::ROW_MAJOR)
+            {
+                for (size_t i = pass_n - 1; i < rows; i++)
+                {
+                    _idx = i * cols + col_idx;
+
+                    base_price = ptr_mid_price[i];
+
+                    for (int row_idx = 0; row_idx < pass_n; row_idx++)
+                    {
+                        // py::print(_idx, ptr[_idx], base_price);
+                        v.push_back(func(ptr[_idx], base_price));
+                        sum += v.back();
+                        _idx -= cols;
+                    }
+                }
+            }
+            else
+            {
+                __idx = col_idx * rows;
+
+                for (size_t i = pass_n - 1; i < rows; i++)
+                {
+                    _idx = __idx + i;
+
+                    base_price = ptr_mid_price[i];
+
+                    for (int row_idx = 0; row_idx < pass_n; row_idx++)
+                    {
+                        v.push_back(func(ptr[_idx - row_idx], base_price));
+                        sum += v.back();
+                    }
                 }
             }
         }
@@ -355,8 +470,8 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col(const py::array_t<T> &df_ar
 {
     py::buffer_info info = df_array.request();
     T *ptr = static_cast<T *>(info.ptr);
-    std::size_t rows = info.shape[0];
-    std::size_t cols = info.shape[1];
+    const std::size_t rows = info.shape[0];
+    const std::size_t cols = info.shape[1];
 
     // py::print("rows", rows, "cols", cols);
     Order order = check_order(info);
@@ -373,14 +488,14 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col(const py::array_t<T> &df_ar
     T sum = 0.0;
     size_t _idx = 0;
     size_t __idx = 0;
-    for (int col_idx = 0; col_idx < cols; col_idx++)
+    for (size_t col_idx = 0; col_idx < cols; col_idx++)
     {
         v.clear();
         sum = 0.0;
 
         if (order == Order::ROW_MAJOR)
         {
-            for (int i = pass_n - 1; i < rows; i++)
+            for (size_t i = pass_n - 1; i < rows; i++)
             {
                 _idx = i * cols + col_idx;
                 for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -396,13 +511,99 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col(const py::array_t<T> &df_ar
         {
             __idx = col_idx * rows;
 
-            for (int i = pass_n - 1; i < rows; i++)
+            for (size_t i = pass_n - 1; i < rows; i++)
             {
                 _idx = __idx + i;
                 for (int row_idx = 0; row_idx < pass_n; row_idx++)
                 {
                     v.push_back(ptr[_idx - row_idx]);
                     sum += v.back();
+                }
+            }
+        }
+
+        res.push_back(_cal_std(v, sum));
+    }
+
+    return res;
+}
+
+// 使用list 储存数据
+// 计算输入数据的均值方差
+// 按列顺序返回 均值方差
+template <typename T>
+std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, int pass_n)
+{
+    std::vector<array_info<T>> ptrs;
+    for (auto &df : df_array)
+    {
+        py::buffer_info info = df.request();
+        T *ptr = static_cast<T *>(info.ptr);
+        std::size_t rows = info.shape[0];
+        std::size_t cols = info.shape[1];
+
+        // py::print("rows", rows, "cols", cols);
+        Order order = check_order(info);
+        if (order == Order::UNKNOWN)
+        {
+            py::print("unknown order");
+            std::abort();
+        }
+
+        array_info<T> array_obj;
+        array_obj.cols = cols;
+        array_obj.rows = rows;
+        array_obj.ptr = ptr;
+        array_obj.order = order;
+
+        ptrs.push_back(array_obj);
+    }
+
+    std::vector<std::tuple<T, T>> res;
+
+    std::list<T> v;
+
+    T sum = 0.0;
+    size_t _idx = 0;
+    size_t __idx = 0;
+    const std::size_t cols = ptrs[0].cols;
+    for (size_t col_idx = 0; col_idx < cols; col_idx++)
+    {
+        v.clear();
+        sum = 0.0;
+
+        for (auto &array_obj : ptrs)
+        {
+            const std::size_t rows = array_obj.rows;
+            T *ptr = array_obj.ptr;
+            const Order order = array_obj.order;
+
+            if (order == Order::ROW_MAJOR)
+            {
+                for (size_t i = pass_n - 1; i < rows; i++)
+                {
+                    _idx = i * cols + col_idx;
+                    for (int row_idx = 0; row_idx < pass_n; row_idx++)
+                    {
+                        v.push_back(ptr[_idx]);
+                        sum += v.back();
+
+                        _idx -= cols;
+                    }
+                }
+            }
+            else
+            {
+                __idx = col_idx * rows;
+
+                for (size_t i = pass_n - 1; i < rows; i++)
+                {
+                    _idx = __idx + i;
+                    for (int row_idx = 0; row_idx < pass_n; row_idx++)
+                    {
+                        v.push_back(ptr[_idx - row_idx]);
+                        sum += v.back();
+                    }
                 }
             }
         }
@@ -423,9 +624,24 @@ std::vector<std::tuple<double, double>> cal_mean_std_each_col(const py::array_t<
     return _cal_mean_std_each_col<double>(df_array, pass_n);
 }
 
+std::vector<std::tuple<double, double>> cal_mean_std_each_col_multi(const std::vector<py::array_t<double>> &df_array, int pass_n)
+{
+    return _cal_mean_std_each_col_multi<double>(df_array, pass_n);
+}
+
 std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col(const py::array_t<double> &df_array, const py::array_t<double> &mid_price, int pass_n)
 {
     return _cal_price_mean_std_each_col<double>(
+        df_array,
+        mid_price,
+        pass_n,
+        [](const double &a, const double &b) -> double
+        { return a / b; });
+}
+
+std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, int pass_n)
+{
+    return _cal_price_mean_std_each_col_multi<double>(
         df_array,
         mid_price,
         pass_n,
@@ -467,10 +683,10 @@ std::tuple<double, double> cal_price_mean_std_diff(const py::array_t<double> &df
     double key_v_d;
     int key_v;
 
-    for (int i = pass_n - 1; i < rows; i++)
+    for (size_t i = pass_n - 1; i < rows; i++)
     {
         base_price = ptr_mid_price[i];
-        for (int col_idx = 0; col_idx < cols; col_idx++)
+        for (size_t col_idx = 0; col_idx < cols; col_idx++)
         {
             _idx = i + col_idx * rows;
             for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -517,10 +733,10 @@ std::tuple<double, double> cal_price_mean_std_diff(const py::array_t<double> &df
     double key_v_d;
     int key_v;
 
-    for (int i = pass_n - 1; i < rows; i++)
+    for (size_t i = pass_n - 1; i < rows; i++)
     {
         base_price = (ptr[i] + ptr[i + rows]) / 2;
-        for (int col_idx = 0; col_idx < cols; col_idx++)
+        for (size_t col_idx = 0; col_idx < cols; col_idx++)
         {
             _idx = i + col_idx * rows;
             for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -564,7 +780,7 @@ void _fillnan_between_nan(const py::array_t<double> &raw, std::vector<int> &col_
     // 构建列索引列表
     if (col_idxs.size() == 0)
     {
-        for (int i = 0; i < cols_raw; i++)
+        for (size_t i = 0; i < cols_raw; i++)
             col_idxs.push_back(i);
     }
 
@@ -572,7 +788,7 @@ void _fillnan_between_nan(const py::array_t<double> &raw, std::vector<int> &col_
     for (auto i : col_idxs)
     {
         idx = i * rows_raw;
-        for (int j = 0; j < rows_raw; j++)
+        for (size_t j = 0; j < rows_raw; j++)
         {
             func(ptr_raw, idx);
             idx++;
@@ -703,9 +919,11 @@ PYBIND11_MODULE(cpp_ext, m)
 
     m.def("cal_price_mean_std_pct_each_col_float", &cal_price_mean_std_pct_each_col_float);
     m.def("cal_price_mean_std_pct_each_col", &cal_price_mean_std_pct_each_col);
+    m.def("cal_price_mean_std_pct_each_col_multi", &cal_price_mean_std_pct_each_col_multi);
 
     m.def("cal_mean_std_each_col_float", &cal_mean_std_each_col_float);
     m.def("cal_mean_std_each_col", &cal_mean_std_each_col);
+    m.def("cal_mean_std_each_col_multi", &cal_mean_std_each_col_multi);
 
     m.def("fillnan_sum_between_nan", &fillnan_sum_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
     m.def("fillnan_prod_between_nan", &fillnan_prod_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
