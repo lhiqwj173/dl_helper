@@ -518,6 +518,8 @@ def get_data_sampler(data_set, _type):
 def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
 
+    t = time.time()
+
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -693,6 +695,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
                 wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
                 p.print(f"使用alist缓存文件继续训练")
                 shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+        else:
+            os.makedirs(params.root, exist_ok=True)
 
     # 调整参数
     if num_processes >= 2:
