@@ -579,9 +579,8 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         val_loader = test.get_cache_data('val', params, accelerator)
         p.print(f'data init')
 
-        # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = test.get_lr_scheduler(optimizer, params)
     criterion = nn.CrossEntropyLoss()
 
@@ -634,7 +633,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             package_root(accelerator, params)
 
         # 释放 训练/验证 数据集 optimizer
-        optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
+        train_loader, val_loader = accelerator.clear(train_loader, val_loader)
 
     # 准备测试数据
     test_loader = test.get_cache_data('test', params, accelerator)
@@ -719,9 +718,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         p.print(f'dataset length: {len(train_loader.dataset)}')
         p.print(f'dataloader length: {len(train_loader)}')
 
-        # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
     scheduler = test.get_lr_scheduler(optimizer, params)
     criterion = nn.CrossEntropyLoss()
 
@@ -781,8 +779,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             # 打包
             package_root(accelerator, params)
 
-        # 释放 训练/验证 数据集 optimizer
-        optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
+        # 释放 训练/验证 数据集
+        train_loader, val_loader = accelerator.clear(train_loader, val_loader)
 
     # 准备测试数据
     test_loader = test.get_data('test', params)
