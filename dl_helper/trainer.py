@@ -615,6 +615,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     
     # 训练循环
     if not only_predict:
+        p.print(f'train start')
         for epoch in range(tracker.epoch_count, params.epochs):
             if tracker.step_in_epoch == 0:
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
@@ -639,6 +640,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     test_loader = test.get_cache_data('test', params, accelerator)
 
     # 测试
+    p.print(f'test start')
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 保存模型
