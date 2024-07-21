@@ -466,7 +466,7 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
             tracker.track(output, target, loss, 'test')
 
     # 追踪器，计算必要的数据
-    tracker.update()
+    tracker.update(test_data)
 
     # for debug
     accelerator.wait_for_everyone()
