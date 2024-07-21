@@ -218,7 +218,7 @@ class Tracker():
                 data_list = datas[symbol]
                 begin = data_list[0][0]
                 end = data_list[-1][0]
-                with open(os.path.join(params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
                     f.write('timestamp,target,predict\n')
                     for timestamp, target, pre,  in data_list:
                         f.write(f'{timestamp},{target},{pre}\n')
