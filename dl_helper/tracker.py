@@ -200,7 +200,7 @@ class Tracker():
             self.step_in_epoch = 0
             self.epoch_count += 1
 
-        if 'test' == self.track_update:
+        if 'test' == self.track_update and self.accelerator.is_main_process:
             # 保存测试数据预测结果
             ids = test_dataloader.dataset.ids# code_timestamp: btcusdt_1710289478588
             all_predictions = self.temp['_y_pred'].to('cpu')
