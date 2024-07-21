@@ -597,7 +597,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             model, optimizer, scheduler
         )
     else:
-        model = accelerator.unwrap_model(model)
+        model = accelerator.prepare(model)
 
     p.print(f'prepare done')
 
