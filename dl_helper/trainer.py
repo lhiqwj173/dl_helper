@@ -515,7 +515,7 @@ def get_data_sampler(data_set, _type):
 
     return train_sampler
 
-def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
+def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
 
     # 训练实例
@@ -571,30 +571,34 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             setattr(params, k, v)
             p.print(f'{k}-> {v}')
 
-    train_loader = test.get_cache_data('train', params, accelerator)
-    val_loader = test.get_cache_data('val', params, accelerator)
-    p.print(f'data init')
-
     if None is model:
         model = test.get_model()
 
-    criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    scheduler = test.get_lr_scheduler(optimizer, params)
+    if not only_predict:
+        train_loader = test.get_cache_data('train', params, accelerator)
+        val_loader = test.get_cache_data('val', params, accelerator)
+        p.print(f'data init')
 
+        # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+        scheduler = test.get_lr_scheduler(optimizer, params)
+
+    criterion = nn.CrossEntropyLoss()
+
+    # # TEST
+    # tracker = Tracker_None()
     # 训练跟踪
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
 
-    # # TEST
-    # tracker = Tracker_None()
-
     # 不需要准备数据
-    model, optimizer, scheduler = accelerator.prepare(
-        model, optimizer, scheduler
-    )
+    if not only_predict:
+        model, optimizer, scheduler = accelerator.prepare(
+            model, optimizer, scheduler
+        )
+    else:
+        model = accelerator.unwrap_model(model)
 
     p.print(f'prepare done')
 
@@ -611,25 +615,26 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         tracker.print_state()
     
     # 训练循环
-    for epoch in range(tracker.epoch_count, params.epochs):
-        if tracker.step_in_epoch == 0:
-            train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+    if not only_predict:
+        for epoch in range(tracker.epoch_count, params.epochs):
+            if tracker.step_in_epoch == 0:
+                train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
-        # 验证
-        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
+            # 验证
+            val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
-        # 绘图
-        tracker.plot()
+            # 绘图
+            tracker.plot()
 
-        if epoch % 30 == 0:
-            # 保存模型
-            save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+            if epoch % 30 == 0:
+                # 保存模型
+                save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
-        # 打包
-        package_root(accelerator, params)
+            # 打包
+            package_root(accelerator, params)
 
-    # 释放 训练/验证 数据集 optimizer
-    optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
+        # 释放 训练/验证 数据集 optimizer
+        optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
 
     # 准备测试数据
     test_loader = test.get_cache_data('test', params, accelerator)
@@ -648,7 +653,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     accelerator.wait_for_everyone()
 
 
-def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
+def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
 
     # 训练实例
@@ -686,23 +691,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
                 p.print(f"使用alist缓存文件继续训练")
                 shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
 
-    ## 检查下载tg训练文件
-    # if (not params.debug) and accelerator.is_local_main_process:
-    #     p.print('check tg download')
-    #     tg_download(
-    #         ses,
-    #         f'{params.train_title}.7z',
-    #         '/kaggle/working/tg'
-    #     )
-
-    #     # 如果存在 checkpoints ，拷贝到正确的路径以继续训练
-    #     folder = os.path.join('/kaggle/working/tg', params.train_title, 'checkpoint')
-    #     p.print(f'folder: {folder}')
-    #     if os.path.exists(folder):
-    #         wx.send_message(f'[{params.train_title}] 使用tg缓存文件继续训练')
-    #         p.print(f"使用tg缓存文件继续训练")
-    #         shutil.copytree(os.path.join('/kaggle/working/tg', params.train_title), params.root, dirs_exist_ok=True)
-
     # 调整参数
     if num_processes >= 2:
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
@@ -721,37 +709,43 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             setattr(params, k, v)
             p.print(f'{k}-> {v}')
 
-    train_loader = test.get_data('train', params)
-    val_loader = test.get_data('val', params)
-
-    p.print(f'dataset length: {len(train_loader.dataset)}')
-    p.print(f'dataloader length: {len(train_loader)}')
-
     if None is model:
         model = test.get_model()
 
-    criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
-    scheduler = test.get_lr_scheduler(optimizer, params)
+    if not only_predict:
+        train_loader = test.get_data('train', params)
+        val_loader = test.get_data('val', params)
 
+        p.print(f'dataset length: {len(train_loader.dataset)}')
+        p.print(f'dataloader length: {len(train_loader)}')
+
+        # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+        scheduler = test.get_lr_scheduler(optimizer, params)
+
+    criterion = nn.CrossEntropyLoss()
+
+    # # TEST
+    # tracker = Tracker_None()
     # 训练跟踪
     tracker = Tracker(params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
 
-    # # TEST
-    # tracker = Tracker_None()
-
-    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-        model, optimizer, train_loader, val_loader, scheduler
-    )
+    if not only_predict:
+        model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+            model, optimizer, train_loader, val_loader, scheduler
+        )
+    else:
+        model = accelerator.prepare(
+            model
+        )
 
     p.print(f'prepare done')
-    p.print(f'each epoch step: {len(train_loader)}')
 
-    # 数据增强
-    trans = test.get_transform(accelerator.device)
+    if not only_predict:
+        # 数据增强
+        trans = test.get_transform(accelerator.device)
 
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
@@ -766,28 +760,29 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     p.print(f'need_xla_metrics_report :{need_xla_metrics_report}')
     
     # 训练循环
-    for epoch in range(tracker.epoch_count, params.epochs):
-        # 训练
-        if tracker.step_in_epoch == 0:
-            train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+    if not only_predict:
+        for epoch in range(tracker.epoch_count, params.epochs):
+            # 训练
+            if tracker.step_in_epoch == 0:
+                train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
-        if need_xla_metrics_report and xm.is_master_ordinal():
-            xm.rendezvous("train done")# mark_step
-            with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
-                f.write(met.metrics_report())
-                f.write('\n---------------------------------------------\n')
-            
-        # 验证
-        val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
+            if need_xla_metrics_report and xm.is_master_ordinal():
+                xm.rendezvous("train done")# mark_step
+                with open(os.path.join(params.root, 'metrics_train.txt'), 'a') as f:
+                    f.write(met.metrics_report())
+                    f.write('\n---------------------------------------------\n')
+                
+            # 验证
+            val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
-        # 绘图
-        tracker.plot()
+            # 绘图
+            tracker.plot()
 
-        # 打包
-        package_root(accelerator, params)
+            # 打包
+            package_root(accelerator, params)
 
-    # 释放 训练/验证 数据集 optimizer
-    optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
+        # 释放 训练/验证 数据集 optimizer
+        optimizer, train_loader, val_loader = accelerator.clear(optimizer, train_loader, val_loader)
 
     # 准备测试数据
     test_loader = test.get_data('test', params)
@@ -1069,9 +1064,19 @@ def test_func():
                 acc.save_state('checkpoint')
                 acc.print(f'{i} {idx} val checkpoint done')
 
-def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
+def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
+    assert mode in ['normal', 'cache_data'], f'mode error: {mode}, must be normal / cache_data'
+    num_processes = match_num_processes()
+    lock = mp.Manager().Lock()
+
+    if mode == 'cache_data':
+        notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
+    elif mode == 'normal':
+        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
+
+def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: xla / normal / simple
+    mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
     num_processes = match_num_processes()
     # num_processes = 1
@@ -1084,14 +1089,6 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
 
     lock = mp.Manager().Lock()
 
-    if num_processes == 8:
-        try:
-            os.environ.pop('CLOUD_TPU_TASK_ID')
-            os.environ.pop('TPU_PROCESS_ADDRESSES')
-            # os.environ['ACCELERATE_DEBUG_MODE'] = '1'
-        except:
-            pass
-
     if mode=='xla' and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, False), start_method='fork')     
     elif mode=='xla_tqdm' and num_processes == 8:
@@ -1100,5 +1097,7 @@ def run(test_class, *args, mode='', train_param={}, model=None, **kwargs):
         notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     elif mode == 'cache_data':
         notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
-    else:
+    elif mode == 'normal':
         notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+    else:
+        raise Exception(f'mode error: {mode}, must be xla / xla_tqdm / simple / cache_data / normal')

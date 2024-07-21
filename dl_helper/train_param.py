@@ -51,6 +51,12 @@ def get_gpu_info():
         tpu = True
         _run_device = 'TPU'
 
+        for i in ['CLOUD_TPU_TASK_ID', 'TPU_PROCESS_ADDRESSES']:
+            try:
+                os.environ.pop(i)
+            except:
+                pass
+
     elif 'CUDA_VERSION' in os.environ:
         # 执行 nvidia-smi 命令，并捕获输出
         result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
