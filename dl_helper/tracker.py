@@ -107,8 +107,6 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def update(self, test_dataloader=None):
-        self.printer.print("update", self.temp['_y_pred'].shape, self.temp['_y_true'].shape)
-
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
