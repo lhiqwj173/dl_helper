@@ -320,8 +320,10 @@ class Tracker():
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if _type == 'test':
+            self.printer.print(f"开始同步ids: {test_dataloader.dataset.use_data_id}")
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
+            self.printer.print(f"同步ids: {_ids}")
         else:
             _ids = []
         if len(_loss.shape) == 0:
