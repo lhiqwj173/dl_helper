@@ -200,7 +200,7 @@ class Tracker():
 
         if 'test' == self.track_update:
             if self.accelerator.is_main_process:
-                self.printer.print('update test round')
+                # self.printer.print('update test round')
                 # 保存测试数据预测结果
                 all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
                 all_predictions = self.temp['_y_pred'].to('cpu')
@@ -220,7 +220,7 @@ class Tracker():
 
                 # 储存预测结果
                 # symbol_begin_end.csv
-                # self.printer.print('save prediction')
+                self.printer.print('save prediction')
                 for symbol in datas:
                     data_list = datas[symbol]
                     begin = data_list[0][0]
@@ -352,7 +352,7 @@ class Tracker():
         self._save_result()
 
     def _plot(self):
-        # self.printer.print('plot...')
+        self.printer.print('plot 0')
         if self.accelerator.is_main_process:
             params = self.params
             self.cost_hour = (time.time() - self.begin_time) / 3600
@@ -363,6 +363,7 @@ class Tracker():
             # 标准化数据，nan补气数据
             data = {}
             for i in self.data:
+                self.printer.print(i)
                 data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
                 if 'test' in i:
@@ -370,7 +371,7 @@ class Tracker():
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
 
-            # self.printer.print(data)
+            self.printer.print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
