@@ -463,7 +463,7 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
             loss = criterion(output, target)
 
             # 追踪器 记录数据
-            tracker.track(output, target, loss, 'test')
+            tracker.track(output, target, loss, 'test', test_data)
 
     # 追踪器，计算必要的数据
     printer.print('update')
