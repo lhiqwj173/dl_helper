@@ -352,7 +352,6 @@ class Tracker():
         self._save_result()
 
     def _plot(self):
-        self.printer.print('plot 0')
         if self.accelerator.is_main_process:
             params = self.params
             self.cost_hour = (time.time() - self.begin_time) / 3600
@@ -363,15 +362,12 @@ class Tracker():
             # 标准化数据，nan补气数据
             data = {}
             for i in self.data:
-                self.printer.print(i)
                 data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
-
-            self.printer.print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
@@ -495,7 +491,7 @@ class Tracker():
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            # self.printer.print(f'plot done: {pic_file}')
+            self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
 
