@@ -450,6 +450,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
+    printer.print('test')
     model.eval()
     with torch.no_grad():
         for batch in test_data:
@@ -466,6 +467,7 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
             tracker.track(output, target, loss, 'test')
 
     # 追踪器，计算必要的数据
+    printer.print('update')
     tracker.update(test_data)
 
     # for debug
@@ -650,12 +652,15 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 保存模型
+    p.print(f'save model')
     save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
     # 绘图
+    p.print(f'save_result')
     tracker.save_result()
 
     # 打包
+    p.print(f'package_root')
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
 
