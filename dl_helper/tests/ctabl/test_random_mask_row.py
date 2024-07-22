@@ -80,7 +80,7 @@ class test(test_base):
         batch_n = 16
 
         mask_rows_vars = [4,3,2,1]
-        self.mask_rows = model_t_vars[self.idx]
+        self.mask_rows = mask_rows_vars[self.idx]
 
         title = f'binctabl_mask_rows_{self.mask_rows}'
         data_parm = {
