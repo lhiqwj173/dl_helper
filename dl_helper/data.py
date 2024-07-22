@@ -389,6 +389,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 数据集参数
         target_parm = data_str2parm(params.data_set)
+        self.pass_n = target_parm['pass_n']
 
         # 当前数据类型的所有可读取数据文件列表
         self.files = []
@@ -619,6 +620,11 @@ class Dataset_cahce(torch.utils.data.Dataset):
         """
         # 切片范围
         a, b = self.x_idx[index]
+        # data_pass_n = b-a
+        # data_diff = self.pass_n - data_pass_n
+        # if data_diff>0:
+        #     a+=data_diff
+
         x = self.data[a:b, :]
 
         self.use_data_id.append(self.ids[index])
