@@ -207,8 +207,11 @@ class Tracker():
 
             # 按标的分类预测
             self.printer.print('sort prediction')
+            self.printer.print(all_predictions.shape)
+            self.printer.print(all_targets.shape)
+            self.printer.print(len(ids))
             datas = {}
-            for i in range(self.temp['_y_pred'].shape[0]):
+            for i in range(all_predictions.shape[0]):
                 symbol, timestamp = ids[i].split('_')
                 if symbol not in datas:
                     datas[symbol] = []
