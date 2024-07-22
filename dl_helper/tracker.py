@@ -340,7 +340,7 @@ class Tracker():
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
-            self.printer.print('temp', _type)
+            self.printer.print('temp', self.temp.keys())
             self.printer.print("self.temp['_ids']", self.temp['_ids'])
 
             if _type == 'test':
