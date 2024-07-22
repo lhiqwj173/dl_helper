@@ -10,7 +10,7 @@ from torchmetrics import F1Score, R2Score
 import numpy as np
 import matplotlib.pyplot as plt
 
-from accelerate.utils import broadcast
+from accelerate.utils import broadcast, gather_object
 
 from dl_helper.scheduler import ReduceLR_slow_loss
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -201,7 +201,7 @@ class Tracker():
         if 'test' == self.track_update and self.accelerator.is_main_process:
             self.printer.print('update test round')
             # 保存测试数据预测结果
-            ids = test_dataloader.dataset.ids# code_timestamp: btcusdt_1710289478588
+            ids = self.temp['_id']# code_timestamp: btcusdt_1710289478588
             all_predictions = self.temp['_y_pred'].to('cpu')
             all_targets = self.temp['_y_true'].to('cpu')
 
@@ -251,6 +251,7 @@ class Tracker():
         self.temp = {}
 
         self.temp['_loss'] = None
+        self.temp['_id'] = None
         self.temp['_num'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
@@ -316,6 +317,9 @@ class Tracker():
         # self.printer.print(f"{predict}")
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+        if _type == 'test':
+            _id =  gather_object(test_dataloader.dataset.ids)
+
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
@@ -325,10 +329,12 @@ class Tracker():
                 self.temp['_y_true'] = _y_true
                 self.temp['_y_pred'] = _y_pred
                 self.temp['_loss'] = _loss
+                self.temp['_id'] = _id
             else:
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
+                self.temp['_id'] = torch.cat([self.temp['_id'], _id])
             self.temp['_num'] += _y_true.shape[0]
 
     def save_result(self):
