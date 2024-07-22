@@ -590,7 +590,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # # TEST
     # tracker = Tracker_None()
     # 训练跟踪
-    tracker = Tracker(params, accelerator, scheduler, num_processes, p)
+    tracker = Tracker(model.model_name(), params, accelerator, scheduler, num_processes, p)
     # 新增到 状态 管理
     accelerator.register_for_checkpointing(tracker)
 
