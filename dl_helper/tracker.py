@@ -497,7 +497,7 @@ class Tracker():
         self.accelerator.wait_for_everyone()
 
     def _save_result(self):
-        self.accelerator.is_main_process:
+        if self.accelerator.is_main_process:
             ## 记录结果
             result_file = os.path.join(self.params.root, 'result.csv')
 
