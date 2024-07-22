@@ -198,37 +198,38 @@ class Tracker():
             self.step_in_epoch = 0
             self.epoch_count += 1
 
-        if 'test' == self.track_update and self.accelerator.is_main_process:
-            self.printer.print('update test round')
-            # 保存测试数据预测结果
-            ids = self.temp['_id']# code_timestamp: btcusdt_1710289478588
-            all_predictions = self.temp['_y_pred'].to('cpu')
-            all_targets = self.temp['_y_true'].to('cpu')
+        if 'test' == self.track_update:
+            if self.accelerator.is_main_process:
+                self.printer.print('update test round')
+                # 保存测试数据预测结果
+                all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
+                all_predictions = self.temp['_y_pred'].to('cpu')
+                all_targets = self.temp['_y_true'].to('cpu')
 
-            # 按标的分类预测
-            self.printer.print('sort prediction')
-            self.printer.print(all_predictions.shape)
-            self.printer.print(all_targets.shape)
-            self.printer.print(len(ids))
-            datas = {}
-            for i in range(all_predictions.shape[0]):
-                symbol, timestamp = ids[i].split('_')
-                if symbol not in datas:
-                    datas[symbol] = []
-                datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
+                # 按标的分类预测
+                self.printer.print('sort prediction')
+                self.printer.print(all_predictions.shape)
+                self.printer.print(all_targets.shape)
+                self.printer.print(len(all_ids))
+                datas = {}
+                for i in range(all_predictions.shape[0]):
+                    symbol, timestamp = all_ids[i].split('_')
+                    if symbol not in datas:
+                        datas[symbol] = []
+                    datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
 
-            # 储存预测结果
-            # symbol_begin_end.csv
-            self.printer.print('save prediction')
-            for symbol in datas:
-                data_list = datas[symbol]
-                begin = data_list[0][0]
-                end = data_list[-1][0]
-                with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                    f.write('timestamp,target,predict\n')
-                    for timestamp, target, pre,  in data_list:
-                        f.write(f'{timestamp},{target},{pre}\n')
-            self.printer.print('update test round done')
+                # 储存预测结果
+                # symbol_begin_end.csv
+                self.printer.print('save prediction')
+                for symbol in datas:
+                    data_list = datas[symbol]
+                    begin = data_list[0][0]
+                    end = data_list[-1][0]
+                    with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                        f.write('timestamp,target,predict\n')
+                        for timestamp, target, pre,  in data_list:
+                            f.write(f'{timestamp},{target},{pre}\n')
+                self.printer.print('update test round done')
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
@@ -250,8 +251,9 @@ class Tracker():
         self.track_update = ''
         self.temp = {}
 
+        self.temp['_ids'] = []
+
         self.temp['_loss'] = None
-        self.temp['_id'] = None
         self.temp['_num'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
@@ -292,7 +294,7 @@ class Tracker():
 
         self.printer.print(f"------------tracker data------------")
 
-    def track(self, output, target, loss, _type):
+    def track(self, output, target, loss, _type, test_dataloader=None):
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
@@ -318,8 +320,10 @@ class Tracker():
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if _type == 'test':
-            _id =  gather_object(test_dataloader.dataset.ids)
-
+            _ids = gather_object(test_dataloader.dataset.use_data_id)
+            test_dataloader.dataset.use_data_id = []
+        else:
+            _ids = []
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
@@ -329,12 +333,14 @@ class Tracker():
                 self.temp['_y_true'] = _y_true
                 self.temp['_y_pred'] = _y_pred
                 self.temp['_loss'] = _loss
-                self.temp['_id'] = _id
             else:
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
-                self.temp['_id'] = torch.cat([self.temp['_id'], _id])
+
+            if _type == 'test':
+                self.temp['_ids'] += _ids
+
             self.temp['_num'] += _y_true.shape[0]
 
     def save_result(self):

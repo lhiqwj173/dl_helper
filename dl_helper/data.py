@@ -381,6 +381,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.type = _type# 数据类型 train/val/test
         self.device = device
 
+        self.use_data_id = []
+
         # 根据数据类型 整理 待读取的数据文件列表、
         data_path = self.params.data_folder
         data_set_files = sorted([i for i in os.listdir(data_path)])
@@ -605,6 +607,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         
         data_map.clear()
 
+        self.use_data_id = []
+
     def __len__(self):
         """Denotes the total number of samples"""
         return self.length
@@ -616,6 +620,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 切片范围
         a, b = self.x_idx[index]
         x = self.data[a:b, :]
+
+        self.use_data_id.append(self.ids[index])
 
         #############################
         # 1. 部分截取
