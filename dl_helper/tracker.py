@@ -320,12 +320,13 @@ class Tracker():
         # self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if _type == 'test':
-            self.printer.print(f"开始同步ids: {len(test_dataloader.dataset.use_data_id)}")
+            self.printer.print(f"开始同步ids: {len(test_dataloader.dataset.use_data_id)} type: {type(test_dataloader.dataset.use_data_id)}")
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
-            self.printer.print(f"同步ids: {len(_ids)}")
+            self.printer.print(f"同步ids: {len(_ids)} type: {type(_ids)}")
         else:
             _ids = []
+
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
@@ -341,8 +342,9 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
 
             if _type == 'test':
+                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
                 self.temp['_ids'] += _ids
-                self.printer.print(f"同步ids: {len(self.temp['_ids'])}")
+                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
 
