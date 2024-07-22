@@ -518,8 +518,6 @@ def get_data_sampler(data_set, _type):
 def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
 
-    t = time.time()
-
     # 训练实例
     test = test_class(*args, **kwargs)
 
@@ -627,8 +625,8 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             # 验证
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
-            # 绘图
-            tracker.plot()
+            # 保存结果
+            tracker.save_result()
 
             if epoch % 30 == 0:
                 # 保存模型
@@ -636,6 +634,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             # 打包
             package_root(accelerator, params)
+
+            # 训练可用时长不足，开始 test/predict
+            if tracker.need_test:
+                break
 
         # 释放 训练/验证 数据集 optimizer
         train_loader, val_loader = accelerator.clear(train_loader, val_loader)
@@ -651,7 +653,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
     # 绘图
-    tracker.plot()
+    tracker.save_result()
 
     # 打包
     package_root(accelerator, params)
@@ -782,10 +784,14 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
             # 绘图
-            tracker.plot()
+            tracker.save_result()
 
             # 打包
             package_root(accelerator, params)
+
+            # 训练可用时长不足，开始 test/predict
+            if tracker.need_test:
+                break
 
         # 释放 训练/验证 数据集
         train_loader, val_loader = accelerator.clear(train_loader, val_loader)
@@ -798,7 +804,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 绘图
-    tracker.plot()
+    tracker.save_result()
 
     # 打包
     package_root(accelerator, params)
