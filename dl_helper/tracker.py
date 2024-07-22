@@ -347,9 +347,9 @@ class Tracker():
             self.temp['_num'] += _y_true.shape[0]
 
 
-    def save_result(self):
+    def save_result(self, model_name):
         self._plot()
-        self._save_result()
+        self._save_result(model_name)
 
     def _plot(self):
         if self.accelerator.is_main_process:
@@ -495,7 +495,7 @@ class Tracker():
 
         self.accelerator.wait_for_everyone()
 
-    def _save_result(self):
+    def _save_result(self, model_name):
         ## 记录结果
         result_file = os.path.join(self.params.root, 'result.csv')
         self.printer.print('1')
@@ -541,7 +541,7 @@ class Tracker():
                     f.write(f'{data_dict[i]},')
             self.printer.print('7')
             # 模型
-            f.write(f'{self.params.model.model_name()},{self.params.describe},')
+            f.write(f'{model_name},{self.params.describe},')
             # 训练结果
             # 选择val_loss 最小的点
             best_idx = data['val_loss'].index(min(data['val_loss']))

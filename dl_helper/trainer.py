@@ -627,7 +627,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
             # 保存结果
-            tracker.save_result()
+            tracker.save_result(model.model_name())
 
             if epoch % 30 == 0:
                 # 保存模型
@@ -653,7 +653,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
     # 绘图
-    tracker.save_result()
+    tracker.save_result(model.model_name())
 
     # 打包
     p.print(f'package_root')
@@ -785,7 +785,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
             # 绘图
-            tracker.save_result()
+            tracker.save_result(model.model_name())
 
             # 打包
             package_root(accelerator, params)
@@ -805,7 +805,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 绘图
-    tracker.save_result()
+    tracker.save_result(model.model_name())
 
     # 打包
     package_root(accelerator, params)
