@@ -522,7 +522,7 @@ class Tracker():
                 # 训练结果
                 for i in self.data:
                     f.write(f'{i},')
-                f.write('cost,folder\n')
+                f.write('cost\n')
 
             # 写入结果
             with open(result_file, 'a') as f:
@@ -542,11 +542,14 @@ class Tracker():
                 best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
                 for i in self.data:
                     if not None is self.data[i] and len(self.data[i]) > best_idx+1:
+                        d = self.data[i][best_idx]
+                        print(d, type(d))
+                        print(self.data[i][best_idx].item())
                         f.write(f'{self.data[i][best_idx].item():.4f},')
                     else:
                         f.write(f',')
                 # 文件夹 
-                f.write(f"{self.cost_hour:.2f}h,{self.params.root}\n")
+                f.write(f"{self.cost_hour:.2f}h\n")
         self.accelerator.wait_for_everyone()
 
     def state_dict(self):
