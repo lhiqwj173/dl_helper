@@ -466,7 +466,7 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
             tracker.track(output, target, loss, 'test', test_data)
 
     # 追踪器，计算必要的数据
-    printer.print('update')
+    # printer.print('update')
     tracker.update(test_data)
 
     # for debug
@@ -647,15 +647,12 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     test_loader = test.get_cache_data('test', params, accelerator)
 
     # 测试
-    p.print(f'test start')
     test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
 
     # 保存模型
-    p.print(f'save model')
     save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
     # 绘图
-    p.print(f'save_result')
     tracker.save_result()
 
     # 打包

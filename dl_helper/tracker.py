@@ -207,10 +207,10 @@ class Tracker():
                 all_targets = self.temp['_y_true'].to('cpu')
 
                 # 按标的分类预测
-                self.printer.print('sort prediction')
-                self.printer.print(all_predictions.shape)
-                self.printer.print(all_targets.shape)
-                self.printer.print(len(all_ids))
+                # self.printer.print('sort prediction')
+                # self.printer.print(all_predictions.shape)
+                # self.printer.print(all_targets.shape)
+                # self.printer.print(len(all_ids))
                 datas = {}
                 for i in range(all_predictions.shape[0]):
                     symbol, timestamp = all_ids[i].split('_')
@@ -220,7 +220,7 @@ class Tracker():
 
                 # 储存预测结果
                 # symbol_begin_end.csv
-                self.printer.print('save prediction')
+                # self.printer.print('save prediction')
                 for symbol in datas:
                     data_list = datas[symbol]
                     begin = data_list[0][0]
@@ -229,7 +229,7 @@ class Tracker():
                         f.write('timestamp,target,predict\n')
                         for timestamp, target, pre,  in data_list:
                             f.write(f'{timestamp},{target},{pre}\n')
-                self.printer.print('update test round done')
+                # self.printer.print('update test round done')
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
@@ -244,7 +244,7 @@ class Tracker():
         self.reset_temp()
         # self.print_state()
         self.step_count = 0
-        self.printer.print('update done')
+        # self.printer.print('update done')
 
     def reset_temp(self):
         # 重置计算变量
@@ -501,6 +501,7 @@ class Tracker():
     def _save_result(self):
         ## 记录结果
         result_file = os.path.join(self.params.root, 'result.csv')
+        self.printer.print('1')
 
         # 数据参数
         data_dict =  data_str2parm(self.params.data_set)
@@ -508,20 +509,25 @@ class Tracker():
         data_dict['classify'] = self.params.classify
         data_dict['regress_y_idx'] = self.params.regress_y_idx
         data_dict['classify_y_idx'] = self.params.classify_y_idx
+        self.printer.print('2')
 
         # 初始化列名
         with open(result_file, 'w') as f:
             # 训练参数
             for key in self.params.__dict__:
                 f.write(f'{key},')
+            self.printer.print('3')
+
             # 数据参数
             for i in data_dict:
                 f.write(f'{i},')
+            self.printer.print('4')
             # 模型
             f.write('model,describe,')
             # 训练结果
             for i in self.data:
                 f.write(f'{i},')
+            self.printer.print('5')
             f.write('cost,folder\n')
 
         # 写入结果
@@ -529,12 +535,14 @@ class Tracker():
             # 训练参数
             for key in self.params.__dict__:
                 f.write(f'{self.params.__dict__[key]},')
+            self.printer.print('6')
             # 数据参数
             for i in data_dict:
                 if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
                     f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
                 else:
                     f.write(f'{data_dict[i]},')
+            self.printer.print('7')
             # 模型
             f.write(f'{self.params.model.model_name()},{self.params.describe},')
             # 训练结果
@@ -545,8 +553,10 @@ class Tracker():
                     f.write(f'{self.data[i][best_idx]},')
                 else:
                     f.write(f',')
+            self.printer.print('8')
             # 文件夹 
             f.write(f"{self.cost_hour:.2f}h,{self.params.root}\n")
+            self.printer.print('9')
 
     def state_dict(self):
         # self.params = params
