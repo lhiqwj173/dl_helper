@@ -330,7 +330,7 @@ class Tracker():
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
-        # self.printer.print('main cal track...')
+        self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
@@ -340,6 +340,7 @@ class Tracker():
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
+            self.printer.print('temp')
 
             if _type == 'test':
                 self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
@@ -348,6 +349,7 @@ class Tracker():
 
             self.temp['_num'] += _y_true.shape[0]
 
+        print('track done')
     def save_result(self):
         self._plot()
         self._save_result()
