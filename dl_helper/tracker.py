@@ -497,56 +497,56 @@ class Tracker():
         self.accelerator.wait_for_everyone()
 
     def _save_result(self):
-        ## 记录结果
-        result_file = os.path.join(self.params.root, 'result.csv')
-
-        # 数据参数
-        data_dict =  data_str2parm(self.params.data_set)
-        data_dict['y_n'] = self.params.y_n
-        data_dict['classify'] = self.params.classify
-        data_dict['regress_y_idx'] = self.params.regress_y_idx
-        data_dict['classify_y_idx'] = self.params.classify_y_idx
-
-        # 初始化列名
-        with open(result_file, 'w') as f:
-            # 训练参数
-            for key in self.params.__dict__:
-                f.write(f'{key},')
+        self.accelerator.is_main_process:
+            ## 记录结果
+            result_file = os.path.join(self.params.root, 'result.csv')
 
             # 数据参数
-            for i in data_dict:
-                f.write(f'{i},')
-            # 模型
-            f.write('model,describe,')
-            # 训练结果
-            for i in self.data:
-                f.write(f'{i},')
-            f.write('cost,folder\n')
+            data_dict =  data_str2parm(self.params.data_set)
+            data_dict['y_n'] = self.params.y_n
+            data_dict['classify'] = self.params.classify
+            data_dict['regress_y_idx'] = self.params.regress_y_idx
+            data_dict['classify_y_idx'] = self.params.classify_y_idx
 
-        # 写入结果
-        with open(result_file, 'a') as f:
-            # 训练参数
-            for key in self.params.__dict__:
-                f.write(f'{self.params.__dict__[key]},')
-            # 数据参数
-            for i in data_dict:
-                if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
-                    f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
-                else:
-                    f.write(f'{data_dict[i]},')
-            # 模型
-            f.write(f'{self.model_name},{self.params.describe},')
-            # 训练结果
-            # 选择val_loss 最小的点
-            best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
-            for i in self.data:
-                if not None is self.data[i] and len(self.data[i]) > best_idx+1:
-                    f.write(f'{self.data[i][best_idx]},')
-                else:
-                    f.write(f',')
-            # 文件夹 
-            f.write(f"{self.cost_hour:.2f}h,{self.params.root}\n")
-        self.accelerator.wait_for_everyone()
+            # 初始化列名
+            with open(result_file, 'w') as f:
+                # 训练参数
+                for key in self.params.__dict__:
+                    f.write(f'{key},')
+
+                # 数据参数
+                for i in data_dict:
+                    f.write(f'{i},')
+                # 模型
+                f.write('model,describe,')
+                # 训练结果
+                for i in self.data:
+                    f.write(f'{i},')
+                f.write('cost,folder\n')
+
+            # 写入结果
+            with open(result_file, 'a') as f:
+                # 训练参数
+                for key in self.params.__dict__:
+                    f.write(f'{self.params.__dict__[key]},')
+                # 数据参数
+                for i in data_dict:
+                    if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
+                        f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
+                    else:
+                        f.write(f'{data_dict[i]},')
+                # 模型
+                f.write(f'{self.model_name},{self.params.describe},')
+                # 训练结果
+                # 选择val_loss 最小的点
+                best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
+                for i in self.data:
+                    if not None is self.data[i] and len(self.data[i]) > best_idx+1:
+                        f.write(f'{self.data[i][best_idx]},')
+                    else:
+                        f.write(f',')
+                # 文件夹 
+                f.write(f"{self.cost_hour:.2f}h,{self.params.root}\n")
 
     def state_dict(self):
         # self.params = params

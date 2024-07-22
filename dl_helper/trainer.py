@@ -662,7 +662,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     tracker.save_result()
 
     # 打包
-    print(f'package_root')
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
 
