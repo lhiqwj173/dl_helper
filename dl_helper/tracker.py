@@ -199,12 +199,14 @@ class Tracker():
             self.epoch_count += 1
 
         if 'test' == self.track_update and self.accelerator.is_main_process:
+            self.printer.print('update test round')
             # 保存测试数据预测结果
             ids = test_dataloader.dataset.ids# code_timestamp: btcusdt_1710289478588
             all_predictions = self.temp['_y_pred'].to('cpu')
             all_targets = self.temp['_y_true'].to('cpu')
 
             # 按标的分类预测
+            self.printer.print('sort prediction')
             datas = {}
             for i in range(self.temp['_y_pred'].shape[0]):
                 symbol, timestamp = ids[i].split('_')
@@ -214,6 +216,7 @@ class Tracker():
 
             # 储存预测结果
             # symbol_begin_end.csv
+            self.printer.print('save prediction')
             for symbol in datas:
                 data_list = datas[symbol]
                 begin = data_list[0][0]
@@ -236,7 +239,7 @@ class Tracker():
         self.reset_temp()
         # self.print_state()
         self.step_count = 0
-        # self.printer.print('update done')
+        self.printer.print('update done')
 
     def reset_temp(self):
         # 重置计算变量

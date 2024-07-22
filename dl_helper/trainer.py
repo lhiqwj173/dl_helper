@@ -450,7 +450,6 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
-    printer.print('test')
     model.eval()
     with torch.no_grad():
         for batch in test_data:
