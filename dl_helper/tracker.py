@@ -225,6 +225,7 @@ class Tracker():
                     f.write('timestamp,target,predict\n')
                     for timestamp, target, pre,  in data_list:
                         f.write(f'{timestamp},{target},{pre}\n')
+            self.printer.print('update test round done')
 
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
