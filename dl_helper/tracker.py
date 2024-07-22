@@ -351,6 +351,8 @@ class Tracker():
             self.temp['_num'] += _y_true.shape[0]
 
         print('track done')
+        self.accelerator.wait_for_everyone()
+
     def save_result(self):
         self._plot()
         self._save_result()
