@@ -57,7 +57,8 @@ class Tracker_None():
         pass
 
 class Tracker():
-    def __init__(self, params, accelerator, scheduler, num_processes, printer):
+    def __init__(self, model_name, params, accelerator, scheduler, num_processes, printer):
+        self.model_name = model_name
         # 时间统计
         self.begin_time = time.time()
         self.epoch_count = 0
@@ -347,9 +348,9 @@ class Tracker():
             self.temp['_num'] += _y_true.shape[0]
 
 
-    def save_result(self, model_name):
+    def save_result(self):
         self._plot()
-        self._save_result(model_name)
+        self._save_result()
 
     def _plot(self):
         if self.accelerator.is_main_process:
@@ -495,7 +496,7 @@ class Tracker():
 
         self.accelerator.wait_for_everyone()
 
-    def _save_result(self, model_name):
+    def _save_result(self):
         ## 记录结果
         result_file = os.path.join(self.params.root, 'result.csv')
         self.printer.print('1')
@@ -541,7 +542,7 @@ class Tracker():
                     f.write(f'{data_dict[i]},')
             self.printer.print('7')
             # 模型
-            f.write(f'{model_name},{self.params.describe},')
+            f.write(f'{self.model_name},{self.params.describe},')
             # 训练结果
             # 选择val_loss 最小的点
             best_idx = data['val_loss'].index(min(data['val_loss']))
