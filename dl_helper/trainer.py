@@ -283,6 +283,7 @@ def package_root(accelerator, params):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         # 拷贝 log 文件夹
+        print('copy log folder')
         destination_folder = os.path.join(params.root, 'logs')
         source_folder = get_log_folder()
         os.makedirs(destination_folder, exist_ok=True)
@@ -291,11 +292,13 @@ def package_root(accelerator, params):
             target = os.path.join(destination_folder, file)
             # 覆盖拷贝文件
             shutil.copy(src, target)
+        print('copy log folder done')
 
         zip_file = f'{params.root}.7z'
         if os.path.exists(zip_file):
             os.remove(zip_file)
         compress_folder(params.root, zip_file, 9, inplace=False)
+        print('compress_folder done')
 
         if not params.debug:
             # # 删除当前的训练文件，如果存在
@@ -306,6 +309,7 @@ def package_root(accelerator, params):
             # 上传更新到alist
             client = alist(user, pwd)
             client.upload(zip_file, '/train_data/')
+        print('upload done')
 
     # print('package_root done')
     accelerator.wait_for_everyone()
