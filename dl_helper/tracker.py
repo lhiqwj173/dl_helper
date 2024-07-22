@@ -513,7 +513,6 @@ class Tracker():
                 # 训练参数
                 for key in self.params.__dict__:
                     f.write(f'{key},')
-
                 # 数据参数
                 for i in data_dict:
                     f.write(f'{i},')
@@ -521,6 +520,8 @@ class Tracker():
                 f.write('model,describe,')
                 # 训练结果
                 for i in self.data:
+                    if i == 'lr':
+                        continue
                     f.write(f'{i},')
                 f.write('cost\n')
 
@@ -541,6 +542,8 @@ class Tracker():
                 # 选择val_loss 最小的点
                 best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
                 for i in self.data:
+                    if i == 'lr':
+                        continue
                     if not None is self.data[i] and len(self.data[i]) > best_idx+1:
                         d = self.data[i][best_idx]
                         if isinstance(d, torch.Tensor):
