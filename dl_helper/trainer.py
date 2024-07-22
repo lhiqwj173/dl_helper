@@ -280,12 +280,9 @@ def notebook_launcher(
             function(*args)
 
 def package_root(accelerator, params):
-    print('package_root')
     accelerator.wait_for_everyone()
-    print('wait_for_everyone')
     if accelerator.is_main_process:
         # 拷贝 log 文件夹
-        print('copy log folder')
         destination_folder = os.path.join(params.root, 'logs')
         source_folder = get_log_folder()
         os.makedirs(destination_folder, exist_ok=True)
@@ -313,7 +310,6 @@ def package_root(accelerator, params):
             client.upload(zip_file, '/train_data/')
         print('upload done')
 
-    print('package_root done')
     accelerator.wait_for_everyone()
 
 last_checkpoint_time = 0

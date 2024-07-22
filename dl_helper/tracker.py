@@ -547,6 +547,7 @@ class Tracker():
                         f.write(f',')
                 # 文件夹 
                 f.write(f"{self.cost_hour:.2f}h,{self.params.root}\n")
+        self.accelerator.wait_for_everyone()
 
     def state_dict(self):
         # self.params = params
