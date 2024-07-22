@@ -543,9 +543,9 @@ class Tracker():
                 for i in self.data:
                     if not None is self.data[i] and len(self.data[i]) > best_idx+1:
                         d = self.data[i][best_idx]
-                        print(d, type(d))
-                        print(self.data[i][best_idx].item())
-                        f.write(f'{self.data[i][best_idx].item():.4f},')
+                        if isinstance(d, torch.Tensor):
+                            d = d.item()
+                        f.write(f'{d:.4f},')
                     else:
                         f.write(f',')
                 # 文件夹 
