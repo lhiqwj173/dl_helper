@@ -259,6 +259,8 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col(const py::array_t<T> 
                 _idx = i * cols + col_idx;
 
                 base_price = ptr_mid_price[i];
+                if (base_price == 0.0)
+                    continue;
 
                 for (int row_idx = 0; row_idx < pass_n; row_idx++)
                 {
@@ -278,6 +280,8 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col(const py::array_t<T> 
                 _idx = __idx + i;
 
                 base_price = ptr_mid_price[i];
+                if (base_price == 0.0)
+                    continue;
 
                 for (int row_idx = 0; row_idx < pass_n; row_idx++)
                 {
@@ -373,6 +377,8 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
                     _idx = i * cols + col_idx;
 
                     base_price = ptr_mid_price[i];
+                    if (base_price == 0.0)
+                        continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
@@ -392,6 +398,8 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
                     _idx = __idx + i;
 
                     base_price = ptr_mid_price[i];
+                    if (base_price == 0.0)
+                        continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
