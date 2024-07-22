@@ -542,7 +542,7 @@ class Tracker():
                 best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
                 for i in self.data:
                     if not None is self.data[i] and len(self.data[i]) > best_idx+1:
-                        f.write(f'{self.data[i][best_idx]},')
+                        f.write(f'{self.data[i][best_idx].item():.4f},')
                     else:
                         f.write(f',')
                 # 文件夹 
