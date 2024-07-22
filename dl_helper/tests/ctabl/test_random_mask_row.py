@@ -103,8 +103,8 @@ class test(test_base):
             # 数据增强
             random_scale=0.05, random_mask_row=1,
 
-            # 每2个样本取一个数据
-            down_freq=2,
+            # 每 10 个样本取一个数据
+            down_freq=10,
 
             # 3分类
             classify=True,
