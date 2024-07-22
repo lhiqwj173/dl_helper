@@ -544,8 +544,11 @@ class Tracker():
                 for i in self.data:
                     if i == 'lr':
                         continue
-                    if not None is self.data[i] and len(self.data[i]) > best_idx+1:
-                        d = self.data[i][best_idx]
+                    if not None is self.data[i]:
+                        if len(self.data[i]) > best_idx+1:
+                            d = self.data[i][best_idx]
+                        else:
+                            d = self.data[i][-1]
                         if isinstance(d, torch.Tensor):
                             d = d.item()
                         f.write(f'{d:.4f},')
