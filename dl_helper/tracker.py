@@ -545,7 +545,7 @@ class Tracker():
             f.write(f'{self.model_name},{self.params.describe},')
             # 训练结果
             # 选择val_loss 最小的点
-            best_idx = data['val_loss'].index(min(data['val_loss']))
+            best_idx = self.data['val_loss'].index(min(self.data['val_loss']))
             for i in self.data:
                 if not None is self.data[i] and len(self.data[i]) > best_idx+1:
                     f.write(f'{self.data[i][best_idx]},')
