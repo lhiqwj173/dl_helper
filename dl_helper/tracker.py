@@ -486,12 +486,12 @@ class Tracker():
             title = f'{params.train_title}'
             if params.describe:
                 title += f' | {params.describe}'
-            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f} hours'
+            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{self.cost_hour:.2f} hours'
             plt.title(title)
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
             plt.savefig(pic_file)
-            self.printer.print(f'plot done: {pic_file}')
+            # self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
 
