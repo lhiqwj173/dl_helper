@@ -77,6 +77,16 @@ class Tracker():
         self.scheduler = scheduler
         self.printer = printer
 
+        # 储存参数
+        self.no_need_save_parm = [
+            'notebook_begin_time',
+            'need_test',
+            'params',
+            'accelerator',
+            'scheduler',
+            'printer',
+        ]
+
         # 最终数据
         self.data = {}
         for i in ['train', 'val', 'test']:
@@ -564,15 +574,12 @@ class Tracker():
         # self.accelerator = accelerator
         # self.scheduler = scheduler
         # self.printer = printer
-        return {key: value for key, value in self.__dict__.items() if key not in [
-            'notebook_begin_time'
-            'params',
-            'accelerator',
-            'scheduler',
-            'printer',
-        ]}
+        return {key: value for key, value in self.__dict__.items() if key not in self.no_need_save_parm}
 
     def load_state_dict(self, state_dict):
+        for i in self.no_need_save_parm:
+            if i in state_dict: 
+                del state_dict[i]
         self.__dict__.update(state_dict)
 
         if '_ids' not in self.temp:

@@ -501,10 +501,10 @@ class printer():
     def print(self, *msg, main=True, **kwargs):
         head = f'[{self.accelerator.process_index}]'
         with self.lock:
-            if main:
-                self.accelerator.print(head, *msg, **kwargs)
+            if main and self.accelerator.is_local_main_process:
+                log(head, *msg, **kwargs)
             else:
-                print(head, *msg, **kwargs)
+                log(head, *msg, **kwargs)
 
 def get_data_sampler(data_set, _type):
     train_sampler = None
@@ -618,6 +618,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         # 输出
         tracker.print_state()
     
+    # for debug
+    tracker.need_test = True
+
     # 训练循环
     if not only_predict:
         p.print(f'train start')
@@ -631,7 +634,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             # 保存结果
             tracker.save_result()
 
-            if epoch % 30 == 0:
+            if epoch % 30 == 0 and epoch > 0:
                 # 保存模型
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
@@ -644,6 +647,8 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
         # 释放 训练/验证 数据集 optimizer
         train_loader, val_loader = accelerator.clear(train_loader, val_loader)
+
+    p.print(f'train start')
 
     # 准备测试数据
     test_loader = test.get_cache_data('test', params, accelerator)
@@ -660,6 +665,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 打包
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
+    p.print(f'all done')
 
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
