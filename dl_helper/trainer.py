@@ -668,7 +668,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 打包
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
-    p.print(f'all done')
+    print(f'all done')
 
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):

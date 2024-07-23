@@ -491,7 +491,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
-        debug(f"读取文件 0: {self.files}")
+        info(f"read data: {self.files}")
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
@@ -511,6 +511,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
             data_map = self._parse_data_map(files)
             self.q.put(data_map)
             debug(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+
+        info(f"read data done")
 
     def _parse_data_map(self, file_name_list):
         # 1.0 读取原始数据
