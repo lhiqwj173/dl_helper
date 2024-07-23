@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
-from py_ext.tool import log, debug, get_log_folder
+from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
@@ -498,14 +498,15 @@ class printer():
         self.lock = lock
         self.accelerator = accelerator
     
-    def print(self, *msg, main=True, **kwargs):
+    def print(self, *msg, main=True):
+        caller_info = _get_caller_info()
         head = f'[{self.accelerator.process_index}]'
         with self.lock:
             if main:
                 if self.accelerator.is_local_main_process:
-                    log(head, *msg, **kwargs)
+                    log(head, *msg, caller_info=caller_info)
             else:
-                log(head, *msg, **kwargs)
+                log(head, *msg, caller_info=caller_info)
 
 def get_data_sampler(data_set, _type):
     train_sampler = None
