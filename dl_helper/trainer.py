@@ -501,8 +501,9 @@ class printer():
     def print(self, *msg, main=True, **kwargs):
         head = f'[{self.accelerator.process_index}]'
         with self.lock:
-            if main and self.accelerator.is_local_main_process:
-                log(head, *msg, **kwargs)
+            if main:
+                if self.accelerator.is_local_main_process:
+                    log(head, *msg, **kwargs)
             else:
                 log(head, *msg, **kwargs)
 
@@ -620,6 +621,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     
     # for debug
     tracker.need_test = True
+    only_predict = True
 
     # 训练循环
     if not only_predict:
