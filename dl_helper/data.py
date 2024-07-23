@@ -461,6 +461,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
 
+        # 读取数据线程是否需要停止
+        self.producer_thread_stop = False
+
         self.q = queue.Queue(maxsize=1)
         
         # # 如果是val/test，直接读取数据
@@ -480,6 +483,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
+    def init_data_thread_close(self):
+        debug(f"init_data_thread_close {rank} {self.type}")
+        self.producer_thread_stop = True
+
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
@@ -491,7 +498,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
-        log(f"read data: {self.files}")
+        log(f"{self.type} read data: {self.files}")
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
@@ -509,10 +516,18 @@ class Dataset_cahce(torch.utils.data.Dataset):
             debug(f"读取文件 2: {files}")
 
             data_map = self._parse_data_map(files)
-            self.q.put(data_map)
+            while 1:
+                try:
+                    self.q.put(data_map, timeout=5)
+                    break
+                except:
+                    # 检查是否需要暂停
+                    if self.producer_thread_stop:
+                        break
+
             debug(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
-        log(f"read data done")
+        log(f"{self.type} read data done")
 
     def _parse_data_map(self, file_name_list):
         # 1.0 读取原始数据
@@ -848,6 +863,10 @@ class DistributedSampler(Sampler):
         log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+
+    def data_loader_close(self):
+        self.mini_epoch_indices_ramain = 0
+        self.dataset.init_data_thread_close()
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为0，需要重新生成，说明该epoch训练结束

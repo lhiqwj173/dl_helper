@@ -648,10 +648,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             if tracker.need_test:
                 break
 
-        # 释放 训练/验证 数据集 optimizer
-        train_loader, val_loader = accelerator.clear(train_loader, val_loader)
+    # 停止继续读取数据
+    train_loader.data_loader_close()
+    val_loader.data_loader_close()
 
-    p.print(f'train start')
+    p.print(f'test start')
 
     # 准备测试数据
     test_loader = test.get_cache_data('test', params, accelerator)
