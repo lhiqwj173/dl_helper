@@ -61,6 +61,7 @@ class Tracker():
         self.model_name = model_name
         # 时间统计
         self.begin_time = time.time()
+        self.notebook_begin_time = time.time()
         self.epoch_count = 0
         self.mini_epoch_count = 0
         self.step_count = 0
@@ -235,7 +236,7 @@ class Tracker():
         if 'test' != self.track_update and self.accelerator.is_main_process:
             # 判断是否需要储存 训练数据
             # self.printer.print('check if need save')
-            last_time_hour = ((time.time() - self.begin_time) / 3600)
+            last_time_hour = ((time.time() - self.notebook_begin_time) / 3600)
             each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
             free_time = self.run_limit_hour - last_time_hour
             if free_time < each_epoch_time_cost * 1.2:
@@ -564,6 +565,7 @@ class Tracker():
         # self.scheduler = scheduler
         # self.printer = printer
         return {key: value for key, value in self.__dict__.items() if key not in [
+            'notebook_begin_time'
             'params',
             'accelerator',
             'scheduler',
