@@ -134,6 +134,10 @@ class DataLoaderDevice(DataLoader):
     def __init__(self, *args, device=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.device = device
+
+    def data_loader_close(self):
+        self.mini_epoch_indices_ramain = 0
+        self.dataset.init_data_thread_close()
         
     def __iter__(self):
         for batch in super().__iter__():
@@ -868,9 +872,6 @@ class DistributedSampler(Sampler):
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
-    def data_loader_close(self):
-        self.mini_epoch_indices_ramain = 0
-        self.dataset.init_data_thread_close()
 
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为0，需要重新生成，说明该epoch训练结束
