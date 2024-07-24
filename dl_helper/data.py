@@ -531,7 +531,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
                     if self.producer_thread_stop:
                         log(f"{self.type} producer_thread_stop:{self:producer_thread_stop}")
                         break
-                debug(f'{self.type} put retry producer_thread_stop:{self:producer_thread_stop}')
+                debug(f'{self.type} put retry producer_thread_stop:{self.producer_thread_stop}')
 
             debug(f'{self.type} put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
