@@ -518,6 +518,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             data_map = self._parse_data_map(files)
             debug(f"{self.type} parse_data_map done")
+            stop = False
             while 1:
                 try:
                     self.q.put(data_map, timeout=5)
@@ -526,8 +527,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
                     # 检查是否需要暂停
                     if self.producer_thread_stop:
                         log(f"{self.type} producer_thread_stop:{self.producer_thread_stop}")
+                        stop = True
                         break
                 debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop}')
+
+            if stop:
+                break
 
             debug(f'{self.type} put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
