@@ -479,19 +479,19 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        debug(f'init_data_thread_start {rank} {self.type}')
+        debug(f'{self.type} init_data_thread_start {rank}')
         self.producer_thread_stop = False
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def init_data_thread_close(self):
-        debug(f"init_data_thread_close {rank} {self.type}")
+        debug(f"{self.type} init_data_thread_close {rank}")
         self.producer_thread_stop = True
 
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        debug(f'get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+        debug(f'{self.type} get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
     def _init_data(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -505,7 +505,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
             mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
             files = [self.files[i] for i in file_indices]
-            debug(f"读取文件 1: {files}")
+            debug(f"{self.type} 读取文件 1: {files}")
 
             # 每个设备负责的实际数据idx，会被真实的load进内存
             each_files_num = len(files) // world_size 
@@ -514,9 +514,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            debug(f"读取文件 2: {files}")
+            debug(f"{self.type} 读取文件 2: {files}")
 
             data_map = self._parse_data_map(files)
+            debug(f"{self.type} parse_data_map done")
             while 1:
                 try:
                     self.q.put(data_map, timeout=5)
@@ -526,8 +527,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
                     if self.producer_thread_stop:
                         log(f"{self.type} producer_thread_stop:{self:producer_thread_stop}")
                         break
+                debug(f'{self.type} put retry producer_thread_stop:{self:producer_thread_stop}')
 
-            debug(f'put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+            debug(f'{self.type} put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
         log(f"{self.type} read data done")
 
@@ -862,7 +864,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
+        log(f'{dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
@@ -876,7 +878,7 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                debug(f'new mini_epoch_file_indices')
+                debug(f'{dataset.type} new mini_epoch_file_indices')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
