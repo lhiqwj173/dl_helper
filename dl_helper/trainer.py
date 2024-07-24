@@ -620,9 +620,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         # 输出
         tracker.print_state()
     
-    # for debug
-    tracker.need_test = True
-    only_predict = True
+    # # for debug
+    # tracker.need_test = True
+    # only_predict = True
 
     # 训练循环
     if not only_predict:
@@ -671,8 +671,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 打包
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
-    print(f'all done')
-
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
