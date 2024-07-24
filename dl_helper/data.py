@@ -529,7 +529,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 except:
                     # 检查是否需要暂停
                     if self.producer_thread_stop:
-                        log(f"{self.type} producer_thread_stop:{self:producer_thread_stop}")
+                        log(f"{self.type} producer_thread_stop:{self.producer_thread_stop}")
                         break
                 debug(f'{self.type} put retry producer_thread_stop:{self.producer_thread_stop}')
 
