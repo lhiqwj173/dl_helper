@@ -869,7 +869,7 @@ class DistributedSampler(Sampler):
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'{dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
+        log(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
@@ -885,7 +885,7 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                debug(f'{dataset.type} new mini_epoch_file_indices')
+                debug(f'{self.dataset.type} new mini_epoch_file_indices')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
