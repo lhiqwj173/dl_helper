@@ -39,7 +39,8 @@ def cal_balance_acc(y_pred, y_true, y_n):
     # 计算均衡 ACC
     balanced_acc = torch.mean(torch.stack(recall_values))
     return balanced_acc
-    
+
+
 class Tracker_None():
     def __init__(self, *args, **kwargs):
         self.epoch_count = 0
@@ -71,6 +72,10 @@ class Tracker():
         self.run_limit_hour = 12 if  num_processes != 8 else 9
         self.need_test = False
         # self.need_test = True
+
+        # 统计训练集的标签分布
+        self.label_counts = {}
+        self.label_count_done = {}
 
         self.params = params
         self.accelerator = accelerator
@@ -119,6 +124,10 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def update(self, test_dataloader=None):
+        # 标记label分布统计完成
+        if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done:
+            self.label_count_done[self.track_update] = True
+
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
@@ -311,6 +320,13 @@ class Tracker():
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
 
+        # 记录label分布
+        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
+            if _type not in self.label_counts:
+                self.label_counts[_type] = torch.bincount(labels, minlength=self.params.y_n)
+            else:
+                self.label_counts[_type] += torch.bincount(labels, minlength=self.params.y_n)
+
         self.track_update = _type
 
         # epoch内的迭代次数
@@ -357,7 +373,6 @@ class Tracker():
                 # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
-
 
     def save_result(self):
         self._plot()
@@ -527,6 +542,9 @@ class Tracker():
                 # 数据参数
                 for i in data_dict:
                     f.write(f'{i},')
+                # 数据标签分布
+                for i in self.label_counts:
+                    f.write(f'label_{i},')
                 # 模型
                 f.write('model,describe,')
                 # 训练结果
@@ -547,6 +565,11 @@ class Tracker():
                         f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
                     else:
                         f.write(f'{data_dict[i]},')
+                # 数据标签分布
+                for i in self.label_counts:
+                    label_pct = torch.softmax(a.float(), dim=0)*100
+                    label_pct /= torch.min(label_pct)
+                    f.write(':'.join([f'{int(i)}' for i in label_pct.to('cpu').tolist()]) + ',')
                 # 模型
                 f.write(f'{self.model_name},{self.params.describe},')
                 # 训练结果
@@ -584,6 +607,10 @@ class Tracker():
 
         if '_ids' not in self.temp:
             self.temp['_ids'] = []
+
+        for i in self.label_counts:
+            if isinstance(self.label_counts[i], torch.Tensor):
+                self.label_counts[i] = self.label_counts[i].to(self.accelerator.device)
         
         for i in self.temp:
             if isinstance(self.temp[i], torch.Tensor):
