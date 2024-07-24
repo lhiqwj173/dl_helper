@@ -650,9 +650,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
     # 停止继续读取数据
     p.print(f'close train data_loading')
-    train_loader.data_loader_close()
+    train_loader.sampler.data_loader_close()
     p.print(f'close val data_loading')
-    val_loader.data_loader_close()
+    val_loader.sampler.data_loader_close()
 
     p.print(f'test start')
 
