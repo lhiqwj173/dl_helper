@@ -485,7 +485,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         producer_thread.start()
 
     def init_data_thread_close(self):
-        debug(f"{self.type} init_data_thread_close {rank}")
+        debug(f"{self.type} init_data_thread_close")
         self.producer_thread_stop = True
 
     def load_data(self):
