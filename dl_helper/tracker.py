@@ -527,6 +527,7 @@ class Tracker():
             # self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
+        debug('plot done')
 
     def _save_result(self):
         if self.accelerator.is_main_process:
@@ -573,7 +574,7 @@ class Tracker():
                         f.write(f'{data_dict[i]},')
                 # 数据标签分布
                 for i in self.label_counts:
-                    label_pct = torch.softmax(a.float(), dim=0)*100
+                    label_pct = torch.softmax(self.label_counts[i].float(), dim=0)*100
                     label_pct /= torch.min(label_pct)
                     f.write(':'.join([f'{int(i)}' for i in label_pct.to('cpu').tolist()]) + ',')
                 # 模型
@@ -597,6 +598,7 @@ class Tracker():
                 # 文件夹 
                 f.write(f"{self.cost_hour:.2f}h\n")
         self.accelerator.wait_for_everyone()
+        debug('save_result done')
 
     def state_dict(self):
         # self.params = params

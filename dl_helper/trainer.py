@@ -652,9 +652,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             if epoch % 30 == 0 and epoch > 0:
                 # 保存模型
+                debug(f'save_model_fn')
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
             # 打包
+            debug(f'package_root')
             package_root(accelerator, params)
 
             # 训练可用时长不足，开始 test/predict
