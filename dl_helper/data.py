@@ -383,55 +383,13 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         self.use_data_id = []
 
-        # 根据数据类型 整理 待读取的数据文件列表、
-        data_path = self.params.data_folder
-        data_set_files = sorted([i for i in os.listdir(data_path)])
-
         # 数据集参数
         target_parm = data_str2parm(params.data_set)
         self.pass_n = target_parm['pass_n']
 
         # 当前数据类型的所有可读取数据文件列表
         self.files = []
-        # 判断数据名类型
-        _type_in_dataname = False
-        for file in data_set_files:
-            if _type in file:
-                _type_in_dataname = True
-                break
-
-        if _type_in_dataname:
-            # 按照数据类型读取数据集
-            for file in data_set_files:
-                if _type in file:
-                    self.files.append(file)
-            self.files.sort()
-        else:
-            # 按照日期读取回归数据集
-            begin_date = ''
-            totals = 0
-            if len(data_set_files[0]) == 12:
-                # a股数据集 20240313.pkl
-                begin_date = target_parm['begin_date'].replace('-', '') + '.pkl'
-                totals = target_parm['total_hours'] // 24
-            else:
-                # 数字货币数据集 20240427_10.pkl
-                begin_date = target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
-                totals = target_parm['total_hours'] // 2
-
-            self.files = data_set_files[data_set_files.index(begin_date):]
-
-            # 初始化各个部分的 begin end
-            _rate_sum = sum(target_parm['data_rate'])
-            idx = 0 if _type=='train' else 1 if _type=='val' else 2
-
-            # 起始索引，以begin_date为0索引
-            begin_idx = 0
-            for i in range(idx):
-                begin_idx += int(totals * (target_parm['data_rate'][i] / _rate_sum))
-            end_idx = int(totals * (target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
-
-            self.files = self.files[begin_idx:end_idx]
+        self.read_files()
 
         # 读取一个文件，判断是否需要拆分数据集
         _,mean_std, _, _, _ = pickle.load(open(os.path.join(self.params.data_folder, self.files[0]), 'rb'))
@@ -477,6 +435,58 @@ class Dataset_cahce(torch.utils.data.Dataset):
         #     # 存放 data_mape 
         #     self.q = queue.Queue(maxsize=1)
 
+    def read_files(self):
+        # 根据数据类型 整理 待读取的数据文件列表、
+        data_path = self.params.data_folder
+
+        # 针对按照文件夹（train/val/test）分配的数据集
+        folder_data_path = os.path.join(data_path, self.type)
+        if os.path.exists(folder_data_path):
+            self.files = sorted([i for i in os.listdir(folder_data_path)])
+            return
+
+        # data_folder 路径下没有分配的文件夹
+        data_set_files = sorted([i for i in os.listdir(data_path)])
+
+        # 判断数据名类型
+        _type_in_dataname = False
+        for file in data_set_files:
+            if _type in file:
+                _type_in_dataname = True
+                break
+
+        if _type_in_dataname:
+            # 按照数据类型读取数据集
+            for file in data_set_files:
+                if _type in file:
+                    self.files.append(file)
+            self.files.sort()
+        else:
+            # 按照日期读取回归数据集
+            begin_date = ''
+            totals = 0
+            if len(data_set_files[0]) == 12:
+                # a股数据集 20240313.pkl
+                begin_date = target_parm['begin_date'].replace('-', '') + '.pkl'
+                totals = target_parm['total_hours'] // 24
+            else:
+                # 数字货币数据集 20240427_10.pkl
+                begin_date = target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
+                totals = target_parm['total_hours'] // 2
+
+            self.files = data_set_files[data_set_files.index(begin_date):]
+
+            # 初始化各个部分的 begin end
+            _rate_sum = sum(target_parm['data_rate'])
+            idx = 0 if _type=='train' else 1 if _type=='val' else 2
+
+            # 起始索引，以begin_date为0索引
+            begin_idx = 0
+            for i in range(idx):
+                begin_idx += int(totals * (target_parm['data_rate'][i] / _rate_sum))
+            end_idx = int(totals * (target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
+
+            self.files = self.files[begin_idx:end_idx]
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         debug(f'{self.type} init_data_thread_start {rank}')
@@ -675,6 +685,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         return x, self.y[index], mean_std
 
+class Dataset_cahce_folder(torch.utils.data.Dataset):
+    def read_files(self):
+        # 文件夹读取训练/验证/测试 数据
+        data_path = os.path.join(self.params.data_folder, self.type)
+        self.files = sorted([i for i in os.listdir(data_path)])
+
 class Dataset(torch.utils.data.Dataset): 
     """Characterizes a dataset for PyTorch"""
 
@@ -857,6 +873,9 @@ class DistributedSampler(Sampler):
         self.accelerator = accelerator
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
+
+        # for debug
+        mini_dataset_length = 2
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)

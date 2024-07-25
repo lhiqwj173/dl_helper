@@ -634,13 +634,17 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     if not only_predict:
         p.print(f'train start')
         for epoch in range(tracker.epoch_count, params.epochs):
+            debug(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
             if tracker.step_in_epoch == 0:
+                debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
             # 验证
+            debug(f'val_fn')
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
             # 保存结果
+            debug(f'save_result')
             tracker.save_result()
 
             if epoch % 30 == 0 and epoch > 0:
