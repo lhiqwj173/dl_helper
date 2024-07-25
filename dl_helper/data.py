@@ -874,8 +874,8 @@ class DistributedSampler(Sampler):
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
 
-        # for debug
-        mini_dataset_length = 2
+        # # for debug
+        # mini_dataset_length = 2
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)

@@ -173,53 +173,53 @@ class Tracker():
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
             # self.printer.print('record data done')
 
-        self.printer.print('update tracker...')
+        # self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            self.printer.print('update train round')
+            # self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
-                self.printer.print('scheduler.step')
+                # self.printer.print('scheduler.step')
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
-                self.printer.print('append lr')
+                # self.printer.print('append lr')
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
 
-                self.printer.print('step done')
+                # self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1
-            self.printer.print('step done')
+            # self.printer.print('step done')
 
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
-            self.printer.print('lr_change')
+            # self.printer.print('lr_change')
 
             if tpu_available():
                 xm.mark_step()
 
             if lr_change.item() == 1:
-                self.printer.print('broadcast lr')
+                # self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
                 self.accelerator.wait_for_everyone()
                 cur_lr = broadcast(cur_lr)
 
                 # 在其他设备上应用学习率
-                self.printer.print(f'apply not main lr -> {cur_lr}')
+                # self.printer.print(f'apply not main lr -> {cur_lr}')
                 if not self.accelerator.is_main_process:
                     self.scheduler.use_lr(cur_lr)
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
-            self.printer.print('update val round, step_in_epoch -> 0')
+            # self.printer.print('update val round, step_in_epoch -> 0')
             self.step_in_epoch = 0
-            self.printer.print(f'step_in_epoch :{self.step_in_epoch}')
+            # self.printer.print(f'step_in_epoch :{self.step_in_epoch}')
             self.epoch_count += 1
 
         if 'test' == self.track_update:
@@ -244,7 +244,7 @@ class Tracker():
 
                 # 储存预测结果
                 # symbol_begin_end.csv
-                self.printer.print('save prediction')
+                # self.printer.print('save prediction')
                 for symbol in datas:
                     data_list = datas[symbol]
                     begin = data_list[0][0]
