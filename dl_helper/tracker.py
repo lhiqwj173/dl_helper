@@ -7,6 +7,8 @@ import torch
 import torch.nn.functional as F
 from torchmetrics import F1Score, R2Score
 
+from py_ext.tool import debug, log
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -322,10 +324,12 @@ class Tracker():
 
         # 记录label分布
         if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
+            debug('统计 label_counts')
             if _type not in self.label_counts:
                 self.label_counts[_type] = torch.bincount(labels, minlength=self.params.y_n)
             else:
                 self.label_counts[_type] += torch.bincount(labels, minlength=self.params.y_n)
+            debug('统计 label_counts done')
 
         self.track_update = _type
 
