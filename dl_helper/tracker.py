@@ -575,7 +575,7 @@ class Tracker():
                 # 数据标签分布
                 for i in self.label_counts:
                     debug(self.label_counts[i])
-                    label_pct = torch.softmax(self.label_counts[i].float(), dim=0)*100
+                    label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
                     label_pct /= torch.min(label_pct)
                     f.write(':'.join([f'{int(i)}' for i in label_pct.to('cpu').tolist()]) + ',')
                 # 模型
