@@ -351,11 +351,13 @@ class Tracker():
         self.printer.print(f"{predict}")
         self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+        self.printer.print('gather loss, y_true, y_pred done')
         if _type == 'test':
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
         else:
             _ids = []
+        self.printer.print('_ids done')
 
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
@@ -370,11 +372,12 @@ class Tracker():
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
+            self.printer.print('temp data done')
 
             if _type == 'test':
-                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
+                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
                 self.temp['_ids'] += _ids
-                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
+                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
 
