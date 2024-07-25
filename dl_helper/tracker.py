@@ -343,13 +343,13 @@ class Tracker():
             predict = torch.argmax(softmax_predictions, dim=1)
 
         # 汇总所有设备上的数据
-        # self.printer.print('sync track...')
+        self.printer.print('sync track...')
         self.accelerator.wait_for_everyone()
         
-        # self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
-        # self.printer.print(f"{target}")
-        # self.printer.print(f"{predict}")
-        # self.printer.print(f"{correct_count}")
+        self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
+        self.printer.print(f"{target}")
+        self.printer.print(f"{predict}")
+        self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         if _type == 'test':
             _ids = gather_object(test_dataloader.dataset.use_data_id)
@@ -360,7 +360,7 @@ class Tracker():
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
-        # self.printer.print('main cal track...')
+        self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
@@ -377,6 +377,8 @@ class Tracker():
                 # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
+
+        debug('track done')
 
     def save_result(self):
         self._plot()
