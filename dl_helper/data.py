@@ -384,8 +384,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.use_data_id = []
 
         # 数据集参数
-        target_parm = data_str2parm(params.data_set)
-        self.pass_n = target_parm['pass_n']
+        self.target_parm = data_str2parm(params.data_set)
+        self.pass_n = self.target_parm['pass_n']
 
         # 当前数据类型的所有可读取数据文件列表
         self.files = []
@@ -467,24 +467,24 @@ class Dataset_cahce(torch.utils.data.Dataset):
             totals = 0
             if len(data_set_files[0]) == 12:
                 # a股数据集 20240313.pkl
-                begin_date = target_parm['begin_date'].replace('-', '') + '.pkl'
-                totals = target_parm['total_hours'] // 24
+                begin_date = self.target_parm['begin_date'].replace('-', '') + '.pkl'
+                totals = self.target_parm['total_hours'] // 24
             else:
                 # 数字货币数据集 20240427_10.pkl
-                begin_date = target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
-                totals = target_parm['total_hours'] // 2
+                begin_date = self.target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
+                totals = self.target_parm['total_hours'] // 2
 
             self.files = data_set_files[data_set_files.index(begin_date):]
 
             # 初始化各个部分的 begin end
-            _rate_sum = sum(target_parm['data_rate'])
+            _rate_sum = sum(self.target_parm['data_rate'])
             idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
 
             # 起始索引，以begin_date为0索引
             begin_idx = 0
             for i in range(idx):
-                begin_idx += int(totals * (target_parm['data_rate'][i] / _rate_sum))
-            end_idx = int(totals * (target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
+                begin_idx += int(totals * (self.target_parm['data_rate'][i] / _rate_sum))
+            end_idx = int(totals * (self.target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
 
             self.files = self.files[begin_idx:end_idx]
 
