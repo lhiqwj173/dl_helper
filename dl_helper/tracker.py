@@ -321,16 +321,6 @@ class Tracker():
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
-
-        # 记录label分布
-        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
-            debug('统计 label_counts')
-            if _type not in self.label_counts:
-                self.label_counts[_type] = torch.bincount(target, minlength=self.params.y_n)
-            else:
-                self.label_counts[_type] += torch.bincount(target, minlength=self.params.y_n)
-            debug('统计 label_counts done')
-
         self.track_update = _type
 
         # epoch内的迭代次数
@@ -343,25 +333,34 @@ class Tracker():
             predict = torch.argmax(softmax_predictions, dim=1)
 
         # 汇总所有设备上的数据
-        self.printer.print('sync track...')
+        # self.printer.print('sync track...')
         self.accelerator.wait_for_everyone()
         
-        self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
-        self.printer.print(f"{target}")
-        self.printer.print(f"{predict}")
+        # self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
+        # self.printer.print(f"{target}")
+        # self.printer.print(f"{predict}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
-        self.printer.print('gather loss, y_true, y_pred done')
+        # self.printer.print('gather loss, y_true, y_pred done')
         if _type == 'test':
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
         else:
             _ids = []
-        self.printer.print('_ids done')
+        # self.printer.print('_ids done')
+
+        # 记录label分布
+        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
+            debug('统计 label_counts')
+            if _type not in self.label_counts:
+                self.label_counts[_type] = torch.bincount(target, minlength=self.params.y_n)
+            else:
+                self.label_counts[_type] += torch.bincount(target, minlength=self.params.y_n)
+            debug('统计 label_counts done')
 
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
 
-        self.printer.print('main cal track...')
+        # self.printer.print('main cal track...')
         if self.accelerator.is_main_process:
             if None is self.temp['_y_true']:
                 self.temp['_y_true'] = _y_true
@@ -371,12 +370,12 @@ class Tracker():
                 self.temp['_y_true'] = torch.cat([self.temp['_y_true'], _y_true])
                 self.temp['_y_pred'] = torch.cat([self.temp['_y_pred'], _y_pred])
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
-            self.printer.print('temp data done')
+            # self.printer.print('temp data done')
 
             if _type == 'test':
-                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
+                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
                 self.temp['_ids'] += _ids
-                self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
+                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
 
