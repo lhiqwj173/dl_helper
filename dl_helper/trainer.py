@@ -649,10 +649,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                 break
 
     # 停止继续读取数据
-    p.print(f'close train data_loading')
-    train_loader.sampler.data_loader_close()
-    p.print(f'close val data_loading')
-    val_loader.sampler.data_loader_close()
+    if not only_predict:
+        p.print(f'close train data_loading')
+        train_loader.sampler.data_loader_close()
+        p.print(f'close val data_loading')
+        val_loader.sampler.data_loader_close()
 
     p.print(f'test start')
 
