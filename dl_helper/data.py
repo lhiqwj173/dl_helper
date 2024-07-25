@@ -451,14 +451,14 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 判断数据名类型
         _type_in_dataname = False
         for file in data_set_files:
-            if self._type in file:
+            if self.type in file:
                 _type_in_dataname = True
                 break
 
         if _type_in_dataname:
             # 按照数据类型读取数据集
             for file in data_set_files:
-                if self._type in file:
+                if self.type in file:
                     self.files.append(file)
             self.files.sort()
         else:
@@ -478,7 +478,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             # 初始化各个部分的 begin end
             _rate_sum = sum(target_parm['data_rate'])
-            idx = 0 if self._type=='train' else 1 if self._type=='val' else 2
+            idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
 
             # 起始索引，以begin_date为0索引
             begin_idx = 0
