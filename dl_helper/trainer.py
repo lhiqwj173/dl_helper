@@ -387,7 +387,9 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
         # 训练
         for batch in active_dataloader:
             # 预处理
+            debug(f'batch')
             data, target = trans(batch, train=True)
+            debug(f'data :{data.shape} target :{target.shape}')
 
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -395,9 +397,13 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 
             optimizer.zero_grad()
             output = model(data)
+            debug(f'model')
             loss = criterion(output, target)
+            debug(f'criterion')
             accelerator.backward(loss)
+            debug(f'backward')
             optimizer.step()
+            debug(f'step')
 
             # 追踪器 记录数据
             with torch.no_grad():
