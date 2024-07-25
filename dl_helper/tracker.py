@@ -349,7 +349,6 @@ class Tracker():
         self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
         self.printer.print(f"{target}")
         self.printer.print(f"{predict}")
-        self.printer.print(f"{correct_count}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         self.printer.print('gather loss, y_true, y_pred done')
         if _type == 'test':
