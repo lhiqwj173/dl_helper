@@ -448,9 +448,12 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
             # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
+    
+    debug('val loop done')
 
     # 追踪器，计算必要的数据
     tracker.update()
+    debug('val_fn done')
 
     # # for debug
     # accelerator.wait_for_everyone()

@@ -173,38 +173,38 @@ class Tracker():
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
             # self.printer.print('record data done')
 
-        # self.printer.print('update tracker...')
+        self.printer.print('update tracker...')
         if 'train' == self.track_update:
-            # self.printer.print('update train round')
+            self.printer.print('update train round')
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
-                # self.printer.print('scheduler.step')
+                self.printer.print('scheduler.step')
 
                 # 记录学习率
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
-                # self.printer.print('append lr')
+                self.printer.print('append lr')
 
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
 
-                # self.printer.print('step done')
+                self.printer.print('step done')
                 if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
                     lr_change += 1
-            # self.printer.print('step done')
+            self.printer.print('step done')
 
             # 同步学习率
             self.accelerator.wait_for_everyone()
             lr_change = broadcast(lr_change)
-            # self.printer.print('lr_change')
+            self.printer.print('lr_change')
 
             if tpu_available():
                 xm.mark_step()
 
             if lr_change.item() == 1:
-                # self.printer.print('broadcast lr')
+                self.printer.print('broadcast lr')
                 cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
 
                 self.accelerator.wait_for_everyone()
@@ -217,8 +217,9 @@ class Tracker():
 
         if 'val' == self.track_update:
             # val 结束，重置为训练阶段
-            # self.printer.print('update val round')
+            self.printer.print('update val round, step_in_epoch -> 0')
             self.step_in_epoch = 0
+            self.printer.print(f'step_in_epoch :{self.step_in_epoch}')
             self.epoch_count += 1
 
         if 'test' == self.track_update:
@@ -350,12 +351,12 @@ class Tracker():
 
         # 记录label分布
         if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
-            debug('统计 label_counts')
+            # debug('统计 label_counts')
             if _type not in self.label_counts:
                 self.label_counts[_type] = torch.bincount(_y_true, minlength=self.params.y_n)
             else:
                 self.label_counts[_type] += torch.bincount(_y_true, minlength=self.params.y_n)
-            debug('统计 label_counts done')
+            # debug('统计 label_counts done')
 
         if len(_loss.shape) == 0:
             _loss = _loss.unsqueeze(0)
@@ -378,8 +379,6 @@ class Tracker():
                 # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
-
-        debug('track done')
 
     def save_result(self):
         self._plot()
