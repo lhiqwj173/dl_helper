@@ -55,7 +55,8 @@ class test(test_base):
 
         batch_n = 16
 
-        target_ratio_vars = [0.001, 0.00105, 0.0011, 0.00115]
+        # target_ratio_vars = [0.001, 0.00105, 0.0011, 0.00115]
+        target_ratio_vars = [1e-5+1e-5*i for i in range(4)]
         self.target_ratio = target_ratio_vars[self.idx]
         yfunc = functools.partial(yfunc, self.target_ratio)
 
