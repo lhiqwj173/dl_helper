@@ -9,7 +9,7 @@ from dl_helper.transforms.binctabl import transform
 
 """
 随机遮蔽    -> 3
-降采样      -> 3
+降采样      -> 2
 标签阈值    -> 0.001 (交易费率)
 
 数据增加 30d
@@ -83,8 +83,8 @@ class test(test_base):
             # 数据增强
             random_scale=0.05, random_mask_row=1,
 
-            # 每 3 个样本取一个数据
-            down_freq=3,
+            # 每 2 个样本取一个数据
+            down_freq=2,
 
             # 3分类
             classify=True,
