@@ -577,7 +577,10 @@ class Tracker():
                     debug(self.label_counts[i])
                     label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
                     label_pct /= torch.min(label_pct)
-                    f.write('@'.join([f'{int(i)}' for i in label_pct.to('cpu').tolist()]) + ',')
+                    label_counts = self.label_counts[i].to('cpu').tolist()
+                    strs = [f'{int(i)}' for i in label_pct.to('cpu').tolist()]
+                    strs = [f'{strs[i]}({label_counts[i]})' for i in range(len(strs))]
+                    f.write('@'.join(strs) + ',')
                 # 模型
                 f.write(f'{self.model_name},{self.params.describe},')
                 # 训练结果

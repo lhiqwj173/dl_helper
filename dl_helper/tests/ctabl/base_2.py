@@ -1,3 +1,5 @@
+import functools
+
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params
 
@@ -6,43 +8,13 @@ from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 
 """
-epochs
-    100
-    200 X
+随机遮蔽    -> 3
+降采样      -> 3
+标签阈值    -> 0.001 (交易费率)
 
-target_type
-    1
-    2 X
-
-lr_scheduler_class
-    ReduceLR_slow_loss X
-    ReduceLROnPlateau 
-
-down_freq 
-    2
-    1 X
-
-pass_n
-    100
-    80 
-    60 X
-    40 X
-    20 X
-
-##########################################
-
-变动遮蔽行数 
-对验证数据基本无影响
-
-遮蔽减少:
-    提高训练损失 / 降低训练数据的acc
-random_mask_row
-    5 
-    4
-    3 
-    2 X
-    1 X
-
+数据增加 30d
+训练:验证:测试
+22:6:2
 """
 
 def yfunc_target_long_short(x):
@@ -55,10 +27,10 @@ def yfunc_target_long_short(x):
     else:
         return 2
 
-def yfunc_target_simple(x):
-    if x > 0:
+def yfunc_target_simple(ratio, x):
+    if x > ratio:
         return 0
-    elif x < 0:
+    elif x < -ratio:
         return 1
     else:
         return 2
@@ -83,10 +55,11 @@ class test(test_base):
 
         batch_n = 16
 
-        mask_rows_vars = [4,3,2,1]
-        self.mask_rows = mask_rows_vars[self.idx]
+        target_ratio_vars = [0.001, 0.00105, 0.0011, 0.00115]
+        self.target_ratio = target_ratio_vars[self.idx]
+        yfunc = functools.partial(yfunc, self.target_ratio)
 
-        title = f'binctabl_mask_rows_{self.mask_rows}'
+        title = f'binctabl_base2_{self.target_ratio}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
@@ -110,8 +83,8 @@ class test(test_base):
             # 数据增强
             random_scale=0.05, random_mask_row=1,
 
-            # 每 10 个样本取一个数据
-            down_freq=10,
+            # 每 3 个样本取一个数据
+            down_freq=3,
 
             # 3分类
             classify=True,
@@ -133,5 +106,5 @@ class test(test_base):
         return m_bin_ctabl(60, 40, 100, 40, 120, 10, self.y_n, 1)
 
     def get_transform(self, device):
-        return transform(device, self.para, 100+self.mask_rows)
+        return transform(device, self.para, 103)
 
