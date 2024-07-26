@@ -443,10 +443,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
         folder_data_path = os.path.join(data_path, self.type)
         debug(f"folder_data_path: {folder_data_path}")
         if os.path.exists(folder_data_path):
-            info(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
+            log(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
             self.files = sorted([i for i in os.listdir(folder_data_path)])
             self.files = [f'{self.type}/{i}' for i in self.files]
-            info(self.files)
+            log(self.files)
             return
 
         # data_folder 路径下没有分配的文件夹
