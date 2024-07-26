@@ -442,7 +442,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 针对按照文件夹（train/val/test）分配的数据集
         folder_data_path = os.path.join(data_path, self.type)
         if os.path.exists(folder_data_path):
+            info(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
             self.files = sorted([i for i in os.listdir(folder_data_path)])
+            info(self.files)
             return
 
         # data_folder 路径下没有分配的文件夹
