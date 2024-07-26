@@ -659,7 +659,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             debug(f'package_root')
             package_root(accelerator, params)
 
-            info(f'epoch {epoch} done')
+            log(f'epoch {epoch} done')
 
             # 训练可用时长不足，开始 test/predict
             if tracker.need_test:
