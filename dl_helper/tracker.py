@@ -551,7 +551,8 @@ class Tracker():
             with open(result_file, 'w') as f:
                 # 训练参数
                 for key in self.params.__dict__:
-                    f.write(f'{key},')
+                    if key != 'y_func':
+                        f.write(f'{key},')
                 # 数据参数
                 for i in data_dict:
                     f.write(f'{i},')
@@ -571,7 +572,8 @@ class Tracker():
             with open(result_file, 'a') as f:
                 # 训练参数
                 for key in self.params.__dict__:
-                    f.write(f'{self.params.__dict__[key]},')
+                    if key != 'y_func':
+                        f.write(f'{self.params.__dict__[key]},')
                 # 数据参数
                 for i in data_dict:
                     if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
