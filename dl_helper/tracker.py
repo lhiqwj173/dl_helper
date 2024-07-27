@@ -594,16 +594,18 @@ class Tracker():
                 # 训练结果
                 # 选择val_loss 最小的点
                 best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
-                log(f'loss {self.data["val_loss"]}')
-                log(f'min {min(self.data["val_loss"])}')
-                log(f'min {min(self.data["val_loss"]).shape}')
-                log(f'best_idx {best_idx.shape}')
-                log(f'best_idx {best_idx}')
+                if best_idx.shape[0] > 1:
+                    best_idx = best_idx[-1]
+                # log(f'loss {self.data["val_loss"]}')
+                # log(f'min {min(self.data["val_loss"])}')
+                # log(f'min {min(self.data["val_loss"]).shape}')
+                # log(f'best_idx {best_idx.shape}')
+                # log(f'best_idx {best_idx}')
                 for i in self.data:
                     if i == 'lr':
                         continue
                     if not None is self.data[i]:
-                        log(f'{i}: len {len(self.data[i])}')
+                        # log(f'{i}: len {len(self.data[i])}')
                         if len(self.data[i]) >= best_idx+1:
                             d = self.data[i][best_idx]
                         else:
