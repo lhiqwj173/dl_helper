@@ -8,13 +8,8 @@ from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 
 """
-随机遮蔽    -> 3
-降采样      -> 2
-标签阈值    -> 0.001 (交易费率)
-
-数据增加 30d
-训练:验证:测试
-22:6:2
+测试 特定标的 训练
+增大batchsize
 """
 
 def yfunc_target_long_short(x):
@@ -58,7 +53,7 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[target_type]
         self.y_n = 3
 
-        batch_n = 16
+        batch_n = 16 * 4
 
         yfunc = functools.partial(yfunc, 4e-05)
 
