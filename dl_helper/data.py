@@ -919,6 +919,7 @@ class DistributedSampler(Sampler):
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
         data_length = torch.min(data_length)
+        log(f'{self.dataset.type} data_length: {data_length}')
 
         if self.shuffle:
             indices = list(torch.randperm(data_length))
