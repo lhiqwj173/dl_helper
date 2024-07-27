@@ -556,9 +556,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 1.0 读取原始数据
         data_path = self.params.data_folder
 
-        # 数据集参数
-        target_parm = data_str2parm(self.params.data_set)
-
         # 获取数据分段
         files = [i for i in file_name_list if i in self.files]
 
@@ -575,7 +572,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         }
 
         for file in files:
-            diff_length, _ = load_data(self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
+            diff_length, _ = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
         # 检查数值异常
@@ -980,15 +977,31 @@ class cache():
         self.data = pickle.load(open(self.file, 'rb'))
         self.cost = time.time() - t0
 
-def load_data(params, file, diff_length, data_map, device=None, log=False):
+def load_data(target_parm, params, file, diff_length, data_map, device=None, log=False):
     # report_memory_usage('begin')
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
+
+    reindex = False
 
     # 每3个降采样
     # 更长时间范围的样本数据
     if params.down_freq > 1:
         idxs = [i for i in range(0, len(x), params.down_freq)]
+        reindex = True
+    else:
+        idxs = list(range(0, len(x)))
+        
+    # 过滤掉不需要的symbol
+    symbols = target_parm['symbols'].split('@')
+    if symbols != ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']:
+        symbols = [i.lower() for i in symbols]
+        # id: btcusdt_1710289478588
+        idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
+        reindex = True
+
+    # 重新取样
+    if reindex:
         ids = [ids[i] for i in idxs]
         mean_std = [mean_std[i] for i in idxs]
         x = [x[i] for i in idxs]
@@ -1183,7 +1196,7 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
         if count > max_num:
             break
 
-        diff_length, need_split_data_set = load_data(params, os.path.join(data_path, file), diff_length, data_map, device)
+        diff_length, need_split_data_set = load_data(target_parm, params, os.path.join(data_path, file), diff_length, data_map, device)
         # report_memory_usage()
 
     if not need_id:
