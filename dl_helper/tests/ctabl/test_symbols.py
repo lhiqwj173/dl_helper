@@ -56,7 +56,7 @@ class test(test_base):
         batch_n = 16 * 4# 7.9GB
         batch_n = 16 * 8# 7.8 - 8GB
         batch_n = 16 * (2**6) # 11.6 - 11.9GiB
-        batch_n = 16 * (2**8)
+        batch_n = 16 * (2**7)
 
         yfunc = functools.partial(yfunc, 4e-05)
 
