@@ -59,7 +59,7 @@ class test(test_base):
 
         yfunc = functools.partial(yfunc, 4e-05)
 
-        title = f'binctabl_symbols_{symbols}'
+        title = f'binctabl_symbols_{"@".join(symbols)}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
