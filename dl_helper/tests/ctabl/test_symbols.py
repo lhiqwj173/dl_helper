@@ -53,10 +53,10 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[target_type]
         self.y_n = 3
 
-        batch_n = 16 * 4# 7.9GB
-        batch_n = 16 * 8# 7.8 - 8GB
-        batch_n = 16 * (2**6) # 11.6 - 11.9GiB
-        batch_n = 16 * (2**2)
+        # batch_n = 16 * 4# 7.9GB
+        # batch_n = 16 * 8# 7.8 - 8GB
+        # batch_n = 16 * (2**6) # 11.6 - 11.9GiB
+        batch_n = 16 * 2
 
         yfunc = functools.partial(yfunc, 4e-05)
 

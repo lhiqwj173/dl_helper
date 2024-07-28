@@ -53,7 +53,7 @@ class test(test_base):
         classify_idx, targrt_name, yfunc = vars[target_type]
         self.y_n = 3
 
-        batch_n = 16
+        batch_n = 16 * 2
 
         # target_ratio_vars = [0.001, 0.00105, 0.0011, 0.00115]
         target_ratio_vars = [1e-5+1e-5*i for i in range(4)]
@@ -84,8 +84,8 @@ class test(test_base):
             # 数据增强
             random_scale=0.05, random_mask_row=1,
 
-            # 每 2 个样本取一个数据
-            down_freq=2,
+            # 每 1 个样本取一个数据
+            down_freq=1,
 
             # 3分类
             classify=True,
