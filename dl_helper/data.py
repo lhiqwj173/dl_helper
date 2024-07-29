@@ -13,7 +13,7 @@ import random
 import datetime
 from tqdm import tqdm
 from collections.abc import Iterable
-from pympler import asizeof
+# from pympler import asizeof
 # import gc
 from dl_helper.train_param import logger, data_parm2str, data_str2parm
 from dl_helper.tool import report_memory_usage, check_nan

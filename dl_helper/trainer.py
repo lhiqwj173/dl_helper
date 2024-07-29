@@ -20,7 +20,6 @@ from torch.utils.data.sampler import RandomSampler
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
-from dl_helper.tg import tg_download_async, tg_download, tg_upload, tg_del_file
 from dl_helper.alist import alist
 
 ses = os.environ.get('TG_SESSION')
@@ -300,11 +299,6 @@ def package_root(accelerator, params):
         print('compress_folder done')
 
         if not params.debug:
-            # # 删除当前的训练文件，如果存在
-            # tg_del_file(ses, os.path.basename(zip_file))
-            # # 上传到tg
-            # tg_upload(ses, zip_file)
-
             # 上传更新到alist
             client = alist(user, pwd)
             client.upload(zip_file, '/train_data/')
