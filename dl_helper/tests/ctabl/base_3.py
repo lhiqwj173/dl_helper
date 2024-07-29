@@ -92,31 +92,58 @@ class test(test_base):
         return transform(device, self.para, 103)
 
 if '__main__' == __name__:
-    # 2024-05-06
-    # 2024-05-09
-    # 2024-05-11
-    # 2024-05-20
-    # 2024-07-16
-    # 2024-07-26
-    import datetime
-    dates = []
 
-    # 0501 + 20
-    begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
-    for i in range(20):
-        dates.append(begin_date + datetime.timedelta(days=i))
+    # ##########################
+    # # 币安
+    # ##########################
+    # # 2024-05-06
+    # # 2024-05-09
+    # # 2024-05-11
+    # # 2024-05-20
+    # # 2024-07-16
+    # # 2024-07-26
+    # import datetime
+    # dates = []
 
-    # 0716 + 11
-    begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
-    for i in range(11):
-        dates.append(begin_date + datetime.timedelta(days=i))
+    # # 0501 + 20
+    # begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
+    # for i in range(20):
+    #     dates.append(begin_date + datetime.timedelta(days=i))
 
-    print(f'训练数据天数: {len(dates)}')
+    # # 0716 + 11
+    # begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
+    # for i in range(11):
+    #     dates.append(begin_date + datetime.timedelta(days=i))
 
-    # 随机抽 6 天作为验证数据集
-    import random
-    random.shuffle(dates)
-    valid_dates = dates[:6]
-    valid_dates.sort()
-    for date in valid_dates:
-        print(date.date())
+    # print(f'训练数据天数: {len(dates)}')
+
+    # # 随机抽 6 天作为验证数据集
+    # import random
+    # random.shuffle(dates)
+    # valid_dates = dates[:6]
+    # valid_dates.sort()
+    # for date in valid_dates:
+    #     print(date.date())
+
+
+    ##########################
+    # A股
+    # 20231130.pkl
+    # 20231213.pkl
+    # 20231218.pkl
+    # 20240110.pkl
+    # 20240201.pkl
+    # 20240326.pkl
+    # 20240408.pkl
+    # 20240521.pkl
+    # 20240529.pkl
+    ##########################
+    import os, random
+    files = os.listdir(r'Z:\L2_DATA\20240729\train')
+
+    # 随机抽取9天的数据作为验证集
+    random.shuffle(files)
+    valid_files = files[:9]
+    valid_files.sort()
+    for file in valid_files:
+        print(file)

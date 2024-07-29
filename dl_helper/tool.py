@@ -4,6 +4,7 @@ from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
+
 def check_nan(data, **kwargs):
     if torch.isnan(data).any().item() or torch.isinf(data).any().item():
         pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))
