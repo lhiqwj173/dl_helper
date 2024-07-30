@@ -88,13 +88,3 @@ else:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
     sys.path.append(os.path.join(root, '3rd', 'dl_helper'))
-    
-    # 敏感参数
-    os.environ['ALIST_USER'] = 'admin'
-    os.environ['ALIST_PWD'] = 'LHss6632673'
-    
-    try:
-        os.environ.pop('TPU_PROCESS_ADDRESSES')
-        os.environ.pop('CLOUD_TPU_TASK_ID')
-    except:
-        pass

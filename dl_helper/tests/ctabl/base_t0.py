@@ -157,13 +157,6 @@ if '__main__' == __name__:
     # for file in valid_files:
     #     print(file)
 
-    import os
-    envs = os.environ
-    for k in envs:
-        print(f'{k}: {envs[k]}')
-
-    sys.exit(0)
-
     run(
         test, 
         mode='cache_data',

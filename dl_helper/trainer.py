@@ -1119,13 +1119,14 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     kwargs['idx'] = get_idx(test_class.title_base())
 
     num_processes = match_num_processes()
-    # num_processes = 1
 
-    # model = None
-    # if num_processes == 8:
-    #     # tpu 在训练函数外实例化模型 传入
-    #     print('训练函数外实例化模型 传入')
-    #     model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
+    os.environ['ALIST_USER'] = 'admin'
+    os.environ['ALIST_PWD'] = 'LHss6632673'
+    try:
+        os.environ.pop('TPU_PROCESS_ADDRESSES')
+        os.environ.pop('CLOUD_TPU_TASK_ID')
+    except:
+        pass
 
     lock = mp.Manager().Lock()
 
