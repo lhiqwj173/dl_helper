@@ -10,8 +10,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 class test_base():
-    def __init__(self, idx, data_folder='', amp='no', debug=False):
-        self.idx = idx
+    def __init__(self, data_folder='', amp='no', debug=False):
         self.data_folder = data_folder if data_folder else './data'
         self.amp = amp
         self.debug = debug
