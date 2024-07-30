@@ -157,6 +157,7 @@ if '__main__' == __name__:
     # for file in valid_files:
     #     print(file)
 
+    import os
     for k, v in os.environ:
         print(f'{k}: {v}')
 
