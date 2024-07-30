@@ -52,7 +52,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        title = title_base() + f'_v{self.idx}'
+        title = self.title_base() + f'_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
@@ -135,28 +135,6 @@ if '__main__' == __name__:
     # for date in valid_dates:
     #     print(date.date())
 
-
-    # ##########################
-    # # A股
-    # # 20231130.pkl
-    # # 20231213.pkl
-    # # 20231218.pkl
-    # # 20240110.pkl
-    # # 20240201.pkl
-    # # 20240326.pkl
-    # # 20240408.pkl
-    # # 20240521.pkl
-    # # 20240529.pkl
-    # ##########################
-    # import os, random
-    # files = os.listdir(r'Z:\L2_DATA\20240729\train')
-
-    # # 随机抽取9天的数据作为验证集
-    # random.shuffle(files)
-    # valid_files = files[:9]
-    # valid_files.sort()
-    # for file in valid_files:
-    #     print(file)
 
     run(
         test, 
