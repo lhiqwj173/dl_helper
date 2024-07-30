@@ -4,13 +4,17 @@
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
 from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau
+from py_ext.tool import log
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
 class test_base():
-    def __init__(self, data_folder='', amp='no', debug=False):
+    def __init__(self, idx, data_folder='', amp='no', debug=False):
+        self.idx = idx
+        log(f'train begin :{self.idx}')
+
         self.data_folder = data_folder if data_folder else './data'
         self.amp = amp
         self.debug = debug

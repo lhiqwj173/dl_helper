@@ -2,6 +2,7 @@ from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tool import report_memory_usage
 from dl_helper.acc.data_loader import skip_first_batches
+from dl_helper.idx_manager import get_idx
 
 import copy
 import shutil
@@ -1114,6 +1115,9 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
+    # 分配idx
+    kwargs['idx'] = get_idx(test_class.title_base())
+
     num_processes = match_num_processes()
     # num_processes = 1
 

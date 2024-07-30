@@ -8,7 +8,6 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
-from dl_helper.idx_manager import get_idx
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
@@ -37,6 +36,11 @@ def yfunc(y):
         return 2
 
 class test(test_base):
+
+    @classmethod
+    def title_base(cls):
+        return 'binctabl_base_t0'
+
     def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -48,11 +52,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        title_base = 'binctabl_base_t0'
-        idx = get_idx(title_base)
-        log(f'train begin :{idx}')
-
-        title = title_base + f'_v{idx}'
+        title = title_base() + f'_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30],
             'pass_n': 100,
@@ -156,6 +156,11 @@ if '__main__' == __name__:
     # valid_files.sort()
     # for file in valid_files:
     #     print(file)
+
+    for k, v in os.environ:
+        print(f'{k}: {v}')
+
+    return
 
     run(
         test, 
