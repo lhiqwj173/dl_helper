@@ -160,7 +160,7 @@ if '__main__' == __name__:
     for k, v in os.environ:
         print(f'{k}: {v}')
 
-    return
+    sys.exit(0)
 
     run(
         test, 
