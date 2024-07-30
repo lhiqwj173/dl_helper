@@ -3,7 +3,7 @@ import socket, time, sys
 CODE = '0QYg9Ky17dWnN4eK'
 def get_idx(train_title):
     # 定义服务器地址和端口
-    HOST = '127.0.0.1'
+    HOST = '168.138.158.156'
     PORT = 12345
 
     # 创建一个 TCP 套接字
