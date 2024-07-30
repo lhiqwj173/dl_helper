@@ -53,14 +53,16 @@ def run_idx_manager():
         # 接收客户端消息
         data = client_socket.recv(1024)
         if data:
-            _code, train_title = data.decode().split('_', maxsplit=1)
-            if _code == CODE:
-                if train_title not in titles:
-                    titles[train_title] = -1
-                titles[train_title] += 1
+            data_str = data.decode()
+            if '_' in data_str:
+                _code, train_title = data_str.split('_', maxsplit=1)
+                if _code == CODE:
+                    if train_title not in titles:
+                        titles[train_title] = -1
+                    titles[train_title] += 1
 
-                # 发送idx回客户端
-                client_socket.sendall(f'{titles[train_title]}'.encode())
+                    # 发送idx回客户端
+                    client_socket.sendall(f'{titles[train_title]}'.encode())
 
         # 关闭与客户端的连接
         client_socket.close()
