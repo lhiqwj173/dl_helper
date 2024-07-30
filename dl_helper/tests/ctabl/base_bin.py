@@ -50,6 +50,7 @@ class test(test_base):
 
         title_base = 'binctabl_base_bin'
         idx = get_idx(title_base)
+        log(f'train begin :{idx}')
 
         title = title_base + f'_v{idx}'
         data_parm = {
