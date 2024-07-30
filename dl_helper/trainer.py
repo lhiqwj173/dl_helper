@@ -24,8 +24,6 @@ from py_ext.wechat import wx
 from dl_helper.alist import alist
 
 ses = os.environ.get('TG_SESSION')
-user = os.environ.get('ALIST_USER')
-pwd = os.environ.get('ALIST_PWD')
 
 if match_num_processes() ==8:
     from torch.nn.parallel import DistributedDataParallel as DDP
@@ -301,7 +299,7 @@ def package_root(accelerator, params):
 
         if not params.debug:
             # 上传更新到alist
-            client = alist(user, pwd)
+            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             client.upload(zip_file, '/train_data/')
         print('upload done')
 
@@ -540,7 +538,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     if (not params.debug) and accelerator.is_local_main_process:
         p.print('check alist download')
         
-        client = alist(user, pwd)
+        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
         try:
             _file = f'alist/{params.train_title}.7z'
             # 下载文件
@@ -701,7 +699,7 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     if (not params.debug) and accelerator.is_local_main_process:
         p.print('check alist download')
         
-        client = alist(user, pwd)
+        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
         try:
             _file = f'alist/{params.train_title}.7z'
             # 下载文件
