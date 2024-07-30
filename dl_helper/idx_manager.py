@@ -25,7 +25,7 @@ def get_idx(train_title):
 def run_idx_manager():
     # 定义服务器地址和端口
     HOST = '168.138.158.156'
-    PORT = 12345de ug
+    PORT = 12345
 
     # 创建一个 TCP 套接字
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
