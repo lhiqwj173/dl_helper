@@ -158,8 +158,9 @@ if '__main__' == __name__:
     #     print(file)
 
     import os
-    for k, v in os.environ:
-        print(f'{k}: {v}')
+    envs = os.environ
+    for k in envs:
+        print(f'{k}: {envs[k]}')
 
     sys.exit(0)
 
