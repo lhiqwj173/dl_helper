@@ -48,7 +48,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        title_base = 'binctabl_base3'
+        title_base = 'binctabl_base_bin'
         idx = get_idx(title_base)
 
         title = title_base + f'_v{idx}'
@@ -160,5 +160,5 @@ if '__main__' == __name__:
     run(
         test, 
         mode='cache_data',
-        data_folder=r'/kaggle/input/lh-q-bin-data-20240728',
+        data_folder=r'/kaggle/input/lh-q-bin-data-20240730',
     )
