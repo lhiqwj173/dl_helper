@@ -53,7 +53,11 @@ def run_idx_manager():
         # 接收客户端消息
         data = client_socket.recv(1024)
         if data:
-            data_str = data.decode()
+            try:
+                data_str = data.decode()
+            except:
+                data_str = ''
+                
             if '_' in data_str:
                 _code, train_title = data_str.split('_', maxsplit=1)
                 if _code == CODE:
