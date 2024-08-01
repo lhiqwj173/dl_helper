@@ -381,6 +381,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
         for batch in active_dataloader:
             # 预处理
             debug(f'batch')
+            raw_x, _, raw_mean_std = batch
             data, target = trans(batch, train=True)
             debug(f'data :{data.shape} target :{target.shape}')
 
@@ -393,7 +394,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             debug(f'model')
             loss = criterion(output, target)
             debug(f'check_nan')
-            check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
+            check_nan(loss, params, accelerator, raw_x=raw_x, raw_mean_std=raw_mean_std, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
             debug(f'criterion')
             accelerator.backward(loss)
             debug(f'backward')
