@@ -1,15 +1,19 @@
 import psutil, pickle, torch, os
 from py_ext.wechat import wx
+from py_ext.tool import debug, log
 from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
 
 def check_nan(data, **kwargs):
+    debug(torch.isnan(data).any().shape)
+    debug(torch.isinf(data).any().shape)
     if torch.isnan(data).any().item() or torch.isinf(data).any().item():
         pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))
         wx.send_message(f'训练异常')
         raise Exception("error train data")
+    
 
 def stop_all_python_processes():
     current_pid = os.getpid()
