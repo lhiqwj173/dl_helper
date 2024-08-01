@@ -875,25 +875,26 @@ class DistributedSampler(Sampler):
         self.accelerator = accelerator
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
+        debug(f'{self.dataset.type} begin find_nearest_mini_dataset_length:{len(self.dataset.files), mini_dataset_length, self.world_size}')
 
         # # for debug
         # mini_dataset_length = 2
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
-        log(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
+        debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
         self.mini_dataset_length = _mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
-        log(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
+        debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        log(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
+        debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
         self.mini_epoch_indices_ramain = self.mini_epoch
         if self.shuffle:
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
         else:
             mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
+        debug(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
         self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
