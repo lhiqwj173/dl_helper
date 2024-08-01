@@ -423,6 +423,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.producer_thread_stop = False
 
         self.q = queue.Queue(maxsize=1)
+        debug(f'{self.type} Dataset_cahce init done')
         
         # # 如果是val/test，直接读取数据
         # if _type in ['val', 'test']:
