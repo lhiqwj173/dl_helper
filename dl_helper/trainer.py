@@ -393,7 +393,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             debug(f'model')
             loss = criterion(output, target)
             debug(f'check_nan: {loss.shape}, {output.shape}, {data.shape}, {target.shape}')
-            check_nan(loss, output=output, data=data, target=target)
+            check_nan(loss, params, accelerator, output=output, data=data, target=target)
             debug(f'criterion')
             accelerator.backward(loss)
             debug(f'backward')

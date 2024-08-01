@@ -6,9 +6,9 @@ if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
 
-def check_nan(check_data, **kwargs):
+def check_nan(check_data, params, accelerator, **kwargs):
     if torch.isnan(check_data).any().item() or torch.isinf(check_data).any().item():
-        pickle.dump((check_data, kwargs), open(f'train_check_data.pkl', 'wb'))
+        pickle.dump((check_data, kwargs), open(os.path.join(params.root, f'train_check_data_{accelerator.process_index}.pkl'), 'wb'))
         wx.send_message(f'训练异常')
         raise Exception("error train check_data")
     
