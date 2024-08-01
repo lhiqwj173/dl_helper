@@ -22,6 +22,20 @@ def get_idx(train_title):
 
     raise Exception('get idx error')
 
+record_file = os.path.join(os.path.expanduser('~'), 'block_ips.txt')
+def read_block_ips():
+
+    if not os.path.exists(record_file):
+        return []
+
+    with open(record_file, 'r') as f:
+        ips = f.read().splitlines()
+        return ips
+
+def update_block_ips(ips):
+    with open(record_file, 'w') as f:
+        f.write('\n'.join(ips))
+
 def run_idx_manager():
     # 定义服务器地址和端口
     HOST = '0.0.0.0'
@@ -40,9 +54,20 @@ def run_idx_manager():
     titles = {}
     latest_timestamp = 0
 
+    # 读取ban ip
+    block_ips = read_block_ips()
+
     while True:
         # 等待客户端连接
         client_socket, client_address = server_socket.accept()
+        client_ip = client_address[0]
+
+        if client_ip in block_ips:
+            print(f"Blocked connection from {client_ip}")
+            # 关闭与客户端的连接
+            client_socket.close()
+            continue
+
         print(f"Connected to {client_address}")
 
         # 检查重置 titles
@@ -51,11 +76,13 @@ def run_idx_manager():
         latest_timestamp = time.time()
 
         # 接收客户端消息
+        need_block = False
         data = client_socket.recv(1024)
         if data:
             try:
                 data_str = data.decode()
             except:
+                need_block = True
                 data_str = ''
                 
             if '_' in data_str:
@@ -65,8 +92,22 @@ def run_idx_manager():
                         titles[train_title] = -1
                     titles[train_title] += 1
 
+                    print(f'{train_title} {titles[train_title]}')
+
                     # 发送idx回客户端
                     client_socket.sendall(f'{titles[train_title]}'.encode())
+                else:
+                    need_block = True
+            else:
+                need_block = True
+
+        else:
+            need_block = True
+
+        if need_block:
+            block_ips.append(client_ip)
+            update_block_ips(block_ips)
+            print(f'block ip: {client_ip}')
 
         # 关闭与客户端的连接
         client_socket.close()
