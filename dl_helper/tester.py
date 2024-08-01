@@ -40,13 +40,16 @@ class test_base():
     # 效率略低
     def get_cache_data(self, _type, params, accelerator):
         dataset = Dataset_cahce(params, _type, accelerator.device)
+        debug(f'{_type} dataset done')
         sampler = DistributedSampler(dataset, accelerator, shuffle=True if _type == 'train' else False)
+        debug(f'{_type} sampler done')
         dataloader = DataLoaderDevice(
             dataset,
             batch_size=params.batch_size, sampler=sampler,
             drop_last=True,
             device=accelerator.device
         )
+        debug(f'{_type} dataloader done')
         return dataloader
 
     # 初始化模型

@@ -586,7 +586,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     if not only_predict:
         train_loader = test.get_cache_data('train', params, accelerator)
         val_loader = test.get_cache_data('val', params, accelerator)
-        debug('data init')
         p.print(f'data init')
 
     # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
