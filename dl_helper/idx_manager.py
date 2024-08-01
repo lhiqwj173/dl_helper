@@ -1,4 +1,4 @@
-import socket, time, sys
+import socket, time, sys, os
 
 CODE = '0QYg9Ky17dWnN4eK'
 def get_idx(train_title):
