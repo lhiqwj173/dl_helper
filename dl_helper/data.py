@@ -845,12 +845,21 @@ class Dataset(torch.utils.data.Dataset):
 def find_nearest_mini_dataset_length(a, b, world_size):
     if a % b == 0 and b%world_size == 0:
         return b
+
+    if a % world_size != 0:
+        a = (a // world_size) * world_size
     
     # 求++
-    c = b
-    while(a % c != 0 or c%world_size!=0):
-        c+=1
-    
+    if (b > a):
+        return a
+    else:
+        c = b
+        while(a % c != 0 or c%world_size!=0):
+            if c > a: 
+                c = a
+                break
+            c+=1
+
     # 求--
     d = b
     while(a % d != 0 or d%world_size!=0):
