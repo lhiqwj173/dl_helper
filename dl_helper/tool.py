@@ -6,16 +6,16 @@ if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
 
-def check_nan(data, **kwargs):
+def check_nan(check_data, **kwargs):
     print('check_nan')
     debug('check_nan')
-    debug(data.shape)
-    debug(torch.isnan(data).any().shape)
-    debug(torch.isinf(data).any().shape)
-    if torch.isnan(data).any().item() or torch.isinf(data).any().item():
-        pickle.dump((data, kwargs), open(f'train_data.pkl', 'wb'))
+    debug(check_data.shape)
+    debug(torch.isnan(check_data).any().shape)
+    debug(torch.isinf(check_data).any().shape)
+    if torch.isnan(check_data).any().item() or torch.isinf(check_data).any().item():
+        pickle.dump((check_data, kwargs), open(f'train_check_data.pkl', 'wb'))
         wx.send_message(f'训练异常')
-        raise Exception("error train data")
+        raise Exception("error train check_data")
     
 
 def stop_all_python_processes():
