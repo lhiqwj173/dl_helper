@@ -7,6 +7,7 @@ if match_num_processes() ==8:
 
 
 def check_nan(data, **kwargs):
+    print('check_nan')
     debug('check_nan')
     debug(data.shape)
     debug(torch.isnan(data).any().shape)
