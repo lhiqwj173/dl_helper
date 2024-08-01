@@ -1,6 +1,6 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
-from dl_helper.tool import report_memory_usage
+from dl_helper.tool import report_memory_usage, check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 
@@ -392,6 +392,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             output = model(data)
             debug(f'model')
             loss = criterion(output, target)
+            check_nan(loss, data, target)
             debug(f'criterion')
             accelerator.backward(loss)
             debug(f'backward')
@@ -630,29 +631,29 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     if not only_predict:
         p.print(f'train start')
         for epoch in range(tracker.epoch_count, params.epochs):
-            debug(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
+            p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
             if tracker.step_in_epoch == 0:
                 debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
             # 验证
-            debug(f'val_fn')
+            p.print(f'epoch {epoch} val_fn')
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
 
             # 保存结果
-            debug(f'save_result')
+            p.print(f'epoch {epoch} save_result')
             tracker.save_result()
 
             if epoch % 30 == 0 and epoch > 0:
                 # 保存模型
-                debug(f'save_model_fn')
+                p.print(f'epoch {epoch} save_model_fn')
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
             # 打包
             debug(f'package_root')
             package_root(accelerator, params)
 
-            log(f'epoch {epoch} done')
+            p.print(f'epoch {epoch} done')
 
             # 训练可用时长不足，开始 test/predict
             if tracker.need_test:
