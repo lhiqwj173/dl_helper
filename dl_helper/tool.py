@@ -7,11 +7,6 @@ if match_num_processes() ==8:
 
 
 def check_nan(check_data, **kwargs):
-    print('check_nan')
-    debug('check_nan')
-    debug(check_data.shape)
-    debug(torch.isnan(check_data).any().shape)
-    debug(torch.isinf(check_data).any().shape)
     if torch.isnan(check_data).any().item() or torch.isinf(check_data).any().item():
         pickle.dump((check_data, kwargs), open(f'train_check_data.pkl', 'wb'))
         wx.send_message(f'训练异常')
