@@ -2,6 +2,8 @@
 用于追踪训练过程评价指标
 """
 import time, math, os, copy
+
+from datetime import timedelta
 from datetime import datetime
 import torch
 import torch.nn.functional as F
@@ -67,6 +69,7 @@ class Tracker():
         self.notebook_begin_time = time.time()
         self.cost_hour = 0# 之前的notebook训练耗时
         self.cur_notebook_cost_hour = 0# 当前notebook耗时
+        self.each_epoch_time_cost = 0
         self.epoch_count = 0
         self.mini_epoch_count = 0
         self.step_count = 0
@@ -264,10 +267,10 @@ class Tracker():
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
                 # 判断是否需要储存 训练数据
-                each_epoch_time_cost = (self.cost_hour + self.cur_notebook_cost_hour) / (self.epoch_count if self.epoch_count > 0 else 1)
+                self.each_epoch_time_cost = (self.cost_hour + self.cur_notebook_cost_hour) / (self.epoch_count if self.epoch_count > 0 else 1)
                 free_time = self.run_limit_hour - self.cur_notebook_cost_hour
-                if free_time < each_epoch_time_cost * 1.1:
-                    self.printer.print(f'each_epoch_time_cost:{each_epoch_time_cost}h, free_time:{free_time}h, run time out, need test/predict')
+                if free_time < self.each_epoch_time_cost * 1.1:
+                    self.printer.print(f'each_epoch_time_cost:{self.each_epoch_time_cost}h, free_time:{free_time}h, run time out, need test/predict')
                     need_test_temp +=1
             # 同步到其他设备
             self.accelerator.wait_for_everyone() 
@@ -397,7 +400,9 @@ class Tracker():
     def _plot(self):
         if self.accelerator.is_main_process:
             params = self.params
-            self.cost_hour = (time.time() - self.begin_time) / 3600
+
+            # 总耗时
+            cost_hour = self.cost_hour + self.cur_notebook_cost_hour
 
             # x 数量
             epochs = self.params.epochs
@@ -529,7 +534,12 @@ class Tracker():
             title = f'{params.train_title}'
             if params.describe:
                 title += f' | {params.describe}'
-            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{self.cost_hour:.2f} hours'
+            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f} hours'
+            if self.each_epoch_time_cost:
+                # 单epoch耗时, 预计等待时间, 下次重启 北京时间
+                next_restart_time = datetime.fromtimestamp(self.notebook_begin_time + self.run_limit_hour * 3600) + timedelta(hours=8)
+                title += f'({self.each_epoch_time_cost:.2f}h/e, wait {(self.each_epoch_time_cost*(self.params.epochs - self.epoch_count)):.2f}h, next restart: {str(next_restart_time)[:16]})'
+
             plt.title(title)
 
             pic_file = os.path.join(params.root, f"{params.train_title}.png")
@@ -570,7 +580,7 @@ class Tracker():
                     if i == 'lr':
                         continue
                     f.write(f'{i},')
-                f.write('cost\n')
+                f.write('each_epoch_cost,cost\n')
 
             # 写入结果
             with open(result_file, 'a') as f:
@@ -619,8 +629,7 @@ class Tracker():
                         f.write(f'{d:.4f},')
                     else:
                         f.write(f',')
-                # 文件夹 
-                f.write(f"{self.cost_hour:.2f}h\n")
+                f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
         self.accelerator.wait_for_everyone()
         debug('save_result done')
 
