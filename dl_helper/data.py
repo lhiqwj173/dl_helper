@@ -590,9 +590,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 分类训练集 数据平衡
         if self.params.classify:
-            if self.type == 'train':
-            # # for debug
-            # if 0:
+            # if self.type == 'train':
+            # for debug
+            if 0:
                 labels = set(data_map['y'])
                 sy = pd.Series(data_map['y'])
                 min_num = sy.value_counts().min()
