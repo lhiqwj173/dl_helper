@@ -77,32 +77,36 @@ def run_idx_manager():
 
         # 接收客户端消息
         need_block = False
-        data = client_socket.recv(1024)
-        if data:
-            try:
-                data_str = data.decode()
-            except:
-                need_block = True
-                data_str = ''
-                
-            if '_' in data_str:
-                _code, train_title = data_str.split('_', maxsplit=1)
-                if _code == CODE:
-                    if train_title not in titles:
-                        titles[train_title] = -1
-                    titles[train_title] += 1
+        try:
+            data = client_socket.recv(1024)
+            if data:
+                try:
+                    data_str = data.decode()
+                except:
+                    need_block = True
+                    data_str = ''
+                    
+                if '_' in data_str:
+                    _code, train_title = data_str.split('_', maxsplit=1)
+                    if _code == CODE:
+                        if train_title not in titles:
+                            titles[train_title] = -1
+                        titles[train_title] += 1
 
-                    print(f'{train_title} {titles[train_title]}')
+                        print(f'{train_title} {titles[train_title]}')
 
-                    # 发送idx回客户端
-                    client_socket.sendall(f'{titles[train_title]}'.encode())
+                        # 发送idx回客户端
+                        client_socket.sendall(f'{titles[train_title]}'.encode())
+                    else:
+                        need_block = True
                 else:
                     need_block = True
+
             else:
                 need_block = True
 
-        else:
-            need_block = True
+        except ConnectionResetError as e:
+            pass
 
         if need_block:
             block_ips.append(client_ip)
