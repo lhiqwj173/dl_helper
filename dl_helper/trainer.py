@@ -4,6 +4,7 @@ from dl_helper.tool import report_memory_usage, check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 
+import pickle
 import copy
 import shutil
 import multiprocessing as mp
