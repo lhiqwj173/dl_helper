@@ -67,6 +67,8 @@ class transform():
             # 调整价格
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
             # debug('mp',mp.shape)
+            debug('trans mp nan', torch.isnan(mp).any().item())
+            debug('trans mp 0', (mp == 0.0).any().item())
             x = torch.where(~self.vol_cond, x / mp, x)
             debug('trans 1', torch.isnan(x).any().item())
             # debug('x 0',x.shape, x.device)
