@@ -20,7 +20,7 @@ init_logger('base', level='INFO')
 - 验证数据集为训练数据集同期内随机6天的数据，在训练集中排除
 
 随机遮蔽    -> 3
-降采样      -> 1
+降采样      -> 3
 
 数据增加 33d
 训练:验证:测试
@@ -76,8 +76,8 @@ class test(test_base):
             # 数据增强
             random_scale=0.05, random_mask_row=1,
 
-            # 每 1 个样本取一个数据
-            down_freq=1,
+            # 每 3 个样本取一个数据
+            down_freq=3,
 
             # 3分类
             classify=True,

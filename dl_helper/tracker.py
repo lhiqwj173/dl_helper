@@ -255,7 +255,7 @@ class Tracker():
                             f.write(f'{timestamp},{target},{pre}\n')
                 # self.printer.print('update test round done')
 
-        if 'test' != self.track_update and not self.need_test:
+        if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
                 # 判断是否需要储存 训练数据
@@ -264,7 +264,7 @@ class Tracker():
                 each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
                 free_time = self.run_limit_hour - last_time_hour
                 if free_time < each_epoch_time_cost * 1.2:
-                    self.printer.print('run time out, need test/predict')
+                    self.printer.print(f'each_epoch_time_cost:{each_epoch_time_cost}h, free_time:{free_time}h, run time out, need test/predict')
                     need_test_temp +=1
             # 同步到其他设备
             self.accelerator.wait_for_everyone() 
