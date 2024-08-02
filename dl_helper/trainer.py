@@ -1118,7 +1118,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
     # 分配idx
-    kwargs['idx'] = get_idx(test_class.title_base())
+    from dl_helper.train_param import get_gpu_info
+    kwargs['idx'] = get_idx(f'{test_class.title_base()}_{get_gpu_info()}')
 
     num_processes = match_num_processes()
 
