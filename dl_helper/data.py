@@ -1063,7 +1063,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
             if None is data_map['raw']:
                 data_map['raw'] = raw
             else:
-                data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0, ignore_index=True)
+                data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
 
         length = len(raw)
         # report_memory_usage('concat raw')
@@ -1096,7 +1096,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
             if None is data_map['raw']:
                 data_map['raw'] = raw2
             else:
-                data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0,  ignore_index=True)
+                data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0)
 
         length = len(raw2)
 
