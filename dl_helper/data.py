@@ -591,8 +591,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # 分类训练集 数据平衡
         if self.params.classify:
             if self.type == 'train':
-            # # for debug
-            # if 0:
                 labels = set(data_map['y'])
                 sy = pd.Series(data_map['y'])
                 min_num = sy.value_counts().min()
@@ -669,6 +667,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         if (x == 0.0).all().item():
             # 记录异常
             log(f'[x all 0.0] index:{index} id:{self.ids[index]}')
+            # raise ValueError
 
         self.use_data_id.append(self.ids[index])
 
