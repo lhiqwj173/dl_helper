@@ -52,6 +52,17 @@ class test(test_base):
 
         batch_n = 16 * 2
 
+        # T: 100, 40, 10, 1
+        model_vars = [
+            (100, 40, 10, 1),
+            (100, 60, 20, 1),
+            (100, 80, 30, 1),
+            (100, 100, 40, 1),
+            (100, 120, 50, 1),
+            (100, 140, 60, 1),
+        ]
+        self.model_var = model_vars[self.idx]
+
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
             'predict_n': [10, 20, 30],
@@ -85,7 +96,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'',
+            describe=f't: {self.model_var}',
             amp=self.amp
         )
 
@@ -95,7 +106,8 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        # 100, 40, 10, 1
+        # T: 100, 40, 10, 1
+        # D: 40, 60, 120, 3
         return m_bin_ctabl(60, 40, 100, 40, 120, 10, self.y_n, 1)
 
     def get_transform(self, device):
