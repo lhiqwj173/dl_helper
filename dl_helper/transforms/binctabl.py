@@ -66,7 +66,7 @@ class transform():
 
             # 调整价格
             import pickle
-            pickle.dump(open(os.path.join(self.param.root, 'raw_x.pkl'), 'wb'))
+            pickle.dump(x, open(os.path.join(self.param.root, 'raw_x.pkl'), 'wb'))
             mp = (x[:, 0, -1] * x[:, 2, -1] / 2).unsqueeze(1).unsqueeze(1)
             # debug('mp',mp.shape)
             debug('trans mp nan', torch.isnan(mp).any().item())
