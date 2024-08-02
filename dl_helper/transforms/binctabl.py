@@ -71,6 +71,8 @@ class transform():
             # debug('mp',mp.shape)
             debug('trans mp nan', torch.isnan(mp).any().item())
             debug('trans mp 0', (mp == 0.0).any().item())
+            # if (mp == 0.0).any().item():
+            #     raise ValueError('mp == 0.0')
             x = torch.where(~self.vol_cond, x / mp, x)
             debug('trans 1', torch.isnan(x).any().item())
             # debug('x 0',x.shape, x.device)
