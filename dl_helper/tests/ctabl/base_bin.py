@@ -108,7 +108,7 @@ class test(test_base):
     def get_model(self):
         # T: 100, 40, 10, 1
         # D: 40, 60, 120, 3
-        return m_bin_ctabl(60, 40, 100, 40, 120, 10, self.y_n, 1)
+        return m_bin_ctabl(60, 40, self.model_var[0], self.model_var[1], 120, self.model_var[2], self.y_n, 1)
 
     def get_transform(self, device):
         return transform(device, self.para, 103)
