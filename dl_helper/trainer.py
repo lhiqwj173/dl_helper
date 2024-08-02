@@ -382,7 +382,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
         for batch in active_dataloader:
             # 预处理
             debug(f'batch')
-            pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))
+            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))
             data, target = trans(batch, train=True)
             debug(f'data :{data.shape} target :{target.shape}')
 
