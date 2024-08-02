@@ -382,6 +382,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # 预处理
             debug(f'batch')
             raw_x, _, raw_mean_std = batch
+            debug(raw_x)
             data, target = trans(batch, train=True)
             debug(f'data :{data.shape} target :{target.shape}')
 
