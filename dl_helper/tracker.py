@@ -65,6 +65,8 @@ class Tracker():
         # 时间统计
         self.begin_time = time.time()
         self.notebook_begin_time = time.time()
+        self.cost_hour = 0# 之前的notebook训练耗时
+        self.cur_notebook_cost_hour = 0# 当前notebook耗时
         self.epoch_count = 0
         self.mini_epoch_count = 0
         self.step_count = 0
@@ -133,6 +135,9 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
+            # 更新训练时间记录
+            self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
+
             # 计算数据
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0)
             if self.params.classify:
@@ -259,11 +264,9 @@ class Tracker():
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
                 # 判断是否需要储存 训练数据
-                # self.printer.print('check if need save')
-                last_time_hour = ((time.time() - self.notebook_begin_time) / 3600)
-                each_epoch_time_cost = last_time_hour / (self.epoch_count if self.epoch_count > 0 else 1)
-                free_time = self.run_limit_hour - last_time_hour
-                if free_time < each_epoch_time_cost * 1.2:
+                each_epoch_time_cost = (self.cost_hour + self.cur_notebook_cost_hour) / (self.epoch_count if self.epoch_count > 0 else 1)
+                free_time = self.run_limit_hour - self.cur_notebook_cost_hour
+                if free_time < each_epoch_time_cost * 1.1:
                     self.printer.print(f'each_epoch_time_cost:{each_epoch_time_cost}h, free_time:{free_time}h, run time out, need test/predict')
                     need_test_temp +=1
             # 同步到其他设备
@@ -303,6 +306,7 @@ class Tracker():
         """
         self.printer.print(f'[train state]')
         self.printer.print(f'begin time: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.begin_time))}')
+        self.printer.print(f'pre cost hour: {self.cost_hour}')
         self.printer.print(f'epoch done: {self.epoch_count}')
         self.printer.print(f'step in epoch: {"train" if self.step_in_epoch == 0 else "val"}')
         self.printer.print(f'step done: {self.step_count}')
@@ -632,6 +636,11 @@ class Tracker():
             if i in state_dict: 
                 del state_dict[i]
         self.__dict__.update(state_dict)
+
+        # 延续训练 更新耗时记录
+        # cur_notebook_cost_hour -> cost_hour
+        self.cost_hour += self.cur_notebook_cost_hour
+        self.cur_notebook_cost_hour = 0
 
         if '_ids' not in self.temp:
             self.temp['_ids'] = []
