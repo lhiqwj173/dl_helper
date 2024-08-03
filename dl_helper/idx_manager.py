@@ -52,6 +52,8 @@ def run_idx_manager():
     print(f"Server is listening on {HOST}:{PORT}")
 
     titles = {}
+    onece_titles = {}
+
     latest_timestamp = 0
 
     # 读取ban ip
@@ -89,14 +91,23 @@ def run_idx_manager():
                 if '_' in data_str:
                     _code, train_title = data_str.split('_', maxsplit=1)
                     if _code == CODE:
-                        if train_title not in titles:
-                            titles[train_title] = -1
-                        titles[train_title] += 1
+                        idx = 0
+                        if 'one' in train_title:
+                            if train_title not in onece_titles:
+                                onece_titles[train_title] = -1
+                            onece_titles[train_title] += 1
+                            idx = onece_titles[train_title]
+                        
+                        else:
+                            if train_title not in titles:
+                                titles[train_title] = -1
+                            titles[train_title] += 1
+                            idx = titles[train_title]
 
-                        print(f'{train_title} {titles[train_title]}')
+                        print(f'{train_title} {idx}')
 
                         # 发送idx回客户端
-                        client_socket.sendall(f'{titles[train_title]}'.encode())
+                        client_socket.sendall(f'{idx}'.encode())
                     else:
                         need_block = True
                 else:
