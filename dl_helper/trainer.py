@@ -371,6 +371,12 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     # if accelerator.is_main_process:
     #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
 
+
+def print_grad(idx, model, printer):
+    for param in self.model.parameters():
+        if param.grad is not None:
+            printer.print(f"step{idx} grad: {param.grad} v: {param}")
+            break
 def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
@@ -390,16 +396,21 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
                 
+            print_grad(0, model, printer)
             optimizer.zero_grad()
             output = model(data)
             # debug(f'model')
             loss = criterion(output, target)
-            # debug(f'check_nan')
-            check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
+            print_grad(1, model, printer)
+            with torch.no_grad():
+                # debug(f'check_nan')
+                check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
             # debug(f'criterion')
             accelerator.backward(loss)
+            print_grad(2, model, printer)
             # debug(f'backward')
             optimizer.step()
+            print_grad(3, model, printer)
             # debug(f'step')
 
             # 追踪器 记录数据
@@ -407,6 +418,11 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 # debug('track')
                 tracker.track(output, target, loss, 'train')
                 # debug('track done')
+
+            # for debug
+            if tracker.temp['_y_true'].size[0] > target.size[0]:
+                return
+            
 
         log(f"[{epoch}][{mini_epoch}] train done")
 
