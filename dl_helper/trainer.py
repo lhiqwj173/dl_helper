@@ -374,9 +374,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
 def print_grad(idx, model, printer):
     for param in model.parameters():
-        if param.grad is not None:
-            printer.print(f"step{idx} grad: {param.grad} v: {param}", main=False)
-            break
+        printer.print(f"step{idx} grad: {param.grad} v: {param}", main=False)
+        break
 def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
