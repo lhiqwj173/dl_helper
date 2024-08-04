@@ -373,7 +373,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
 
 def print_grad(idx, model, printer):
-    for param in self.model.parameters():
+    for param in model.parameters():
         if param.grad is not None:
             printer.print(f"step{idx} grad: {param.grad} v: {param}", main=False)
             break
