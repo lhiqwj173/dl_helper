@@ -96,7 +96,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f't: {"@".join(self.model_var)}',
+            describe=f't: {"@".join([str(i) for i in self.model_var])}',
             amp=self.amp
         )
 
