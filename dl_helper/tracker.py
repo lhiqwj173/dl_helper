@@ -547,7 +547,7 @@ class Tracker():
             # self.printer.print(f'plot done: {pic_file}')
 
         self.accelerator.wait_for_everyone()
-        debug('plot done')
+        # debug('plot done')
 
     def _save_result(self):
         if self.accelerator.is_main_process:
@@ -596,7 +596,7 @@ class Tracker():
                         f.write(f'{data_dict[i]},')
                 # 数据标签分布
                 for i in self.label_counts:
-                    debug(self.label_counts[i])
+                    # debug(self.label_counts[i])
                     label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
                     label_pct /= torch.min(label_pct)
                     label_counts = self.label_counts[i].to('cpu').tolist()
@@ -631,7 +631,7 @@ class Tracker():
                         f.write(f',')
                 f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
         self.accelerator.wait_for_everyone()
-        debug('save_result done')
+        # debug('save_result done')
 
     def state_dict(self):
         # self.params = params

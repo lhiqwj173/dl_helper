@@ -62,36 +62,36 @@ class transform():
                     x = x[:, :, -self.time_length:]
             # debug('random_mask_row')
 
-            debug('trans 0', torch.isnan(x).any().item())
+            # debug('trans 0', torch.isnan(x).any().item())
 
             # 调整价格
             # import pickle
             # pickle.dump(x, open(os.path.join(self.param.root, 'raw_x.pkl'), 'wb'))
             mp = ((x[:, 0, -1] + x[:, 2, -1]) / 2).unsqueeze(1).unsqueeze(1)
             # debug('mp',mp.shape)
-            debug('trans mp nan', torch.isnan(mp).any().item())
-            debug('trans mp 0', (mp == 0.0).any().item())
+            # debug('trans mp nan', torch.isnan(mp).any().item())
+            # debug('trans mp 0', (mp == 0.0).any().item())
             # if (mp == 0.0).any().item():
             #     raise ValueError('mp == 0.0')
             x = torch.where(~self.vol_cond, x / mp, x)
-            debug('trans 1', torch.isnan(x).any().item())
+            # debug('trans 1', torch.isnan(x).any().item())
             # debug('x 0',x.shape, x.device)
             # 标准化
             # debug('mean',mean_std[:, :, :1].shape, mean_std.device)
             x -= mean_std[:, :, :1]
             # debug('x 1',x.shape)
             # debug('std',mean_std[:, :, 1:].shape)
-            debug('trans 2', torch.isnan(x).any().item())
+            # debug('trans 2', torch.isnan(x).any().item())
             x /= mean_std[:, :, 1:]
             # debug('x 2',x.shape)
             # debug('std done')
-            debug('trans 3', torch.isnan(x).any().item())
+            # debug('trans 3', torch.isnan(x).any().item())
 
             # random_scale
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
             # debug('random_scale')
-            debug('trans 4', torch.isnan(x).any().item())
+            # debug('trans 4', torch.isnan(x).any().item())
 
             return x, y
 

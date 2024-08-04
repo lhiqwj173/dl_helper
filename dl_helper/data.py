@@ -56,8 +56,8 @@ def reduce_mem_usage(df):
                     df[col] = df[col].astype(np.float64)
 
     end_mem = df.memory_usage().sum() / 1024**2
-    # logger.debug('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
-    # logger.debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+    # logger.# debug('Memory usage after optimization is: {:.2f} MB'.format(end_mem))
+    # logger.# debug('Decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
 
     return df
 
@@ -161,7 +161,7 @@ class Dataset_0(torch.utils.data.Dataset):
 
         if not need_split_data_set:
             # if self.log:
-            #     logger.debug("使用全部数据")
+            #     logger.# debug("使用全部数据")
             if params.use_trade:
                 self.price_cols += [42, 45]
                 self.vol_cols += [40, 41, 43, 44]
@@ -173,12 +173,12 @@ class Dataset_0(torch.utils.data.Dataset):
 
             elif params.use_pk:
                 # if self.log:
-                #     logger.debug("只使用盘口数据")
+                #     logger.# debug("只使用盘口数据")
                 pass
 
             elif params.use_trade:
                 # if self.log:
-                #     logger.debug("只使用交易数据")
+                #     logger.# debug("只使用交易数据")
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
@@ -188,7 +188,7 @@ class Dataset_0(torch.utils.data.Dataset):
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
 
-        # logger.debug('del data_map > raw / mean_std')
+        # logger.# debug('del data_map > raw / mean_std')
         # report_memory_usage()
 
         self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
@@ -204,7 +204,7 @@ class Dataset_0(torch.utils.data.Dataset):
                 min_num = sy.value_counts().min()
 
                 # if self.log:
-                #     logger.debug(f'min_num: {min_num}')
+                #     logger.# debug(f'min_num: {min_num}')
 
                 # report_memory_usage()
 
@@ -222,7 +222,7 @@ class Dataset_0(torch.utils.data.Dataset):
                 idx.sort()
 
                 # if self.log:
-                #     logger.debug(f'reindex')
+                #     logger.# debug(f'reindex')
 
                 data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
                 data_map['x'] = [data_map['x'][i] for i in idx]
@@ -272,7 +272,7 @@ class Dataset_0(torch.utils.data.Dataset):
         self.input_shape = (1,) + self.input_shape
 
         # if self.log:
-        #     logger.debug(f'数据集初始化完毕')
+        #     logger.# debug(f'数据集初始化完毕')
         # report_memory_usage()
 
     def __len__(self):
@@ -423,7 +423,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.producer_thread_stop = False
 
         self.q = queue.Queue(maxsize=1)
-        debug(f'{self.type} Dataset_cahce init done')
+        # debug(f'{self.type} Dataset_cahce init done')
         
         # # 如果是val/test，直接读取数据
         # if _type in ['val', 'test']:
@@ -442,7 +442,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 针对按照文件夹（train/val/test）分配的数据集
         folder_data_path = os.path.join(data_path, self.type)
-        debug(f"folder_data_path: {folder_data_path}")
+        # debug(f"folder_data_path: {folder_data_path}")
         if os.path.exists(folder_data_path):
             log(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
             self.files = sorted([i for i in os.listdir(folder_data_path)])
@@ -494,19 +494,19 @@ class Dataset_cahce(torch.utils.data.Dataset):
             self.files = self.files[begin_idx:end_idx]
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
-        debug(f'{self.type} init_data_thread_start {rank}')
+        # debug(f'{self.type} init_data_thread_start {rank}')
         self.producer_thread_stop = False
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
     def init_data_thread_close(self):
-        debug(f"{self.type} init_data_thread_close")
+        # debug(f"{self.type} init_data_thread_close")
         self.producer_thread_stop = True
 
     def load_data(self):
         """从 队列中 加载数据"""
         data_map = self.q.get()
-        debug(f'{self.type} get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+        # debug(f'{self.type} get mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
         self._load_data_map(data_map)
 
     def _init_data(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
@@ -520,7 +520,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
             mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
             files = [self.files[i] for i in file_indices]
-            debug(f"{self.type} 读取文件 1: {files}")
+            # debug(f"{self.type} 读取文件 1: {files}")
 
             # 每个设备负责的实际数据idx，会被真实的load进内存
             each_files_num = len(files) // world_size 
@@ -529,10 +529,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            debug(f"{self.type} 读取文件 2: {files}")
+            # debug(f"{self.type} 读取文件 2: {files}")
 
             data_map = self._parse_data_map(files)
-            debug(f"{self.type} parse_data_map done")
+            # debug(f"{self.type} parse_data_map done")
             stop = False
             while 1:
                 try:
@@ -544,12 +544,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
                         log(f"{self.type} producer_thread_stop:{self.producer_thread_stop}")
                         stop = True
                         break
-                debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop}')
+                # debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop}')
 
             if stop:
                 break
 
-            debug(f'{self.type} put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
+            # debug(f'{self.type} put {i} mini_epoch data_map, ramin:{self.q.qsize()} full:{self.q.full()}')
 
         log(f"{self.type} read data done")
 
@@ -714,7 +714,7 @@ class Dataset(torch.utils.data.Dataset):
 
         if not need_split_data_set:
             # if self.log:
-            #     logger.debug("使用全部数据")
+            #     logger.# debug("使用全部数据")
             if params.use_trade:
                 self.price_cols += [42, 45]
                 self.vol_cols += [40, 41, 43, 44]
@@ -726,12 +726,12 @@ class Dataset(torch.utils.data.Dataset):
 
             elif params.use_pk:
                 # if self.log:
-                #     logger.debug("只使用盘口数据")
+                #     logger.# debug("只使用盘口数据")
                 pass
 
             elif params.use_trade:
                 # if self.log:
-                #     logger.debug("只使用交易数据")
+                #     logger.# debug("只使用交易数据")
                 self.price_cols = [2, 5]
                 self.vol_cols = [0, 1, 3, 4]
 
@@ -744,7 +744,7 @@ class Dataset(torch.utils.data.Dataset):
         self.mean_std = data_map['mean_std']
         del data_map['mean_std']
 
-        # logger.debug('del data_map > raw / mean_std')
+        # logger.# debug('del data_map > raw / mean_std')
         # report_memory_usage()
 
         # 训练数据集
@@ -758,7 +758,7 @@ class Dataset(torch.utils.data.Dataset):
                 min_num = sy.value_counts().min()
 
                 # if self.log:
-                #     logger.debug(f'min_num: {min_num}')
+                #     logger.# debug(f'min_num: {min_num}')
 
                 # report_memory_usage()
 
@@ -776,7 +776,7 @@ class Dataset(torch.utils.data.Dataset):
                 idx.sort()
 
                 # if self.log:
-                #     logger.debug(f'reindex')
+                #     logger.# debug(f'reindex')
 
                 data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
                 data_map['x'] = [data_map['x'][i] for i in idx]
@@ -888,20 +888,20 @@ class DistributedSampler(Sampler):
         self.accelerator = accelerator
         self.world_size = accelerator.num_processes
         self.rank = accelerator.process_index
-        debug(f'{self.dataset.type} begin find_nearest_mini_dataset_length:{len(self.dataset.files), mini_dataset_length, self.world_size}')
+        # debug(f'{self.dataset.type} begin find_nearest_mini_dataset_length:{len(self.dataset.files), mini_dataset_length, self.world_size}')
 
         # # for debug
         # mini_dataset_length = 2
 
         # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
         _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
-        debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
+        # debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
         self.mini_dataset_length = _mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
-        debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
+        # debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
         self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
+        # debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
         self.mini_epoch_indices_ramain = self.mini_epoch
         if self.shuffle:
             mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
@@ -923,7 +923,7 @@ class DistributedSampler(Sampler):
             self.mini_epoch_indices_ramain = self.mini_epoch
             if self.shuffle:
                 mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                debug(f'{self.dataset.type} new mini_epoch_file_indices')
+                # debug(f'{self.dataset.type} new mini_epoch_file_indices')
             else:
                 mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
@@ -954,7 +954,7 @@ def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
     need_reindex = False
 
     # 标签平衡
-    # logger.debug('标签平衡')
+    # logger.# debug('标签平衡')
     need_reindex = True
 
     labels = set(test_y)
@@ -1043,7 +1043,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     # feature == 46 且 params.use_pk/params.use_trade 不全为true
     need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
     # if log:
-    #     logger.debug(f'need_split_data_set: {need_split_data_set}')
+    #     logger.# debug(f'need_split_data_set: {need_split_data_set}')
 
     # 校正参数
     if len(mean_std[0]) == 40:
@@ -1111,12 +1111,12 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     y_idx = -1
     if params.regress_y_idx != -1:
         # if log:
-        #     logger.debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
+        #     logger.# debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
         y_idx = params.regress_y_idx
         
     elif params.classify_y_idx!=1:
         # if log:
-        #     logger.debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
+        #     logger.# debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
         y_idx = params.classify_y_idx
 
     # 多个可迭代
@@ -1188,7 +1188,7 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
         files = files[begin_idx:end_idx]
 
     # if log:
-    #     logger.debug(f'{files}')
+    #     logger.# debug(f'{files}')
 
     # 读取分段合并
     diff_length = 0
@@ -1241,14 +1241,14 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
     # if log:
     #     if params.classify:
-    #         logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
+    #         logger.# debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
     #     else:
     #         try:
-    #             logger.debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
+    #             logger.# debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
     #         except:
     #             _df = pd.DataFrame(dataset_test.y)
     #             for col in list(_df):
-    #                 logger.debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
+    #                 logger.# debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
 
     train_sampler = None
     if not None is data_sample_getter_func:

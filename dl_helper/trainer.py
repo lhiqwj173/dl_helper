@@ -354,13 +354,13 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         # 追踪器 记录数据
         with torch.no_grad():
-            debug('track')
+            # debug('track')
             tracker.track(output, target, loss, 'train')
-            debug('track done')
+            # debug('track done')
 
     # 追踪器，计算必要的数据
     tracker.update()
-    debug('update')
+    # debug('update')
 
     # 缓存checkpoint
     if need_checkpoint:
@@ -381,10 +381,10 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
         # 训练
         for batch in active_dataloader:
             # 预处理
-            debug(f'batch')
+            # debug(f'batch')
             # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))
             data, target = trans(batch, train=True)
-            debug(f'data :{data.shape} target :{target.shape}')
+            # debug(f'data :{data.shape} target :{target.shape}')
 
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -392,27 +392,27 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 
             optimizer.zero_grad()
             output = model(data)
-            debug(f'model')
+            # debug(f'model')
             loss = criterion(output, target)
-            debug(f'check_nan')
+            # debug(f'check_nan')
             check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
-            debug(f'criterion')
+            # debug(f'criterion')
             accelerator.backward(loss)
-            debug(f'backward')
+            # debug(f'backward')
             optimizer.step()
-            debug(f'step')
+            # debug(f'step')
 
             # 追踪器 记录数据
             with torch.no_grad():
-                debug('track')
+                # debug('track')
                 tracker.track(output, target, loss, 'train')
-                debug('track done')
+                # debug('track done')
 
         log(f"[{epoch}][{mini_epoch}] train done")
 
     # 追踪器，计算必要的数据
     tracker.update()
-    debug('update')
+    # debug('update')
 
     # 缓存checkpoint
     if need_checkpoint:
@@ -446,11 +446,11 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 追踪器 记录数据
             tracker.track(output, target, loss, 'val')
     
-    debug('val loop done')
+    # debug('val loop done')
 
     # 追踪器，计算必要的数据
     tracker.update()
-    debug('val_fn done')
+    # debug('val_fn done')
 
     # # for debug
     # accelerator.wait_for_everyone()
@@ -493,9 +493,9 @@ def save_model_fn(params, model, accelerator, input_shape):
             torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
             input_names=['input'], output_names=['output'])
         except:
-            logger.debug('导出onnx失败')
-            logger.debug(f"模型的设备：{next(model.parameters()).device}")
-            logger.debug(f"数据的设备：{torch.randn(input_shape).to(accelerator.device).device}")
+            log('导出onnx失败')
+            log(f"模型的设备：{next(model.parameters()).device}")
+            log(f"数据的设备：{torch.randn(input_shape).to(accelerator.device).device}")
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
@@ -636,7 +636,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         for epoch in range(tracker.epoch_count, params.epochs):
             p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
             if tracker.step_in_epoch == 0:
-                debug(f'train_fn_mini_epoch')
+                # debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
             # 验证
@@ -653,7 +653,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
             # 打包
-            debug(f'package_root')
+            # debug(f'package_root')
             package_root(accelerator, params)
 
             p.print(f'epoch {epoch} done')
