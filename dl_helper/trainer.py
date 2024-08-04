@@ -419,7 +419,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 # debug('track done')
 
             # for debug
-            if tracker.temp['_y_true'].size[0] > target.size[0]:
+            if tracker.temp['_y_true'].shape[0] > target.shape[0]:
                 return
             
 
