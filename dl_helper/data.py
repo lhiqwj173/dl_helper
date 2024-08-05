@@ -513,7 +513,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
-        log(f"{self.type} read data: {[self.files[i] for i in mini_epoch_file_indices]}")
+        log(f"{self.type} init_data begin")
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
@@ -528,7 +528,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             offset = each_files_num * rank
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
-            # debug(f"{self.type} 读取文件 2: {files}")
+            log(f"{self.type} rank:{rank} 读取文件: {files}")
 
             data_map = self._parse_data_map(files)
             # debug(f"{self.type} parse_data_map done")
