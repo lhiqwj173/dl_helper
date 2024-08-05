@@ -447,7 +447,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
             log(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
             self.files = sorted([i for i in os.listdir(folder_data_path)])
             self.files = [f'{self.type}/{i}' for i in self.files]
-            log(self.files)
             return
 
         # data_folder 路径下没有分配的文件夹
@@ -514,7 +513,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 从 mini_epoch_file_indices 截取 mini_dataset_length 个文件序号
         # 作为本次迭代 mini_epoch 使用的文件序号
-        log(f"{self.type} read data: {self.files}")
+        log(f"{self.type} read data: {[self.files[i] for i in mini_epoch_file_indices]}")
 
         for i in range(mini_epoch):
             file_indices = mini_epoch_file_indices[:mini_dataset_length]
