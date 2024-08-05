@@ -138,6 +138,6 @@ if '__main__' == __name__:
     run(
         test, 
         mode='cache_data',
-        # data_folder=r'/kaggle/input/lh-q-t0-data-20240729'
-        data_folder=r'Z:\L2_DATA\20240729',
+        data_folder=r'/kaggle/input/lh-q-t0-data-20240729'
+        # data_folder=r'Z:\L2_DATA\20240729',
     )
