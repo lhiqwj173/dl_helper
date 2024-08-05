@@ -1014,7 +1014,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     symbols = target_parm['symbols'].split('@')
     if symbols not in [
         ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT'],
-        '成交量 >= 100w'
+        ['成交量 >= 100w']
     ]:
         symbols = [i.lower() for i in symbols]
         # id: btcusdt_1710289478588
