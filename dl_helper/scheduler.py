@@ -22,6 +22,9 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
         self.base_lrs = [group['lr'] for group in optimizer.param_groups]
         self.warmup_lrs = [lr / warmup_epochs for lr in self.base_lrs]
 
+        # 初始化学习率
+        self.step(None)
+
     def step(self, metrics, epoch=None):
         if self.current_epoch < self.warmup_epochs:
             lr = [(self.current_epoch + 1) * warmup_lr for warmup_lr in self.warmup_lrs]
