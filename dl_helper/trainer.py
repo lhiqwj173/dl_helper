@@ -427,6 +427,8 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 tracker.track(output, target, loss, 'train')
                 # debug('track done')
 
+            return
+
         log(f"[{epoch}][{mini_epoch}] train done")
 
     # 追踪器，计算必要的数据
@@ -658,6 +660,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             if tracker.step_in_epoch == 0:
                 # debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+            return
 
             # 验证
             p.print(f'epoch {epoch} val_fn')
