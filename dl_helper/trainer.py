@@ -399,9 +399,11 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
                 target = target.unsqueeze(1)
+            debug(f'unsqueeze')
                 
             record_grad(0, model, accelerator.process_index)
             optimizer.zero_grad()
+            debug(f'zero_grad')
             output = model(data)
             debug(f'model')
             loss = criterion(output, target)
