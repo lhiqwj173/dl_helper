@@ -407,6 +407,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             output = model(data)
             debug(f'model')
             loss = criterion(output, target)
+            printer.print(f'loss: {loss}', main=False)
             record_grad(1, model, accelerator.process_index)
             with torch.no_grad():
                 debug(f'check_nan')
@@ -629,13 +630,13 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     accelerator.register_for_checkpointing(tracker)
 
     # 不需要准备数据
-    # if not only_predict:
-    #     model, optimizer, scheduler = accelerator.prepare(
-    #         model, optimizer, scheduler
-    #     )
-    # else:
-    #     model = accelerator.prepare(model)
-    model = model.to(accelerator.device)
+    if not only_predict:
+        model, optimizer, scheduler = accelerator.prepare(
+            model, optimizer, scheduler
+        )
+    else:
+        model = accelerator.prepare(model)
+    # model = model.to(accelerator.device)
 
     p.print(f'prepare done')
 
