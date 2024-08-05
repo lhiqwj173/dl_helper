@@ -20,11 +20,11 @@ init_logger('base', level='INFO')
 - 验证数据集为训练数据集同期内随机6天的数据，在训练集中排除
 
 随机遮蔽    -> 3
-降采样      -> 3
+降采样      -> 5
 
-数据增加 33d
+数据增加 37d
 训练:验证:测试
-25:6:2
+28:7:2
 """
 
 def yfunc(y):
@@ -115,41 +115,41 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    # ##########################
-    # # 币安
-    # ##########################
-    # # 2024-05-06
-    # # 2024-05-09
-    # # 2024-05-11
-    # # 2024-05-20
-    # # 2024-07-16
-    # # 2024-07-26
-    # import datetime
-    # dates = []
+    ##########################
+    # 币安
+    ##########################
+    # 2024-05-08
+    # 2024-05-10
+    # 2024-05-14
+    # 2024-05-19
+    # 2024-07-19
+    # 2024-07-22
+    # 2024-07-30
+    import datetime
+    dates = []
 
-    # # 0501 + 20
-    # begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
-    # for i in range(20):
-    #     dates.append(begin_date + datetime.timedelta(days=i))
+    # 0501 + 20
+    begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
+    for i in range(20):
+        dates.append(begin_date + datetime.timedelta(days=i))
 
-    # # 0716 + 11
-    # begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
-    # for i in range(11):
-    #     dates.append(begin_date + datetime.timedelta(days=i))
+    # 0716 + 17
+    begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
+    for i in range(17):
+        dates.append(begin_date + datetime.timedelta(days=i))
 
-    # print(f'训练数据天数: {len(dates)}')
+    print(f'训练数据天数: {len(dates)}')
 
-    # # 随机抽 6 天作为验证数据集
-    # import random
-    # random.shuffle(dates)
-    # valid_dates = dates[:6]
-    # valid_dates.sort()
-    # for date in valid_dates:
-    #     print(date.date())
+    # 随机抽 7 天作为验证数据集
+    import random
+    random.shuffle(dates)
+    valid_dates = dates[:7]
+    valid_dates.sort()
+    for date in valid_dates:
+        print(date.date())
 
-
-    run(
-        test, 
-        mode='cache_data',
-        data_folder=r'/kaggle/input/lh-q-bin-data-20240730',
-    )
+    # run(
+    #     test, 
+    #     mode='cache_data',
+    #     data_folder=r'/kaggle/input/lh-q-bin-data-20240730',
+    # )
