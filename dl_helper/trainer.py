@@ -635,6 +635,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     #     )
     # else:
     #     model = accelerator.prepare(model)
+    model = model.to(accelerator.device)
 
     p.print(f'prepare done')
 
