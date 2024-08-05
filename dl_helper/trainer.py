@@ -426,6 +426,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
 
             # for debug
             if tracker.temp['_y_true'].shape[0] > target.shape[0]:
+                printer.print('stop')
                 return
             
 
