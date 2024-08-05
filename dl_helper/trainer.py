@@ -374,7 +374,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 def record_grad(idx, model, rank):
     with open(f'grad_{rank}.txt', 'a') as f:
         for param in model.parameters():
-            f.write(f"step{idx}\ngrad: {param.grad}\nv: {param}")
+            f.write(f"step{idx}\ngrad: {param.grad}\nv: {param}\n\n")
             break
 
 def print_grad(idx, model, printer):
