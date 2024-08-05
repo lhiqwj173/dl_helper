@@ -627,12 +627,12 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     accelerator.register_for_checkpointing(tracker)
 
     # 不需要准备数据
-    if not only_predict:
-        model, optimizer, scheduler = accelerator.prepare(
-            model, optimizer, scheduler
-        )
-    else:
-        model = accelerator.prepare(model)
+    # if not only_predict:
+    #     model, optimizer, scheduler = accelerator.prepare(
+    #         model, optimizer, scheduler
+    #     )
+    # else:
+    #     model = accelerator.prepare(model)
 
     p.print(f'prepare done')
 
