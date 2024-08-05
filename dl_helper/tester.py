@@ -3,7 +3,7 @@
 """
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
-from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau
+from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau
 from py_ext.tool import log
 
 import torch
@@ -78,5 +78,7 @@ class test_base():
             lr_scheduler_class = ReduceLR_slow_loss
         elif 'ReduceLROnPlateau' == self.lr_scheduler_class:
             lr_scheduler_class = ReduceLROnPlateau
+        elif 'WarmupReduceLROnPlateau' == self.lr_scheduler_class:
+            lr_scheduler_class = WarmupReduceLROnPlateau
 
         return lr_scheduler_class(optimizer, *args, patience=params.learning_rate_scheduler_patience, **kwargs)

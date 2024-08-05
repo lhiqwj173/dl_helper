@@ -42,7 +42,7 @@ class test(test_base):
     def title_base(cls):
         return 'binctabl_base_t0'
 
-    def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLROnPlateau', **kwargs):
+    def __init__(self, *args, target_type=1, lr_scheduler_class='WarmupReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
 
         self.lr_scheduler_class = lr_scheduler_class
@@ -109,35 +109,35 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    ##########################
-    # A股
-    # 20231212.pkl
-    # 20240116.pkl
-    # 20240206.pkl
-    # 20240221.pkl
-    # 20240228.pkl
-    # 20240304.pkl
-    # 20240322.pkl
-    # 20240401.pkl
-    # 20240408.pkl
-    # 20240618.pkl
-    # 20240709.pkl
-    # 20240723.pkl
-    ##########################
-    import os, random
-    files = os.listdir(r'Z:\L2_DATA\20240805\train')
-    print(f'files num: {len(files)}')
+    # ##########################
+    # # A股
+    # # 20231212.pkl
+    # # 20240116.pkl
+    # # 20240206.pkl
+    # # 20240221.pkl
+    # # 20240228.pkl
+    # # 20240304.pkl
+    # # 20240322.pkl
+    # # 20240401.pkl
+    # # 20240408.pkl
+    # # 20240618.pkl
+    # # 20240709.pkl
+    # # 20240723.pkl
+    # ##########################
+    # import os, random
+    # files = os.listdir(r'Z:\L2_DATA\20240805\train')
+    # print(f'files num: {len(files)}')
 
-    # 随机抽取12天的数据作为验证集
-    random.shuffle(files)
-    valid_files = files[:12]
-    valid_files.sort()
-    for file in valid_files:
-        print(file)
+    # # 随机抽取12天的数据作为验证集
+    # random.shuffle(files)
+    # valid_files = files[:12]
+    # valid_files.sort()
+    # for file in valid_files:
+    #     print(file)
 
-    # run(
-    #     test, 
-    #     mode='cache_data',
-    #     # data_folder=r'/kaggle/input/lh-q-t0-data-20240729'
-    #     data_folder=r'Z:\L2_DATA\20240729',
-    # )
+    run(
+        test, 
+        mode='cache_data',
+        # data_folder=r'/kaggle/input/lh-q-t0-data-20240729'
+        data_folder=r'Z:\L2_DATA\20240729',
+    )

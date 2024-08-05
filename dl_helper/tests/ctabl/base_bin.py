@@ -42,7 +42,7 @@ class test(test_base):
     def title_base(cls):
         return 'binctabl_base_bin'
 
-    def __init__(self, *args, target_type=1, lr_scheduler_class='ReduceLROnPlateau', **kwargs):
+    def __init__(self, *args, target_type=1, lr_scheduler_class='WarmupReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
 
         self.lr_scheduler_class = lr_scheduler_class
@@ -113,41 +113,41 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    ##########################
-    # 币安
-    ##########################
-    # 2024-05-08
-    # 2024-05-10
-    # 2024-05-14
-    # 2024-05-19
-    # 2024-07-19
-    # 2024-07-22
-    # 2024-07-30
-    import datetime
-    dates = []
+    # ##########################
+    # # 币安
+    # ##########################
+    # # 2024-05-08
+    # # 2024-05-10
+    # # 2024-05-14
+    # # 2024-05-19
+    # # 2024-07-19
+    # # 2024-07-22
+    # # 2024-07-30
+    # import datetime
+    # dates = []
 
-    # 0501 + 20
-    begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
-    for i in range(20):
-        dates.append(begin_date + datetime.timedelta(days=i))
+    # # 0501 + 20
+    # begin_date = datetime.datetime.strptime('2024-05-01', '%Y-%m-%d')
+    # for i in range(20):
+    #     dates.append(begin_date + datetime.timedelta(days=i))
 
-    # 0716 + 17
-    begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
-    for i in range(17):
-        dates.append(begin_date + datetime.timedelta(days=i))
+    # # 0716 + 17
+    # begin_date = datetime.datetime.strptime('2024-07-16', '%Y-%m-%d')
+    # for i in range(17):
+    #     dates.append(begin_date + datetime.timedelta(days=i))
 
-    print(f'训练数据天数: {len(dates)}')
+    # print(f'训练数据天数: {len(dates)}')
 
-    # 随机抽 7 天作为验证数据集
-    import random
-    random.shuffle(dates)
-    valid_dates = dates[:7]
-    valid_dates.sort()
-    for date in valid_dates:
-        print(date.date())
+    # # 随机抽 7 天作为验证数据集
+    # import random
+    # random.shuffle(dates)
+    # valid_dates = dates[:7]
+    # valid_dates.sort()
+    # for date in valid_dates:
+    #     print(date.date())
 
-    # run(
-    #     test, 
-    #     mode='cache_data',
-    #     data_folder=r'/kaggle/input/lh-q-bin-data-20240730',
-    # )
+    run(
+        test, 
+        mode='cache_data',
+        data_folder=r'/kaggle/input/lh-q-bin-data-20240730',
+    )

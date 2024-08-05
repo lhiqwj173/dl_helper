@@ -14,6 +14,24 @@ class ReduceLROnPlateau(_ReduceLROnPlateau):
         for i, param_group in enumerate(self.optimizer.param_groups):
             param_group['lr'] = lr   
 
+class WarmupReduceLROnPlateau(ReduceLROnPlateau):
+    def __init__(self, optimizer, warmup_epochs=10, **kwargs):
+        super(WarmupReduceLROnPlateau, self).__init__(optimizer, **kwargs)
+        self.warmup_epochs = warmup_epochs
+        self.current_epoch = 0
+        self.base_lrs = [group['lr'] for group in optimizer.param_groups]
+        self.warmup_lrs = [lr / warmup_epochs for lr in self.base_lrs]
+
+    def step(self, metrics, epoch=None):
+        if self.current_epoch < self.warmup_epochs:
+            lr = [(self.current_epoch + 1) * warmup_lr for warmup_lr in self.warmup_lrs]
+            for param_group, lr in zip(self.optimizer.param_groups, lr):
+                param_group['lr'] = lr
+            self.current_epoch += 1
+        else:
+            # Pass the call to the parent class (ReduceLROnPlateau)
+            super(WarmupReduceLROnPlateau, self).step(metrics, epoch)
+
 # 当训练的损失序列区域平缓时，减低学习率
 class ReduceLR_slow_loss():
     def __init__(self, optimizer, min_pct=-0.00005, patience=20, factor=0.1, min_lr=0, eps=1e-8, debug=False):
