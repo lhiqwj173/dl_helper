@@ -17,10 +17,11 @@ init_logger('base', level='INFO')
     价差/最小变单位 >=  1 -上涨 0
     价差/最小变单位 <= -1 -下跌 1
     else                -不变 2
-- 验证数据集为训练数据集同期内随机6天的数据，在训练集中排除
+- 验证数据集为训练数据集同期内随机7天的数据，在训练集中排除
 
-随机遮蔽    -> 3
 降采样      -> 5
+
+不使用数据增强
 
 数据增加 37d
 训练:验证:测试
@@ -84,11 +85,8 @@ class test(test_base):
             # 学习率衰退延迟
             learning_rate_scheduler_patience=10,
 
-            # 数据增强
-            random_scale=0.05, random_mask_row=1,
-
-            # 每 3 个样本取一个数据
-            down_freq=3,
+            # 每 5 个样本取一个数据
+            down_freq=5,
 
             # 3分类
             classify=True,

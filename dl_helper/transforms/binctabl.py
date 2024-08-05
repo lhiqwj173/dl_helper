@@ -4,6 +4,9 @@ from py_ext.tool import debug
 
 class transform():
     def __init__(self, device, param, raw_time_length, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+        """
+        如果 param 中random_mask_row为0, 则raw_time_length无作用, 根据输入的形状进行切片
+        """
         assert not param.cnn, '暂不支持cnn'
 
         self.device = device
@@ -58,7 +61,7 @@ class transform():
                     x = x[:, :, -self.raw_time_length:]
                 x = self.random_mask_row(x)
             else:
-                if self.raw_time_length > self.time_length:
+                if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
             # debug('random_mask_row')
 
