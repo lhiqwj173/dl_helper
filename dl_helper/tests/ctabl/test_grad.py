@@ -10,7 +10,7 @@ from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
 
 from py_ext.tool import log, init_logger
-init_logger('base', level='INFO')
+init_logger('base', level='DEBUG')
 
 """
 - 使用新的标签 
