@@ -427,8 +427,6 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
                 tracker.track(output, target, loss, 'train')
                 # debug('track done')
 
-            return
-
         log(f"[{epoch}][{mini_epoch}] train done")
 
     # 追踪器，计算必要的数据
