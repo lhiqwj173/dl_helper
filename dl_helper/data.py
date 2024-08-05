@@ -1012,7 +1012,10 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         
     # 过滤掉不需要的symbol
     symbols = target_parm['symbols'].split('@')
-    if symbols != ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']:
+    if symbols not in [
+        ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT'],
+        '成交量 >= 100w'
+    ]:
         symbols = [i.lower() for i in symbols]
         # id: btcusdt_1710289478588
         idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
