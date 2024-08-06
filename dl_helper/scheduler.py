@@ -27,6 +27,7 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
         self.step(None)
 
     def step(self, metrics):
+        debug('step')
         if self.current_epoch < self.warmup_epochs:
             debug(f"Warmup epoch, {self.current_epoch}, {self.warmup_epochs}")
             lr = [(self.current_epoch + 1) * warmup_lr for warmup_lr in self.warmup_lrs]
