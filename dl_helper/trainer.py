@@ -637,12 +637,27 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 数据增强
     trans = test.get_transform(accelerator.device)
 
+    # for debug
+    p.print(f'init lr: {optimizer.param_groups[0]["lr"]}')
+    p.print(f'scheduler.current_epoch: {scheduler.current_epoch}')
+    p.print(f'scheduler.warmup_epochs: {scheduler.warmup_epochs}')
+    p.print(f'scheduler.base_lrs: {scheduler.base_lrs}')
+    p.print(f'scheduler.warmup_lrs: {scheduler.warmup_lrs}')
+
     # 读取可能存在的训练数据（继续训练）
     checkpoint_folder = os.path.join(params.root, 'checkpoint')
     resume_from_checkpoint = os.path.exists(checkpoint_folder)
     if resume_from_checkpoint:
         accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
         accelerator.load_state(checkpoint_folder)
+
+        # for debug
+        p.print(f'load lr: {optimizer.param_groups[0]["lr"]}')
+        p.print(f'scheduler.current_epoch: {scheduler.current_epoch}')
+        p.print(f'scheduler.warmup_epochs: {scheduler.warmup_epochs}')
+        p.print(f'scheduler.base_lrs: {scheduler.base_lrs}')
+        p.print(f'scheduler.warmup_lrs: {scheduler.warmup_lrs}')
+
         # 输出
         tracker.print_state()
     
@@ -658,6 +673,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             if tracker.step_in_epoch == 0:
                 # debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+
+            # debug
+            return
 
             # 验证
             p.print(f'epoch {epoch} val_fn')

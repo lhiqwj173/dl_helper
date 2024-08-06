@@ -1,4 +1,5 @@
 import pandas as pd
+from py_ext.tool import debug, log
 from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
 
 from dl_helper.train_param import tpu_available
@@ -27,12 +28,14 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
 
     def step(self, metrics):
         if self.current_epoch < self.warmup_epochs:
+            debug(f"Warmup epoch, {self.current_epoch}, {self.warmup_epochs}")
             lr = [(self.current_epoch + 1) * warmup_lr for warmup_lr in self.warmup_lrs]
             for param_group, lr in zip(self.optimizer.param_groups, lr):
                 param_group['lr'] = lr
             self.current_epoch += 1
         else:
             # Pass the call to the parent class (ReduceLROnPlateau)
+            debug(f'ReduceLROnPlateau')
             super(WarmupReduceLROnPlateau, self).step(metrics)
 
 # 当训练的损失序列区域平缓时，减低学习率
