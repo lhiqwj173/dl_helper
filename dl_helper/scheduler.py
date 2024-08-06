@@ -10,7 +10,7 @@ def lr_lambda(x, min_lr, max_lr, total_iters):
     return min_lr * (max_lr / min_lr) ** (x / total_iters)
 
 class LRFinder:
-    def __init__(self, optimizer, *args, total_iters: int=50, min_lr: float=1e-7, max_lr: float=1, **kwargs):
+    def __init__(self, optimizer, *args, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1, **kwargs):
         self.optimizer = optimizer
         self.min_lr = min_lr
         self.max_lr = max_lr

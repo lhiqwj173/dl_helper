@@ -31,7 +31,7 @@ class test_base():
             self.para.debug = True
 
         if self.findbest_lr:
-            self.para.epochs = 50
+            self.para.epochs = 80
         
         return self.para
 
