@@ -43,6 +43,15 @@ def cal_balance_acc(y_pred, y_true, y_n):
     balanced_acc = torch.mean(torch.stack(recall_values))
     return balanced_acc
 
+def max_downward_slope(numbers):
+    """
+    返回向下的最大斜率的idx
+    """
+    slopes = []
+    for i in range(1, len(numbers)):
+        slope = (numbers[i] - numbers[i-1]) / 1  # 假设间隔为 1
+        slopes.append(slope)
+    return slopes.index(min(slopes))
 
 class Tracker_None():
     def __init__(self, *args, **kwargs):
@@ -430,22 +439,27 @@ class Tracker():
             # 用于添加图例
             ax1_handles = []
 
-            # 计算误差最低点
-            min_train_loss = min(data['train_loss'])
-            min_test_loss = min(data['val_loss'])
-            min_train_x = data['train_loss'].index(min_train_loss)
-            min_test_x = data['val_loss'].index(min_test_loss)
             # 测试集损失
             if not isinstance(self.scheduler, LRFinder) and data['test_loss']:
                 ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='b', linestyle='--')[0])
             # 绘制loss曲线
             ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='#7070FF')[0])
             if not isinstance(self.scheduler, LRFinder):
+                # 计算误差最低点
+                min_train_loss = min(data['train_loss'])
+                min_test_loss = min(data['val_loss'])
+                min_train_x = data['train_loss'].index(min_train_loss)
+                min_test_x = data['val_loss'].index(min_test_loss)
+
                 ax1_handles.append(ax1.plot(list(range(epochs)), data['val_loss'], label=f"validation loss {last_value(data['val_loss']):.4f}", c='b')[0])
                 # 标记损失最低点
                 ax1_handles.append(ax1.scatter(min_train_x, min_train_loss, c='#7070FF',label=f'train loss min: {min_train_loss:.4f}'))
                 ax1_handles.append(ax1.scatter(min_test_x, min_test_loss, c='b',label=f'validation loss min: {min_test_loss:.4f}'))
                 # self.printer.print(f'plot loss')
+            else:
+                # 标记向下最大斜率点
+                down_max_idx = max_downward_slope(data['train_loss'])
+                ax1_handles.append(ax1.scatter(down_max_idx, data['train_loss'][down_max_idx], c='#7070FF',label=f'max downward slope lr: {data["lr"][down_max_idx]:.3e}'))
 
             if not isinstance(self.scheduler, LRFinder):
                 if params.classify:
