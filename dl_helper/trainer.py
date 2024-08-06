@@ -674,9 +674,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                 # debug(f'train_fn_mini_epoch')
                 train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
-            # debug
-            return
-
             # 验证
             p.print(f'epoch {epoch} val_fn')
             val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
