@@ -6,6 +6,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
 from dl_helper.train_param import tpu_available
 if tpu_available():
     import torch_xla.core.xla_model as xm
+def lr_lambda(x, min_lr, max_lr, total_iters):
+    return min_lr * (max_lr / min_lr) ** (x / total_iters)
 
 class LRFinder:
     def __init__(self, optimizer, *args, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1, **kwargs):
@@ -13,14 +15,15 @@ class LRFinder:
         self.min_lr = min_lr
         self.max_lr = max_lr
         self.total_iters = total_iters
-        self.lr_lambda = lambda x: self.min_lr * (self.max_lr / self.min_lr) ** (x / self.total_iters)
+        # self.lr_lambda = lambda x: self.min_lr * (self.max_lr / self.min_lr) ** (x / self.total_iters)
         self.iteration = 0
         self.history = {'lr': [], 'loss': []}
 
     def step(self, loss_array):
         loss = loss_array[-1]
 
-        lr = self.lr_lambda(self.iteration)
+        # lr = self.lr_lambda(self.iteration)
+        lr = lr_lambda(self.iteration, self.min_lr, self.max_lr, self.total_iters)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         
