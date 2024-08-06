@@ -39,6 +39,18 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
             debug(f'ReduceLROnPlateau')
             super(WarmupReduceLROnPlateau, self).step(metrics)
 
+    def state_dict(self):
+        d = super().state_dict()
+        debug(f'state_dict: {d}')
+        return d
+
+    def load_state_dict(self, state_dict):
+        debug(f'load_state_dict: {state_dict}')
+        debug(f'self.current_epoch: {self.current_epoch}')
+        super().load_state_dict()
+        debug(f'self.current_epoch: {self.current_epoch}')
+
+
 # 当训练的损失序列区域平缓时，减低学习率
 class ReduceLR_slow_loss():
     def __init__(self, optimizer, min_pct=-0.00005, patience=20, factor=0.1, min_lr=0, eps=1e-8, debug=False):
