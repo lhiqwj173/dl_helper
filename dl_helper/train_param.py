@@ -179,6 +179,7 @@ class Params:
 
   weight_decay=0.01
 
+  # 弃用!!!
   # 测试最优学习率
   # 非训练使用
   init_learning_ratio=0

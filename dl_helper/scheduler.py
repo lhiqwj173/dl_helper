@@ -1,10 +1,38 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 from py_ext.tool import debug, log
 from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
 
 from dl_helper.train_param import tpu_available
 if tpu_available():
     import torch_xla.core.xla_model as xm
+
+class LRFinder:
+    def __init__(self, optimizer: Optimizer, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1):
+        self.optimizer = optimizer
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.total_iters = total_iters
+        self.lr_lambda = lambda x: self.min_lr * (self.max_lr / self.min_lr) ** (x / self.total_iters)
+        self.iteration = 0
+        self.history = {'lr': [], 'loss': []}
+
+    def step(self, loss_array):
+        loss = loss_array[-1]
+
+        lr = self.lr_lambda(self.iteration)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        
+        self.history['lr'].append(lr)
+        self.history['loss'].append(loss)
+        
+        self.iteration += 1
+    def state_dict(self):
+        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
 
 class ReduceLROnPlateau(_ReduceLROnPlateau):
     def step(self, loss_array):
@@ -47,7 +75,7 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
     def load_state_dict(self, state_dict):
         debug(f'load_state_dict: {state_dict}')
         debug(f'self.current_epoch: {self.current_epoch}')
-        super().load_state_dict()
+        super().load_state_dict(state_dict)
         debug(f'self.current_epoch: {self.current_epoch}')
 
 
@@ -128,3 +156,5 @@ class ReduceLR_slow_loss():
 
     def load_state_dict(self, state_dict):
         self.__dict__.update(state_dict)
+
+

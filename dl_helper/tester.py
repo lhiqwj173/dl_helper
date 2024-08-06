@@ -3,7 +3,7 @@
 """
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
-from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau
+from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder
 from py_ext.tool import log
 
 import torch
@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from py_ext.tool import debug
 
 class test_base():
-    def __init__(self, idx, data_folder='', amp='no', debug=False):
+    def __init__(self, idx, data_folder='', amp='no', debug=False, findbest_lr=False):
         self.idx = idx
         log(f'train begin :{self.idx}')
 
@@ -21,6 +21,7 @@ class test_base():
         self.amp = amp
         self.debug = debug
         self.para = None
+        self.findbest_lr = findbest_lr
 
     # 获取训练参数
     def get_param(self):
@@ -72,9 +73,10 @@ class test_base():
 
     def get_transform(self, device):
         return transform()
-
     def get_lr_scheduler(self, optimizer, params, *args, **kwargs):
-        if 'ReduceLR_slow_loss' == self.lr_scheduler_class:
+        if self.findbest_lr:
+            lr_scheduler_class = LRFinder
+        elif 'ReduceLR_slow_loss' == self.lr_scheduler_class:
             lr_scheduler_class = ReduceLR_slow_loss
         elif 'ReduceLROnPlateau' == self.lr_scheduler_class:
             lr_scheduler_class = ReduceLROnPlateau
