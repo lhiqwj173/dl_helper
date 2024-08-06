@@ -8,7 +8,7 @@ if tpu_available():
     import torch_xla.core.xla_model as xm
 
 class LRFinder:
-    def __init__(self, optimizer, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1):
+    def __init__(self, optimizer, *args, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1, **kwargs):
         self.optimizer = optimizer
         self.min_lr = min_lr
         self.max_lr = max_lr
