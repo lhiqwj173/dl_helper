@@ -10,7 +10,7 @@ def lr_lambda(x, min_lr, max_lr, total_iters):
     return min_lr * (max_lr / min_lr) ** (x / total_iters)
 
 class LRFinder:
-    def __init__(self, optimizer, *args, total_iters: int=80, min_lr: float=1e-7, max_lr: float=1, **kwargs):
+    def __init__(self, optimizer, *args, total_iters: int=50, min_lr: float=1e-7, max_lr: float=1, **kwargs):
         self.optimizer = optimizer
         self.min_lr = min_lr
         self.max_lr = max_lr
@@ -18,9 +18,15 @@ class LRFinder:
         # self.lr_lambda = lambda x: self.min_lr * (self.max_lr / self.min_lr) ** (x / self.total_iters)
         self.iteration = 0
         self.history = {'lr': [], 'loss': []}
+        
+        # 初始化学习率
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = min_lr
 
     def step(self, loss_array):
         loss = loss_array[-1]
+
+        self.iteration += 1
 
         # lr = self.lr_lambda(self.iteration)
         lr = lr_lambda(self.iteration, self.min_lr, self.max_lr, self.total_iters)
@@ -30,7 +36,6 @@ class LRFinder:
         self.history['lr'].append(lr)
         self.history['loss'].append(loss)
         
-        self.iteration += 1
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
 

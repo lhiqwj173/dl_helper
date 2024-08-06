@@ -29,6 +29,10 @@ class test_base():
         if self.debug:
             self.para.epochs = 2
             self.para.debug = True
+
+        if self.findbest_lr:
+            self.para.epochs = 50
+        
         return self.para
 
     # 初始化数据
