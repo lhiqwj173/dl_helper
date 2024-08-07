@@ -74,6 +74,7 @@ def run_idx_manager():
 
         # 检查重置 titles
         if time.time() - latest_timestamp > 11*3600:
+            print(f'重置titles字典 {time.time()} {latest_timestamp} diff:{time.time() - latest_timestamp}')
             titles = {}
         latest_timestamp = time.time()
 
