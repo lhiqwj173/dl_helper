@@ -592,10 +592,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
     
-        # 调整lr
-        l = params.learning_rate
-        params.learning_rate *= num_processes
-        p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        if not params.abs_learning_rate:
+            # 若不存在绝对学习率，需要基于设备调整lr
+            l = params.learning_rate
+            params.learning_rate *= num_processes
+            p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     # 临时额外的训练参数
     if train_param:
@@ -611,8 +612,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         val_loader = test.get_cache_data('val', params, accelerator)
         p.print(f'data init')
 
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    # 绝对学习率优先
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
     scheduler = test.get_lr_scheduler(optimizer, params)
     criterion = nn.CrossEntropyLoss()
 
@@ -756,10 +758,11 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
     
-        # 调整lr
-        l = params.learning_rate
-        params.learning_rate *= num_processes
-        p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        if not params.abs_learning_rate:
+            # 若不存在绝对学习率，需要基于设备调整lr
+            l = params.learning_rate
+            params.learning_rate *= num_processes
+            p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     # 临时额外的训练参数
     if train_param:
@@ -777,8 +780,8 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
         p.print(f'dataset length: {len(train_loader.dataset)}')
         p.print(f'dataloader length: {len(train_loader)}')
 
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
     scheduler = test.get_lr_scheduler(optimizer, params)
     criterion = nn.CrossEntropyLoss()
 
@@ -878,11 +881,11 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
         params.batch_size //= num_processes
         p.print(f'batch_size: {b} -> {params.batch_size}')
     
-    # if num_processes > 1:
-        # 调整lr
-        l = params.learning_rate
-        params.learning_rate *= num_processes
-        p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        if not params.abs_learning_rate:
+            # 若不存在绝对学习率，需要基于设备调整lr
+            l = params.learning_rate
+            params.learning_rate *= num_processes
+            p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
     p.print(f'batch_size: {params.batch_size}')
 
@@ -903,8 +906,8 @@ def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=
         model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
 
     criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
@@ -965,10 +968,11 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
     params = test.get_param()
 
     # 调整参数
-    # 调整lr
-    l = params.learning_rate
-    params.learning_rate *= num_processes
-    xm.master_print(f'learning_rate: {l} -> {params.learning_rate}')
+    if not params.abs_learning_rate:
+        # 若不存在绝对学习率，需要基于设备调整lr
+        l = params.learning_rate
+        params.learning_rate *= num_processes
+        xm.master_print(f'learning_rate: {l} -> {params.learning_rate}')
     params.batch_size //= num_processes
     xm.master_print(f'batch_size: {params.batch_size}')
 
@@ -1003,8 +1007,8 @@ def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param
         model = DDP(model, gradient_as_bucket_view=True)
 
     criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate,weight_decay=params.weight_decay)
+    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
 
     trans = test.get_transform(device)

@@ -73,7 +73,7 @@ def run_idx_manager():
         print(f"Connected to {client_address}")
 
         # 检查重置 titles
-        if time.time() - latest_timestamp > 30*60:
+        if time.time() - latest_timestamp > 11*3600:
             titles = {}
         latest_timestamp = time.time()
 

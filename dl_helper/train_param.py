@@ -9,9 +9,9 @@ root: 项目路径
 epochs: 训练轮数
 batch_size: 批次大小
 learning_rate: 学习率
+abs_learning_rate: # 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
 lr_scheduler_class: 学习率调度类
 learning_rate_scheduler_patience: 学习率衰减延迟
-warm_up_epochs: warm up 数
 no_better_stop: 早停参数
 random_mask: 随机遮蔽
 random_mask_row: 随机遮蔽行
@@ -154,9 +154,7 @@ class Params:
   # learning_rate
   learning_rate = 0.001
   learning_rate_scheduler_patience = 20
-
-  # warm up 数
-  warm_up_epochs = 3
+  abs_learning_rate = 0
 
   # 早停参数
   no_better_stop = 15
@@ -205,8 +203,10 @@ class Params:
       train_title, root, data_set,
 
       # 训练参数
-      learning_rate, batch_size, 
-      epochs=100, warm_up_epochs=3, 
+      batch_size, 
+      learning_rate = 0, 
+      abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
+      epochs=100, 
       no_better_stop=0, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
 
       # 数据增强
@@ -249,7 +249,7 @@ class Params:
       self.epochs = epochs
       self.batch_size = batch_size
       self.learning_rate = learning_rate
-      self.warm_up_epochs = warm_up_epochs
+      self.abs_learning_rate = abs_learning_rate
       self.no_better_stop = no_better_stop
       self.checkpointing_steps = checkpointing_steps
       self.random_mask = random_mask
