@@ -55,14 +55,15 @@ class test(test_base):
 
         # T: 100, 40, 10, 1
         model_vars = [
-            (100, 40, 10, 1),
-            (100, 60, 20, 1),
-            (100, 80, 30, 1),
-            (100, 100, 40, 1),
-            (100, 120, 50, 1),
-            (100, 140, 60, 1),
+            ((100, 40, 10, 1), 3.8e-7),
+            ((100, 60, 20, 1), 0.01),
+            ((100, 80, 30, 1), 0.01),
+            ((100, 100, 40, 1), 0.01),
+            ((100, 120, 50, 1), 0.01),
+            ((100, 140, 60, 1), 0.01),
         ]
-        self.model_var = model_vars[self.idx]
+        self.model_var = model_vars[self.idx][0]
+        self.lr = model_vars[self.idx][1]
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
@@ -80,7 +81,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            learning_rate=0.0001*batch_n, batch_size=64*batch_n, epochs=150,
+            abs_learning_rate=self.lr, batch_size=64*batch_n, epochs=150,
 
             # 学习率衰退延迟
             learning_rate_scheduler_patience=10,
