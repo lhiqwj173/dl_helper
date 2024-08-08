@@ -85,10 +85,56 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
         return d
 
     def load_state_dict(self, state_dict):
-        debug(f'load_state_dict: {state_dict}')
-        debug(f'self.current_epoch: {self.current_epoch}')
         super().load_state_dict(state_dict)
-        debug(f'self.current_epoch: {self.current_epoch}')
+
+class OneCycle():
+    def __init__(self, optimizer, total_iters: int, min_lr: float, max_lr: float, *args, **kwargs):
+        self.optimizer = optimizer
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.total_iters = total_iters
+
+        one_cycle_epochs = int(total_iters * 0.85)
+        self.max_lr_epoch_idx = one_cycle_epochs // 2
+        self.final_epoch_idx = self.max_lr_epoch_idx * 2
+
+        # 每次调整的学习率
+        self.each_diff_lr = (max_lr - min_lr) / self.max_lr_epoch_idx
+        self.each_diff_lr_final = (min_lr - min_lr / 100) / (total_iters - self.final_epoch_idx - 1)
+
+        self.iteration = 0
+        
+        # 初始化学习率
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = min_lr
+
+    def step(self, loss_array):
+        loss = loss_array[-1]
+
+        self.iteration += 1
+
+        # lr = self.lr_lambda(self.iteration)
+        cur_lr = self.optimize.param_groups[0]["lr"]
+        if self.iteration <= self.max_lr_epoch_idx:
+            lr = cur_lr + self.each_diff_lr
+        elif self.iteration <= self.final_epoch_idx:
+            lr = cur_lr - self.each_diff_lr
+        else:
+            # 最终阶段
+            lr = cur_lr - self.each_diff_lr_final
+        
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        
+    def state_dict(self):
+        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
+
+    def use_lr(self, lr):
+        for i, param_group in enumerate(self.optimizer.param_groups):
+            param_group['lr'] = lr   
 
 
 # 当训练的损失序列区域平缓时，减低学习率

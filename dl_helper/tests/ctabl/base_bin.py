@@ -3,7 +3,7 @@ import sys
 
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params
-
+from dl_helper.scheduler import OneCycle
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
@@ -42,10 +42,9 @@ class test(test_base):
     def title_base(cls):
         return 'binctabl_base_bin'
 
-    def __init__(self, *args, target_type=1, lr_scheduler_class='WarmupReduceLROnPlateau', **kwargs):
+    def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.lr_scheduler_class = lr_scheduler_class
         symbols = ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']
 
         classify_idx, targrt_name = 4, '10_target_mid_diff'
@@ -53,17 +52,22 @@ class test(test_base):
 
         batch_n = 16 * 2
 
+        epochs = 150
+
+        min_lr = 3.8e-7
+        max_lr = 4.8e-5
+        self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
+
         # T: 100, 40, 10, 1
         model_vars = [
-            ((100, 40, 10, 1), 3.8e-7),
-            ((100, 60, 20, 1), 5e-7),
-            ((100, 80, 30, 1), 5e-7),
-            ((100, 100, 40, 1), 3.8e-7),
-            ((100, 120, 50, 1), 3.8e-7),
-            ((100, 140, 60, 1), 3.8e-7),
+            (100, 40, 10, 1),
+            (100, 60, 20, 1),
+            (100, 80, 30, 1),
+            (100, 100, 40, 1),
+            (100, 120, 50, 1),
+            (100, 140, 60, 1),
         ]
-        self.model_var = model_vars[self.idx][0]
-        self.lr = model_vars[self.idx][1]
+        self.model_var = model_vars[self.idx]
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
@@ -81,10 +85,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            abs_learning_rate=self.lr, batch_size=64*batch_n, epochs=150,
-
-            # 学习率衰退延迟
-            learning_rate_scheduler_patience=10,
+            batch_size=64*batch_n, epochs=epochs,
 
             # 每 5 个样本取一个数据
             down_freq=5,
@@ -149,7 +150,7 @@ if '__main__' == __name__:
 
     run(
         test,
-        findbest_lr=True, 
+        # findbest_lr=True, 
         mode='cache_data',
         data_folder=r'/kaggle/input/lh-q-bin-data-20240805',
     )
