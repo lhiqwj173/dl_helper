@@ -92,5 +92,7 @@ class test_base():
                 lr_scheduler_class = WarmupReduceLROnPlateau
         elif isinstance(self.lr_scheduler_class, type):
             lr_scheduler_class = self.lr_scheduler_class
+        else:
+            raise Exception(f'UNKNOW lr_scheduler_class {self.lr_scheduler_class}')
 
         return lr_scheduler_class(optimizer, *args, patience=params.learning_rate_scheduler_patience, **kwargs)
