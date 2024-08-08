@@ -1,6 +1,8 @@
 """
 训练的基类
 """
+import functools
+
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
 from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder
