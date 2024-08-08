@@ -245,7 +245,7 @@ class Params:
       if self.amp in ['fp8', 'fp16', 'bf16']:
           self.train_title = f'{self.train_title }_{self.amp}'
           self.root = f'{self.root }_{self.amp}'
-
+        
       self.epochs = epochs
       self.batch_size = batch_size
       self.learning_rate = learning_rate

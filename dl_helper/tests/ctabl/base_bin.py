@@ -149,7 +149,7 @@ if '__main__' == __name__:
 
     run(
         test,
-        # findbest_lr=True, 
+        findbest_lr=True, 
         mode='cache_data',
         data_folder=r'/kaggle/input/lh-q-bin-data-20240805',
     )

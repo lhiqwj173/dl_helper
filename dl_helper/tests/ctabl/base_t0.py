@@ -80,7 +80,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            abs_learning_rate=self.lr, batch_size=64*batch_n, epochs=150,
+            abs_learning_rate=self.lr, batch_size=64*batch_n, epochs=300,
 
             # 学习率衰退延迟
             learning_rate_scheduler_patience=10,
