@@ -40,7 +40,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return 'binctabl_base_t0'
+        return 'binctabl_t0_max_bs'
 
     def __init__(self, *args, target_type=1, lr_scheduler_class='WarmupReduceLROnPlateau', **kwargs):
         super().__init__(*args, **kwargs)
