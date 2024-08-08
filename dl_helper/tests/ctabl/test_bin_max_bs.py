@@ -103,6 +103,7 @@ class test(test_base):
 if '__main__' == __name__:
     for i in range(10):
         batch_size = 2048 * (2 ** (i+1))
+        print(f'test Bin batch_size: {batch_size}')
         run(
             test,
             # findbest_lr=True, 
