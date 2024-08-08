@@ -114,7 +114,7 @@ class OneCycle():
         self.iteration += 1
 
         # lr = self.lr_lambda(self.iteration)
-        cur_lr = self.optimize.param_groups[0]["lr"]
+        cur_lr = self.optimizer.param_groups[0]["lr"]
         if self.iteration <= self.max_lr_epoch_idx:
             lr = cur_lr + self.each_diff_lr
         elif self.iteration <= self.final_epoch_idx:
