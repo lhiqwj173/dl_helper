@@ -51,6 +51,8 @@ class test(test_base):
         classify_idx, targrt_name = 4, '10_target_mid_diff'
         self.y_n = 3
 
+        batch_n = 16 * 2
+
         # T: 100, 40, 10, 1
         model_vars = [
             ((100, 40, 10, 1), 3.8e-7),
@@ -79,7 +81,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            abs_learning_rate=self.lr, batch_size=32768, epochs=150,
+            abs_learning_rate=self.lr, batch_size=64*batch_n, epochs=150,
 
             # 学习率衰退延迟
             learning_rate_scheduler_patience=10,
