@@ -90,7 +90,7 @@ class test_base():
                 lr_scheduler_class = ReduceLROnPlateau
             elif 'WarmupReduceLROnPlateau' == self.lr_scheduler_class:
                 lr_scheduler_class = WarmupReduceLROnPlateau
-        elif isinstance(self.lr_scheduler_class, type):
+        elif isinstance(self.lr_scheduler_class, type) or isinstance(self.lr_scheduler_class, functools.partial):
             lr_scheduler_class = self.lr_scheduler_class
         else:
             raise Exception(f'UNKNOW lr_scheduler_class {self.lr_scheduler_class}')
