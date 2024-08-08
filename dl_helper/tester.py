@@ -27,7 +27,7 @@ class test_base():
     def get_param(self):
         assert self.para, 'should init param in __init__()'
         if self.debug:
-            self.para.epochs = 2
+            self.para.epochs = 1
             self.para.debug = True
 
         if self.findbest_lr:
