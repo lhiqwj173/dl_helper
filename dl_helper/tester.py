@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from py_ext.tool import debug
 
 class test_base():
-    def __init__(self, idx, data_folder='', amp='no', debug=False, findbest_lr=False):
+    def __init__(self, idx, *args, data_folder='', amp='no', debug=False, findbest_lr=False, **kwargs):
         self.idx = idx
         log(f'train begin :{self.idx}')
 
@@ -34,7 +34,7 @@ class test_base():
             self.para.epochs = 60
             self.para.root += f'_findlr'
             self.para.train_title += f'_findlr'
-        
+
         return self.para
 
     # 初始化数据

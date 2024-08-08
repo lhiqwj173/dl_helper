@@ -585,6 +585,12 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         else:
             os.makedirs(params.root, exist_ok=True)
 
+    if params.debug:
+        # 删除重建文件夹
+        if os.path.exists(params.root):
+            shutil.rmtree(params.root)
+        os.makedirs(params.root, exist_ok=True)
+
     # 调整参数
     if num_processes >= 2:
         # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
