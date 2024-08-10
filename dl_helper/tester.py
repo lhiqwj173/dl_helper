@@ -20,6 +20,8 @@ class test_base():
         log(f'train begin :{self.idx}')
 
         self.data_folder = data_folder if data_folder else './data'
+
+        # GPU: fp16
         self.amp = amp
         self.debug = debug
         self.para = None
