@@ -40,7 +40,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return 'binctabl_base_bin'
+        return 'binctabl_bin_amp'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
