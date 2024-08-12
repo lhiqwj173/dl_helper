@@ -366,6 +366,16 @@ class Tracker():
         if _type == 'test':
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
+
+            ##################
+            # 测试
+            if '159329_1722216951' in _ids:
+                _test_idx = _ids.index('159329_1722216951')
+                print('label:', _y_true[_test_idx])
+                raise
+
+            ##################
+
         else:
             _ids = []
         # self.printer.print('_ids done')
