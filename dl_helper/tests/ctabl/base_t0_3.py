@@ -61,7 +61,7 @@ class test(test_base):
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = predict_n_vars[self.idx]
-        classify_idx, targrt_name = 1 + (predict_n.index(self.predict_n) + 4) * 2 , f'{self.predict_n}_target_mid_diff'
+        classify_idx, targrt_name = 1 + (predict_n_vars.index(self.predict_n) + 4) * 2 , f'{self.predict_n}_target_mid_diff'
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
