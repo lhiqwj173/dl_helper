@@ -1150,6 +1150,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
     # 分配idx
+    from dl_helper.train_param import get_gpu_info
     base_title= f'{test_class.title_base()}_{get_gpu_info()}'
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
@@ -1157,7 +1158,6 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['idx'] = int(arg.split('=')[1])
                 break
     else:
-        from dl_helper.train_param import get_gpu_info
         kwargs['idx'] = get_idx(base_title)
 
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
