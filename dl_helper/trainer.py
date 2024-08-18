@@ -1159,7 +1159,6 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         from dl_helper.train_param import get_gpu_info
         base_title= f'{test_class.title_base()}_{get_gpu_info()}'
         kwargs['idx'] = get_idx(base_title)
-    os.environ['lh_dl_idx'] = kwargs['idx']
 
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
 
