@@ -997,7 +997,7 @@ class cache():
 
 def load_data(target_parm, params, file, diff_length, data_map, device=None, log=False):
     # report_memory_usage('begin')
-    print(f'load data: {file}')
+    print(f'load data: {file}', flush=True)
 
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
