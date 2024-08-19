@@ -36,7 +36,7 @@ class test_base():
             self.para.debug = True
 
         if self.findbest_lr:
-            self.para.epochs = 60
+            self.para.epochs = 45
             self.para.root += f'_findlr'
             self.para.train_title += f'_findlr'
 
