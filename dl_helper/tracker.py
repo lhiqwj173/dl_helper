@@ -179,7 +179,7 @@ class Tracker():
         if self.accelerator.is_main_process:
             if self.params.classify:
                 self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
-                self.temp['_y_pred_max_probabilities'], self.temp['_y_pred'] = torch.max(softmax_predictions, dim=1)
+                self.temp['_y_pred_max_probabilities'], self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
 
             # 更新训练时间记录
             self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
