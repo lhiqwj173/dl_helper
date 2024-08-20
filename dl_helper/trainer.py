@@ -1156,8 +1156,10 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         for arg in sys.argv[1:]:
             if arg.startswith('idx='):
                 kwargs['idx'] = int(arg.split('=')[1])
-                break
-    else:
+            if arg.startswith('amp='):
+                kwargs['amp'] = arg.split('=')[1]
+                
+    if 'idx' not in kwargs:
         kwargs['idx'] = get_idx(base_title)
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
 
