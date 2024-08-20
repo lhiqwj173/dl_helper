@@ -40,7 +40,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return 'binctabl_base_t0_extra'
+        return 'binctabl_base_t0_extra_250w'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,8 +51,9 @@ class test(test_base):
 
         epochs = 80
 
-        predict_n = [2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 30, 50, 100]
+        predict_n = [10, 20, 30, 40, 50, 100]
         predict_n_vars = [10, 30 , 50, 100]
+        predict_idx_vars = [1, 5 , 9, 11]
         min_lr_vars = [6.6e-7, 5.0e-7, 5.0e-7, 5.0e-7]
         max_lr_vars = [2.1e-3, 2.1e-3, 5.0e-7, 5.0e-7]
 
@@ -61,21 +62,17 @@ class test(test_base):
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = predict_n_vars[self.idx]
-
-        if self.predict_n == 10:
-            classify_idx, targrt_name = 1 + (predict_n_vars.index(self.predict_n) + 5) * 2 , f'{self.predict_n}_target_mid_diff'
-        else:
-            classify_idx, targrt_name = 1 + (predict_n_vars.index(self.predict_n) + 10) * 2 , f'{self.predict_n}_target_mid_diff'
+        classify_idx, targrt_name = predict_idx_vars[self.idx] , f'{self.predict_n}_target_mid_diff'
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
-            'predict_n': [8, 10, 12, 14, 16, 18, 20, 30, 50, 100],
+            'predict_n': [10, 20, 30, 40, 50, 100],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': '成交量 >= 1000w',
+            'symbols': '成交量 >= 250w',
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
         }
@@ -91,7 +88,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'1000w predict_n:{self.predict_n}',
+            describe=f'extra 250w predict_n:{self.predict_n}',
             amp=self.amp
         )
 
@@ -141,5 +138,5 @@ if '__main__' == __name__:
         findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        data_folder=r'/kaggle/input/lh-q-t0-data-extra'
+        data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w'
     )
