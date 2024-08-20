@@ -323,7 +323,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         }
 
         for file in files:
-            diff_length, _ = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
+            diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
         # 检查数值异常
