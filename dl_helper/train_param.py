@@ -185,8 +185,6 @@ class Params:
 
   data_set = ''
   y_n = 0
-  use_trade = False
-  use_pk = True
 
   regress_y_idx = -1
   classify_y_idx = -1
@@ -224,9 +222,6 @@ class Params:
       
       # 数据集路径
       data_folder = '',
-
-      # 数据使用部分
-      use_pk = True, use_trade = False,
 
       describe='',
 
@@ -270,8 +265,6 @@ class Params:
       self.y_func = y_func
 
       self.describe = describe
-      self.use_pk = use_pk
-      self.use_trade = use_trade
       self.workers = workers
 
       self.data_folder = data_folder if data_folder else './data'

@@ -144,233 +144,6 @@ class DataLoaderDevice(DataLoader):
             else:
                 raise Exception(f'未支持的类型: {type(batch)}')
 
-class Dataset_0(torch.utils.data.Dataset): 
-    """Characterizes a dataset for PyTorch"""
-
-    def __init__(self, params, data_map, need_split_data_set, classify=False, train=True, log=False):
-        """Initialization"""
-        self.log = log
-        self.params = params
-
-        # 原始数据
-        # report_memory_usage()
-
-        # 区分价量列
-        self.price_cols = [i*2 for i in range(20)]
-        self.vol_cols = [i*2+1 for i in range(20)]
-
-        if not need_split_data_set:
-            # if self.log:
-            #     logger.# debug("使用全部数据")
-            if params.use_trade:
-                self.price_cols += [42, 45]
-                self.vol_cols += [40, 41, 43, 44]
-
-        else:
-            # 使用部分截取
-            if (params.use_pk and params.use_trade):
-                raise Exception('no use')
-
-            elif params.use_pk:
-                # if self.log:
-                #     logger.# debug("只使用盘口数据")
-                pass
-
-            elif params.use_trade:
-                # if self.log:
-                #     logger.# debug("只使用交易数据")
-                self.price_cols = [2, 5]
-                self.vol_cols = [0, 1, 3, 4]
-
-        self.data = torch.from_numpy(data_map['raw'].values)
-        del data_map['raw']
-
-        self.mean_std = data_map['mean_std']
-        del data_map['mean_std']
-
-        # logger.# debug('del data_map > raw / mean_std')
-        # report_memory_usage()
-
-        self.data = torch.unsqueeze(self.data, 0)  # 增加一个通道维度
-
-        # 训练数据集
-        self.train = train
-
-        if classify:
-            # 分类训练集 数据平衡
-            if train:
-                labels = set(data_map['y'])
-                sy = pd.Series(data_map['y'])
-                min_num = sy.value_counts().min()
-
-                # if self.log:
-                #     logger.# debug(f'min_num: {min_num}')
-
-                # report_memory_usage()
-
-                idx = []
-                for label in labels:
-                    origin_idx = sy[sy == label].index
-
-                    if len(origin_idx) > min_num:
-                        idx += np.random.choice(origin_idx,
-                                                min_num, replace=False).tolist()
-                    else:
-                        idx += origin_idx.tolist()
-
-                # 排序
-                idx.sort()
-
-                # if self.log:
-                #     logger.# debug(f'reindex')
-
-                data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
-                data_map['x'] = [data_map['x'][i] for i in idx]
-                data_map['y'] = [data_map['y'][i] for i in idx]
-                self.mean_std = [self.mean_std[i] for i in idx]
-        # else:
-        #     # 回归数据集
-        #     # y 可能为nan
-        #     idxs = [i for i in range(len(data_map['y'])) if not np.isnan(data_map['y'][i])]
-        #     # 过滤nan
-        #     data_map['y'] = [data_map['y'][i] for i in idxs]
-        #     data_map['x'] = [data_map['x'][i] for i in idxs]
-        #     self.mean_std = [self.mean_std[i] for i in idxs]
-        #     data_map['ids'] = [data_map['ids'][i] for i in idxs] if data_map['ids'] else ids
-
-        # report_memory_usage()
-
-        # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
-        self.time_length = int(params.data_set.split('_')[3])
-
-        # id
-        self.ids = data_map['ids']
-        del data_map['ids']
-        
-        # 数据长度
-        self.length = len(data_map['x'])
-
-        # x 切片索引
-        self.x_idx = data_map['x']
-        del data_map['x']
-        # x = torch.tensor(np.array(x), dtype=torch.float)
-
-        # 最大musk时间个数
-        self.max_mask_num = 5
-
-        # y
-        # 标签onehot 编码
-        # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
-        self.y = torch.tensor(np.array(data_map['y']), dtype=torch.int64 if params.classify else torch.float)
-        
-        data_map.clear()
-
-        self.need_split_data_set = need_split_data_set
-
-        self.input_shape = self.__getitem__(0)[0].shape
-        # 增加一个batch维度
-        self.input_shape = (1,) + self.input_shape
-
-        # if self.log:
-        #     logger.# debug(f'数据集初始化完毕')
-        # report_memory_usage()
-
-    def __len__(self):
-        """Denotes the total number of samples"""
-        return self.length
-
-    def __getitem__(self, index):
-        """Generates samples of data"""
-        # #############################
-        # # 测试用
-        # #############################
-        # return torch.randn(40, 100), 0
-        # #############################
-        # #############################
-        
-        # 切片范围
-        a, b = self.x_idx[index]
-
-        # 截断数据 b向上截取
-        # a=3, b=6
-        # 3, 4, 5
-        # self.time_length=2
-        # 4, 5
-        # a -> 4
-        ab_length = b-a
-        if ab_length > self.time_length:
-            a += (ab_length-self.time_length)
-
-        #############################
-        # 1. 部分截取
-        #############################
-        if self.need_split_data_set:
-            # 使用部分截取 xa, xb
-            xa, xb = 0, 46
-            if self.params.use_pk and self.params.use_trade:
-                raise Exception('no use')
-            elif self.params.use_pk:
-                xb = 40
-            elif self.params.use_trade:
-                xa = 40
-
-            # 截取mean_std
-            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-        else:
-            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
-
-        #############################
-        # 2. 全部使用，在读取数据的部分作截取操作
-        #############################
-
-        # 获取切片x
-        if self.train and self.params.random_mask_row>0:
-            # 随机遮蔽行
-            x = random_mask_row(self.data[:, self.x_idx[index][0]:b, :].clone(), self.time_length)
-        else:
-            x = self.data[:, a:b, :].clone()
-
-        check_nan(x)
-
-        #############################
-        #############################
-        # mid_price
-        mid = (x[0, -1, 0] + x[0, -1, 2]) / 2
-
-        # 价格标准化
-        x[0, :, self.price_cols] /= mid
-        x[0, :, :] -= mean_std[:, 0]
-        x[0, :, :] /= mean_std[:, 1]
-
-        # 随机缩放
-        if self.train and self.params.random_scale>0:
-            x = random_scale(x, self.params.random_scale)
-        check_nan(x)
-
-        # 随机mask
-        if self.train and self.params.random_mask>0:
-            x = random_mask(x, self.params.random_mask)
-        check_nan(x)
-
-        # #############################
-        # # 测试用
-        # #############################
-        # # x = self.data[:, a:b, :].clone()
-        # x = self.data[:, a:b, :]
-        # #############################
-        # #############################
-
-        # print(x.device)
-        # raise
-
-        # return x, (self.y[index], self.ids[index])
-        if self.params.cnn:
-            # x:[channel, pass_n, feature] -> [1, 100, 40/6/46]
-            return x, self.y[index]
-        else:
-            # x:[feature, pass_n] -> [40/6/46, 100]
-            return x[0].permute(1, 0), self.y[index]
-
 class Dataset_cahce(torch.utils.data.Dataset): 
     """
     不会主动load数据
@@ -393,28 +166,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 读取一个文件，判断是否需要拆分数据集
         _,mean_std, _, _, _ = pickle.load(open(os.path.join(self.params.data_folder, self.files[0]), 'rb'))
-        self.need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
-
-        # 区分价量列
-        self.price_cols = [i*2 for i in range(20)]
-        self.vol_cols = [i*2+1 for i in range(20)]
-
-        if not self.need_split_data_set:
-            if params.use_trade:
-                self.price_cols += [42, 45]
-                self.vol_cols += [40, 41, 43, 44]
-
-        else:
-            # 使用部分截取
-            if (params.use_pk and params.use_trade):
-                raise Exception('no use')
-
-            elif params.use_pk:
-                pass
-
-            elif params.use_trade:
-                self.price_cols = [2, 5]
-                self.vol_cols = [0, 1, 3, 4]
 
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
@@ -670,178 +421,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         self.use_data_id.append(self.ids[index])
 
-        #############################
-        # 1. 部分截取
-        #############################
-        if self.need_split_data_set:
-            # 使用部分截取 xa, xb
-            xa, xb = 0, 46
-            if self.params.use_pk and self.params.use_trade:
-                raise Exception('no use')
-            elif self.params.use_pk:
-                xb = 40
-            elif self.params.use_trade:
-                xa = 40
-
-            # 截取mean_std
-            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-        else:
-            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
-
-        return x, self.y[index], mean_std
-
-class Dataset_cahce_folder(torch.utils.data.Dataset):
-    def read_files(self):
-        # 文件夹读取训练/验证/测试 数据
-        data_path = os.path.join(self.params.data_folder, self.type)
-        self.files = sorted([i for i in os.listdir(data_path)])
-
-class Dataset(torch.utils.data.Dataset): 
-    """Characterizes a dataset for PyTorch"""
-
-    def __init__(self, params, data_map, need_split_data_set, classify=False, train=True, log=False):
-        """Initialization"""
-        self.log = log
-        self.params = params
-
-        # 原始数据
-        # report_memory_usage()
-
-        # 区分价量列
-        self.price_cols = [i*2 for i in range(20)]
-        self.vol_cols = [i*2+1 for i in range(20)]
-
-        if not need_split_data_set:
-            # if self.log:
-            #     logger.# debug("使用全部数据")
-            if params.use_trade:
-                self.price_cols += [42, 45]
-                self.vol_cols += [40, 41, 43, 44]
-
-        else:
-            # 使用部分截取
-            if (params.use_pk and params.use_trade):
-                raise Exception('no use')
-
-            elif params.use_pk:
-                # if self.log:
-                #     logger.# debug("只使用盘口数据")
-                pass
-
-            elif params.use_trade:
-                # if self.log:
-                #     logger.# debug("只使用交易数据")
-                self.price_cols = [2, 5]
-                self.vol_cols = [0, 1, 3, 4]
-
-        if isinstance(data_map['raw'] , pd.DataFrame):
-            self.data = torch.from_numpy(data_map['raw'].values)
-        else:
-            self.data = data_map['raw']
-        del data_map['raw']
-
-        self.mean_std = data_map['mean_std']
-        del data_map['mean_std']
-
-        # logger.# debug('del data_map > raw / mean_std')
-        # report_memory_usage()
-
-        # 训练数据集
-        self.train = train
-
-        if classify:
-            # 分类训练集 数据平衡
-            if train:
-                labels = set(data_map['y'])
-                sy = pd.Series(data_map['y'])
-                min_num = sy.value_counts().min()
-
-                # if self.log:
-                #     logger.# debug(f'min_num: {min_num}')
-
-                # report_memory_usage()
-
-                idx = []
-                for label in labels:
-                    origin_idx = sy[sy == label].index
-
-                    if len(origin_idx) > min_num:
-                        idx += np.random.choice(origin_idx,
-                                                min_num, replace=False).tolist()
-                    else:
-                        idx += origin_idx.tolist()
-
-                # 排序
-                idx.sort()
-
-                # if self.log:
-                #     logger.# debug(f'reindex')
-
-                data_map['ids'] = [data_map['ids'][i] for i in idx] if data_map['ids'] else data_map['ids']
-                data_map['x'] = [data_map['x'][i] for i in idx]
-                data_map['y'] = [data_map['y'][i] for i in idx]
-                self.mean_std = [self.mean_std[i] for i in idx]
-
-        # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
-        self.time_length = int(params.data_set.split('_')[3])
-
-        # id
-        self.ids = data_map['ids']
-        del data_map['ids']
-        
-        # 数据长度
-        self.length = len(data_map['x'])
-
-        # x 切片索引
-        self.x_idx = data_map['x']
-        del data_map['x']
-        # x = torch.tensor(np.array(x), dtype=torch.float)
-
-        # 最大musk时间个数
-        self.max_mask_num = 5
-
-        # y
-        # 标签onehot 编码
-        # self.y = torch.tensor(pd.get_dummies(np.array(y)).values, dtype=torch.int64)
-        self.y = torch.tensor(np.array(data_map['y']), dtype=torch.int64 if params.classify else torch.float)
-        
-        data_map.clear()
-
-        self.need_split_data_set = need_split_data_set
-
-        self.input_shape = self.__getitem__(0)[0].shape
-        # 增加一个batch维度
-        self.input_shape = (1,) + self.input_shape
-
-    def __len__(self):
-        """Denotes the total number of samples"""
-        return self.length
-
-    def __getitem__(self, index):
-        """Generates samples of data
-        x, y, mean_std
-        """
-        # 切片范围
-        a, b = self.x_idx[index]
-        x = self.data[a:b, :]
-
-        #############################
-        # 1. 部分截取
-        #############################
-        if self.need_split_data_set:
-            # 使用部分截取 xa, xb
-            xa, xb = 0, 46
-            if self.params.use_pk and self.params.use_trade:
-                raise Exception('no use')
-            elif self.params.use_pk:
-                xb = 40
-            elif self.params.use_trade:
-                xa = 40
-
-            # 截取mean_std
-            mean_std = torch.tensor(self.mean_std[index][xa:xb], dtype=torch.float)
-        else:
-            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
+        mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
         return x, self.y[index], mean_std
 
@@ -1036,74 +616,26 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
 
     length = 0
 
-    # 判断是否需要截取操作
-    # raw数据feature == 46: 包含 深度/交易 数据，则需要根据 params.use_pk/params.use_trade 对数据作截取操作
-    # feature == 46 且 params.use_pk/params.use_trade 不全为true
-    need_split_data_set = len(mean_std[0]) == 46 and not (params.use_pk and params.use_trade)
-    # if log:
-    #     logger.# debug(f'need_split_data_set: {need_split_data_set}')
-
-    # 校正参数
-    if len(mean_std[0]) == 40:
-        params.use_pk = True
-        params.use_trade = False
-
-    ###################################################
-    # 1. 不做截取操作 在dataset中截取
-    ###################################################
-    if not need_split_data_set:
-        if None is device:
-            raw = reduce_mem_usage(raw)
-            if None is data_map['raw']:
-                data_map['raw'] = raw
-            else:
-                data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+    if None is device:
+        raw = reduce_mem_usage(raw)
+        if None is data_map['raw']:
+            data_map['raw'] = raw
         else:
-            # 直接放在 device 中
-            # raw = torch.from_numpy(raw.values).to(device).float()
-            raw = torch.tensor(raw.values, dtype=torch.float32).to(device)
-            if None is data_map['raw']:
-                data_map['raw'] = raw
-            else:
-                data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
+            data_map['raw'] = pd.concat([data_map['raw'], raw], axis=0, ignore_index=True)
+    else:
+        # 直接放在 device 中
+        # raw = torch.from_numpy(raw.values).to(device).float()
+        raw = torch.tensor(raw.values, dtype=torch.float32).to(device)
+        if None is data_map['raw']:
+            data_map['raw'] = raw
+        else:
+            data_map['raw'] = torch.cat([data_map['raw'], raw], axis=0)
 
-        length = len(raw)
-        # report_memory_usage('concat raw')
+    length = len(raw)
+    # report_memory_usage('concat raw')
 
     data_map['mean_std'] += mean_std
     # report_memory_usage('concat mean_std')
-    ###################################################
-    # 2. 截取操作
-    ###################################################
-    if need_split_data_set:
-        xa, xb = 0, 46
-        if params.use_pk and params.use_trade:
-            raise Exception('no use')
-        elif params.use_pk:
-            xb = 40
-        elif params.use_trade:
-            xa = 40
-
-        if None is device:
-            raw2 = raw.iloc[:, xa:xb].copy()
-            raw2 = reduce_mem_usage(raw2)
-            if None is data_map['raw']:
-                data_map['raw'] = raw2
-            else:
-                data_map['raw']  = pd.concat([data_map['raw'], raw2], axis=0, ignore_index=True)
-        else:
-            # 直接放在 device 中
-            # raw2 = torch.from_numpy(raw.iloc[:, xa:xb].values).to(device)
-            raw2 = torch.tensor(raw.iloc[:, xa:xb].values, dtype=torch.float32).to(device)
-            if None is data_map['raw']:
-                data_map['raw'] = raw2
-            else:
-                data_map['raw'] = torch.cat([data_map['raw'], raw2], axis=0)
-
-        length = len(raw2)
-
-    ###################################################
-    ###################################################
 
     # 预处理标签
     y_idx = -1
@@ -1133,7 +665,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     diff_length += length
     # report_memory_usage('concat other')
 
-    return diff_length, need_split_data_set
+    return diff_length
 
 def read_data(_type, params, device=None, max_num=10000, need_id=False, log=False, data_sample_getter_func=None):
     data_path = params.data_folder
@@ -1191,7 +723,6 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     # 读取分段合并
     diff_length = 0
     count = 0
-    need_split_data_set = False
 
     # ids, mean_std, x, y, raw = [], [], [], [], pd.DataFrame()
     # data_map['ids'] = []
@@ -1213,7 +744,7 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
         if count > max_num:
             break
 
-        diff_length, need_split_data_set = load_data(target_parm, params, os.path.join(data_path, file), diff_length, data_map, device)
+        diff_length = load_data(target_parm, params, os.path.join(data_path, file), diff_length, data_map, device)
         # report_memory_usage()
 
     if not need_id:
@@ -1236,7 +767,7 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     # # data = torch.randn(num_samples, 3, 64, 64)
     # target = torch.randint(0, num_classes, (num_samples,))
     # dataset_test = torch.utils.data.TensorDataset(data, target)
-    dataset_test = Dataset(params, data_map, need_split_data_set, params.classify, train=_type == 'train', log=log)
+    dataset_test = Dataset(params, data_map, params.classify, train=_type == 'train', log=log)
     # if log:
     #     if params.classify:
     #         logger.# debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')

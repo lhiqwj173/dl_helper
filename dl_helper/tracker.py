@@ -13,6 +13,7 @@ from py_ext.tool import debug, log
 
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, precision_recall_curve
 
 from accelerate.utils import broadcast, gather_object
 
@@ -42,6 +43,36 @@ def cal_balance_acc(y_pred, y_true, y_n):
     # 计算均衡 ACC
     balanced_acc = torch.mean(torch.stack(recall_values))
     return balanced_acc
+
+def plot_roc_curve(y_true, y_score, file_path):
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.cpu().numpy()
+        y_score = y_score.cpu().numpy()
+
+    plt.figure(figsize=(15, 5))
+
+    # 计算每个类别的 ROC 曲线并绘制子图
+    best_thresholds = []
+    for i in range(y_score.shape[1]):
+        fpr, tpr, _ = roc_curve(y_true == i, y_score[:, i])
+
+        # 计算使 F1 分数最优的阈值
+        precision, recall, thresholds = precision_recall_curve(y_true == i, y_score[:, i])
+        f1_scores = 2 * (precision * recall) / (precision + recall)
+        best_threshold = thresholds[np.argmax(f1_scores)]
+        best_thresholds.append(best_threshold)
+
+        plt.subplot(1, 3, i+1)
+        plt.plot(fpr, tpr)
+        plt.plot([0, 1], [0, 1], linestyle='--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'ROC Curve - Class {i}')
+        plt.scatter(fpr[np.argmax(tpr - fpr)], tpr[np.argmax(tpr - fpr)], c='red', marker='x', label=f'Best Threshold: {best_threshold}')
+        plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(file_path)
 
 def max_downward_slope(numbers):
     """
@@ -146,6 +177,10 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
+            if self.params.classify:
+                self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
+                self.temp['_y_pred_max_probabilities'], self.temp['_y_pred'] = torch.max(softmax_predictions, dim=1)
+
             # 更新训练时间记录
             self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
 
@@ -238,12 +273,18 @@ class Tracker():
             # self.printer.print(f'step_in_epoch :{self.step_in_epoch}')
             self.epoch_count += 1
 
+            # 绘制roc 曲线
+            if self.params.classify and self.accelerator.is_main_process:# and not isinstance(self.scheduler, LRFinder):
+                pic_file = os.path.join(params.root, f"ROC_curve.png")
+                plot_roc_curve(self.temp['_y_true'], self.temp['softmax_predictions'], pic_file)
+
         if 'test' == self.track_update:
             if self.accelerator.is_main_process:
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
                 all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
                 all_predictions = self.temp['_y_pred'].to('cpu')
+                all_predictions_probabilities = self.temp['_y_pred_max_probabilities'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
 
                 # 按标的分类预测
@@ -256,7 +297,7 @@ class Tracker():
                     symbol, timestamp = all_ids[i].split('_')
                     if symbol not in datas:
                         datas[symbol] = []
-                    datas[symbol].append((timestamp, all_targets[i], all_predictions[i]))
+                    datas[symbol].append((timestamp, all_targets[i], all_predictions[i], all_predictions_probabilities[i]))
 
                 # 储存预测结果
                 # symbol_begin_end.csv
@@ -266,9 +307,9 @@ class Tracker():
                     begin = data_list[0][0]
                     end = data_list[-1][0]
                     with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                        f.write('timestamp,target,predict\n')
-                        for timestamp, target, pre,  in data_list:
-                            f.write(f'{timestamp},{target},{pre}\n')
+                        f.write('timestamp,target,predict,probabilities\n')
+                        for timestamp, target, pre, pro  in data_list:
+                            f.write(f'{timestamp},{target},{pre},{pro}\n')
                 # self.printer.print('update test round done')
 
         if 'val' == self.track_update and not self.need_test:
@@ -350,9 +391,10 @@ class Tracker():
 
         # 统计损失 tensor
         predict = output
-        if self.params.classify:
-            softmax_predictions = F.softmax(output, dim=1)
-            predict = torch.argmax(softmax_predictions, dim=1)
+        # 不在此处softmax, 输出测试数据预测结果时，需要附带概率
+        # if self.params.classify:
+        #     softmax_predictions = F.softmax(output, dim=1)
+        #     predict = torch.argmax(softmax_predictions, dim=1)
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')

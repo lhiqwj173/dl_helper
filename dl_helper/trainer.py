@@ -1159,8 +1159,13 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 break
     else:
         kwargs['idx'] = get_idx(base_title)
-
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
+
+    # 检查 amp 命令行参数
+    if sys.argv[1:]:
+        for arg in sys.argv[1:]:
+            if arg.startswith('amp='):
+                kwargs['amp'] = arg.split('=')[1]
 
     num_processes = match_num_processes()
 

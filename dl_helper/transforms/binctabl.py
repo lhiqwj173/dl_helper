@@ -3,7 +3,7 @@ from dl_helper.train_param import tpu_available
 from py_ext.tool import debug
 
 class transform():
-    def __init__(self, device, param, raw_time_length, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+    def __init__(self, device, param, raw_time_length,num_rows=40, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
         """
         如果 param 中random_mask_row为0, 则raw_time_length无作用, 根据输入的形状进行切片
         """
@@ -18,7 +18,7 @@ class transform():
         self.min_scale = min_scale
         self.max_scale = max_scale
 
-        self.num_rows = 46 if self.param.use_pk and self.param.use_trade else 40 if self.param.use_pk else 6
+        self.num_rows = num_rows
         self.batch_size = param.batch_size
 
         # 用于random_mask_row
@@ -31,7 +31,7 @@ class transform():
         # 用于random_scale
         self.rand_scales = torch.rand(self.batch_size, self.num_rows, self.time_length, device=self.device) < scale_prob
         # 只用vol_cols
-        self.vol_cond = torch.tensor([False, True] * 20, device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
+        self.vol_cond = torch.tensor([False, True] * (20 if self.num_rows==40 else 22), device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
         self.rand_scales = torch.where(self.vol_cond, self.rand_scales, torch.tensor(False, device=self.device))
 
     def random_mask_row(self, tensor):
