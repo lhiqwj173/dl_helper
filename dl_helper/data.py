@@ -997,8 +997,6 @@ class cache():
 
 def load_data(target_parm, params, file, diff_length, data_map, device=None, log=False):
     # report_memory_usage('begin')
-    print(f'load data: {file}', flush=True)
-
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
     reindex = False
@@ -1013,10 +1011,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         
     # 过滤掉不需要的symbol
     symbols = target_parm['symbols'].split('@')
-    if symbols not in [
-        ['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT'],
-        ['成交量 >= 100w']
-    ]:
+    if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]):
         symbols = [i.lower() for i in symbols]
         # id: btcusdt_1710289478588
         idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
