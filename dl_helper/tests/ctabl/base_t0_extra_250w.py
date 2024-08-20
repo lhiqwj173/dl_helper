@@ -103,7 +103,7 @@ class test(test_base):
         return m_bin_ctabl(80, 44, 100, 140, 160, 60, self.y_n, 1)
 
     def get_transform(self, device):
-        return transform(device, self.para, 103)
+        return transform(device, self.para, 103, num_rows=44)
 
 if '__main__' == __name__:
 
