@@ -1158,7 +1158,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['idx'] = int(arg.split('=')[1])
             if arg.startswith('amp='):
                 kwargs['amp'] = arg.split('=')[1]
-                
+    if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
+    if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
     if 'idx' not in kwargs:
         kwargs['idx'] = get_idx(base_title)
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
