@@ -669,7 +669,7 @@ std::vector<std::tuple<double, double>> cal_mean_std_each_col(const py::array_t<
     return _cal_mean_std_each_col<double>(df_array, pass_n);
 }
 
-std::vector<std::tuple<double, double>> cal_mean_std_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<T>> &time_diff_max, int pass_n)
+std::vector<std::tuple<double, double>> cal_mean_std_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &time_diff_max, int pass_n)
 {
     return _cal_mean_std_each_col_multi<double>(df_array, time_diff_max, pass_n);
 }
@@ -684,7 +684,7 @@ std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col(const py
         { return a / b; });
 }
 
-std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, const std::vector<py::array_t<T>> &time_diff_max, int pass_n)
+std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, const std::vector<py::array_t<double>> &time_diff_max, int pass_n)
 {
     return _cal_price_mean_std_each_col_multi<double>(
         df_array,
