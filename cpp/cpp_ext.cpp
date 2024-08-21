@@ -392,9 +392,13 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
-                        // py::print(_idx, ptr[_idx], base_price);
-                        v.push_back(func(ptr[_idx], base_price));
-                        sum += v.back();
+                        T &_v = ptr[_idx];
+                        if (!std::isnan(_v) && !std::isinf(_v))
+                        {
+                            v.push_back(func(_v, base_price));
+                            sum += v.back();
+                        }
+
                         _idx -= cols;
                     }
                 }
@@ -416,8 +420,12 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
-                        v.push_back(func(ptr[_idx - row_idx], base_price));
-                        sum += v.back();
+                        T &_v = ptr[_idx - row_idx];
+                        if (!std::isnan(_v) && !std::isinf(_v))
+                        {
+                            v.push_back(func(_v, base_price));
+                            sum += v.back();
+                        }
                     }
                 }
             }
@@ -624,8 +632,12 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
-                        v.push_back(ptr[_idx]);
-                        sum += v.back();
+                        T &_v = ptr[_idx];
+                        if (!std::isnan(_v) && !std::isinf(_v))
+                        {
+                            v.push_back(_v);
+                            sum += v.back();
+                        }
 
                         _idx -= cols;
                     }
@@ -646,8 +658,12 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
-                        v.push_back(ptr[_idx - row_idx]);
-                        sum += v.back();
+                        T &_v = ptr[_idx - row_idx];
+                        if (!std::isnan(_v) && !std::isinf(_v))
+                        {
+                            v.push_back(_v);
+                            sum += v.back();
+                        }
                     }
                 }
             }
@@ -957,12 +973,32 @@ void fillnan_mean_between_nan(const py::array_t<double> &raw, std::vector<int> c
     _fillnan_between_nan(raw, col_idxs, func);
 }
 
+void test_input_nan_inf(const py::array_t<double> &raw)
+{
+    py::buffer_info info_raw = raw.request();
+    double *ptr_raw = static_cast<double *>(info_raw.ptr);
+    std::size_t rows_raw = info_raw.shape[0];
+    std::size_t cols_raw = info_raw.shape[1];
+
+    // 遍历输出
+    for (size_t i = 0; i < rows_raw; i++)
+    {
+        for (size_t j = 0; j < cols_raw; j++)
+        {
+            if (std::isnan(ptr_raw[i * cols_raw + j]))
+            {
+                py::print("nan", i, j);
+            }
+            if (std::isinf(ptr_raw[i * cols_raw + j]))
+            {
+                py::print("inf", i, j);
+            }
+        }
+    }
+}
+
 PYBIND11_MODULE(cpp_ext, m)
 {
-    // 测试用
-    m.def("print_mat_float", &print_mat_float);
-    m.def("print_mat", &print_mat);
-
     m.def("cal_price_mean_std_pct_each_col_float", &cal_price_mean_std_pct_each_col_float);
     m.def("cal_price_mean_std_pct_each_col", &cal_price_mean_std_pct_each_col);
     m.def("cal_price_mean_std_pct_each_col_multi", &cal_price_mean_std_pct_each_col_multi);
@@ -975,4 +1011,9 @@ PYBIND11_MODULE(cpp_ext, m)
     m.def("fillnan_prod_between_nan", &fillnan_prod_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
     m.def("fillnan_count_between_nan", &fillnan_count_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
     m.def("fillnan_mean_between_nan", &fillnan_mean_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
+
+    // 测试用
+    m.def("print_mat_float", &print_mat_float);
+    m.def("print_mat", &print_mat);
+    m.def("test_input_nan_inf", &test_input_nan_inf);
 }

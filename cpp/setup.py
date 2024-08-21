@@ -4,6 +4,9 @@ import numpy as np
 from setuptools import setup, Extension
 import platform
 
+# python setup.py build_ext
+# pip install -e .
+
 extra_compile_args = []
 if platform.system() == 'Windows':
     extra_compile_args.append('/std:c++17')
