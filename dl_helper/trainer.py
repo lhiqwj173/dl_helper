@@ -390,8 +390,8 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
     for mini_epoch in range(active_dataloader.sampler.mini_epoch):
         # 训练
         for batch in active_dataloader:
-            # 测试用
-            _batch = copy.deepcopy(batch)
+            # # 测试用
+            # _batch = copy.deepcopy(batch)
 
             # 预处理
             # debug(f'batch')
@@ -414,8 +414,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # printer.print(f'loss: {loss}', main=False)
             # record_grad(1, model, accelerator.process_index)
             with torch.no_grad():
-                # debug(f'check_nan')
-                check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id, batch=_batch)
+                check_nan(output, ids=active_dataloader.dataset.use_data_id)
                 active_dataloader.dataset.use_data_id = []
             # debug(f'criterion')
             accelerator.backward(loss)
@@ -1153,8 +1152,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
-    # 测试用
-    kwargs['idx'] = 0
+    # # 测试用
+    # kwargs['idx'] = 0
 
     # 分配idx
     from dl_helper.train_param import get_gpu_info

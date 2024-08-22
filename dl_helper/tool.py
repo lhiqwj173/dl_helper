@@ -5,14 +5,19 @@ from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
+def check_nan(output, ids):
+    has_nan = torch.isnan(output).any(dim=-1)  # 检查是否有 NaN
+    has_inf = torch.isinf(output).any(dim=-1)  # 检查是否有 inf
 
-def check_nan(check_data, params, accelerator, **kwargs):
-    if torch.isnan(check_data).any().item() or torch.isinf(check_data).any().item():
-        pickle.dump((check_data, kwargs), open(os.path.join(params.root, f'train_check_data_{accelerator.process_index}.pkl'), 'wb'))
-        wx.send_message(f'训练数据异常 nan')
-        log(f'训练数据异常 nan')
-        raise Exception("error train check_data")
-    
+    # 找出包含 NaN 或 inf 值的批次索引
+    batch_indices = torch.nonzero(has_nan | has_inf, as_tuple=True)[0]
+    if batch_indices.numel() > 0:
+        bad_ids = []
+        for i in list(batch_indices):
+            bad_ids.append(ids[i])
+        msg = f'训练数据异常 nan/inf ids:{bad_ids}'
+        wx.send_message(msg)
+        raise Exception(msg)
 
 def stop_all_python_processes():
     current_pid = os.getpid()
