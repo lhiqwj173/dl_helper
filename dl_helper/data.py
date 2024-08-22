@@ -323,15 +323,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
-        try:
-            # 异常全0
-            for i, _mean_std in enumerate(self.mean_std):
-                if _mean_std[0][0] == 0:
-                    raise Exception(f'{i} {_mean_std}')
-        except Exception as e:
-            os._exit(0)
-            sys.exit(1)
-        
         # 检查数值异常
         if isinstance(data_map['raw'], pd.DataFrame):
             assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
