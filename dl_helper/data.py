@@ -331,7 +331,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 if _mean_std[0][0] == 0:
                     raise Exception(f'{i} {_mean_std}')
         except Exception as e:
-            print(f"Exception in rank {rank}: {e}")
             dist.barrier()  # 同步所有进程
             dist.destroy_process_group()  # 销毁进程组
             print("Exiting due to exception")
