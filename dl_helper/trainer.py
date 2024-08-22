@@ -1153,8 +1153,10 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
-    # 分配idx
+    # 测试用
     kwargs['idx'] = 0
+
+    # 分配idx
     from dl_helper.train_param import get_gpu_info
     base_title= f'{test_class.title_base()}_{get_gpu_info()}'
     if len(sys.argv) > 1:
