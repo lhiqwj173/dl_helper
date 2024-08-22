@@ -179,7 +179,7 @@ class Tracker():
         if self.accelerator.is_main_process:
             if self.params.classify:
                 self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
-                self.temp['_y_pred_max_probabilities'], self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
+                _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
 
             # 更新训练时间记录
             self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
@@ -283,21 +283,16 @@ class Tracker():
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
                 all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
-                all_predictions = self.temp['_y_pred'].to('cpu')
-                all_predictions_probabilities = self.temp['_y_pred_max_probabilities'].to('cpu')
+                softmax_predictions = self.temp['softmax_predictions'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
 
                 # 按标的分类预测
-                # self.printer.print('sort prediction')
-                # self.printer.print(all_predictions.shape)
-                # self.printer.print(all_targets.shape)
-                # self.printer.print(len(all_ids))
                 datas = {}
-                for i in range(all_predictions.shape[0]):
+                for i in range(all_targets.shape[0]):
                     symbol, timestamp = all_ids[i].split('_')
                     if symbol not in datas:
                         datas[symbol] = []
-                    datas[symbol].append((timestamp, all_targets[i], all_predictions[i], all_predictions_probabilities[i]))
+                    datas[symbol].append((timestamp, all_targets[i], softmax_predictions[i]))
 
                 # 储存预测结果
                 # symbol_begin_end.csv
@@ -307,9 +302,10 @@ class Tracker():
                     begin = data_list[0][0]
                     end = data_list[-1][0]
                     with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                        f.write('timestamp,target,predict,probabilities\n')
-                        for timestamp, target, pre, pro  in data_list:
-                            f.write(f'{timestamp},{target},{pre},{pro}\n')
+                        f.write('timestamp,target,probabilities\n')
+                        for timestamp, target, pro  in data_list:
+                            pro_str = ','.join([str(i) for i in pro])
+                            f.write(f'{timestamp},{target},{pre},{pro_str}\n')
                 # self.printer.print('update test round done')
 
         if 'val' == self.track_update and not self.need_test:
