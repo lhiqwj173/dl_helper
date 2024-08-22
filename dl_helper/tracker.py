@@ -305,7 +305,7 @@ class Tracker():
                         f.write('timestamp,target,probabilities\n')
                         for timestamp, target, pro  in data_list:
                             pro_str = ','.join([str(i) for i in pro])
-                            f.write(f'{timestamp},{target},{pre},{pro_str}\n')
+                            f.write(f'{timestamp},{target},{pro_str}\n')
                 # self.printer.print('update test round done')
 
         if 'val' == self.track_update and not self.need_test:
