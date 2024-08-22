@@ -4,8 +4,8 @@ from dl_helper.tool import report_memory_usage, check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 
-import pickle
 import copy
+import pickle
 import shutil
 import multiprocessing as mp
 
@@ -390,9 +390,12 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
     for mini_epoch in range(active_dataloader.sampler.mini_epoch):
         # 训练
         for batch in active_dataloader:
+            # 测试用
+            _batch = copy.deepcopy(batch)
+
             # 预处理
             # debug(f'batch')
-            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))
+            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))            
             data, target = trans(batch, train=True)
             # debug(f'data :{data.shape} target :{target.shape}')
             # printer.print(f'data[0]: {data[0][:5][:5]}', main=False)
@@ -412,7 +415,8 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # record_grad(1, model, accelerator.process_index)
             with torch.no_grad():
                 # debug(f'check_nan')
-                check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id)
+                check_nan(loss, params, accelerator, output=output, data=data, target=target, id=active_dataloader.dataset.use_data_id, batch=_batch)
+                active_dataloader.dataset.use_data_id = []
             # debug(f'criterion')
             accelerator.backward(loss)
             # record_grad(2, model, accelerator.process_index)
@@ -1150,6 +1154,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     mode: xla /xla_tqdm/simple/cache_data/ normal 
     """
     # 分配idx
+    kwargs['idx'] = 0
     from dl_helper.train_param import get_gpu_info
     base_title= f'{test_class.title_base()}_{get_gpu_info()}'
     if len(sys.argv) > 1:

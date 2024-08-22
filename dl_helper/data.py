@@ -339,7 +339,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
         # del data_map['raw']
 
         # 分类训练集 数据平衡
+        # 测试用
         if self.params.classify:
+        # if self.params.classify and 0:
             if self.type == 'train':
                 labels = set(data_map['y'])
                 sy = pd.Series(data_map['y'])
