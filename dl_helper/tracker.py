@@ -304,7 +304,7 @@ class Tracker():
                     with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
                         f.write('timestamp,target,probabilities\n')
                         for timestamp, target, pro  in data_list:
-                            pro_str = ','.join([str(i) for i in pro])
+                            pro_str = ','.join([str(float(i)) for i in pro])
                             f.write(f'{timestamp},{target},{pro_str}\n')
                 # self.printer.print('update test round done')
 
