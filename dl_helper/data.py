@@ -329,6 +329,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 if _mean_std[0][0] == 0:
                     raise Exception(f'{i} {_mean_std}')
         except Exception as e:
+            os._exit(0)
             sys.exit(1)
         
         # 检查数值异常
