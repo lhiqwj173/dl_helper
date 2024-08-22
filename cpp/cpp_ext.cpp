@@ -385,9 +385,9 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
 
                     base_price = ptr_mid_price[i];
 
-                    // 确保pass_n内的最大时间间隔不大于6
+                    // 确保 time_diff 满足条件
                     time_diff = ptr_time_diff_max[i];
-                    if (time_diff > 6)
+                    if (time_diff == 0)
                         continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -413,9 +413,9 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
 
                     base_price = ptr_mid_price[i];
 
-                    // 确保pass_n内的最大时间间隔不大于6
+                    // 确保 time_diff 满足条件
                     time_diff = ptr_time_diff_max[i];
-                    if (time_diff > 6)
+                    if (time_diff == 0)
                         continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -625,9 +625,9 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
                 {
                     _idx = i * cols + col_idx;
 
-                    // 确保pass_n内的最大时间间隔不大于6
+                    // 确保 time_diff 满足条件
                     time_diff = ptr_time_diff_max[i];
-                    if (time_diff > 6)
+                    if (time_diff == 0)
                         continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
@@ -651,9 +651,9 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
                 {
                     _idx = __idx + i;
 
-                    // 确保pass_n内的最大时间间隔不大于6
+                    // 确保 time_diff 满足条件
                     time_diff = ptr_time_diff_max[i];
-                    if (time_diff > 6)
+                    if (time_diff == 0)
                         continue;
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)

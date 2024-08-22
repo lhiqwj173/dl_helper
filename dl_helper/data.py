@@ -164,9 +164,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.files = []
         self.read_files()
 
-        # 读取一个文件，判断是否需要拆分数据集
-        _,mean_std, _, _, _ = pickle.load(open(os.path.join(self.params.data_folder, self.files[0]), 'rb'))
-
         # pred_5_pass_40_y_1_bd_2024-04-08_dr_8@2@2_th_72_s_2_t_samepaper.7z
         self.time_length = int(params.data_set.split('_')[3])
 
@@ -326,6 +323,11 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
+        # 异常全0
+        for i, _mean_std in enumerate(self.mean_std):
+            if _mean_std[0][0] == 0:
+                raise Exception(f'{i} {_mean_std}')
+
         # 检查数值异常
         if isinstance(data_map['raw'], pd.DataFrame):
             assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
@@ -340,8 +342,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # 分类训练集 数据平衡
         # 测试用
-        if self.params.classify:
-        # if self.params.classify and 0:
+        # if self.params.classify:
+        if self.params.classify and 0:
             if self.type == 'train':
                 labels = set(data_map['y'])
                 sy = pd.Series(data_map['y'])
@@ -424,6 +426,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.use_data_id.append(self.ids[index])
 
         mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
+        # 全0 异常
+        assert not torch.all(mean_std == 0).item(), 'mean_std all 0.0'
 
         return x, self.y[index], mean_std
 
@@ -580,6 +584,11 @@ class cache():
 def load_data(target_parm, params, file, diff_length, data_map, device=None, log=False):
     # report_memory_usage('begin')
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
+
+    # 异常全0检查
+    for i, _mean_std in enumerate(mean_std):
+        if _mean_std[0][0] == 0:
+            raise Exception(f'{i} {_mean_std}')# 159567_1705629192 - 159567_1705645164
 
     reindex = False
 
