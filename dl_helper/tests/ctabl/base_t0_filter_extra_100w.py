@@ -53,8 +53,8 @@ class test(test_base):
 
         predict_n = [10, 20, 30, 40, 50, 100]
         predict_n_vars = [10, 30 , 50, 100]
-        min_lr_vars = [6.6e-7, 5.0e-7, 5.0e-7, 5.0e-7]
-        max_lr_vars = [2.1e-3, 2.1e-3, 5.0e-7, 5.0e-7]
+        min_lr_vars = [3.3e-6, 1.1e-6, 1.1e-6, 1.1e-6]
+        max_lr_vars = [3.5e-3, 3.5e-3, 3.5e-3, 6e-3]
 
         min_lr = min_lr_vars[self.idx]
         max_lr = max_lr_vars[self.idx]
