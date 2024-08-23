@@ -74,6 +74,11 @@ def plot_roc_curve(y_true, y_score, file_path):
     plt.tight_layout()
     plt.savefig(file_path)
 
+    threshold_file = file_path.replace('ROC_curve.png', 'threshold.txt')
+    with open(threshold_file, 'w') as f:
+        d = ",".join([f'{i:.3f}' for i in best_thresholds])
+        f.write(f'{d}\n')
+
 def max_downward_slope(numbers):
     """
     返回向下的最大斜率的idx
