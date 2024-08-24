@@ -307,7 +307,7 @@ class Tracker():
                     begin = data_list[0][0]
                     end = data_list[-1][0]
                     with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                        f.write('timestamp,target,probabilities\n')
+                        f.write('timestamp,target,0,1,2\n')
                         for timestamp, target, pro  in data_list:
                             pro_str = ','.join([str(float(i)) for i in pro])
                             f.write(f'{timestamp},{target},{pro_str}\n')
