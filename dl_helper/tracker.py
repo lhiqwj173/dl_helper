@@ -304,6 +304,8 @@ class Tracker():
                 # self.printer.print('save prediction')
                 for symbol in datas:
                     data_list = datas[symbol]
+                    # 按照 timestamp 排序
+                    data_list = sorted(data_list, key=lambda x: x[0])
                     begin = data_list[0][0]
                     end = data_list[-1][0]
                     with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
