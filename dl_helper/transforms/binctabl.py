@@ -96,6 +96,9 @@ class transform():
             # debug('random_scale')
             # debug('trans 4', torch.isnan(x).any().item())
 
+            # nan 替换为 -1
+            x = torch.where(torch.isnan(x), torch.tensor(-1.0, device=x.device), x)
+
             return x, y
 
 if __name__ == '__main__':

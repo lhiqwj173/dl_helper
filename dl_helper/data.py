@@ -323,13 +323,14 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
-        # 检查数值异常
-        if isinstance(data_map['raw'], pd.DataFrame):
-            assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
-        else:
-            has_nan = torch.isnan(data_map['raw']).any()
-            has_inf = torch.isinf(data_map['raw']).any()
-            assert not has_nan and not has_inf, '数值异常'
+        # 会存在nan，不再做nan 检查，训练准备阶段将nan 赋值为 -1
+        # # 检查数值异常
+        # if isinstance(data_map['raw'], pd.DataFrame):
+        #     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
+        # else:
+        #     has_nan = torch.isnan(data_map['raw']).any()
+        #     has_inf = torch.isinf(data_map['raw']).any()
+        #     assert not has_nan and not has_inf, '数值异常'
 
         # 2.0 数据初始化
         # data_map['data'] = torch.from_numpy(data_map['raw'].values)
@@ -371,7 +372,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         if isinstance(data_map['raw'] , pd.DataFrame):
             self.data = torch.from_numpy(data_map['raw'].values)
         else:
-            self.data = data_map['raw']
+            self.data = data_map['raw']        
         del data_map['raw']
 
         self.mean_std = data_map['mean_std']
@@ -609,16 +610,6 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         mean_std = [mean_std[i] for i in idxs]
         x = [x[i] for i in idxs]
         y = [y[i] for i in idxs]
-
-    # TODO a股数据内存占用过大
-    # ids,mean_std, x, y, raw   : load 占用的内存：5.290GB
-    # ids,mean_std, x, _, _     : load 占用的内存：2.596GB
-    # ids,_, _, _, _            ：load 占用的内存：1.635GB
-    # _,_, _, _, _              ：load 占用的内存：1.406GB
-    # _,_, _, _, _ = pickle.load(open(file, 'rb'))
-    # gc.collect()
-
-    # total_size = (asizeof.asizeof((ids,mean_std, x, y)) + raw.memory_usage(index=True, deep=True).sum())  / (1024**3)
 
     length = 0
 
