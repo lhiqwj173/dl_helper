@@ -137,6 +137,6 @@ if '__main__' == __name__:
         findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        data_folder=r'/kaggle/input/lh-q-t0-data-filter-extra-plus-100w'
+        data_folder=r'/kaggle/input/lh-q-t0-data-extra-plus-100w'
         # data_folder=r'C:\Users\lh\Desktop\temp\data'
     )
