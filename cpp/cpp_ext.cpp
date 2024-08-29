@@ -1023,11 +1023,11 @@ PYBIND11_MODULE(cpp_ext, m)
 {
     m.def("cal_price_mean_std_pct_each_col_float", &cal_price_mean_std_pct_each_col_float);
     m.def("cal_price_mean_std_pct_each_col", &cal_price_mean_std_pct_each_col);
-    m.def("cal_price_mean_std_pct_each_col_multi", &cal_price_mean_std_pct_each_col_multi);
+    m.def("cal_price_mean_std_pct_each_col_multi", &cal_price_mean_std_pct_each_col_multi, py::arg("df_array"), py::arg("mid_price"), py::arg("pass_n"), py::arg("time_diff_max") = py::list());
 
     m.def("cal_mean_std_each_col_float", &cal_mean_std_each_col_float);
     m.def("cal_mean_std_each_col", &cal_mean_std_each_col);
-    m.def("cal_mean_std_each_col_multi", &cal_mean_std_each_col_multi);
+    m.def("cal_mean_std_each_col_multi", &cal_mean_std_each_col_multi, py::arg("df_array"), py::arg("pass_n"), py::arg("time_diff_max") = py::list());
 
     m.def("fillnan_sum_between_nan", &fillnan_sum_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
     m.def("fillnan_prod_between_nan", &fillnan_prod_between_nan, py::arg("raw"), py::arg("col_idxs") = py::list());
