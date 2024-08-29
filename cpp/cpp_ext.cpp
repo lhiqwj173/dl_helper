@@ -308,7 +308,7 @@ struct array_info
 // 所有数据调整成与 midprice 的数值，根据 func
 // 按列顺序返回 均值方差
 template <typename T>
-std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, const std::vector<py::array_t<T>> &mid_price, const std::vector<py::array_t<T>> &time_diff_max, int pass_n, std::function<T(const T &, const T &)> func)
+std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, const std::vector<py::array_t<T>> &mid_price, int pass_n, std::function<T(const T &, const T &)> func, const std::vector<py::array_t<T>> &time_diff_max={})
 {
     std::vector<array_info<T>> ptrs;
     for (auto &df : df_array)
@@ -344,11 +344,14 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
     }
 
     std::vector<T *> time_diff_max_ptrs;
-    for (auto &df : time_diff_max)
-    {
-        py::buffer_info info = df.request();
-        T *ptr = static_cast<T *>(info.ptr);
-        time_diff_max_ptrs.push_back(ptr);
+    bool use_time_diff_max = time_diff_max.size() > 0;
+    if (use_time_diff_max){
+        for (auto &df : time_diff_max)
+        {
+            py::buffer_info info = df.request();
+            T *ptr = static_cast<T *>(info.ptr);
+            time_diff_max_ptrs.push_back(ptr);
+        }
     }
 
     std::vector<std::tuple<T, T>> res;
@@ -374,7 +377,10 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
             T *ptr = array_obj.ptr;
             const Order order = array_obj.order;
             T *ptr_mid_price = mid_price_ptrs[idx];
-            T *ptr_time_diff_max = time_diff_max_ptrs[idx];
+
+            T *ptr_time_diff_max = nullptr;
+            if (use_time_diff_max)
+                T *ptr_time_diff_max = time_diff_max_ptrs[idx];
             idx++;
 
             if (order == Order::ROW_MAJOR)
@@ -386,9 +392,11 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
                     base_price = ptr_mid_price[i];
 
                     // 确保 time_diff 满足条件
-                    time_diff = ptr_time_diff_max[i];
-                    if (time_diff == 0)
-                        continue;
+                    if (use_time_diff_max){
+                        time_diff = ptr_time_diff_max[i];
+                        if (time_diff == 0)
+                            continue;
+                    }
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
@@ -414,9 +422,12 @@ std::vector<std::tuple<T, T>> _cal_price_mean_std_each_col_multi(const std::vect
                     base_price = ptr_mid_price[i];
 
                     // 确保 time_diff 满足条件
-                    time_diff = ptr_time_diff_max[i];
-                    if (time_diff == 0)
-                        continue;
+                    if (use_time_diff_max){
+
+                        time_diff = ptr_time_diff_max[i];
+                        if (time_diff == 0)
+                            continue;
+                    }
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
@@ -561,7 +572,7 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col(const py::array_t<T> &df_ar
 // 计算输入数据的均值方差
 // 按列顺序返回 均值方差
 template <typename T>
-std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, const std::vector<py::array_t<T>> &time_diff_max, int pass_n)
+std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py::array_t<T>> &df_array, int pass_n, const std::vector<py::array_t<T>> &time_diff_max={})
 {
     std::vector<array_info<T>> ptrs;
     for (auto &df : df_array)
@@ -589,11 +600,14 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
     }
 
     std::vector<T *> time_diff_max_ptrs;
-    for (auto &df : time_diff_max)
-    {
-        py::buffer_info info = df.request();
-        T *ptr = static_cast<T *>(info.ptr);
-        time_diff_max_ptrs.push_back(ptr);
+    bool use_time_diff_max = time_diff_max.size() > 0;
+    if (use_time_diff_max){
+        for (auto &df : time_diff_max)
+        {
+            py::buffer_info info = df.request();
+            T *ptr = static_cast<T *>(info.ptr);
+            time_diff_max_ptrs.push_back(ptr);
+        }
     }
 
     std::vector<std::tuple<T, T>> res;
@@ -617,7 +631,9 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
             T *ptr = array_obj.ptr;
             const Order order = array_obj.order;
 
-            T *ptr_time_diff_max = time_diff_max_ptrs[idx++];
+            T *ptr_time_diff_max=nullptr;
+            if (use_time_diff_max)
+                ptr_time_diff_max = time_diff_max_ptrs[idx++];
 
             if (order == Order::ROW_MAJOR)
             {
@@ -626,9 +642,12 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
                     _idx = i * cols + col_idx;
 
                     // 确保 time_diff 满足条件
-                    time_diff = ptr_time_diff_max[i];
-                    if (time_diff == 0)
-                        continue;
+                    if (use_time_diff_max)
+                    {
+                        time_diff = ptr_time_diff_max[i];
+                        if (time_diff == 0)
+                            continue;
+                    }
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
@@ -652,9 +671,12 @@ std::vector<std::tuple<T, T>> _cal_mean_std_each_col_multi(const std::vector<py:
                     _idx = __idx + i;
 
                     // 确保 time_diff 满足条件
-                    time_diff = ptr_time_diff_max[i];
-                    if (time_diff == 0)
-                        continue;
+                    if (use_time_diff_max)
+                    {
+                        time_diff = ptr_time_diff_max[i];
+                        if (time_diff == 0)
+                            continue;
+                    }
 
                     for (int row_idx = 0; row_idx < pass_n; row_idx++)
                     {
@@ -685,9 +707,9 @@ std::vector<std::tuple<double, double>> cal_mean_std_each_col(const py::array_t<
     return _cal_mean_std_each_col<double>(df_array, pass_n);
 }
 
-std::vector<std::tuple<double, double>> cal_mean_std_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &time_diff_max, int pass_n)
+std::vector<std::tuple<double, double>> cal_mean_std_each_col_multi(const std::vector<py::array_t<double>> &df_array, int pass_n, const std::vector<py::array_t<double>> &time_diff_max={})
 {
-    return _cal_mean_std_each_col_multi<double>(df_array, time_diff_max, pass_n);
+    return _cal_mean_std_each_col_multi<double>(df_array, pass_n, time_diff_max);
 }
 
 std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col(const py::array_t<double> &df_array, const py::array_t<double> &mid_price, int pass_n)
@@ -700,15 +722,15 @@ std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col(const py
         { return a / b; });
 }
 
-std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, const std::vector<py::array_t<double>> &time_diff_max, int pass_n)
+std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, int pass_n, const std::vector<py::array_t<double>> &time_diff_max={})
 {
     return _cal_price_mean_std_each_col_multi<double>(
         df_array,
         mid_price,
-        time_diff_max,
         pass_n,
-        [](const double &a, const double &b) -> double
-        { return a / b; });
+        [](const double &a, const double &b) -> double{ return a / b; },
+        time_diff_max
+        );
 }
 
 std::vector<std::tuple<float, float>> cal_price_mean_std_pct_each_col_float(const py::array_t<float> &df_array, const py::array_t<float> &mid_price, int pass_n)
