@@ -291,29 +291,30 @@ class Tracker():
                 softmax_predictions = self.temp['softmax_predictions'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
 
-                # 按标的分类预测
-                datas = {}
-                for i in range(all_targets.shape[0]):
-                    symbol, timestamp = all_ids[i].split('_')
-                    if symbol not in datas:
-                        datas[symbol] = []
-                    datas[symbol].append((timestamp, all_targets[i], softmax_predictions[i]))
+                if '_' in all_ids[0]:
+                    # 按标的分类预测
+                    datas = {}
+                    for i in range(all_targets.shape[0]):
+                        symbol, timestamp = all_ids[i].split('_')
+                        if symbol not in datas:
+                            datas[symbol] = []
+                        datas[symbol].append((timestamp, all_targets[i], softmax_predictions[i]))
 
-                # 储存预测结果
-                # symbol_begin_end.csv
-                # self.printer.print('save prediction')
-                for symbol in datas:
-                    data_list = datas[symbol]
-                    # 按照 timestamp 排序
-                    data_list = sorted(data_list, key=lambda x: x[0])
-                    begin = data_list[0][0]
-                    end = data_list[-1][0]
-                    with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                        f.write('timestamp,target,0,1,2\n')
-                        for timestamp, target, pro  in data_list:
-                            pro_str = ','.join([str(float(i)) for i in pro])
-                            f.write(f'{timestamp},{target},{pro_str}\n')
-                # self.printer.print('update test round done')
+                    # 储存预测结果
+                    # symbol_begin_end.csv
+                    # self.printer.print('save prediction')
+                    for symbol in datas:
+                        data_list = datas[symbol]
+                        # 按照 timestamp 排序
+                        data_list = sorted(data_list, key=lambda x: x[0])
+                        begin = data_list[0][0]
+                        end = data_list[-1][0]
+                        with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                            f.write('timestamp,target,0,1,2\n')
+                            for timestamp, target, pro  in data_list:
+                                pro_str = ','.join([str(float(i)) for i in pro])
+                                f.write(f'{timestamp},{target},{pro_str}\n')
+                    # self.printer.print('update test round done')
 
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
