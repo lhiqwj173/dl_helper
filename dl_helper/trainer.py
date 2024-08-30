@@ -1160,9 +1160,9 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     base_title= f'{test_class.title_base()}_{get_gpu_info()}'
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
-            if arg.startswith('idx='):
+            if 'idx=' in arg:
                 kwargs['idx'] = int(arg.split('=')[1])
-            if arg.startswith('amp='):
+            if 'amp=' in arg:
                 kwargs['amp'] = arg.split('=')[1]
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
     if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
