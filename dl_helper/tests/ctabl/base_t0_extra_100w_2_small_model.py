@@ -40,7 +40,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return 'binctabl_base_t0_extra_100w_2'
+        return 'binctabl_base_t0_extra_100w_2_small_model'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,7 +85,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'extra 100w 2 predict_n:{self.predict_n}',
+            describe=f'extra 100w 2 small predict_n:{self.predict_n}',
             amp=self.amp
         )
 
