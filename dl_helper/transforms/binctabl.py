@@ -2,6 +2,21 @@ import torch, os
 from dl_helper.train_param import tpu_available
 from py_ext.tool import debug
 
+class fi2010_transform():
+    def __init__(self, device, param, raw_time_length,num_rows=40, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
+        pass
+
+    def __call__(self, batch, train=False):
+        with torch.no_grad():
+            x, y, mean_std = batch
+            x = torch.transpose(x, 1, 2)
+
+            # nan 替换为 -1
+            x = torch.where(torch.isnan(x), torch.tensor(-1.0, device=x.device), x)
+
+            return x, y
+
+
 class transform():
     def __init__(self, device, param, raw_time_length,num_rows=40, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
         """
