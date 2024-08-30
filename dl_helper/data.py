@@ -270,15 +270,16 @@ class Dataset_cahce(torch.utils.data.Dataset):
             # debug(f"{self.type} 读取文件 1: {files}")
 
             # 每个设备负责的实际数据idx，会被真实的load进内存
-            each_files_num = len(files) // world_size 
+            each_files_num = len(files) // world_size
+            each_files_num = len(files) if each_files_num == 0 else each_files_num
             assert each_files_num > 0, f'each device wait read files: 0'
 
-            offset = each_files_num * rank
+            offset = each_files_num * rank if len(files) > each_files_num else 0
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
             files = files[offset:offset+each_files_num]
             log(f"{self.type} rank:{rank} 读取文件: {files}")
 
-            data_map = self._parse_data_map(files)
+            data_map = self._parse_data_map(files, world_size, rank)
             # debug(f"{self.type} parse_data_map done")
             stop = False
             while 1:
@@ -300,7 +301,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         log(f"{self.type} read data done")
 
-    def _parse_data_map(self, file_name_list):
+    def _parse_data_map(self, file_name_list, world_size, rank):
         # 1.0 读取原始数据
         data_path = self.params.data_folder
 
@@ -323,18 +324,15 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
-        # 会存在nan，不再做nan 检查，训练准备阶段将nan 赋值为 -1
-        # # 检查数值异常
-        # if isinstance(data_map['raw'], pd.DataFrame):
-        #     assert data_map['raw'].isna().any().any()==False and np.isinf(data_map['raw']).any().any()==False, '数值异常'
-        # else:
-        #     has_nan = torch.isnan(data_map['raw']).any()
-        #     has_inf = torch.isinf(data_map['raw']).any()
-        #     assert not has_nan and not has_inf, '数值异常'
-
-        # 2.0 数据初始化
-        # data_map['data'] = torch.from_numpy(data_map['raw'].values)
-        # del data_map['raw']
+        # 数据集内部分发
+        if file_name_list == self.files and world_size >1:
+            log('数据集内部分发设备')
+            _each_length = len(data_map['ids']) // world_size
+            diff = rank * _each_length
+            data_map['ids'] = data_map['ids'][diff:_each_length + diff]
+            data_map['mean_std'] = data_map['mean_std'][diff:_each_length + diff]
+            data_map['x'] = data_map['x'][diff:_each_length + diff]
+            data_map['y'] = data_map['y'][diff:_each_length + diff]
 
         # 分类训练集 数据平衡
         # 测试用
@@ -478,6 +476,7 @@ class DistributedSampler(Sampler):
         _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
         # debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
         self.mini_dataset_length = _mini_dataset_length  if dataset.type == 'train' else len(self.dataset.files)
+        self.mini_dataset_length = min(self.mini_dataset_length, len(self.dataset.files))
         # debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
         assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
@@ -792,5 +791,7 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     return data_loader
 
 if __name__ == "__main__":
-    data = read_data(r'D:\code\featrue_data\notebook\20240413_滚动标准化', 'test')
-    print(len(data))
+    # data = read_data(r'D:\code\featrue_data\notebook\20240413_滚动标准化', 'test')
+    # print(len(data))
+
+    print(find_nearest_mini_dataset_length(1, 16, 2))
