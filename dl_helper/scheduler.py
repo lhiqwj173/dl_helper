@@ -90,7 +90,7 @@ class WarmupReduceLROnPlateau(ReduceLROnPlateau):
 class OneCycle():
     def __init__(self, optimizer, total_iters: int, min_lr: float, max_lr: float, *args, **kwargs):
         self.optimizer = optimizer
-        self.min_lr = max(min_lr, 100 * 1e-7 * 5)
+        self.min_lr = max(min_lr, 100 * 1e-7 * 10)
         self.max_lr = max_lr
         self.total_iters = total_iters
 

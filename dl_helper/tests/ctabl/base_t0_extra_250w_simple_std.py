@@ -74,8 +74,8 @@ class test(test_base):
 
         predict_n = [3, 5, 10, 20, 30, 40, 50, 100]
 
-        min_lr = 6.6e-7
-        max_lr = 2.1e-3
+        min_lr = 9.6e-6
+        max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = 3
@@ -160,7 +160,7 @@ if '__main__' == __name__:
 
     run(
         test, 
-        findbest_lr=True,
+        # findbest_lr=True,
         amp='fp16',
         mode='cache_data',
         data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-3'
