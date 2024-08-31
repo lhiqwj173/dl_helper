@@ -1,5 +1,5 @@
 import functools
-import sys
+import sys, torch
 
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params
