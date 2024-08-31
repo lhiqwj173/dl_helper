@@ -42,14 +42,13 @@ class test(test_base):
         epochs = 80
 
         predict_n = [3, 5, 10, 20, 30, 40, 50, 100]
-        predict_n_vars = [3, 10]
 
         min_lr = 6.6e-7
         max_lr = 2.1e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        self.predict_n = predict_n_vars[self.idx]
-        classify_idx, targrt_name = predict_n.index(self.predict_n) * 2 , f'{self.predict_n}_target_mid_diff'
+        self.predict_n = 3
+        classify_idx, targrt_name = 0 + self.idx , f'{self.predict_n}_label_{self.idx}'
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
@@ -75,7 +74,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'predict_n:{self.predict_n}',
+            describe=f'label_{self.idx} n=3',
             amp=self.amp
         )
 
