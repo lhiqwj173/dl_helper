@@ -54,8 +54,11 @@ class test(test_base):
             (100, 200, 100, 1),
             # T: 100, 140, 60, 1
             (100, 140, 60, 1),
-
+            
             # T: 100, 100, 50, 1
+            (100, 100, 50, 1),
+            # T: 100, 50, 25, 1
+            (100, 50, 25, 1), 
         ]
 
         model_D_vars = [
@@ -65,7 +68,11 @@ class test(test_base):
             (44, 80, 160, 3),
 
             # D: 44, 60, 120, 3
+            (44, 60, 120, 3),
+            # D: 44, 44, 60, 3
+            (44, 44, 60, 3),
         ]
+        
         self.model_T = model_T_vars[self.idx]
         self.model_D = model_D_vars[self.idx]
 
