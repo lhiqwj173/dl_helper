@@ -609,7 +609,7 @@ class Tracker():
             title = f'{params.train_title}'
             if params.describe:
                 title += f' | {params.describe}'
-            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f} hours'
+            title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f}H'
             if self.each_epoch_time_cost:
                 # 单epoch耗时, 预计等待时间, 下次重启 北京时间
                 next_restart_time = datetime.fromtimestamp(self.notebook_begin_time + self.run_limit_hour * 3600) + timedelta(hours=8)
