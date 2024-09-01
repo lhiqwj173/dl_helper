@@ -142,8 +142,9 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        # T: 100, 100, 50, 1
-        # D: 44, 60, 120, 3
+        # # T: 100, 100, 50, 1
+        # # D: 44, 60, 120, 3
+        # return m_bin_ctabl(60, 44, 100,  100,  120,  50, self.y_n, 1)
         return m_bin_ctabl(self.model_D[1], self.model_D[0], self.model_T[0],  self.model_T[1],  self.model_D[2],  self.model_T[2], self.y_n, self.model_T[3])
 
     def get_transform(self, device):
