@@ -127,10 +127,24 @@ if '__main__' == __name__:
     # for file in valid_files:
     #     print(file)
 
+    import sys
+    data_type = '100w'
+    for i in sys.argv[1:]:
+        if i == '100w':
+            data_type = '100w'
+            break
+        elif i == '250w':
+            data_type = '250w'
+            break
+        elif i == '1000w':
+            data_type = '1000w'
+            break
+
     run(
         test, 
         # findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-2'
+        # data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-2'
+        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}-3'
     )
