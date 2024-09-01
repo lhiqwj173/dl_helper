@@ -170,6 +170,9 @@ if '__main__' == __name__:
         elif i == '1000w':
             data_type = '1000w'
             break
+        elif i == '2000w':
+            data_type = '2000w'
+            break
 
     run(
         test, 
