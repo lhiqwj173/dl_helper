@@ -180,5 +180,5 @@ if '__main__' == __name__:
         amp='fp16',
         mode='cache_data',
         # data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-2'
-        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}-3'
+        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}-3' if data_type!='2000w' else rf'/kaggle/input/lh-q-t0-data-extra-{data_type}'
     )
