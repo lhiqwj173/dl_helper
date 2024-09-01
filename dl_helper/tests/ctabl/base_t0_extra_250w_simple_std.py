@@ -161,18 +161,20 @@ if '__main__' == __name__:
     import sys
     data_type = '100w'
     for i in sys.argv[1:]:
-        if i == '100w':
-            data_type = '100w'
+        if i.startswith('100w'):
+            data_type = i
             break
-        elif i == '250w':
-            data_type = '250w'
+        elif i.startswith('250w'):
+            data_type = i
             break
-        elif i == '1000w':
-            data_type = '1000w'
+        elif i.startswith('1000w'):
+            data_type = i
             break
-        elif i == '2000w':
-            data_type = '2000w'
+        elif i.startswith('2000w'):
+            data_type = i
             break
+
+    data_type = data_type.replace('_', '-')
 
     run(
         test, 
@@ -180,5 +182,5 @@ if '__main__' == __name__:
         amp='fp16',
         mode='cache_data',
         # data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-2'
-        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}-3' if data_type!='2000w' else rf'/kaggle/input/lh-q-t0-data-extra-{data_type}'
+        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}'
     )
