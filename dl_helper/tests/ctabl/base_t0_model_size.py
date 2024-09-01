@@ -1,5 +1,5 @@
 import functools
-import sys, torch
+import sys, torch, os
 
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params
@@ -14,7 +14,11 @@ init_logger('base', level='INFO')
 
 """
 测试模型复杂度:
-
+    # T: 100, 200, 100, 1
+    # D: 44, 100, 200, 3
+    
+    # T: 100, 140, 60, 1
+    # D: 44, 80, 160, 3
 
 最佳模型复杂度:
 

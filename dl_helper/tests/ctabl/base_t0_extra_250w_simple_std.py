@@ -14,10 +14,13 @@ init_logger('base', level='INFO')
 
 """
 测试数据集:
-
+ 100w
+ 250w
+ 1000w
+ 2000w
 
 最佳数据集:
-
+ 2000w
 """
 
 class transform_simple_std(transform):
