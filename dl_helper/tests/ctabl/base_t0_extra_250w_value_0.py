@@ -30,7 +30,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return 'binctabl_base_t0_value_0'
+        return f'binctabl_base_t0_value_0_{data_type}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
