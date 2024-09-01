@@ -13,10 +13,10 @@ from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
-测试数据集:
+测试模型复杂度:
 
 
-最佳数据集:
+最佳模型复杂度:
 
 """
 
@@ -64,7 +64,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'binctabl_base_t0_simple_std_{data_type}'
+        return f'binctabl_base_t0_model_size_{data_folder_name}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,12 +77,32 @@ class test(test_base):
 
         predict_n = [3, 5, 10, 20, 30, 40, 50, 100]
 
+        model_T_vars = [
+            # T: 100, 200, 100, 1
+            (100, 200, 100, 1),
+            # T: 100, 140, 60, 1
+            (100, 140, 60, 1),
+
+            # T: 100, 100, 50, 1
+        ]
+
+        model_D_vars = [
+            # D: 44, 100, 200, 3
+            (44, 100, 200, 3),
+            # D: 44, 80, 160, 3
+            (44, 80, 160, 3),
+
+            # D: 44, 60, 120, 3
+        ]
+        self.model_T = model_T_vars[self.idx]
+        self.model_D = model_D_vars[self.idx]
+
         min_lr = 9.6e-6
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = 3
-        classify_idx, targrt_name = 0 + self.idx , f'{self.predict_n}_label_{self.idx}'
+        classify_idx, targrt_name = 0 , f'{self.predict_n}'
 
         title = self.title_base() + f'_v{self.idx}'
         data_parm = {
@@ -92,7 +112,7 @@ class test(test_base):
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': '成交量 >= 250w',
+            'symbols': '成交量 >= 2000w',
             'target': targrt_name,
             'std_mode': '5d'  # 4h/1d/5d
         }
@@ -108,7 +128,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f'label_{self.idx} n=3',
+            describe=f"D:{self.model_D[0]}_{self.model_D[1]}_{self.model_D[2]}_{self.model_D[3]} T:{self.model_T[0]}_{self.model_T[1]}_{self.model_T[2]}_{self.model_T[3]}",
             amp=self.amp
         )
 
@@ -118,17 +138,9 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        # T: 100, 200, 100, 1
-        # D: 44, 100, 200, 3
-        # return m_bin_ctabl(100, 44, 100, 200, 200, 100, self.y_n, 1)
-
-        # T: 100, 140, 60, 1
-        # D: 44, 80, 160, 3
-        # return m_bin_ctabl(80, 44, 100, 140, 160, 60, self.y_n, 1)
-
         # T: 100, 100, 50, 1
         # D: 44, 60, 120, 3
-        return m_bin_ctabl(60, 44, 100,  100,  120,  50, self.y_n, 1)
+        return m_bin_ctabl(self.model_T[1], self.model_T[0], self.model_D[0],  self.model_D[1],  self.model_T[2],  self.model_D[2], self.y_n, self.model_D[3])
 
     def get_transform(self, device):
         return transform_simple_std(device, self.para, 103, num_rows=44)
@@ -161,29 +173,14 @@ if '__main__' == __name__:
     # for file in valid_files:
     #     print(file)
 
-    import sys
-    data_type = '100w'
-    for i in sys.argv[1:]:
-        if i.startswith('100w'):
-            data_type = i
-            break
-        elif i.startswith('250w'):
-            data_type = i
-            break
-        elif i.startswith('1000w'):
-            data_type = i
-            break
-        elif i.startswith('2000w'):
-            data_type = i
-            break
-
-    data_type = data_type.replace('_', '-')
+    input_folder = r'/kaggle/input'
+    data_folder_name = os.listdir(input_folder)[0]
+    data_folder = os.path.join(input_folder, data_folder_name)
 
     run(
         test, 
         # findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        # data_folder=r'/kaggle/input/lh-q-t0-data-extra-250w-2'
-        data_folder=rf'/kaggle/input/lh-q-t0-data-extra-{data_type}'
+        data_folder=data_folder
     )
