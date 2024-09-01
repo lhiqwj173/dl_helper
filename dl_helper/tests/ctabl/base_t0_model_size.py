@@ -144,7 +144,7 @@ class test(test_base):
     def get_model(self):
         # T: 100, 100, 50, 1
         # D: 44, 60, 120, 3
-        return m_bin_ctabl(self.model_T[1], self.model_T[0], self.model_D[0],  self.model_D[1],  self.model_T[2],  self.model_D[2], self.y_n, self.model_D[3])
+        return m_bin_ctabl(self.model_D[1], self.model_D[0], self.model_T[0],  self.model_T[1],  self.model_D[2],  self.model_T[2], self.y_n, self.model_T[3])
 
     def get_transform(self, device):
         return transform_simple_std(device, self.para, 103, num_rows=44)
