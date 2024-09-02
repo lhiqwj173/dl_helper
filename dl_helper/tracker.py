@@ -183,7 +183,7 @@ class Tracker():
             thresholds = f.readline().strip().split(',')
             thresholds = [float(i) for i in thresholds]
 
-        thresholds = torch.tensor(thresholds)
+        thresholds = torch.tensor(thresholds,device=self.temp['softmax_predictions'].device)
         categories = [0, 1, 2]
 
         combinations = []
@@ -191,7 +191,7 @@ class Tracker():
             combinations.extend(itertools.permutations(categories, r))
 
         combinations = [i for i in combinations if len(i) == len(categories)]
-        combinations = [torch.tensor(i) for i in combinations]
+        combinations = [torch.tensor(i,device=self.temp['softmax_predictions'].device) for i in combinations]
 
         thresholded_predictions = self.temp['softmax_predictions'] > thresholds
         thresholded_predictions_int = thresholded_predictions.int()
@@ -209,11 +209,15 @@ class Tracker():
             f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(y_pred.device)
             weighted_f1 = f1_score(y_pred, self.temp['_y_true']).unsqueeze(0)
         
-            rets.append((balance_acc, weighted_f1))
+            rets.append((comb, balance_acc, weighted_f1))
+
+        # 按照 weighted_f1 排序
+        rets = sorted(rets, key=lambda x: x[2])
+
         with open(threshold_file, 'a')as f:
             f.write('comb,balance_acc,weighted_f1\n')
-            for i, comb in enumerate(combinations):
-                f.write(f"{comb[0]}_{comb[1]}_{comb[2]},{rets[0]},{rets[1]}\n")
+            for i, (comb, balance_acc, weighted_f1) in enumerate(rets):
+                f.write(f"{comb[0]}_{comb[1]}_{comb[2]},{balance_acc},{weighted_f1}\n")
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
