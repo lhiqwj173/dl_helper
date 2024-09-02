@@ -182,7 +182,7 @@ class Tracker():
             threshold = f.readline().strip().split(',')
             threshold = [float(i) for i in threshold]
 
-        pickle.dump((datas, threshold), open(os.path.join(self.params.root, 'threshold_f1score'), 'wb'))
+        pickle.dump((datas, threshold), open('threshold_f1score', 'wb'))
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
