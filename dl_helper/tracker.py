@@ -2,6 +2,7 @@
 用于追踪训练过程评价指标
 """
 import time, math, os, copy, pickle
+import itertools
 
 from datetime import timedelta
 from datetime import datetime
@@ -174,15 +175,45 @@ class Tracker():
     def update_mini_batch(self):
         self.mini_epoch_count += 1
 
-    def cal_threshold_f1score(self, datas):
+    def cal_threshold_f1score(self):
         # 按照不同的 threshold 计算均衡f1 score
         # 读取 threshold
         threshold_file = os.path.join(self.params.root, 'threshold.txt')
         with open(threshold_file, 'r')as f:
-            threshold = f.readline().strip().split(',')
-            threshold = [float(i) for i in threshold]
+            thresholds = f.readline().strip().split(',')
+            thresholds = [float(i) for i in thresholds]
 
-        pickle.dump((datas, threshold), open('threshold_f1score', 'wb'))
+        thresholds = torch.tensor(thresholds)
+        categories = [0, 1, 2]
+
+        combinations = []
+        for r in range(1, len(categories) + 1):
+            combinations.extend(itertools.permutations(categories, r))
+
+        combinations = [i for i in combinations if len(i) == len(categories)]
+        combinations = [torch.tensor(i) for i in combinations]
+
+        thresholded_predictions = self.temp['softmax_predictions'] > thresholds
+        thresholded_predictions_int = thresholded_predictions.int()
+        rets = []
+        for comb in combinations:
+            # 预测类别
+            y_pred = torch.argmax(thresholded_predictions_int[:, comb], dim=1)
+
+            balance_acc = cal_balance_acc(
+                y_pred, self.temp['_y_true'], self.params.y_n
+            ).unsqueeze(0)
+            # self.printer.print('balance_acc')
+            
+            # 计算加权 F1 分数
+            f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(y_pred.device)
+            weighted_f1 = f1_score(y_pred, self.temp['_y_true']).unsqueeze(0)
+        
+            rets.append((balance_acc, weighted_f1))
+        with open(threshold_file, 'a')as f:
+            f.write('comb,balance_acc,weighted_f1\n')
+            for i, comb in enumerate(combinations):
+                f.write(f"{comb[0]}_{comb[1]}_{comb[2]},{rets[0]},{rets[1]}\n")
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
@@ -192,16 +223,21 @@ class Tracker():
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
-            if self.params.classify:
-                self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
-                _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
-
+            
             # 更新训练时间记录
             self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
 
             # 计算数据
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0)
+
             if self.params.classify:
+                self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
+
+                if 'test' == self.track_update:
+                    self.cal_threshold_f1score()
+
+                _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
+
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
@@ -326,9 +362,6 @@ class Tracker():
                                 f.write(f'{timestamp},{target},{pro_str}\n')
                     # self.printer.print('update test round done')
                 
-                self.cal_threshold_f1score(datas)
-
-
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
