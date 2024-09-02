@@ -1,7 +1,7 @@
 """
 用于追踪训练过程评价指标
 """
-import time, math, os, copy
+import time, math, os, copy, pickle
 
 from datetime import timedelta
 from datetime import datetime
@@ -174,6 +174,16 @@ class Tracker():
     def update_mini_batch(self):
         self.mini_epoch_count += 1
 
+    def cal_threshold_f1score(datas):
+        # 按照不同的 threshold 计算均衡f1 score
+        # 读取 threshold
+        threshold_file = os.path.join(self.params.root, 'threshold.txt')
+        with open(threshold_file, 'r')as f:
+            threshold = f.readline().strip().split(',')
+            threshold = [float(i) for i in threshold]
+
+        pickle.dump((datas, threshold), open('threshold_f1score', 'wb'))
+
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
         if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done:
@@ -291,9 +301,9 @@ class Tracker():
                 softmax_predictions = self.temp['softmax_predictions'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
 
+                datas = {}
                 if '_' in all_ids[0]:
                     # 按标的分类预测
-                    datas = {}
                     for i in range(all_targets.shape[0]):
                         symbol, timestamp = all_ids[i].split('_')
                         if symbol not in datas:
@@ -315,6 +325,9 @@ class Tracker():
                                 pro_str = ','.join([str(float(i)) for i in pro])
                                 f.write(f'{timestamp},{target},{pro_str}\n')
                     # self.printer.print('update test round done')
+                
+                cal_threshold_f1score(datas)
+
 
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)

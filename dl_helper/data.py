@@ -276,7 +276,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             offset = each_files_num * rank if len(files) > each_files_num else 0
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
-            files = files[offset:offset+each_files_num]
+            files = files[offset:offset+each_files_num] if self.type != 'test' else files # 若为测试集,加载全部文件,在内部再进行分发
             log(f"{self.type} rank:{rank} 读取文件: {files}")
 
             data_map = self._parse_data_map(files, world_size, rank)
@@ -325,7 +325,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             # report_memory_usage()
 
         # 数据集内部分发
-        if file_name_list == self.files and world_size >1:
+        if (file_name_list == self.files and world_size >1) or (self.type == "test"):
             log('数据集内部分发设备')
             _each_length = len(data_map['ids']) // world_size
             diff = rank * _each_length
