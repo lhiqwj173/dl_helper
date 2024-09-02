@@ -174,7 +174,7 @@ class Tracker():
     def update_mini_batch(self):
         self.mini_epoch_count += 1
 
-    def cal_threshold_f1score(datas):
+    def cal_threshold_f1score(self, datas):
         # 按照不同的 threshold 计算均衡f1 score
         # 读取 threshold
         threshold_file = os.path.join(self.params.root, 'threshold.txt')
@@ -182,7 +182,7 @@ class Tracker():
             threshold = f.readline().strip().split(',')
             threshold = [float(i) for i in threshold]
 
-        pickle.dump((datas, threshold), open('threshold_f1score', 'wb'))
+        pickle.dump((datas, threshold), open(os.path.join(self.params.root, 'threshold_f1score'), 'wb'))
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
@@ -326,7 +326,7 @@ class Tracker():
                                 f.write(f'{timestamp},{target},{pro_str}\n')
                     # self.printer.print('update test round done')
                 
-                cal_threshold_f1score(datas)
+                self.cal_threshold_f1score(datas)
 
 
         if 'val' == self.track_update and not self.need_test:
