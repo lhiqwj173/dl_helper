@@ -45,7 +45,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        epochs = 80
+        epochs = 150
 
         predict_n = [3, 5, 10, 20, 30, 40, 50, 100]
 
