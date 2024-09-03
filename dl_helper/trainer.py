@@ -716,6 +716,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # 绘图
     tracker.save_result()
 
+    # 输出状态到日志
+    tracker.print_state()
+
     # 打包
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
