@@ -80,11 +80,11 @@ class test(test_base):
         self.predict_n = 3
         classify_idx, targrt_name = 0 , f'{self.predict_n}'
 
-        data_folder_name = os.listdir(input_folder)[self.idx]
-        data_folder = os.path.join(input_folder, data_folder_name)
-        self.data_folder = data_folder
+        _data_folder_name = os.listdir(data_folder)[self.idx]
+        _data_folder = os.path.join(data_folder, _data_folder_name)
+        self.data_folder = _data_folder
 
-        title = self.title_base() + f"_{data_folder_name}"
+        title = self.title_base() + f"_{_data_folder_name}"
         data_parm = {
             'predict_n': [3],
             'pass_n': 100,
@@ -106,7 +106,7 @@ class test(test_base):
             classify=True,
             y_n=self.y_n, classify_y_idx=classify_idx, y_func=yfunc,
 
-            data_folder=data_folder,
+            data_folder=self.data_folder,
 
             describe=f"label {classify_idx}",
             amp=self.amp
