@@ -67,6 +67,15 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
+        vars = []
+        datas = ['5y', '5y_predict_10_20', '5y_predict_10_20_std10']
+        for data in datas:
+            vars.append((data, 1))
+        for data in datas[1:]:
+            vars.append((data, 3))
+            vars.append((data, 5))
+        data_set, classify_idx = vars[self.idx]
+
         self.y_n = 3
 
         batch_n = 16 * 2
@@ -78,18 +87,12 @@ class test(test_base):
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = 3
-        classify_idx, targrt_name = 1 , f'{self.predict_n}'
         
-        for arg in sys.argv:
-            if arg.startswith('classify_idx'):
-                classify_idx = int(arg.split('=')[1])
-                break
+        input_folder = r'/kaggle/input'
+        data_folder_name = os.listdir(input_folder)[0]
+        self.data_folder = os.path.join(input_folder, data_folder_name, data_set)
 
-        _data_folder_name = os.listdir(data_folder)[self.idx]
-        _data_folder = os.path.join(data_folder, _data_folder_name)
-        self.data_folder = _data_folder
-
-        title = self.title_base() + f"_{_data_folder_name}_{classify_idx}"
+        title = self.title_base() + f"_{data_set}_{classify_idx}"
         data_parm = {
             'predict_n': [3],
             'pass_n': 100,
@@ -98,7 +101,7 @@ class test(test_base):
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
             'symbols': '成交额 >= 10亿',
-            'target': targrt_name,
+            'target': '',
             'std_mode': '5d'  # 4h/1d/5d
         }
 
@@ -113,7 +116,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f"label {classify_idx}",
+            describe=f"dataset:{data_set} classify_idx:{classify_idx}",
             amp=self.amp
         )
 
@@ -132,14 +135,9 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    input_folder = r'/kaggle/input'
-    data_folder_name = os.listdir(input_folder)[0]
-    data_folder = os.path.join(input_folder, data_folder_name)
-
     run(
         test, 
         # findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        data_folder=data_folder
     )
