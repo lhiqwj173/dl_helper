@@ -78,7 +78,7 @@ class test(test_base):
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         self.predict_n = 3
-        classify_idx, targrt_name = 0 , f'{self.predict_n}'
+        classify_idx, targrt_name = 1 , f'{self.predict_n}'
         
         for arg in sys.argv:
             if 'classify_idx' in arg:
