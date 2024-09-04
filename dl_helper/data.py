@@ -187,6 +187,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
     def read_files(self):
         # 根据数据类型 整理 待读取的数据文件列表、
         data_path = self.params.data_folder
+        print(data_path)
 
         # 针对按照文件夹（train/val/test）分配的数据集
         folder_data_path = os.path.join(data_path, self.type)
@@ -199,6 +200,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # data_folder 路径下没有分配的文件夹
         data_set_files = sorted([i for i in os.listdir(data_path)])
+        pritn(data_set_files)
 
         # 判断数据名类型
         _type_in_dataname = False
