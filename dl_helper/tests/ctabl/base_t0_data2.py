@@ -79,6 +79,11 @@ class test(test_base):
 
         self.predict_n = 3
         classify_idx, targrt_name = 0 , f'{self.predict_n}'
+        
+        for arg in sys.argv:
+            if 'classify_idx' in arg:
+                classify_idx = int(arg.split('=')[1])
+                break
 
         _data_folder_name = os.listdir(data_folder)[self.idx]
         _data_folder = os.path.join(data_folder, _data_folder_name)
