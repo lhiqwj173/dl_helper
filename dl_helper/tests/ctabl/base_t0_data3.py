@@ -78,15 +78,9 @@ class test(test_base):
         for data in datas:
             _classify_idx = 0
             for predict_n in [20, 50, 100]:
-                if data != '5y_2label':
-                    for label in [0, 1]:
-                        vars.append((data, _classify_idx))
-                        _classify_idx += 1
-
-                else:
-                    for label in [0, 1, 2]:
-                        vars.append((data, _classify_idx))
-                        _classify_idx += 1
+                for label in [0, 1, 2]:
+                    vars.append((data, _classify_idx))
+                    _classify_idx += 1
                     
         data_set, classify_idx = vars[self.idx]
 
