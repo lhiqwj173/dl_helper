@@ -95,7 +95,7 @@ def run_idx_manager():
                     begin_idx = 0
                     # 使用正则表达式匹配 'b@' 后面的数字部分
                     # 起始的 索引为 0
-                    result = re.search(r'_b@(\d+)_', input_str)
+                    result = re.search(r'_b@(\d+)_', train_title)
                     if result:
                         begin_idx = int(result.group(1))
 
