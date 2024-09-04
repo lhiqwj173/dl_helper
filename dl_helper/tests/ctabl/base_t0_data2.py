@@ -81,7 +81,7 @@ class test(test_base):
         classify_idx, targrt_name = 1 , f'{self.predict_n}'
         
         for arg in sys.argv:
-            if 'classify_idx' in arg:
+            if arg.startswith('classify_idx'):
                 classify_idx = int(arg.split('=')[1])
                 break
 
