@@ -89,7 +89,7 @@ class test(test_base):
         _data_folder = os.path.join(data_folder, _data_folder_name)
         self.data_folder = _data_folder
 
-        title = self.title_base() + f"_{_data_folder_name}"
+        title = self.title_base() + f"_{_data_folder_name}_{classify_idx}"
         data_parm = {
             'predict_n': [3],
             'pass_n': 100,
