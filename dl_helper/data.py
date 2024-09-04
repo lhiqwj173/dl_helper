@@ -200,7 +200,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         # data_folder 路径下没有分配的文件夹
         data_set_files = sorted([i for i in os.listdir(data_path)])
-        pritn(data_set_files)
+        print(data_set_files)
 
         # 判断数据名类型
         _type_in_dataname = False
