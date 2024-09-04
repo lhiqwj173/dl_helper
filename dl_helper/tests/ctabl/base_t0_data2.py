@@ -82,6 +82,7 @@ class test(test_base):
 
         data_folder_name = os.listdir(input_folder)[self.idx]
         data_folder = os.path.join(input_folder, data_folder_name)
+        self.data_folder = data_folder
 
         title = self.title_base() + f"_{data_folder_name}"
         data_parm = {
