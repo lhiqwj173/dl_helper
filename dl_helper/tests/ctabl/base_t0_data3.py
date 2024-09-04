@@ -61,7 +61,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'one_test_t0_datas'
+        return f'once_b@18_test_t0_datas'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,16 +71,23 @@ class test(test_base):
             '159509',
             '513050',
             '513100',
+            '5y_2label',
             '513300',
             '518880',
-            '5y_2label',
         ]
         for data in datas:
             _classify_idx = 0
             for predict_n in [20, 50, 100]:
-                for label in [0, 1, 2]:
-                    vars.append((data, _classify_idx))
-                    _classify_idx += 1
+                if data != '5y_2label':
+                    for label in [0, 1]:
+                        vars.append((data, _classify_idx))
+                        _classify_idx += 1
+
+                else:
+                    for label in [0, 1, 2]:
+                        vars.append((data, _classify_idx))
+                        _classify_idx += 1
+                    
         data_set, classify_idx = vars[self.idx]
 
         self.y_n = 3

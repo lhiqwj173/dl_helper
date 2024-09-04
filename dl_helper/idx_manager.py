@@ -91,19 +91,27 @@ def run_idx_manager():
                     
                 if '_' in data_str:
                     _code, train_title = data_str.split('_', maxsplit=1)
+
+                    begin_idx = 0
+                    # 使用正则表达式匹配 'b@' 后面的数字部分
+                    # 起始的 索引为 0
+                    result = re.search(r'_b@(\d+)_', input_str)
+                    if result:
+                        begin_idx = int(result.group(1))
+
                     if _code == CODE:
                         idx = 0
-                        if 'one' in train_title:
+                        if train_title.startswith('once'):
                             if train_title not in onece_titles:
-                                onece_titles[train_title] = -1
-                            onece_titles[train_title] += 1
+                                onece_titles[train_title] = begin_idx
                             idx = onece_titles[train_title]
+                            onece_titles[train_title] += 1
                         
                         else:
                             if train_title not in titles:
-                                titles[train_title] = -1
-                            titles[train_title] += 1
+                                titles[train_title] = begin_idx
                             idx = titles[train_title]
+                            titles[train_title] += 1
 
                         print(f'{train_title} {idx}')
 
