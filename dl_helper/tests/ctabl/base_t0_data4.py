@@ -78,10 +78,10 @@ class test(test_base):
         for data in datas:
             _classify_idx = 0
             for predict_n in [20, 50, 100]:
-                vars.append((data, _classify_idx))
+                vars.append((data, _classify_idx, predict_n, 2))
                 _classify_idx += 1
                     
-        data_set, classify_idx = vars[self.idx]
+        data_set, classify_idx, predict_n, label_idx = vars[self.idx]
 
         self.y_n = 3
 
@@ -93,15 +93,13 @@ class test(test_base):
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        self.predict_n = 3
-        
         input_folder = r'/kaggle/input'
         data_folder_name = os.listdir(input_folder)[0]
         self.data_folder = os.path.join(input_folder, data_folder_name, data_set)
 
-        title = self.title_base() + f"_{data_set}_{classify_idx}"
+        title = self.title_base() + f"_{data_set}_{predict_n}_{label_idx}"
         data_parm = {
-            'predict_n': [3],
+            'predict_n': [20, 50, 100],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
@@ -123,7 +121,7 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f"dataset:{data_set} classify_idx:{classify_idx}",
+            describe=f"dataset:{data_set} predict_n:{predict_n} label_idx:{label_idx}",
             amp=self.amp
         )
 
