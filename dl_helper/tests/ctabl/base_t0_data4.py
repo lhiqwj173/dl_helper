@@ -61,7 +61,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_test_t0_datas'
+        return f'once_b@9_test_t0_datas'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,7 +71,7 @@ class test(test_base):
             '159509',
             '513050',
             '513100',
-            '5y_2label',
+            '5y_1label',
             '513300',
             '518880',
         ]
