@@ -57,17 +57,46 @@
 ##################################
 日期: 20240904
 训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data3.py
+           D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data4.py
 数据集路径: Z:\L2_DATA\train_data\t0_data_20240904
-成果路径:   
+            Z:\L2_DATA\train_data\t0_data_20240905
+成果路径:   D:\code\forecast_model\notebook\20240904_test_data_2
 训练目的:   测试数据集
     三种计算label方法 predict_n=[20, 50, 100]
     1. 成交额10亿过滤
     2. 单标的训练
 
-回测结果: 
-
+回测结果: 全部亏损
 训练总结: 
+    1. 标签3 效果最佳
+    2. 存在标的测试集性能表现不佳，如
+        dataset:518880 predict_n:20 label_idx:2 val_f1: 0.7266	test_f1: 0.6338
+        dataset:513300 predict_n:20 label_idx:2	val_f1: 0.7966	test_f1: 0.5626
+        推测原因: 数据本身未知的特性 / sharp minima
 
+优化总结: 
+    基准: predict_n=20 标签3
+    1. 测试 单标的单日 内部随机一定量的数据进行训练，若不满足则舍弃该部分的数据
+    2. 在1的基础上使用不同的随机种子训练多个模型，进行模型融合，提高预测准确度
+    3. 测试 simple / each_sample 标注化方法的性能影响
+    4. 测试 数据增强 对性能影响
+    5. 测试 batchsize 对性能影响
+    6. 剔除训练样本中 测试集性能表现不佳 的标的
+
+##################################
+
+##################################
+日期: 20240905
+训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data5.py
+数据集路径: Z:\L2_DATA\train_data\t0_data_20240905_2
+成果路径:   
+训练目的:   测试数据集
+    基准: predict_n=20 标签3
+    1. 测试 simple / each_sample 标注化方法的性能影响
+    2. 不同随机种子训练多个模型，进行模型融合，提高预测准确度
+
+回测结果: 
+训练总结: 
 优化总结: 
 
 ##################################

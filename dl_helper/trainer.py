@@ -548,8 +548,8 @@ def get_data_sampler(data_set, _type):
 
     return train_sampler
 
-def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
-    set_seed(42)
+def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False, seed=42):
+    set_seed(seed)
 
     # 训练实例
     test = test_class(*args, **kwargs)
