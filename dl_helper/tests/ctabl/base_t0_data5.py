@@ -75,7 +75,7 @@ class test(test_base):
         ]
         for data in datas:
             for seed in [42, 55, 109, 123]:
-                vars.appen((data, seed))
+                vars.append((data, seed))
                     
         self.data_set, seed = vars[self.idx]
         set_seed(seed)
