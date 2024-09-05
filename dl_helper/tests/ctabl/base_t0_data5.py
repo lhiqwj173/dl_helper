@@ -76,6 +76,8 @@ class test(test_base):
         for data in datas:
             for seed in [42, 55, 109, 123]:
                 vars.append((data, seed))
+        vars.append(('10y_each_sample', 150))
+        vars.append(('10y_simple', 150))
                     
         self.data_set, seed = vars[self.idx]
         set_seed(seed)
