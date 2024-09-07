@@ -45,6 +45,27 @@ def cal_balance_acc(y_pred, y_true, y_n):
     balanced_acc = torch.mean(torch.stack(recall_values))
     return balanced_acc
 
+def class_accuracy(y_pred, y_true, y_n):
+    class_correct = [0] * y_n
+    class_total = [0] * y_n
+    
+    for i in range(y_n):
+        class_correct[i] = torch.logical_and(y_pred == i, y_pred == y_true).sum().item()
+        class_total[i] = (y_true == i).sum().item()
+    
+    class_acc = [class_correct[i] / class_total[i] if class_total[i] > 0 else 0 for i in range(y_n)]
+    
+    return torch.tensor(class_acc, device=y_pred.device)
+
+def class_f1_score(y_pred, y_true):
+    # 计算每个类别的 F1 分数
+    f1_score = F1Score(num_classes=y_n, average='none', task='multiclass').to(y_pred.device)  # 设置 average='none' 以计算每个类别的 F1 分数
+    # 计算 F1 Score
+    f1_score.update(y_pred, y_true)
+    class_f1 = f1_score.compute()
+
+    return class_f1
+
 def plot_roc_curve(y_true, y_score, file_path):
     if isinstance(y_true, torch.Tensor):
         y_true = y_true.cpu().numpy()
@@ -252,6 +273,10 @@ class Tracker():
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
                 # self.printer.print('weighted_f1')
+
+                # 计算各个类别 f1 score
+                class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'])
+
             else:
                 # 计算方差加权 R2
                 r2_score = R2Score(multioutput='variance_weighted').to(self.temp['_y_pred'].device)
@@ -268,6 +293,9 @@ class Tracker():
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
+                    for i in range(len(class_f1)):
+                        self.data[f'{self.track_update}_f1_{i}'] = class_f1[i]
+
                 else:
                     self.data[f'{self.track_update}_r2'] = variance_weighted_r2
             else:
@@ -275,6 +303,9 @@ class Tracker():
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
+                    for i in range(len(class_f1)):
+                        self.data[f'{self.track_update}_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_f1_{i}'], class_f1[i]])
+
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
             # self.printer.print('record data done')
@@ -633,17 +664,48 @@ class Tracker():
                 # 计算f1最高点
                 max_train_f1 = max(data["train_f1"])
                 max_test_f1 = max(data["val_f1"])
+                max_train_class_f1s = []
+                max_val_class_f1s = []
+                for i in range(params.y_n):
+                    max_train_class_f1 = max(data["train_class_f1_{i}"])
+                    max_val_class_f1 = max(data["val_class_f1_{i}"])
+                    max_train_class_f1s.append(max_train_class_f1)
+                    max_val_class_f1s.append(max_val_class_f1)
+
                 max_train_f1_x = data["train_f1"].index(max_train_f1)
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
+                max_train_class_f1_xs = []
+                max_val_class_f1_xs = []
+                for i in range(params.y_n):
+                    max_train_class_f1_x = data["train_class_f1_{i}"].index(max_train_class_f1s[i])
+                    max_val_class_f1_x = data["val_class_f1_{i}"].index(max_val_class_f1s[i])
+                    max_train_class_f1_xs.append(max_train_class_f1_x)
+                    max_val_class_f1_xs.append(max_val_class_f1_x)
+
+                colors = [
+                    ('#57C838', '#8DE874'),# 均衡 f1
+                    ('#fc5454', '#feb9b9'),# 类别 0
+                    ('#b03ef9', '#dba5fd'),# 类别 1
+                ]
+
                 # 测试集f1
                 if data["test_f1"]:
-                    t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c='#57C838', linestyle='--')[0])
+                    t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
+                    for i in range(len(colors) - 1):
+                        t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
+
                 # 绘制f1曲线
-                t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c='#8DE874')[0])
-                t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c='#57C838')[0])
+                t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], label=f'train f1 {last_value(data["train_f1"]):.4f}', c=colors[0][1])[0])
+                t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f}', c=colors[0][0])[0])
+                for i in range(len(colors) - 1):
+                    t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], label=f'train class {i} f1 {last_value(data[f"train_class_f1_{i}"]):.4f}', c=colors[i+1][1])[0])
+                    t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f}', c=colors[i+1][0])[0])
+
                 # 标记f1最高点
-                t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c='#8DE874',label=f'train f1 max: {max_train_f1:.4f}'))
-                t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c='#57C838',label=f'val f1 max: {max_test_f1:.4f}'))
+                t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1],label=f'train f1 max: {max_train_f1:.4f}'))
+                t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f}'))
+                for i in range(len(colors) - 1):
+                    t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1],label=f'train class {i} f1 max: {max_train_class_f1s[i]:.4f}'))
 
                 # 启用次刻度
                 axs[1].minorticks_on()
