@@ -293,7 +293,7 @@ class Tracker():
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
-                    for i in range(len(class_f1)):
+                    for i in range(len(class_f1) - 1):
                         self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
 
                 else:
@@ -303,7 +303,7 @@ class Tracker():
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
-                    for i in range(len(class_f1)):
+                    for i in range(len(class_f1) - 1):
                         self.data[f'{self.track_update}_class_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_class_f1_{i}'], class_f1[i].unsqueeze(0)])
 
                 else:
@@ -678,7 +678,7 @@ class Tracker():
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 max_train_class_f1_xs = []
                 max_val_class_f1_xs = []
-                for i in range(params.y_n):
+                for i in range(params.y_n -1):
                     max_train_class_f1_x = data[f"train_class_f1_{i}"].index(max_train_class_f1s[i])
                     max_val_class_f1_x = data[f"val_class_f1_{i}"].index(max_val_class_f1s[i])
                     max_train_class_f1_xs.append(max_train_class_f1_x)
