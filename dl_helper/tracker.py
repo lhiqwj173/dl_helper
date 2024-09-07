@@ -275,6 +275,8 @@ class Tracker():
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
                 # self.printer.print('weighted_f1')
+                
+                torch.cuda.empty_cache()  # 仅在使用GPU的情况下
 
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
