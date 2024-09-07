@@ -268,14 +268,17 @@ class Tracker():
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 ).unsqueeze(0)
                 # self.printer.print('balance_acc')
+                print('balance_acc', flush=True)
                 
                 # 计算加权 F1 分数
                 f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
                 # self.printer.print('weighted_f1')
+                print('weighted_f1', flush=True)
 
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                print('class_f1', flush=True)
 
             else:
                 # 计算方差加权 R2
@@ -283,6 +286,7 @@ class Tracker():
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
                 # self.printer.print('variance_weighted_r2')
         
+            print('cal done', flush=True)
             # self.printer.print(f'_loss: {_loss.shape}')
             # self.printer.print(f'balance_acc: {balance_acc.shape}')
             # self.printer.print(f'weighted_f1: {weighted_f1.shape}')
@@ -309,6 +313,7 @@ class Tracker():
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
             # self.printer.print('record data done')
+            print('record data done', flush=True)
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
