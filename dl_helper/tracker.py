@@ -68,6 +68,12 @@ def class_f1_score(y_pred, y_true, y_n):
     print('compute', flush=True)
     return class_f1
 
+def f1_score(y_true, y_pred, y_n):
+    # 计算加权 F1 分数
+    f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
+    return f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
+
+
 def plot_roc_curve(y_true, y_score, file_path):
     if isinstance(y_true, torch.Tensor):
         y_true = y_true.cpu().numpy()
@@ -271,12 +277,9 @@ class Tracker():
                 ).unsqueeze(0)
                 # self.printer.print('balance_acc')
                 
-                # 计算加权 F1 分数
-                f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
-                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
+                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 # self.printer.print('weighted_f1')
 
-                del f1_score
                 torch.cuda.empty_cache()  # 仅在使用GPU的情况下
 
                 # 计算各个类别 f1 score
