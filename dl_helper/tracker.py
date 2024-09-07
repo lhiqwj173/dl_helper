@@ -556,6 +556,8 @@ class Tracker():
             for i in self.data:
                 data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
+                print(f"{i}: {data[i]}")
+
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
