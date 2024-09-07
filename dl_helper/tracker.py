@@ -294,7 +294,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
                     for i in range(len(class_f1)):
-                        self.data[f'{self.track_update}_f1_{i}'] = class_f1[i]
+                        self.data[f'{self.track_update}_f1_{i}'] = class_f1[i].unsqueeze(0)
 
                 else:
                     self.data[f'{self.track_update}_r2'] = variance_weighted_r2
@@ -304,7 +304,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                     for i in range(len(class_f1)):
-                        self.data[f'{self.track_update}_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_f1_{i}'], class_f1[i]])
+                        self.data[f'{self.track_update}_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_f1_{i}'], class_f1[i]].unsqueeze(0))
 
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
@@ -556,7 +556,7 @@ class Tracker():
             for i in self.data:
                 data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
-                print(f"{i}: {data[i]}")
+                # print(f"{i}: {data[i]}")
 
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
