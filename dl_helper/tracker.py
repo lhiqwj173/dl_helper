@@ -668,7 +668,7 @@ class Tracker():
                 max_test_f1 = max(data["val_f1"])
                 max_train_class_f1s = []
                 max_val_class_f1s = []
-                for i in range(params.y_n):
+                for i in range(params.y_n - 1):
                     max_train_class_f1 = max(data[f"train_class_f1_{i}"])
                     max_val_class_f1 = max(data[f"val_class_f1_{i}"])
                     max_train_class_f1s.append(max_train_class_f1)
