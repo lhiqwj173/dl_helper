@@ -294,7 +294,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
                     for i in range(len(class_f1)):
-                        self.data[f'{self.track_update}_f1_{i}'] = class_f1[i].unsqueeze(0)
+                        self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
 
                 else:
                     self.data[f'{self.track_update}_r2'] = variance_weighted_r2
@@ -304,7 +304,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                     for i in range(len(class_f1)):
-                        self.data[f'{self.track_update}_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_f1_{i}'], class_f1[i]].unsqueeze(0))
+                        self.data[f'{self.track_update}_class_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_f1_{i}'], class_f1[i]].unsqueeze(0))
 
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2])
