@@ -669,8 +669,8 @@ class Tracker():
                 max_train_class_f1s = []
                 max_val_class_f1s = []
                 for i in range(params.y_n):
-                    max_train_class_f1 = max(data["train_class_f1_{i}"])
-                    max_val_class_f1 = max(data["val_class_f1_{i}"])
+                    max_train_class_f1 = max(data[f"train_class_f1_{i}"])
+                    max_val_class_f1 = max(data[f"val_class_f1_{i}"])
                     max_train_class_f1s.append(max_train_class_f1)
                     max_val_class_f1s.append(max_val_class_f1)
 
@@ -679,8 +679,8 @@ class Tracker():
                 max_train_class_f1_xs = []
                 max_val_class_f1_xs = []
                 for i in range(params.y_n):
-                    max_train_class_f1_x = data["train_class_f1_{i}"].index(max_train_class_f1s[i])
-                    max_val_class_f1_x = data["val_class_f1_{i}"].index(max_val_class_f1s[i])
+                    max_train_class_f1_x = data[f"train_class_f1_{i}"].index(max_train_class_f1s[i])
+                    max_val_class_f1_x = data[f"val_class_f1_{i}"].index(max_val_class_f1s[i])
                     max_train_class_f1_xs.append(max_train_class_f1_x)
                     max_val_class_f1_xs.append(max_val_class_f1_x)
 
