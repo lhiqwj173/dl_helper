@@ -708,6 +708,7 @@ class Tracker():
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f}'))
                 for i in range(len(colors) - 1):
                     t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1],label=f'train class {i} f1 max: {max_train_class_f1s[i]:.4f}'))
+                    t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f}'))
 
                 # 启用次刻度
                 axs[1].minorticks_on()
