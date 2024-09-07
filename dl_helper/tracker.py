@@ -62,16 +62,14 @@ def class_f1_score(y_pred, y_true, y_n):
     f1_score = F1Score(num_classes=y_n, average='none', task='multiclass').to(y_pred.device)  # 设置 average='none' 以计算每个类别的 F1 分数
     print('F1Score', flush=True)
     # 计算 F1 Score
-    f1_score.update(y_pred, y_true)
-    print('update', flush=True)
-    class_f1 = f1_score.compute()
+    class_f1 = f1_score(y_pred, y_true)
     print('compute', flush=True)
     return class_f1
 
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
-    f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(self.temp['_y_pred'].device)
-    return f1_score(self.temp['_y_pred'], self.temp['_y_true']).unsqueeze(0)
+    f1_score = F1Score(num_classes=y_n, average='weighted', task='multiclass').to(y_pred.device)
+    return f1_score(y_pred, y_true).unsqueeze(0)
 
 
 def plot_roc_curve(y_true, y_score, file_path):
