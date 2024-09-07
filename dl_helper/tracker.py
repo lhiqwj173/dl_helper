@@ -57,7 +57,7 @@ def class_accuracy(y_pred, y_true, y_n):
     
     return torch.tensor(class_acc, device=y_pred.device)
 
-def class_f1_score(y_pred, y_true):
+def class_f1_score(y_pred, y_true, y_n):
     # 计算每个类别的 F1 分数
     f1_score = F1Score(num_classes=y_n, average='none', task='multiclass').to(y_pred.device)  # 设置 average='none' 以计算每个类别的 F1 分数
     # 计算 F1 Score
@@ -275,7 +275,7 @@ class Tracker():
                 # self.printer.print('weighted_f1')
 
                 # 计算各个类别 f1 score
-                class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'])
+                class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
 
             else:
                 # 计算方差加权 R2
