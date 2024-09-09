@@ -18,6 +18,8 @@ init_logger('base', level='INFO')
 测试 simple std 数据集
 """
 
+k_fold_k = 5
+
 class transform_simple_std(transform):
 
     def __call__(self, batch, train=False):
@@ -66,6 +68,7 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
+        vars = []
         _codes = [
             '513050',
             '513330',
@@ -98,7 +101,11 @@ class test(test_base):
             '159636',
             '159659',
         ]
-        data_set = _codes[self.idx]
+        for code in _codes:
+            for i in range(k_fold_k):
+                vars.append((code, i))
+
+        data_set, k_fold_idx = _codes[self.idx]
 
         input_folder = r'/kaggle/input'
         data_folder_name = os.listdir(input_folder)[0]
@@ -141,7 +148,9 @@ class test(test_base):
             data_folder=self.data_folder,
 
             describe=f"predict_n100 label_idx4",
-            amp=self.amp
+            amp=self.amp,
+
+            k_fold_idx=k_fold_idx, k_fold_k=k_fold_k, 
         )
 
     def get_in_out_shape(self):
@@ -159,9 +168,20 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    run(
-        test, 
-        # findbest_lr=True,
-        amp='fp16',
-        mode='cache_data',
-    )
+    # 分配idx
+    from dl_helper.train_param import get_gpu_info
+    from dl_helper.idx_manager import get_idx
+
+    base_title= f'{test.title_base()}_{get_gpu_info()}'
+    idx = get_idx(base_title) * k_fold_k
+
+    for i in range(k_fold_k):
+        idx += 1
+
+        run(
+            test, 
+            # findbest_lr=True,
+            amp='fp16',
+            mode='cache_data',
+            idx = idx,
+        )
