@@ -11,7 +11,7 @@ class alist():
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, user, pwd, host='http://146.56.188.82:5244'):
+    def __init__(self, user, pwd, host='http://146.235.33.108:5244'):
         self.host = host
         self.headers = {
             'User-Agent': 'Apifox/1.0.0 (https://apifox.com)',
@@ -156,7 +156,7 @@ class alist():
 
 
 if __name__ == '__main__':
-    a = alist('admin', 'LHss6632673')
+    a = alist('admin', '***')
 
     # listdir
     cur_files = [i['name'] for i in a.listdir('/')]
