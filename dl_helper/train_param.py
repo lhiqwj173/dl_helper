@@ -144,6 +144,9 @@ class Params:
 
   seed = 42
 
+  k_fold_idx = 0
+  k_fold_k = 0
+  k_fold_ratio = (30,2,1)
   #############################
   # 训练超参数
   #############################
@@ -223,6 +226,9 @@ class Params:
       # 数据集路径
       data_folder = '',
 
+      # 交叉验证
+      k_fold_idx=0,k_fold_k=0,k_fold_ratio=(30,2,1),
+
       describe='',
 
       debug = False,seed = 42,amp='no'
@@ -271,6 +277,10 @@ class Params:
 
       self.debug = debug
       self.seed = seed
+
+      self.k_fold_idx = k_fold_idx
+      self.k_fold_k = k_fold_k
+      self.k_fold_ratio = k_fold_ratio
 
       # # log
       # os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)

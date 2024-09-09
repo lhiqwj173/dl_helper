@@ -63,19 +63,50 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'datas_10y_4_5'
+        return f'test_t0_datas'
 
-    def __init__(self, *args, target_type=1, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         vars = []
-        classify_idx = 0
-        for predict_n in [10, 30, 60, 100]:
-            for label in range(5):
-                vars.append((predict_n, label, classify_idx))
-                classify_idx+=1
+        _codes = [
+            '513050',
+            '513330',
+            '518880',
+            '159941',
+            '513180',
+            '159920',
+            '513500',
+            '513130',
+            '159792',
+            '513100',
+            '159937',
+            '510900',
+            '513060',
+            '159934',
+            '159509',
+            '159632',
+            '159605',
+            '513010',
+            '159513',
+            '513120',
+            '159501',
+            '518800',
+            '513300',
+            '513660',
+            '513090',
+            '513980',
+            '159892',
+            '159740',
+            '159636',
+            '159659',
+        ]
+        for code in _codes:
+            for i in range(5):
+                vars.append((code, i))
+        code, k_fold_idx = vars[self.idx]
 
-        predict_n, label_idx, classify_idx = vars[self.idx]
+        classify_idx, predict_n, label_idx = 0, 100, 0
 
         self.y_n = 3
 
@@ -87,16 +118,19 @@ class test(test_base):
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        title = self.title_base() + f"_predict_n{predict_n}_label_idx{label_idx}"
+        input_folder = r'/kaggle/input'
+        self.data_folder = os.path.join(input_folder, code)
+
+        title = self.title_base() + f"_seed{seed}"
         data_parm = {
-            'predict_n': [10, 30, 60, 100],
+            'predict_n': [100],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
             'symbols': '成交额 >= 10亿',
-            'target': f'label {label_idx}',
+            'target': 'label 0',
             'std_mode': '5d'  # 4h/1d/5d
         }
 
@@ -111,8 +145,11 @@ class test(test_base):
 
             data_folder=self.data_folder,
 
-            describe=f"predict_n{predict_n} label_idx{label_idx}",
-            amp=self.amp
+            describe=f"predict_n_100 lable_0",
+            amp=self.amp,
+
+            k_fold_idx=k_fold_idx,
+            k_fold_k=5,
         )
 
     def get_in_out_shape(self):
@@ -130,14 +167,9 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    input_folder = r'/kaggle/input'
-    data_folder_name = os.listdir(input_folder)[0]
-    data_folder = os.path.join(input_folder, data_folder_name)
-
     run(
         test, 
         # findbest_lr=True,
         amp='fp16',
         mode='cache_data',
-        data_folder=data_folder
     )

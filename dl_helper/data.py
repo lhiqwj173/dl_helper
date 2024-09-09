@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import threading
 import queue, copy, sys
-
 import torch
 from torch.utils.data import Dataset, DataLoader, Sampler
 
@@ -199,6 +198,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
             return
 
         # data_folder 路径下没有分配的文件夹
+        # 获取所有的文件
         data_set_files = sorted([i for i in os.listdir(data_path)])
         print(data_set_files)
 
@@ -210,11 +210,36 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 break
 
         if _type_in_dataname:
+            # 文件包含 数据类型 
             # 按照数据类型读取数据集
             for file in data_set_files:
                 if self.type in file:
                     self.files.append(file)
             self.files.sort()
+
+        elif self.target_parm['k_fold_k'] > 0:
+            # k折交叉验证
+            each_num = sum(self.target_parm['k_fold_ratio'])
+            total_num = each_num + (self.target_parm['k_fold_k'] - 1)*self.target_parm['k_fold_ratio'][2]
+            
+            idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
+            each_1 = len(data_set_files) // total_num
+            diff = self.target_parm['k_fold_idx'] * (self.target_parm['k_fold_ratio'][2] * each_1)
+            data_length = each_1 * self.target_parm['k_fold_ratio'][idx]
+
+            if self.type in ['train', 'val']:
+                # 创建随机数生成器对象
+                rng = random.Random(self.target_parm['k_fold_idx'])
+                # 从原始列表中随机抽取
+                data_set_files = data_set_files[diff: diff + each_1 * sum(self.target_parm['k_fold_ratio'][:2])]
+                rng.shuffle(data_set_files)
+                begin = sum(self.target_parm['k_fold_ratio'][:idx]) * each_1
+                self.files = data_set_files[begin: begin + data_length]
+
+            else:
+                diff += sum(self.target_parm['k_fold_ratio'][:idx]) * each_1
+                self.files = data_set_files[diff: diff + data_length]
+
         else:
             # 按照日期读取回归数据集
             begin_date = ''
