@@ -109,7 +109,7 @@ class test(test_base):
 
         input_folder = r'/kaggle/input'
         data_folder_name = os.listdir(input_folder)[0]
-        self.data_folder = os.path.join(input_folder, data_set)
+        self.data_folder = os.path.join(input_folder, data_folder_name, data_set)
 
         predict_n, label_idx, classify_idx = 100, 4, 0
 
