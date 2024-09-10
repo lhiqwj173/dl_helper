@@ -217,27 +217,27 @@ class Dataset_cahce(torch.utils.data.Dataset):
                     self.files.append(file)
             self.files.sort()
 
-        elif self.target_parm['k_fold_k'] > 0:
+        elif self.params.k_fold_k > 0:
             # k折交叉验证
-            each_num = sum(self.target_parm['k_fold_ratio'])
-            total_num = each_num + (self.target_parm['k_fold_k'] - 1)*self.target_parm['k_fold_ratio'][2]
+            each_num = sum(self.params.k_fold_ratio)
+            total_num = each_num + (self.params.k_fold_k - 1)*self.params.k_fold_ratio[2]
             
             idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
             each_1 = len(data_set_files) // total_num
-            diff = self.target_parm['k_fold_idx'] * (self.target_parm['k_fold_ratio'][2] * each_1)
-            data_length = each_1 * self.target_parm['k_fold_ratio'][idx]
+            diff = self.params.k_fold_idx * (self.params.k_fold_ratio[2] * each_1)
+            data_length = each_1 * self.params.k_fold_ratio[idx]
 
             if self.type in ['train', 'val']:
                 # 创建随机数生成器对象
-                rng = random.Random(self.target_parm['k_fold_idx'])
+                rng = random.Random(self.params.k_fold_idx)
                 # 从原始列表中随机抽取
-                data_set_files = data_set_files[diff: diff + each_1 * sum(self.target_parm['k_fold_ratio'][:2])]
+                data_set_files = data_set_files[diff: diff + each_1 * sum(self.params.k_fold_ratio[:2])]
                 rng.shuffle(data_set_files)
-                begin = sum(self.target_parm['k_fold_ratio'][:idx]) * each_1
+                begin = sum(self.params.k_fold_ratio[:idx]) * each_1
                 self.files = data_set_files[begin: begin + data_length]
 
             else:
-                diff += sum(self.target_parm['k_fold_ratio'][:idx]) * each_1
+                diff += sum(self.params.k_fold_ratio[:idx]) * each_1
                 self.files = data_set_files[diff: diff + data_length]
 
         else:
