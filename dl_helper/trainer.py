@@ -22,7 +22,7 @@ from torch.utils.data.sampler import RandomSampler
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
-from dl_helper.alist import alist
+from py_ext.alist import alist
 
 ses = os.environ.get('TG_SESSION')
 
