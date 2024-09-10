@@ -63,7 +63,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'single_symbol'
+        return f'once_single_symbol'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -123,7 +123,7 @@ class test(test_base):
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        title = self.title_base() + f"_{data_set}"
+        title = self.title_base() + f"_{data_set}_fold{k_fold_idx}"
         data_parm = {
             'predict_n': [100],
             'pass_n': 100,
@@ -176,8 +176,6 @@ if '__main__' == __name__:
     idx = get_idx(base_title) * k_fold_k
 
     for i in range(k_fold_k):
-        idx += 1
-
         run(
             test, 
             # findbest_lr=True,
@@ -185,3 +183,4 @@ if '__main__' == __name__:
             mode='cache_data',
             idx = idx,
         )
+        idx += 1

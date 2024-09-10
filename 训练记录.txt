@@ -124,19 +124,25 @@ test_t0_datas_10y_simple_55_T4x2_fp16	0.604801	0.557193	0.905596	0.557540	0.5565
 日期: 20240909
 训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data6.py
 数据集路径: Z:\L2_DATA\train_data\t0_data_20240909
+            Z:\L2_DATA\train_data\t0_data_20240909_2
 成果路径:   D:\code\forecast_model\notebook\20240909_test_data
+           D:\code\forecast_model\notebook\20240909_test_data_2
 训练目的:   测试数据集
-    成交额10亿过滤
+    成交额10/5亿过滤
     predict_n=[10, 30, 60, 100] 标签[0/1/2/3 paper]
 
 回测结果: 
+    base 成交额10亿过滤
+	            describe.1	    mean_test_01_f1
+4	predict_n100 label_idx4	    0.62880
+
 训练总结: 
     1. paper 标签性能最优
     2. predict_n 越大 性能越好
+    3. 成交额5亿过滤: 训练样本增大,性能反而普遍下降
 
 优化总结: 
-    1. 成交额5亿过滤 predict_n=[10, 30, 60, 100] 标签[0/1/2/3 paper]
+    1. 单标的5折验证    
     2. 使用更多的模型进行融合
-    3. 单标的5折验证    
 
 ##################################
