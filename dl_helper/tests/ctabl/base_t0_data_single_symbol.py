@@ -101,6 +101,13 @@ class test(test_base):
             '159636',
             '159659',
         ]
+
+        _codes = [
+            '159636',
+            '159740',
+            '513980',
+            '518800',
+        ]
         for code in _codes:
             for i in range(k_fold_k):
                 vars.append((code, i))
