@@ -105,7 +105,7 @@ class test(test_base):
             for i in range(k_fold_k):
                 vars.append((code, i))
 
-        data_set, k_fold_idx = _codes[self.idx]
+        data_set, k_fold_idx = vars[self.idx]
 
         input_folder = r'/kaggle/input'
         data_folder_name = os.listdir(input_folder)[0]
