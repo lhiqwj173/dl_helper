@@ -139,7 +139,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
-            batch_size=64*batch_n, epochs=3,
+            batch_size=64*batch_n, epochs=epochs,
 
             # 3分类
             classify=True,
