@@ -20,10 +20,6 @@ init_logger('base', level='INFO')
 
 class transform_simple_std(transform):
 
-    def __init__(self, *args, nan_replace=-1, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.nan_replace = nan_replace
-
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
@@ -48,8 +44,8 @@ class transform_simple_std(transform):
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
 
-            # nan 替换为 self.nan_replace
-            x = torch.where(torch.isnan(x), torch.tensor(float(self.nan_replace), device=x.device), x)
+            # nan 替换为 -1
+            x = torch.where(torch.isnan(x), torch.tensor(-1.0, device=x.device), x)
 
             return x, y
 
@@ -65,7 +61,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'10y_4_5'
+        return f'datas_5y_4_5'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -97,7 +93,7 @@ class test(test_base):
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': '成交额 >= 10亿',
+            'symbols': '成交额 >= 5亿',
             'target': f'label {label_idx}',
             'std_mode': '5d'  # 4h/1d/5d
         }
