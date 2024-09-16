@@ -101,7 +101,7 @@ class OneCycle():
 
         # 每次调整的学习率
         self.each_diff_lr = (self.max_lr - self.min_lr) / self.max_lr_epoch_idx
-        self.each_diff_lr_final = (self.min_lr - self.min_lr / 500) / (total_iters - self.final_epoch_idx - 1)
+        self.each_diff_lr_final = (self.min_lr - self.min_lr / 500) / (total_iters - self.final_epoch_idx)
 
         self.iteration = 0
         
