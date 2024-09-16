@@ -3,7 +3,7 @@ import socket, time, sys, os, re
 CODE = '0QYg9Ky17dWnN4eK'
 def get_idx(train_title):
     # 定义服务器地址和端口
-    HOST = '168.138.158.156'
+    HOST = '146.235.33.108'
     PORT = 12345
 
     # 创建一个 TCP 套接字
@@ -137,6 +137,7 @@ def run_idx_manager():
         client_socket.close()
 
 if "__main__" == __name__:
+    print(f'idx: {get_idx("test")}')
     run_idx_manager()
     # if len(sys.argv) > 1 and sys.argv[1] == "server":
     #     run_idx_manager()

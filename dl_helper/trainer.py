@@ -1,8 +1,10 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
+from dl_helper.tracker import MODEL_FINAL, MODEL_BEST, MODEL_DUMMY, TEST_FINAL, TEST_BEST, TEST_DUMMY
 from dl_helper.tool import report_memory_usage, check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
+from dl_helper.models.dummy import m_dummy
 
 import copy
 import pickle
@@ -41,7 +43,7 @@ if match_num_processes() ==8:
     except ImportError:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
-from accelerate import Accelerator
+from accelerate import Accelerator, load_checkpoint_in_model
 from accelerate.utils import broadcast
 from accelerate.state import AcceleratorState, PartialState
 from accelerate.utils import (
@@ -480,24 +482,40 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
 def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
-    model.eval()
-    with torch.no_grad():
-        for batch in test_data:
-            data, target = trans(batch)
+    test_types = [TEST_FINAL, TEST_BEST, TEST_DUMMY]
+    models = [model]
 
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
+    # 读取最佳模型
+    model_best = accelerator.unwrap_model(model)
+    accelerator.load_checkpoint_in_model(model_best, os.path.join(params.root, MODEL_BEST))
+    models.append(model_best)
 
-            output = model(data)
-            loss = criterion(output, target)
+    # dummy 模型
+    model_dummy = m_dummy(params.y_n)
+    models.append(model_dummy)
 
-            # 追踪器 记录数据
-            tracker.track(output, target, loss, 'test', test_data)
+    # 准备模型
+    models[1:] = accelerator.prepare(models[1:])
 
-    # 追踪器，计算必要的数据
-    # printer.print('update')
-    tracker.update(test_data)
+    for i, model in enumerate(models):
+        model.eval()
+        with torch.no_grad():
+            for batch in test_data:
+                data, target = trans(batch)
+
+                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                if not params.classify and len(target.shape) == 1:
+                    target = target.unsqueeze(1)
+
+                output = model(data)
+                loss = criterion(output, target)
+
+                # 追踪器 记录数据
+                tracker.track(output, target, loss, test_types[i], test_data)
+
+        # 追踪器，计算必要的数据
+        # printer.print('update')
+        tracker.update(test_data)
 
     # for debug
     accelerator.wait_for_everyone()
@@ -506,10 +524,10 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
 
 def save_model_fn(params, model, accelerator, input_shape):
     accelerator.wait_for_everyone()
-    accelerator.save_model(model, os.path.join(params.root, 'model'))
+    accelerator.save_model(model, os.path.join(params.root, MODEL_FINAL))
     model = accelerator.unwrap_model(model)
     if accelerator.is_local_main_process:
-        onnex_model_save_path = os.path.join(params.root, f'model.onnx')
+        onnex_model_save_path = os.path.join(params.root, MODEL_FINAL, f'model.onnx')
         # 导出onnx
         try:
             torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
@@ -663,6 +681,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # tracker.need_test = True
     # only_predict = True
 
+    # 记录最佳 平均f1—score 
+    max_mean_f1 = 0.0
+
     # 训练循环
     if not only_predict:
         p.print(f'train start')
@@ -680,10 +701,22 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             p.print(f'epoch {epoch} save_result')
             tracker.save_result()
 
-            if epoch % 30 == 0 and epoch > 0:
+            # 计算平均 f1 score 
+            _max_mean_f1 = tracker.get_mean_f1_socre_important()
+
+            if (epoch % 30 == 0 and epoch > 0) or (_max_mean_f1 > max_mean_f1):
+
                 # 保存模型
                 p.print(f'epoch {epoch} save_model_fn')
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+
+                if _max_mean_f1 > max_mean_f1:
+                    # 拷贝记录最佳模型
+                    model_folder = os.path.join(params.root, MODEL_FINAL)
+                    best_folder = os.path.join(params.root, MODEL_BEST)
+                    shutil.copytree(model_folder, best_folder, dirs_exist_ok=True, overwrite=True)
+                    # 更新最佳 f1 score
+                    max_mean_f1 = _max_mean_f1
 
             # 打包
             # debug(f'package_root')

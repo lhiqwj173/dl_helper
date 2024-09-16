@@ -24,6 +24,11 @@ from dl_helper.train_param import tpu_available, data_str2parm
 if tpu_available():
     import torch_xla.core.xla_model as xm
 
+MODEL_TYPES=['model_final', 'model_best', 'model_dummy']
+TEST_TYPES=[i.replace('model', 'test') for i in MODEL_TYPES]
+MODEL_FINAL, MODEL_BEST, MODEL_DUMMY = MODEL_TYPES
+TEST_FINAL, TEST_BEST, TEST_DUMMY = TEST_TYPES
+
 def last_value(data):
     """返回最后一个非nan值"""
     for i in range(len(data)-1, -1, -1):
@@ -173,20 +178,6 @@ class Tracker():
 
         # 最终数据
         self.data = {}
-        for i in ['train', 'val', 'test']:
-            # 训练损失
-            self.data[f'{i}_loss'] = None
-
-            if params.classify: 
-                # 分类模型 acc
-                self.data[f'{i}_acc'] = None
-
-                # 暂时只使用加权f1
-                self.data[f'{i}_f1'] = None
-            else:
-                # 回归模型 r2
-                # 暂时只使用加权r2
-                self.data[f'{i}_r2'] = None
 
         # 训练学习率
         self.data['lr'] = []
@@ -203,9 +194,13 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def cal_threshold_f1score(self):
+        folder = self.track_update.replace('test', 'model')
+        folder = os.path.join(self.params.root, folder)
+
+
         # 按照不同的 threshold 计算均衡f1 score
         # 读取 threshold
-        threshold_file = os.path.join(self.params.root, 'threshold.txt')
+        threshold_file = os.path.join(folder, 'threshold.txt')
         with open(threshold_file, 'r')as f:
             thresholds = f.readline().strip().split(',')
             thresholds = [float(i) for i in thresholds]
@@ -248,7 +243,7 @@ class Tracker():
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
-        if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done:
+        if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update not in TEST_TYPES[1:]:
             self.label_count_done[self.track_update] = True
 
         # 计算变量 -> data
@@ -264,7 +259,7 @@ class Tracker():
             if self.params.classify:
                 self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
 
-                if 'test' == self.track_update:
+                if self.track_update in TEST_TYPES:
                     self.cal_threshold_f1score()
 
                 _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
@@ -295,7 +290,7 @@ class Tracker():
             # self.printer.print(f'weighted_f1: {weighted_f1.shape}')
 
             # 记录数据
-            if self.data[f'{self.track_update}_loss'] is None:
+            if f'{self.track_update}_loss' not in self.data:
                 self.data[f'{self.track_update}_loss'] = _loss
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = balance_acc
@@ -371,13 +366,17 @@ class Tracker():
                 pic_file = os.path.join(self.params.root, f"ROC_curve.png")
                 plot_roc_curve(self.temp['_y_true'], self.temp['softmax_predictions'], pic_file)
 
-        if 'test' == self.track_update:
+        if self.track_update in TEST_TYPES:
             if self.accelerator.is_main_process:
+                save_folder = os.path.join(self.params.root, self.track_update.replace('test','model'))
+
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
                 all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
                 softmax_predictions = self.temp['softmax_predictions'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
+
+                assert len(all_ids) == all_targets.shape[0] == softmax_predictions.shape[0], f'{all_ids}, {all_targets.shape}, {softmax_predictions.shape} predict result length not match'
 
                 datas = {}
                 if '_' in all_ids[0]:
@@ -386,7 +385,7 @@ class Tracker():
                         symbol, timestamp = all_ids[i].split('_')
                         if symbol not in datas:
                             datas[symbol] = []
-                        datas[symbol].append((timestamp, all_targets[i], softmax_predictions[i]))
+                        datas[symbol].append((int(timestamp), all_targets[i], softmax_predictions[i]))
 
                     # 储存预测结果
                     # symbol_begin_end.csv
@@ -397,7 +396,7 @@ class Tracker():
                         data_list = sorted(data_list, key=lambda x: x[0])
                         begin = data_list[0][0]
                         end = data_list[-1][0]
-                        with open(os.path.join(self.params.root, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                        with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
                             f.write('timestamp,target,0,1,2\n')
                             for timestamp, target, pro  in data_list:
                                 pro_str = ','.join([str(float(i)) for i in pro])
@@ -419,9 +418,6 @@ class Tracker():
             self.need_test = need_test_temp.item() == 1
 
         self.reset_temp()
-        # self.print_state()
-        self.step_count = 0
-        # self.printer.print('update done')
 
     def reset_temp(self):
         # 重置计算变量
@@ -434,6 +430,8 @@ class Tracker():
         self.temp['_num'] = 0
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
+
+        self.step_count = 0
 
     def print_state(self):
         self.printer.print(f"------------tracker data------------")
@@ -497,7 +495,7 @@ class Tracker():
         # self.printer.print(f"{predict}")
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         # self.printer.print('gather loss, y_true, y_pred done')
-        if _type == 'test':
+        if _type in TEST_TYPES:
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
 
@@ -514,7 +512,8 @@ class Tracker():
         # self.printer.print('_ids done')
 
         # 记录label分布
-        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done:
+        # test_best / test_dummy 不需要记录
+        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done and _type not in TEST_TYPES[1:]:
             # debug('统计 label_counts')
             if _type not in self.label_counts:
                 self.label_counts[_type] = torch.bincount(_y_true, minlength=self.params.y_n)
@@ -537,12 +536,14 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             # self.printer.print('temp data done')
 
-            if _type == 'test':
-                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
+            if _type in TEST_TYPES:
                 self.temp['_ids'] += _ids
-                # self.printer.print(f"更新self.temp['_ids']: {len(self.temp['_ids'])} type: {type(self.temp['_ids'])}")
 
             self.temp['_num'] += _y_true.shape[0]
+
+    def get_mean_f1_socre_important(self):
+        return (self.data[f'val_class_f1_0'][-1] + self.data[f'val_class_f1_1'][-1]) / 2
+
 
     def save_result(self):
         self._plot()
@@ -565,10 +566,19 @@ class Tracker():
 
                 print(f"{i}: {data[i]}")
 
-                if 'test' in i:
+                if i in TEST_TYPES:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
+
+            # 更改键名 test_final -> test
+            # 选择 TEST_FINAL 进行绘图
+            old_keys = [i for i in data if TEST_FINAL in i]
+            new_keys = [i.replace(TEST_FINAL, 'test') for i in old_keys]
+            for old_key, new_key in zip(old_keys, new_keys):
+                data[new_key] = data.pop(old_key)
+
+            print(data)
 
             # 创建图形和坐标轴
             fig, axs = None, None
@@ -753,10 +763,6 @@ class Tracker():
 
             # 数据参数
             data_dict =  data_str2parm(self.params.data_set)
-            data_dict['y_n'] = self.params.y_n
-            data_dict['classify'] = self.params.classify
-            data_dict['regress_y_idx'] = self.params.regress_y_idx
-            data_dict['classify_y_idx'] = self.params.classify_y_idx
 
             # 初始化列名
             with open(result_file, 'w') as f:
@@ -766,12 +772,13 @@ class Tracker():
                         f.write(f'{key},')
                 # 数据参数
                 for i in data_dict:
+                    
                     f.write(f'{i},')
                 # 数据标签分布
                 for i in self.label_counts:
                     f.write(f'label_{i},')
                 # 模型
-                f.write('model,describe,')
+                f.write('model,')
                 # 训练结果
                 for i in self.data:
                     if i == 'lr':
@@ -779,18 +786,23 @@ class Tracker():
                     f.write(f'{i},')
                 f.write('each_epoch_cost,cost\n')
 
+            def write_values(f, values):
+                if isinstance(values, list) or isinstance(values, tuple):
+                    f.write(f'{"@".join([str(i) for i in values])},')
+                else:
+                    f.write(f'{values},')
+
             # 写入结果
             with open(result_file, 'a') as f:
                 # 训练参数
                 for key in self.params.__dict__:
                     if key != 'y_func':
-                        f.write(f'{self.params.__dict__[key]},')
+                        write_values(f, self.params.__dict__[key])
+
                 # 数据参数
                 for i in data_dict:
-                    if isinstance(data_dict[i], list) or isinstance(data_dict[i], tuple):
-                        f.write(f'{"@".join([str(i) for i in data_dict[i]])},')
-                    else:
-                        f.write(f'{data_dict[i]},')
+                    write_values(f, data_dict[i])
+
                 # 数据标签分布
                 for i in self.label_counts:
                     # debug(self.label_counts[i])
@@ -799,9 +811,9 @@ class Tracker():
                     label_counts = self.label_counts[i].to('cpu').tolist()
                     strs = [f'{int(i)}' for i in label_pct.to('cpu').tolist()]
                     strs = [f'{strs[i]}({label_counts[i]})' for i in range(len(strs))]
-                    f.write('@'.join(strs) + ',')
+                    write_values(f, strs)
                 # 模型
-                f.write(f'{self.model_name},{self.params.describe},')
+                f.write(f'{self.model_name},')
                 # 训练结果
                 # 选择val_loss 最小的点
                 best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]

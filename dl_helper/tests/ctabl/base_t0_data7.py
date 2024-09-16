@@ -65,7 +65,8 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'10y_4_5'
+        # return f'10y_4_5'
+        return f'10y_4_5_strict'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -83,7 +84,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        epochs = 100
+        epochs = 5
 
         min_lr = 9.6e-6
         max_lr = 4.6e-3
