@@ -567,7 +567,7 @@ class Tracker():
 
                 print(f"{i}: {data[i]}")
 
-                if i in TEST_TYPES:
+                if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
