@@ -677,9 +677,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         # 输出
         tracker.print_state()
 
-    os.makedirs(params.root, MODEL_BEST, exist_ok=True)
-    os.makedirs(params.root, MODEL_FINAL, exist_ok=True)
-    os.makedirs(params.root, MODEL_DUMMY, exist_ok=True)
+    os.makedirs(os.path.join(params.root, MODEL_BEST), exist_ok=True)
+    os.makedirs(os.path.join(params.root, MODEL_FINAL), exist_ok=True)
+    os.makedirs(os.path.join(params.root, MODEL_DUMMY), exist_ok=True)
     
     # # for debug
     # tracker.need_test = True
