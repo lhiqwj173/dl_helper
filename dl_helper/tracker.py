@@ -363,7 +363,7 @@ class Tracker():
 
             # 绘制roc 曲线
             if self.params.classify and self.accelerator.is_main_process:# and not isinstance(self.scheduler, LRFinder):
-                pic_file = os.path.join(self.params.root, f"ROC_curve.png")
+                pic_file = os.path.join(self.params.root, MODEL_FINAL, f"ROC_curve.png")
                 plot_roc_curve(self.temp['_y_true'], self.temp['softmax_predictions'], pic_file)
 
         if self.track_update in TEST_TYPES:
