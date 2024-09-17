@@ -497,10 +497,11 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
     models.append(model_dummy)
 
     # 准备模型
-    models[1:] = accelerator.prepare(models[1:])
+    for i in range(2):
+        models[i+1] = accelerator.prepare(models[i+1])
 
     for i, model in enumerate(models):
-        printer.print(f'测试模型: {i}, {model.device}')
+        printer.print(f'测试模型: {i}')
 
         model.eval()
         with torch.no_grad():

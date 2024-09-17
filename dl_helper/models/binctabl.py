@@ -53,8 +53,6 @@ class BiN(nn.Module):
     #     self.y2 = nn.Parameter(y2)
     #     nn.init.constant_(self.y2, 0.01)
 
-    print(self.y1.deveice, x.device)
-
     self.y1.data = torch.where(self.y1.data < 0, torch.tensor([0.01], device=x.device), self.y1.data)
     self.y2.data = torch.where(self.y2.data < 0, torch.tensor([0.01], device=x.device), self.y2.data)
 
