@@ -802,8 +802,8 @@ class Tracker():
                 pic_file = os.path.join(params.root, f"Scores_by_group.png")
                 plt.savefig(pic_file)
 
-            except:
-                pass
+            except Exception as e:
+                print(e)
 
         self.accelerator.wait_for_everyone()
         # debug('plot done')
