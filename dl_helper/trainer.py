@@ -500,6 +500,8 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
     models[1:] = accelerator.prepare(models[1:])
 
     for i, model in enumerate(models):
+        printer.print(f'测试模型: {i}')
+
         model.eval()
         with torch.no_grad():
             for batch in test_data:
