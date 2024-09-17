@@ -487,7 +487,7 @@ def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, 
 
     # 读取最佳模型
     model_best = accelerator.unwrap_model(model)
-    accelerator.load_checkpoint_in_model(model_best, os.path.join(params.root, MODEL_BEST))
+    load_checkpoint_in_model(model_best, os.path.join(params.root, MODEL_BEST))
     models.append(model_best)
 
     # dummy 模型
