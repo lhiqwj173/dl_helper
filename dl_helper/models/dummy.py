@@ -14,4 +14,4 @@ class m_dummy(nn.Module):
         self.y_len = y_len
 
     def forward(self, x):
-        return torch.randn(x.shape[0], self.y_len)
+        return torch.randn(x.shape[0], self.y_len, device=x.device)
