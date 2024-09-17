@@ -714,7 +714,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                     # 拷贝记录最佳模型
                     model_folder = os.path.join(params.root, MODEL_FINAL)
                     best_folder = os.path.join(params.root, MODEL_BEST)
-                    shutil.copytree(model_folder, best_folder, dirs_exist_ok=True, overwrite=True)
+                    if os.path.exists(best_folder):
+                        shutil.rmtree(best_folder)
+                    shutil.copytree(model_folder, best_folder)
                     # 更新最佳 f1 score
                     max_mean_f1 = _max_mean_f1
 
