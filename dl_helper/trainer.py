@@ -707,7 +707,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             # 计算平均 f1 score 
             _max_mean_f1 = tracker.get_mean_f1_socre_important()
-            need_save_best_model = _max_mean_f1 > max_mean_f1
+            need_save_best_model = torch.tensor(0, device=accelerator.device)
+            if _max_mean_f1 > max_mean_f1:
+                need_save_best_model += 1
+
             # 同步
             accelerator.wait_for_everyone()
             need_save_best_model = broadcast(need_save_best_model)
