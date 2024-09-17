@@ -197,7 +197,6 @@ class Tracker():
         folder = self.track_update.replace('test', 'model')
         folder = os.path.join(self.params.root, folder)
 
-
         # 按照不同的 threshold 计算均衡f1 score
         # 读取 threshold
         threshold_file = os.path.join(folder, 'threshold.txt')
@@ -259,7 +258,7 @@ class Tracker():
             if self.params.classify:
                 self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
 
-                if self.track_update in TEST_TYPES:
+                if self.track_update in TEST_TYPES[:2]:
                     self.cal_threshold_f1score()
 
                 _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
