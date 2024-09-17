@@ -575,6 +575,8 @@ class Tracker():
             # 选择 TEST_FINAL 进行绘图
             old_keys = [i for i in data if TEST_FINAL in i]
             new_keys = [i.replace(TEST_FINAL, 'test') for i in old_keys]
+            print(f'old_keys:\n{old_keys}')
+            print(f'new_keys:\n{new_keys}')
             for old_key, new_key in zip(old_keys, new_keys):
                 data[new_key] = data.pop(old_key)
 
@@ -595,7 +597,7 @@ class Tracker():
             ax1_handles = []
 
             # 测试集损失
-            if not isinstance(self.scheduler, LRFinder) and data['test_loss']:
+            if not isinstance(self.scheduler, LRFinder) and 'test_loss' in data:
                 ax1_handles.append(ax1.plot(list(range(epochs)), data['test_loss'], label=f"test loss {last_value(data['test_loss']):.4f}", c='b', linestyle='--')[0])
             # 绘制loss曲线
             ax1_handles.append(ax1.plot(list(range(epochs)), data['train_loss'], label=f"train loss {last_value(data['train_loss']):.4f}", c='#7070FF')[0])
@@ -630,7 +632,7 @@ class Tracker():
                     max_train_acc_x = data['train_acc'].index(max_train_acc)
                     max_test_acc_x = data['val_acc'].index(max_test_acc)
                     # 测试集准确率
-                    if data['test_acc']:
+                    if 'test_acc' in data:
                         ax1_handles.append(ax1.plot(list(range(epochs)), data['test_acc'], label=f"test acc {last_value(data['test_acc']):.4f}", c='r', linestyle='--')[0]) 
                     # 绘制acc曲线
                     ax1_handles.append(ax1.plot(list(range(epochs)), data['train_acc'], label=f"train acc {last_value(data['train_acc']):.4f}", c='#FF7E7E')[0])
@@ -648,7 +650,7 @@ class Tracker():
                     max_train_r2_x = data['train_r2'].index(max_train_r2)
                     max_test_r2_x = data['val_r2'].index(max_test_r2)
                     # 测试集r2
-                    if data['test_r2']:
+                    if 'test_r2' in data:
                         ax1_handles.append(ax1.plot(list(range(epochs)), data['test_r2'], label=f"test r2 {last_value(data['test_r2']):.4f}", c='r', linestyle='--')[0])
                     # 绘制r2曲线
                     ax1_handles.append(ax1.plot(list(range(epochs)), data['train_r2'], label=f"train r2 {last_value(data['train_r2']):.4f}", c='#FF7E7E')[0])
@@ -708,7 +710,7 @@ class Tracker():
                 ]
 
                 # 测试集f1
-                if data["test_f1"]:
+                if 'test_f1' in data:
                     t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
                     for i in range(len(colors) - 1):
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
