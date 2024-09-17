@@ -541,8 +541,10 @@ class Tracker():
             self.temp['_num'] += _y_true.shape[0]
 
     def get_mean_f1_socre_important(self):
-        return (self.data[f'val_class_f1_0'][-1] + self.data[f'val_class_f1_1'][-1]) / 2
-
+        if self.accelerator.is_main_process:
+            return (self.data[f'val_class_f1_0'][-1] + self.data[f'val_class_f1_1'][-1]) / 2
+        else:
+            return 0
 
     def save_result(self):
         self._plot()

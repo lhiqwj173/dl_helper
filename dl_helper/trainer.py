@@ -707,14 +707,18 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             # 计算平均 f1 score 
             _max_mean_f1 = tracker.get_mean_f1_socre_important()
+            need_save_best_model = _max_mean_f1 > max_mean_f1
+            # 同步
+            accelerator.wait_for_everyone()
+            need_save_best_model = broadcast(need_save_best_model)
 
-            if (epoch % 30 == 0 and epoch > 0) or (_max_mean_f1 > max_mean_f1):
+            if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
 
                 # 保存模型
                 p.print(f'epoch {epoch} save_model_fn')
                 save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
 
-                if _max_mean_f1 > max_mean_f1:
+                if need_save_best_model and accelerator.is_local_main_process:
                     # 拷贝记录最佳模型
                     model_folder = os.path.join(params.root, MODEL_FINAL)
                     best_folder = os.path.join(params.root, MODEL_BEST)
