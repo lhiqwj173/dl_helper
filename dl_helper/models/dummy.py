@@ -10,6 +10,7 @@ class m_dummy(nn.Module):
         return "dummy"
 
     def __init__(self, y_len):
+        super().__init__()
         self.y_len = y_len
 
     def forward(self, x):
