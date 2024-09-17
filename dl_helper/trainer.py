@@ -481,14 +481,16 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     # if accelerator.is_main_process:
     #     report_memory_usage(f"[{epoch}][{len(val_data)}] val done")
 
-def test_fn(params, model, criterion, test_data, accelerator, tracker, printer, trans):
+def test_fn(params, model, blank_model, criterion, test_data, accelerator, tracker, printer, trans):
     test_types = [TEST_FINAL, TEST_BEST, TEST_DUMMY]
     models = [model]
 
     # 读取最佳模型
-    model_best = accelerator.unwrap_model(model)
-    load_checkpoint_in_model(model_best, os.path.join(params.root, MODEL_BEST))
-    models.append(model_best)
+    # model_best = accelerator.unwrap_model(model)
+    # load_checkpoint_in_model(model_best, os.path.join(params.root, MODEL_BEST))
+    # models.append(model_best)
+    load_checkpoint_in_model(blank_model, os.path.join(params.root, MODEL_BEST))
+    models.append(blank_model)
 
     # dummy 模型
     model_dummy = m_dummy(params.y_n)
@@ -754,7 +756,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     test_loader = test.get_cache_data('test', params, accelerator)
 
     # 测试
-    test_fn(params, model, criterion, test_loader, accelerator, tracker, p, trans)
+    test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 
     # 保存模型
     save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
