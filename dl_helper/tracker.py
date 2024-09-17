@@ -756,6 +756,55 @@ class Tracker():
             plt.savefig(pic_file)
             # self.printer.print(f'plot done: {pic_file}')
 
+            # 绘制对比柱状图 train/val/best/final/dummy
+            # 'test_final_loss': 0.9020195007324219,
+            # 'test_final_acc': 0.6873999834060669,
+            # 'test_final_f1': 0.5510613322257996,
+            # 'test_final_class_f1_0': 0.2587284445762634,
+            # 'test_final_class_f1_1': 0.2538251578807831,
+            score_data = {}
+            try:
+                for _type in ['train', 'val', 'test_best', 'test_final', 'test_dummy']:
+                    score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1]
+                    score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1]
+                    score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1]
+                    score_data[f'{_type}_class_f1_0'] = self.data[f'{_type}_class_f1_0'][-1]
+                    score_data[f'{_type}_class_f1_1'] = self.data[f'{_type}_class_f1_1'][-1]
+                print(score_data)
+
+                # 按照不同指标分组
+                loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
+                acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
+                f1_score_data = [score_data[i] for i in score_data if 'f1' in i]
+                class_f1_0_score_data = [score_data[i] for i in score_data if 'class_f1_0' in i]
+                class_f1_1_score_data = [score_data[i] for i in score_data if 'class_f1_1' in i]
+
+                labels = ['Train', 'Val', 'Final', 'Best', 'Dummy']
+
+                # 自定义颜色
+                colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537']
+
+                # 绘制柱状图
+                fig, ax = plt.subplots()
+                width = 0.15
+                alpha = 0.6
+
+                bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
+                bar2 = ax.bar([i + width for i in range(3)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
+                bar3 = ax.bar([i + 2*width for i in range(3)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
+                bar4 = ax.bar([i + 3*width for i in range(3)], class_f1_0_score_data, width, color=colors[3], label='Class F1 (0)', alpha=alpha)
+                bar5 = ax.bar([i + 4*width for i in range(3)], class_f1_1_score_data, width, color=colors[4], label='Class F1 (1)', alpha=alpha)
+
+                ax.set_ylabel('Scores')
+                ax.set_title('Scores by group')
+                ax.legend()
+
+                pic_file = os.path.join(params.root, f"Scores_by_group.png")
+                plt.savefig(pic_file)
+
+            except:
+                pass
+
         self.accelerator.wait_for_everyone()
         # debug('plot done')
 
