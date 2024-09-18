@@ -775,7 +775,7 @@ class Tracker():
                 # 按照不同指标分组
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
                 acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
-                f1_score_data = [score_data[i] for i in score_data if 'f1' in i]
+                f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
                 class_f1_0_score_data = [score_data[i] for i in score_data if 'class_f1_0' in i]
                 class_f1_1_score_data = [score_data[i] for i in score_data if 'class_f1_1' in i]
 
@@ -790,10 +790,10 @@ class Tracker():
                 alpha = 0.6
 
                 bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
-                bar2 = ax.bar([i + width for i in range(3)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
-                bar3 = ax.bar([i + 2*width for i in range(3)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
-                bar4 = ax.bar([i + 3*width for i in range(3)], class_f1_0_score_data, width, color=colors[3], label='Class F1 (0)', alpha=alpha)
-                bar5 = ax.bar([i + 4*width for i in range(3)], class_f1_1_score_data, width, color=colors[4], label='Class F1 (1)', alpha=alpha)
+                bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
+                bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
+                bar4 = ax.bar([i + 3*width for i in range(5)], class_f1_0_score_data, width, color=colors[3], label='Class F1 (0)', alpha=alpha)
+                bar5 = ax.bar([i + 4*width for i in range(5)], class_f1_1_score_data, width, color=colors[4], label='Class F1 (1)', alpha=alpha)
 
                 ax.set_ylabel('Scores')
                 ax.set_title('Scores by group')
