@@ -715,6 +715,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             need_save_best_model = torch.tensor(0, device=accelerator.device)
             if _max_mean_f1 > max_mean_f1:
                 need_save_best_model += 1
+            p.print(f'max_mean_f1: {_max_mean_f1}', main=False)
 
             # 同步
             accelerator.wait_for_everyone()
