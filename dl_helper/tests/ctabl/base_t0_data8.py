@@ -69,7 +69,7 @@ class test(test_base):
     @classmethod
     def title_base(cls):
         # return f'10y_4_5'
-        return f'10y_strict_label_threshold'
+        return f'10y_strict_label_threshold2'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
