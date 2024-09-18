@@ -89,7 +89,7 @@ class test(test_base):
 
         batch_n = 16 * 2
 
-        epochs = 10
+        epochs = 100
 
         min_lr = 9.6e-6
         max_lr = 4.6e-3
