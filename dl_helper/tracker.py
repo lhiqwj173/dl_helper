@@ -765,11 +765,11 @@ class Tracker():
             score_data = {}
             try:
                 for _type in ['train', 'val', 'test_best', 'test_final', 'test_dummy']:
-                    score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1]
-                    score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1]
-                    score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1]
-                    score_data[f'{_type}_class_f1_0'] = self.data[f'{_type}_class_f1_0'][-1]
-                    score_data[f'{_type}_class_f1_1'] = self.data[f'{_type}_class_f1_1'][-1]
+                    score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1].cpu().item()
+                    score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
+                    score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
+                    score_data[f'{_type}_class_f1_0'] = self.data[f'{_type}_class_f1_0'][-1].cpu().item()
+                    score_data[f'{_type}_class_f1_1'] = self.data[f'{_type}_class_f1_1'][-1].cpu().item()
                 print(score_data)
 
                 # 按照不同指标分组
