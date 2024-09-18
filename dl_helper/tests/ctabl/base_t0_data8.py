@@ -78,8 +78,9 @@ class test(test_base):
         classify_idx = 0
         for predict_n in [10, 30, 60, 100]:
             for label in range(5):
-                if predict_n == 100:
-                    for threshold in [0.7, 0.9]:
+                if predict_n == 100 and label == 4:
+                    # for threshold in [0.7, 0.9]:
+                    for threshold in [0.1, 0.3]:
                         vars.append((predict_n, label, classify_idx, threshold))
                 classify_idx+=1
 

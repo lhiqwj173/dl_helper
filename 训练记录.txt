@@ -186,7 +186,7 @@ test_t0_datas_10y_simple_55_T4x2_fp16	0.604801	0.557193	0.905596	0.557540	0.5565
 日期: 20240918
 训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data8.py
 数据集路径: Z:\L2_DATA\train_data\t0_data_20240916_2
-成果路径:   
+成果路径:   D:\code\forecast_model\notebook\20240919_test_label_threshold
 训练目的:   测试数据集
     predict_n 100
     标签 0-4
