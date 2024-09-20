@@ -69,7 +69,8 @@ class test(test_base):
     @classmethod
     def title_base(cls):
         # return f'10y_4_5'
-        return f'10y_strict_label_threshold3'
+        return f'10y_strict_label_threshold2'
+        # return f'10y_strict_label_threshold3'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -80,8 +81,8 @@ class test(test_base):
             for label in range(5):
                 if predict_n == 100:
                     # for threshold in [0.7, 0.9]:
-                    # for threshold in [0.1, 0.3]:
-                    for threshold in [0.01, 0.05]:
+                    for threshold in [0.1, 0.3]:
+                    # for threshold in [0.01, 0.05]:
                         vars.append((predict_n, label, classify_idx, threshold))
                 classify_idx+=1
 
