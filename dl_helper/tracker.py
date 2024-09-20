@@ -770,7 +770,13 @@ class Tracker():
                     score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
                     score_data[f'{_type}_class_f1_0'] = self.data[f'{_type}_class_f1_0'][-1].cpu().item()
                     score_data[f'{_type}_class_f1_1'] = self.data[f'{_type}_class_f1_1'][-1].cpu().item()
-                print(score_data)
+                    self.data[f'{_type}_mean_class_f1'] = (score_data[f'{_type}_class_f1_0'] + score_data[f'{_type}_class_f1_1']) / 2
+
+                # 计算增强说明文字
+                for _type in ['train', 'val', 'test_best', 'test_final']:
+                    pct = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
+                    self.data[f'{_type}_mean_class_f1'] = str(self.data[f'{_type}_mean_class_f1']) + f"({pct}%)"
+                self.data['test_dummy_mean_class_f1'] = str(self.data['test_dummy_mean_class_f1'])
 
                 # 按照不同指标分组
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
@@ -794,6 +800,11 @@ class Tracker():
                 bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
                 bar4 = ax.bar([i + 3*width for i in range(5)], class_f1_0_score_data, width, color=colors[3], label='Class F1 (0)', alpha=alpha)
                 bar5 = ax.bar([i + 4*width for i in range(5)], class_f1_1_score_data, width, color=colors[4], label='Class F1 (1)', alpha=alpha)
+                # 添加增强说明文字
+                tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
+                for i, bar in enumerate(bar5):
+                    yval = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, yval, self.data[f'{tag_type[i]}_mean_class_f1'], ha='center', va='bottom')
 
                 ax.set_ylabel('Scores')
                 ax.set_title('Scores by group')
@@ -824,7 +835,6 @@ class Tracker():
                         f.write(f'{key},')
                 # 数据参数
                 for i in data_dict:
-                    
                     f.write(f'{i},')
                 # 数据标签分布
                 for i in self.label_counts:
@@ -880,11 +890,14 @@ class Tracker():
                     if i == 'lr':
                         continue
                     if not None is self.data[i]:
-                        # log(f'{i}: len {len(self.data[i])}')
-                        if len(self.data[i]) >= best_idx+1:
-                            d = self.data[i][best_idx]
+                        if (isinstance(self.data[i], (list, tuple, torch.Tensor))):
+                            if len(self.data[i]) >= best_idx+1:
+                                d = self.data[i][best_idx]
+                            else:
+                                d = self.data[i][-1]
                         else:
-                            d = self.data[i][-1]
+                            d = self.data[i]
+
                         if isinstance(d, torch.Tensor):
                             d = d.item()
                         f.write(f'{d:.4f},')
