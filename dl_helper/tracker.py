@@ -563,7 +563,7 @@ class Tracker():
             # 标准化数据，nan补气数据
             data = {}
             for i in self.data:
-                data[i] = [] if None is self.data[i] else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
+                data[i] = [] if None is self.data[i] else [self.data[i]] if isinstance(self.data[i], (float, int, str)) else copy.deepcopy(self.data[i]) if isinstance(self.data[i], list) else self.data[i].cpu().tolist()
 
                 print(f"{i}: {data[i]}")
 
