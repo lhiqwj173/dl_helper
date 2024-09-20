@@ -900,7 +900,11 @@ class Tracker():
 
                         if isinstance(d, torch.Tensor):
                             d = d.item()
-                        f.write(f'{d:.4f},')
+
+                        if isinstance(d, float):
+                            f.write(f'{d:.4f},')
+                        else:
+                            f.write(f'{d},')
                     else:
                         f.write(f',')
                 f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
