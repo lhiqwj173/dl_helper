@@ -773,10 +773,11 @@ class Tracker():
                     self.data[f'{_type}_mean_class_f1'] = (score_data[f'{_type}_class_f1_0'] + score_data[f'{_type}_class_f1_1']) / 2
 
                 # 计算增强说明文字
+                tag_texts = {}
                 for _type in ['train', 'val', 'test_best', 'test_final']:
-                    pct = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
-                    self.data[f'{_type}_mean_class_f1'] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({pct.2f}%)"
-                self.data['test_dummy_mean_class_f1'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
+                    self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
+                    tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct'].2f}%)"
+                tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
 
                 # 按照不同指标分组
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
@@ -804,7 +805,7 @@ class Tracker():
                 tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
                 for i, bar in enumerate(bar5):
                     yval = bar.get_height()
-                    ax.text(bar.get_x() + bar.get_width()/2, yval, self.data[f'{tag_type[i]}_mean_class_f1'], ha='center', va='bottom')
+                    ax.text(bar.get_x() + bar.get_width()/2, yval, tag_texts[tag_type[i]], ha='center', va='bottom')
 
                 ax.set_ylabel('Scores')
                 ax.set_title('Scores by group')
