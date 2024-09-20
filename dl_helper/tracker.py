@@ -775,8 +775,8 @@ class Tracker():
                 # 计算增强说明文字
                 for _type in ['train', 'val', 'test_best', 'test_final']:
                     pct = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
-                    self.data[f'{_type}_mean_class_f1'] = str(self.data[f'{_type}_mean_class_f1']) + f"({pct}%)"
-                self.data['test_dummy_mean_class_f1'] = str(self.data['test_dummy_mean_class_f1'])
+                    self.data[f'{_type}_mean_class_f1'] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({pct.2f}%)"
+                self.data['test_dummy_mean_class_f1'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
 
                 # 按照不同指标分组
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
