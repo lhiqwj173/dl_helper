@@ -776,7 +776,7 @@ class Tracker():
                 tag_texts = {}
                 for _type in ['train', 'val', 'test_best', 'test_final']:
                     self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
-                    tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct'].2f}%)"
+                    tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct']:.2f}%)"
                 tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
 
                 # 按照不同指标分组
