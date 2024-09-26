@@ -733,6 +733,17 @@ std::vector<std::tuple<double, double>> cal_price_mean_std_pct_each_col_multi(co
         );
 }
 
+std::vector<std::tuple<double, double>> cal_price_mean_std_diff_each_col_multi(const std::vector<py::array_t<double>> &df_array, const std::vector<py::array_t<double>> &mid_price, int pass_n, const std::vector<py::array_t<double>> &time_diff_max={})
+{
+    return _cal_price_mean_std_each_col_multi<double>(
+        df_array,
+        mid_price,
+        pass_n,
+        [](const double &a, const double &b) -> double{ return a - b; },
+        time_diff_max
+        );
+}
+
 std::vector<std::tuple<float, float>> cal_price_mean_std_pct_each_col_float(const py::array_t<float> &df_array, const py::array_t<float> &mid_price, int pass_n)
 {
     return _cal_price_mean_std_each_col<float>(
@@ -1024,6 +1035,7 @@ PYBIND11_MODULE(cpp_ext, m)
     m.def("cal_price_mean_std_pct_each_col_float", &cal_price_mean_std_pct_each_col_float);
     m.def("cal_price_mean_std_pct_each_col", &cal_price_mean_std_pct_each_col);
     m.def("cal_price_mean_std_pct_each_col_multi", &cal_price_mean_std_pct_each_col_multi, py::arg("df_array"), py::arg("mid_price"), py::arg("pass_n"), py::arg("time_diff_max") = py::list());
+    m.def("cal_price_mean_std_diff_each_col_multi", &cal_price_mean_std_diff_each_col_multi, py::arg("df_array"), py::arg("mid_price"), py::arg("pass_n"), py::arg("time_diff_max") = py::list());
 
     m.def("cal_mean_std_each_col_float", &cal_mean_std_each_col_float);
     m.def("cal_mean_std_each_col", &cal_mean_std_each_col);

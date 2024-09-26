@@ -16,9 +16,9 @@ init_logger('base', level='INFO')
 
 """
 predict_n 100
-标签 0-4
+标签 4
 
-测试 标签阈值 0.7/0.9
+测试 100% 严格过滤标准化数据
 """
 
 class transform_simple_std(transform):
@@ -68,10 +68,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        # return f'10y_4_5'
-        # return f'10y_strict_label_threshold2'
-        # return f'10y_strict_label_threshold3'
-        return f'10y_strict_label_threshold4'
+        return f'10y_100%_strict'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -79,16 +76,11 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [10, 30, 60, 100]:
-            for label in range(5):
-                if predict_n == 100 and label == 4:
-                    # for threshold in [0.7, 0.9]:
-                    # for threshold in [0.1, 0.3]:
-                    # for threshold in [0.01, 0.05]:
-                    for threshold in [1.3, 1.5, 1.7, 1.9]:
-                        vars.append((predict_n, label, classify_idx, threshold))
-                classify_idx+=1
+            vars.append((predict_n, classify_idx))
+            classify_idx+=1
 
-        predict_n, label_idx, classify_idx, threshold = vars[self.idx]
+        label_idx = 4
+        predict_n, classify_idx = vars[self.idx]
 
         self.y_n = 3
 
@@ -100,7 +92,7 @@ class test(test_base):
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        title = self.title_base() + f"_threshold{threshold}_label_idx{label_idx}"
+        title = self.title_base() + f"predict_n{predict_n}_label_idx{label_idx}"
         data_parm = {
             'predict_n': [10, 30, 60, 100],
             'pass_n': 100,
@@ -120,11 +112,11 @@ class test(test_base):
 
             # 3分类
             classify=True,
-            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, threshold),
+            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 0.5),
 
             data_folder=self.data_folder,
 
-            describe=f"threshold{threshold} label_idx{label_idx}",
+            describe=f"predict_n{predict_n} label_idx{label_idx}",
             amp=self.amp
         )
 
@@ -144,7 +136,6 @@ class test(test_base):
 if '__main__' == __name__:
 
     input_folder = r'/kaggle/input'
-    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -155,7 +146,4 @@ if '__main__' == __name__:
         amp='fp16',
         mode='cache_data',
         data_folder=data_folder,
-
-        idx=0,
-        debug=True,
     )
