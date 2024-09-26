@@ -68,7 +68,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'10y_100%_strict'
+        return f'10y_100_strict'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
