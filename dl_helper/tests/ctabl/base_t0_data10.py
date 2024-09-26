@@ -18,10 +18,12 @@ init_logger('base', level='INFO')
 predict_n 100
 标签 4
 
-测试 100% 严格过滤标准化数据
+价格数据使用 涨跌停价进行 归一化
 """
+price_cols = [i*2 for i in range(22)]
+other_cols = [i*2 + 1 for i in range(22)]
 
-class transform_simple_std(transform):
+class transform_limit_std(transform):
 
     def __init__(self, *args, nan_replace=-1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -46,8 +48,20 @@ class transform_simple_std(transform):
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
 
-            x -= mean_std[:, :, :1]
-            x /= mean_std[:, :, 1:]
+            # 中间价格
+            mid_price = (x[:, 0, -1] + x[:, 2, -1]) / 2
+
+            # 价归一化
+            x[:, price_cols, :] -= mean_std[:, price_cols, 1:]
+            mid_price -= mean_std[:, price_cols, 1:]
+            high_low_diff = mean_std[:, price_cols, 0] - mean_std[:, price_cols, 1]
+            x[:, price_cols, :] /= high_low_diff
+            mid_price /= high_low_diff
+            x[:, price_cols, :] -= mid_price
+
+            # 量标准化
+            x[:, other_cols, :] -= mean_std[:, other_cols, :1]
+            x[:, other_cols, :] /= mean_std[:, other_cols, 1:]
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
 
@@ -68,14 +82,14 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'10y_100_strict'
+        return f'10y_limit_std'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
         vars = []
         classify_idx = 0
-        for predict_n in [3, 10, 30, 60, 100]:
+        for predict_n in [10, 30, 60, 100]:
             vars.append((predict_n, classify_idx))
             classify_idx+=1
 
@@ -131,7 +145,7 @@ class test(test_base):
         return m_bin_ctabl(60, 44, 100,  100,  120,  50, self.y_n, 1)
 
     def get_transform(self, device):
-        return transform_simple_std(device, self.para, 103, num_rows=44)
+        return transform_limit_std(device, self.para, 103, num_rows=44)
 
 if '__main__' == __name__:
 
