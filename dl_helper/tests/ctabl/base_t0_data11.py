@@ -18,7 +18,7 @@ init_logger('base', level='INFO')
 predict_n 100
 标签 4
 
-价格数据使用 涨跌停价进行 归一化
+价格数据使用 pct/diff 归一化
 """
 price_cols = [i*2 for i in range(22)]
 other_cols = [i*2 + 1 for i in range(22)]
@@ -66,6 +66,49 @@ class transform_mid_pct(transform):
 
             return x, y
 
+class transform_mid_diff(transform):
+
+    def __init__(self, *args, nan_replace=-1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.nan_replace = nan_replace
+
+    def __call__(self, batch, train=False):
+        with torch.no_grad():
+            x, y, mean_std = batch
+            # debug('x', x.shape, x.device)
+            # debug('y', y.shape, y.device)
+            # debug('mean_std', mean_std.shape, mean_std.device)
+
+            # not cnn -> (batchsize, 40, 100)
+            x = torch.transpose(x, 1, 2)
+
+            # random_mask_row
+            if train and self.param.random_mask_row:
+                if x.shape[2] > self.raw_time_length:
+                    x = x[:, :, -self.raw_time_length:]
+                x = self.random_mask_row(x)
+            else:
+                if x.shape[2] > self.time_length:
+                    x = x[:, :, -self.time_length:]
+
+            # 中间价格
+            mid_price = ((x[:, 0, -1] + x[:, 2, -1]) / 2).unsqueeze(1).unsqueeze(1).clone()
+
+            # 价归一化
+            x[:, price_cols, :] -= mid_price
+
+            # 量标准化
+            x[:, other_cols, :] -= mean_std[:, other_cols, :1]
+            x[:, other_cols, :] /= mean_std[:, other_cols, 1:]
+            if train and self.param.random_scale>0:
+                x = self.random_scale(x)
+
+            # nan 替换为 self.nan_replace
+            x = torch.where(torch.isnan(x), torch.tensor(float(self.nan_replace), device=x.device), x)
+
+            return x, y
+
+
 def yfunc(threshold, y):
     if y > threshold:
         return 0
@@ -83,14 +126,20 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.std_class = {
+            'pct': transform_mid_pct,
+            'diff': transform_mid_diff
+        }
+
         vars = []
         classify_idx = 0
         for predict_n in [3, 10, 30, 60, 100]:
-            vars.append((predict_n, classify_idx))
+            for std_type in ['pct', 'diff']:
+                vars.append((predict_n, classify_idx, std_type))
             classify_idx+=1
 
         label_idx = 4
-        predict_n, classify_idx = vars[self.idx]
+        predict_n, classify_idx, self.std_type = vars[self.idx]
 
         self.y_n = 3
 
@@ -102,7 +151,8 @@ class test(test_base):
         max_lr = 4.6e-3
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
-        title = self.title_base() + f"predict_n{predict_n}_label_idx{label_idx}"
+        title = self.title_base() + f"_predict_n{predict_n}_label_idx{label_idx}_std{self.std_type}"
+
         data_parm = {
             'predict_n': [10, 30, 60, 100],
             'pass_n': 100,
@@ -141,7 +191,7 @@ class test(test_base):
         return m_bin_ctabl(60, 44, 100,  100,  120,  50, self.y_n, 1)
 
     def get_transform(self, device):
-        return transform_mid_pct(device, self.para, 103, num_rows=44)
+        return self.std_class[self.std_type](device, self.para, 103, num_rows=44)
 
 if '__main__' == __name__:
 
