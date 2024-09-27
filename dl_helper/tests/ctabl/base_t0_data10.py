@@ -49,12 +49,12 @@ class transform_limit_std(transform):
                     x = x[:, :, -self.time_length:]
 
             # 中间价格
-            mid_price = (x[:, 0, -1] + x[:, 2, -1]) / 2
+            mid_price = ((x[:, 0, -1] + x[:, 2, -1]) / 2).unsqueeze(1).unsqueeze(1).expand(-1, len(price_cols), -1).clone()
 
             # 价归一化
             x[:, price_cols, :] -= mean_std[:, price_cols, 1:]
             mid_price -= mean_std[:, price_cols, 1:]
-            high_low_diff = mean_std[:, price_cols, 0] - mean_std[:, price_cols, 1]
+            high_low_diff = mean_std[:, price_cols, :1] - mean_std[:, price_cols, 1:]
             x[:, price_cols, :] /= high_low_diff
             mid_price /= high_low_diff
             x[:, price_cols, :] -= mid_price
@@ -89,7 +89,7 @@ class test(test_base):
 
         vars = []
         classify_idx = 0
-        for predict_n in [10, 30, 60, 100]:
+        for predict_n in [3, 10, 30, 60, 100]:
             vars.append((predict_n, classify_idx))
             classify_idx+=1
 
@@ -150,6 +150,7 @@ class test(test_base):
 if '__main__' == __name__:
 
     input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -160,4 +161,7 @@ if '__main__' == __name__:
         amp='fp16',
         mode='cache_data',
         data_folder=data_folder,
+
+        # debug=True,
+        # idx=0
     )
