@@ -76,9 +76,9 @@ class test(test_base):
 
         vars = []
         classify_idx = 0
-        # for predict_n in [3, 10, 30, 60, 100]:
-        for predict_n in [10, 60, 100]:
-            vars.append((predict_n, classify_idx))
+        for predict_n in [3, 10, 30, 60, 100]:
+            if predict_n in [10, 60, 100]:
+                vars.append((predict_n, classify_idx))
             classify_idx+=1
 
         lrs = [
