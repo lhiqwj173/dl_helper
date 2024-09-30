@@ -76,9 +76,19 @@ class test(test_base):
 
         vars = []
         classify_idx = 0
-        for predict_n in [3, 10, 30, 60]:
+        for predict_n in [3, 10, 30, 60, 100]:
             vars.append((predict_n, classify_idx))
             classify_idx+=1
+
+
+        lrs = [
+            (2.15e-5, 4.6e-3),
+            (8.5e-7, 1.2e-3),
+            (2.15e-5, 4.6e-3),
+            (1.1e-6, 2.1e-3),
+            (8.6e-7, 1.2e-3),
+        ]
+
 
         label_idx = 4
         predict_n, classify_idx = vars[self.idx]
@@ -89,8 +99,10 @@ class test(test_base):
 
         epochs = 100
 
-        min_lr = 9.6e-6
-        max_lr = 4.6e-3
+        # min_lr = 9.6e-6
+        # max_lr = 4.6e-3
+        min_lr, max_lr = lrs[self.idx]
+
         self.lr_scheduler_class = functools.partial(OneCycle, total_iters=epochs, min_lr=min_lr, max_lr=max_lr)
 
         title = self.title_base() + f"_predict_n{predict_n}_label_idx{label_idx}"
