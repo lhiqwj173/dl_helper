@@ -51,6 +51,9 @@ class transform_mid_pv(transform):
             else:
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
+            
+            if x.shape[1] > self.num_rows:
+                x = x[:, :self.num_rows, :]
 
             # 中间价格 / 中间量
             mid_price = ((x[:, 0, -1] + x[:, 2, -1]) / 2).unsqueeze(1).unsqueeze(1).clone()
