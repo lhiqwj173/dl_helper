@@ -607,6 +607,15 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     # report_memory_usage('begin')
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
+    # 40档位价量数据nan处理
+    if raw.shape[1] in [40, 42]:
+        price_cols = [i for i in list(raw)[:40] if '价' in i]
+        vol_cols = [i for i in list(raw)[:40] if '价' not in i]
+        # 价格nan，用前一个价格填充
+        raw[price_cols] = raw[price_cols].fillna(method='ffill')
+        # 量nan，用0填充
+        raw[vol_cols] = raw[vol_cols].fillna(0)
+
     # # 异常全0检查
     # for i, _mean_std in enumerate(mean_std):
     #     if _mean_std[0][0] == 0:

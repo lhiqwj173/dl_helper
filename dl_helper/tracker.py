@@ -852,6 +852,10 @@ class Tracker():
             def write_values(f, values):
                 if isinstance(values, list) or isinstance(values, tuple):
                     f.write(f'{"@".join([str(i) for i in values])},')
+
+                elif ',' in str(values):
+                    f.write(f'{values},'.replace(',', '_'))
+                    
                 else:
                     f.write(f'{values},')
 

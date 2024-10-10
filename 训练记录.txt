@@ -210,3 +210,43 @@ test_t0_datas_10y_simple_55_T4x2_fp16	0.604801	0.557193	0.905596	0.557540	0.5565
 训练总结: 
 优化总结: 
 ##################################
+
+##################################
+日期: 20241004
+训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data12.py (市值top 5)
+           D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data13.py (市值top 10)
+           D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data14.py (市值top 20)
+           D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data15.py (模型复杂度)
+
+数据集路径: D:\L2_DATA_T0_ETF\train_data\market_top_5
+           D:\L2_DATA_T0_ETF\train_data\market_top_10
+           D:\L2_DATA_T0_ETF\train_data\market_top_20
+
+成果路径:   D:\code\forecast_model\notebook\20241001_test_fix_dup_softmax
+训练目的:   修复多次softmax代码
+    各个数据集/模型复杂度 训练base
+
+回测结果: 全部亏损
+训练总结: 
+    top20~top10 > top5	[top20]
+    模型越小性能越好，之前的模型存在严重过拟合	[SMALL]
+                                            T: 100, 30, 10, 1
+                                            D: 44, 20, 10, 3
+
+优化总结: 
+##################################
+
+##################################
+日期: 20241004
+训练代码:   D:\code\dl_helper\dl_helper\tests\ctabl\base_t0_data16.py
+数据集路径: D:\L2_DATA_T0_ETF\train_data\market_top_5
+成果路径:   D:\code\forecast_model\notebook\20241004_test_mid_pv_std
+训练目的:  测试标准化
+    价格: (d / mid_price) / 0.001
+    量: d / mid_vol 
+回测结果: 全部亏损
+训练总结: 
+    模型性能越好提升越大	使用
+
+优化总结: 
+##################################
