@@ -608,7 +608,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
     # 40档位价量数据nan处理
-    if raw.shape[1] in [40, 42]:
+    if raw.shape[1] in [40, 44]:
         price_cols = [i for i in list(raw)[:40] if '价' in i]
         vol_cols = [i for i in list(raw)[:40] if '价' not in i]
         # 价格nan，用前一个价格填充
@@ -633,7 +633,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         
     # 过滤掉不需要的symbol
     symbols = target_parm['symbols'].split('@')
-    if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0])  and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]):
+    if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]) and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]) and ('top' not in symbols[0]):
         symbols = [i.lower() for i in symbols]
         # id: btcusdt_1710289478588
         idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]

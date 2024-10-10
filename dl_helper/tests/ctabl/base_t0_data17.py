@@ -112,15 +112,15 @@ class test(test_base):
         title = self.title_base() + f"_predict_n{predict_n}"
 
         data_parm = {
-            'predict_n': [10, 30, 60, 100],
+            'predict_n': [3, 10, 30, 60, 100],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': '成交额 >= 10亿',
+            'symbols': 'top 20',
             'target': f'label 4',
-            'std_mode': '5d'  # 4h/1d/5d
+            'std_mode': '中间价量标准化'
         }
 
         # 实例化 参数对象
@@ -146,7 +146,7 @@ class test(test_base):
     def get_model(self):
         # SMALL
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [44, 20, 10, 3]
+        d1, d2, d3, d4 = [40, 20, 10, 3]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
