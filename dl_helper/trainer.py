@@ -718,11 +718,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     # tracker.need_test = True
     # only_predict = True
 
-    # 记录最佳 平均f1—score 
-    max_mean_f1 = 0.0
-
     # 训练循环
-    no_better_count = 0
     if not only_predict:
         p.print(f'train start')
         for epoch in range(tracker.epoch_count, params.epochs):
@@ -740,19 +736,23 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             tracker.save_result()
 
             # 计算平均 f1 score 
-            _max_mean_f1 = tracker.get_mean_f1_socre_important()
-            need_save_best_model = torch.tensor(0, device=accelerator.device)
-            if _max_mean_f1 > max_mean_f1:
-            # if epoch == 0:
-                need_save_best_model += 1
+            _max_mean_f1_list = tracker.get_mean_f1_socre_important()
+            need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
+            if len(_max_mean_f1_list) > 0:
+                _max_mean_f1 = max(_max_mean_f1_list)
+                max_idx = _max_mean_f1_list.index(_max_mean_f1)
+                if max_idx == len(_max_mean_f1_list) - 1:
+                    # 当前的模型版本最优
+                    need_save_best_model += 1
+
+                if params.no_better_stop > 0 and (len(_max_mean_f1_list) - 1 - max_idx) >= params.no_better_stop:
+                    # 长时间无优化，停止训练
+                    no_better_need_stop += 1
 
             # 同步
             accelerator.wait_for_everyone()
             need_save_best_model = broadcast(need_save_best_model)
-
-            # 早停
-            if not need_save_best_model:
-                no_better_count += 1
+            no_better_need_stop = broadcast(no_better_need_stop)
 
             if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
 
@@ -767,8 +767,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                     if os.path.exists(best_folder):
                         shutil.rmtree(best_folder)
                     shutil.copytree(model_folder, best_folder)
-                    # 更新最佳 f1 score
-                    max_mean_f1 = _max_mean_f1
 
             # 打包
             # debug(f'package_root')
@@ -776,9 +774,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             p.print(f'epoch {epoch} done')
 
-            # 训练可用时长不足 / 没有更好的效果, 停止训练
+            # 训练可用时长不足 / 早停
             # 开始 test/predict
-            if tracker.need_test or (params.no_better_stop > 0 and no_better_count >= params.no_better_stop):
+            if tracker.need_test or no_better_need_stop:
                 break
 
     # 停止继续读取数据
