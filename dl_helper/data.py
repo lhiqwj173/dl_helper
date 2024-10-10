@@ -609,11 +609,16 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
 
     # 40档位价量数据nan处理
     if raw.shape[1] in [40, 44]:
-        price_cols = [i for i in list(raw)[:40] if '价' in i]
-        vol_cols = [i for i in list(raw)[:40] if '价' not in i]
-        # 价格nan，用前一个价格填充
-        raw[price_cols] = raw[price_cols].fillna(method='ffill')
+        # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
+        for i in range(2, 11):
+            # 买价
+            raw[f'买{i}价'].fillna(raw[f'买{i-1}价'] - 0.001, inplace=True)
+
+            # 卖价
+            raw[f'卖{i}价'].fillna(raw[f'卖{i-1}价'] + 0.001, inplace=True)
+
         # 量nan，用0填充
+        vol_cols = [i for i in list(raw)[:40] if '价' not in i]
         raw[vol_cols] = raw[vol_cols].fillna(0)
 
     # # 异常全0检查
