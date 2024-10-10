@@ -1,7 +1,7 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tracker import MODEL_FINAL, MODEL_BEST, MODEL_DUMMY, TEST_FINAL, TEST_BEST, TEST_DUMMY
-from dl_helper.tool import report_memory_usage, check_nan
+from dl_helper.tool import report_memory_usage, check_nan, _check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 from dl_helper.models.dummy import m_dummy
@@ -383,6 +383,33 @@ def print_grad(idx, model, printer):
     for param in model.parameters():
         printer.print(f"step{idx} grad: {param.grad} v: {param}", main=False)
         break
+
+def test_train_func(data_file_path, id, test_class):
+    test = test_class(idx=0)
+
+    params = test.get_param()
+    model = test.get_model()
+    trans = test.get_transform(None)
+
+    from .data import Dataset_cahce
+    dataset = Dataset_cahce(params, 'test')# 使用test 避免类别均衡 导致拿不到数据
+    dataset.files = [data_file_path]
+    data_map = dataset._parse_data_map(dataset.files, 1, 0)
+    dataset._load_data_map(data_map)
+
+    idx = dataset.ids.index(id)
+    batch = dataset.__getitem__(idx)
+    batch = [i.unsqueeze(0).float() for i in batch]
+
+    data, target = trans(batch, train=True)
+    if not params.classify and len(target.shape) == 1:
+        target = target.unsqueeze(1)
+    output = model(data)
+    batch_indices = _check_nan(output)
+
+    print(f"[{idx}] batch_indices: {batch_indices}")
+
+
 def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
@@ -392,12 +419,13 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
     for mini_epoch in range(active_dataloader.sampler.mini_epoch):
         # 训练
         for batch in active_dataloader:
-            # # 测试用
-            # _batch = copy.deepcopy(batch)
+            # 测试用
+            _batch = copy.deepcopy(batch)
+            debug(f'batch')
+            pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb')) 
+            pickle.dump(active_dataloader.dataset.use_data_id, open(os.path.join(params.root, f'raw_ids_{accelerator.process_index}.pkl'), 'wb')) 
 
             # 预处理
-            # debug(f'batch')
-            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb'))            
             data, target = trans(batch, train=True)
             # debug(f'data :{data.shape} target :{target.shape}')
             # printer.print(f'data[0]: {data[0][:5][:5]}', main=False)

@@ -5,12 +5,17 @@ from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
-def check_nan(output, ids):
+def _check_nan(output):
     has_nan = torch.isnan(output).any(dim=-1)  # 检查是否有 NaN
     has_inf = torch.isinf(output).any(dim=-1)  # 检查是否有 inf
 
     # 找出包含 NaN 或 inf 值的批次索引
     batch_indices = torch.nonzero(has_nan | has_inf, as_tuple=True)[0]
+    return batch_indices
+
+def check_nan(output, ids):
+    # 找出包含 NaN 或 inf 值的批次索引
+    batch_indices = _check_nan(output)
     if batch_indices.numel() > 0:
         bad_ids = []
         for i in list(batch_indices):

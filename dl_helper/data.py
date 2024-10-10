@@ -188,6 +188,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
         data_path = self.params.data_folder
         print(data_path)
 
+        if not os.path.exists(data_path):
+            return
+
         # 针对按照文件夹（train/val/test）分配的数据集
         folder_data_path = os.path.join(data_path, self.type)
         # debug(f"folder_data_path: {folder_data_path}")
@@ -637,12 +640,13 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         idxs = list(range(0, len(x)))
         
     # 过滤掉不需要的symbol
-    symbols = target_parm['symbols'].split('@')
-    if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]) and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]) and ('top' not in symbols[0]):
-        symbols = [i.lower() for i in symbols]
-        # id: btcusdt_1710289478588
-        idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
-        reindex = True
+    if not None is target_parm:
+        symbols = target_parm['symbols'].split('@')
+        if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]) and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]) and ('top' not in symbols[0]):
+            symbols = [i.lower() for i in symbols]
+            # id: btcusdt_1710289478588
+            idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
+            reindex = True
 
     # 重新取样
     if reindex:

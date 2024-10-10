@@ -57,7 +57,7 @@ class BiN(nn.Module):
     self.y2.data = torch.where(self.y2.data < 0, torch.tensor([0.01], device=x.device), self.y2.data)
 
     #normalization along the temporal dimensione 
-    T2 = torch.ones([self.t1, 1]).to(x.device)
+    T2 = torch.ones([self.t1, 1], dtype=x.dtype).to(x.device)
     x2 = torch.mean(x, axis=2).to(x.device) 
     x2 = torch.reshape(x2, (x2.shape[0], x2.shape[1], 1))
 
