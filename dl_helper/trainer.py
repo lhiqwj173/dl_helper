@@ -419,11 +419,11 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
     for mini_epoch in range(active_dataloader.sampler.mini_epoch):
         # 训练
         for batch in active_dataloader:
-            # 测试用
-            _batch = copy.deepcopy(batch)
-            debug(f'batch')
-            pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb')) 
-            pickle.dump(active_dataloader.dataset.use_data_id, open(os.path.join(params.root, f'raw_ids_{accelerator.process_index}.pkl'), 'wb')) 
+            # # 测试用
+            # _batch = copy.deepcopy(batch)
+            # debug(f'batch')
+            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb')) 
+            # pickle.dump(active_dataloader.dataset.use_data_id, open(os.path.join(params.root, f'raw_ids_{accelerator.process_index}.pkl'), 'wb')) 
 
             # 预处理
             data, target = trans(batch, train=True)
