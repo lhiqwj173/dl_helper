@@ -120,12 +120,13 @@ class OneCycle():
             lr = cur_lr + self.each_diff_lr
         elif self.iteration <= self.final_epoch_idx:
             lr = cur_lr - self.each_diff_lr
-        elif cur_lr <= 1e-7:
-            return  # 学习率已经最小
         else:
             # 最终阶段
             lr = cur_lr - self.each_diff_lr_final
-        
+                
+        if lr <= 1e-7:
+            return # 学习率已经最小
+
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         
@@ -146,18 +147,18 @@ class OneCycle_fast(OneCycle):
         
     def step(self, loss_array):
         """
-        train loss 连续3次上升, 则进入减低学习率阶段，
+        train loss 连续 5 次上升, 则进入减低学习率阶段，
         学习率上升阶段与 OneCycle 一致，学习率上限设置倾向于更大
         """
-        # 检查是否 连续3次上升
+        # 检查是否 连续 5 次上升
         if len(loss_array) >= 3 and not self.train_loss_bad_appear:
-            if loss_array[-1] > loss_array[-2] > loss_array[-3]:
+            if loss_array[-1] > loss_array[-2] > loss_array[-3] > loss_array[-4] > loss_array[-5]:
                 self.train_loss_bad_appear = True
                 # 更改 各个调整区域的idx
                 diff = self.max_lr_epoch_idx - self.iteration
                 if diff > 0:
                     self.max_lr_epoch_idx -=diff
-                    self.final_epoch_idx -=diff
+                    self.final_epoch_idx -=diff*2
 
         loss = loss_array[-1]
 
@@ -168,12 +169,13 @@ class OneCycle_fast(OneCycle):
             lr = cur_lr + self.each_diff_lr
         elif self.iteration <= self.final_epoch_idx:
             lr = cur_lr - self.each_diff_lr
-        elif cur_lr <= 1e-7:
-            return  # 学习率已经最小
         else:
             # 最终阶段
             lr = cur_lr - self.each_diff_lr_final
         
+        if lr <= 1e-7:
+            return # 学习率已经最小
+
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
 

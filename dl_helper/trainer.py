@@ -722,6 +722,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     max_mean_f1 = 0.0
 
     # 训练循环
+    no_better_count = 0
     if not only_predict:
         p.print(f'train start')
         for epoch in range(tracker.epoch_count, params.epochs):
@@ -749,6 +750,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             accelerator.wait_for_everyone()
             need_save_best_model = broadcast(need_save_best_model)
 
+            # 早停
+            if not need_save_best_model:
+                no_better_count += 1
+
             if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
 
                 # 保存模型
@@ -771,8 +776,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             p.print(f'epoch {epoch} done')
 
-            # 训练可用时长不足，开始 test/predict
-            if tracker.need_test:
+            # 训练可用时长不足 / 没有更好的效果, 停止训练
+            # 开始 test/predict
+            if tracker.need_test or (params.no_better_stop > 0 and no_better_count >= params.no_better_stop):
                 break
 
     # 停止继续读取数据

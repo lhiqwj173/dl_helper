@@ -160,7 +160,7 @@ class Params:
   abs_learning_rate = 0
 
   # 早停参数
-  no_better_stop = 15
+  no_better_stop = 10
 
   # 缓存数据间隔
   checkpointing_steps =  15
@@ -208,7 +208,7 @@ class Params:
       learning_rate = 0, 
       abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
       epochs=100, 
-      no_better_stop=0, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
+      no_better_stop=10, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
 
       # 数据增强
       random_mask=0, random_scale=0, random_mask_row=0, down_freq=0,
