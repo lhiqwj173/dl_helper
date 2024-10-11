@@ -544,7 +544,7 @@ class Tracker():
 
     def get_mean_f1_socre_important(self):
         if self.accelerator.is_main_process:
-            return ((pd.Series(self.data[f'val_class_f1_0']) + pd.Series(self.data[f'val_class_f1_1'])) / 2).tolist()
+            return ((pd.Series(self.data[f'val_class_f1_0'].cpu().numpy()) + pd.Series(self.data[f'val_class_f1_1'].cpu().numpy())) / 2).tolist()
             return (self.data[f'val_class_f1_0'][-1] + self.data[f'val_class_f1_1'][-1]) / 2
         else:
             return []
