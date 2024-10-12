@@ -90,7 +90,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'new_base'
+        return f'new_base_{dataset_type}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -98,7 +98,8 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 10, 30, 60, 100]:
-            vars.append((predict_n, classify_idx))
+            if predict_n in [3, 30, 60, 100]:
+                vars.append((predict_n, classify_idx))
             classify_idx+=1
 
         predict_n, classify_idx = vars[self.idx]
@@ -112,13 +113,13 @@ class test(test_base):
         title = self.title_base() + f"_predict_n{predict_n}"
 
         data_parm = {
-            'predict_n': [3, 10, 30, 60, 100],
+            'predict_n': [3, 30, 60, 100],
             'pass_n': 100,
             'y_n': self.y_n,
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': 'top 20',
+            'symbols': f'{dataset_type}',
             'target': f'label 4',
             'std_mode': '中间价量标准化'
         }
@@ -162,6 +163,17 @@ if '__main__' == __name__:
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
+
+    # 按照数据集分类
+    dataset_type = ''
+    if data_folder_name == 'lh-q-t0-test-data-20240927-2':
+        dataset_type = 'top5'
+    elif data_folder_name == 'lh-q-t0-test-data-20240927-3':
+        dataset_type = 'top10'
+    elif data_folder_name == 'lh-q-t0-test-data-20240927-4':
+        dataset_type = 'top20'
+    else:
+        raise Exception('dataset type not found')
 
     run(
         test, 
