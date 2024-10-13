@@ -20,8 +20,8 @@ predict_n 100
 
 价格数据使用 涨跌停价进行 归一化
 """
-price_cols = [i*2 for i in range(22)]
-other_cols = [i*2 + 1 for i in range(22)]
+price_cols = [i*2 for i in range(20)]
+other_cols = [i*2 + 1 for i in range(20)]
 
 class transform_limit_std(transform):
 
@@ -47,7 +47,10 @@ class transform_limit_std(transform):
             else:
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
-
+            
+            if x.shape[1] > self.num_rows:
+                x = x[:, :self.num_rows, :]
+                
             # 中间价格
             mid_price = ((x[:, 0, -1] + x[:, 2, -1]) / 2).unsqueeze(1).unsqueeze(1).expand(-1, len(price_cols), -1).clone()
 

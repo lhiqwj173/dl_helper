@@ -21,7 +21,7 @@ predict_n 100
 
 标准化
 价格: (d / mid_price) / 0.001
-量: d / mid_vol 
+量: 简单标准化
 
 小模型
 T: 100, 30, 10, 1
@@ -32,7 +32,7 @@ D: 44, 20, 10, 3
 
 batch_size=128
 
-新base基准
+测试 中间价标准化 
 """
 price_cols = [i*2 for i in range(20)]
 other_cols = [i*2 + 1 for i in range(20)]
@@ -69,8 +69,9 @@ class transform_mid_pv(transform):
             x[:, price_cols, :] /= mid_price
             x[:, price_cols, :] /= 0.001
 
-            # 量归一化
-            x[:, other_cols, :] /= mid_vol
+            # 量标准化
+            x[:, other_cols, :] -= mean_std[:, other_cols, :1]
+            x[:, other_cols, :] /= mean_std[:, other_cols, 1:]
 
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
@@ -90,7 +91,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'new_base_{dataset_type}'
+        return f'midp_std_{dataset_type}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -121,7 +122,7 @@ class test(test_base):
             'total_hours': int(24*20),
             'symbols': f'{dataset_type}',
             'target': f'label 4',
-            'std_mode': '中间价量标准化'
+            'std_mode': '中间价标准化'
         }
 
         # 实例化 参数对象
