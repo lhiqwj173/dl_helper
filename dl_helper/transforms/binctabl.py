@@ -47,8 +47,10 @@ class transform():
         self.rand_scales = torch.rand(self.batch_size, self.num_rows, self.time_length, device=self.device) < scale_prob
         # 只用vol_cols
 
-        if self.num_rows <= 44:
+        if self.num_rows in [40, 44]:
             self.vol_cond = torch.tensor([False, True] * (20 if self.num_rows==40 else 22), device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
+        elif self.num_rows == 21:
+            self.vol_cond = torch.tensor([True] * 21, device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
         elif self.num_rows == 146:
             self.vol_cond = torch.tensor(
                 [False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, True, True, True, True, True, True, True, True, True, True, False, True, True, True, True, True, True, True, True, True, True, True, True, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True], 
