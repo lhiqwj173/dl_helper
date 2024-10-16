@@ -65,6 +65,9 @@ class transform_deeplob(transform):
             if train and self.param.random_scale>0:
                 x = self.random_scale(x)
 
+            # 增加一个 通道维度
+            x = x.unsqueeze(1)
+
             return x, y
 
 
