@@ -126,6 +126,7 @@ class test(test_base):
             describe=f"predict_n{predict_n}_seed{seed}",
             amp=self.amp,
             seed=seed,
+            no_better_stop=0,
         )
 
     def get_in_out_shape(self):
