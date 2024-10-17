@@ -599,14 +599,13 @@ def get_data_sampler(data_set, _type):
 
     return train_sampler
 
-def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False, seed=42):
-    set_seed(seed)
-
+def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     # 训练实例
     test = test_class(*args, **kwargs)
 
     # 训练参数
     params = test.get_param()
+    set_seed(params.seed)
 
     accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
     p = printer(lock, accelerator)
@@ -1238,6 +1237,13 @@ def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwar
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
     mode: xla /xla_tqdm/simple/cache_data/ normal 
+    args / kwargs 为tester构造参数
+
+    可增加字典参数(都可在命令行添加):
+        idx: 训练索引
+        amp: 混合精度训练
+        findbest_lr: 搜索学习率模式
+
     """
     # # 测试用
     # kwargs['idx'] = 0
@@ -1251,17 +1257,15 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['idx'] = int(arg.split('=')[1])
             if arg.startswith('amp='):
                 kwargs['amp'] = arg.split('=')[1]
+            if arg.startswith('findbest_lr='):
+                kwargs['findbest_lr'] = arg.split('=')[1]
+
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
     if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
     if 'idx' not in kwargs:
         kwargs['idx'] = get_idx(base_title)
-    log(f'begin:{base_title} idx: {kwargs["idx"]}')
 
-    # 检查 amp 命令行参数
-    if sys.argv[1:]:
-        for arg in sys.argv[1:]:
-            if arg.startswith('amp='):
-                kwargs['amp'] = arg.split('=')[1]
+    log(f'begin:{base_title} idx: {kwargs["idx"]}')
 
     num_processes = match_num_processes()
 
