@@ -76,7 +76,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'stable_market_depth_{dataset_type}_filter_0'
+        return f'stable_market_depth_{dataset_type}_filter_1'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
