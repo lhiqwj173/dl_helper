@@ -94,6 +94,11 @@ def plot_roc_curve(y_true, y_score, file_path):
         # 计算使 F1 分数最优的阈值
         precision, recall, thresholds = precision_recall_curve(y_true == i, y_score[:, i])
         f1_scores = 2 * (precision * recall) / (precision + recall)
+
+        # f1_scores nan -> 备份数据
+        if math.isnan(np.max(f1_scores)):
+            pickle.dump((y_score, y_score), open(y_score.replace('ROC_curve.png', 'y_true_y_score_dump.pkl', 'wb')))
+
         best_threshold = thresholds[np.argmax(f1_scores)]
         best_thresholds.append(best_threshold)
 
