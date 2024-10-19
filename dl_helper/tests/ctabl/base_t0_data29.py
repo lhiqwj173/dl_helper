@@ -144,7 +144,7 @@ class test(test_base):
 if '__main__' == __name__:
 
     input_folder = r'/kaggle/input'
-    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
