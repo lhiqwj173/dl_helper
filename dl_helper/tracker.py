@@ -240,7 +240,8 @@ class Tracker():
         with open(threshold_file, 'a')as f:
             f.write('comb,balance_acc,weighted_f1\n')
             for i, (comb, balance_acc, weighted_f1) in enumerate(rets):
-                f.write(f"{comb[0]}_{comb[1]}_{comb[2]},{balance_acc.item()},{weighted_f1.item()}\n")
+                comb_str = '_'.join([str(i) for i in comb])
+                f.write(f"{comb_str},{balance_acc.item()},{weighted_f1.item()}\n")
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
