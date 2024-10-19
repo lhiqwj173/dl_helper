@@ -102,12 +102,8 @@ def plot_roc_curve(y_true, y_score, file_path):
         plt.plot([0, 1], [0, 1], linestyle='--')
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title(f'ROC Curve - Class {i}')
+        plt.title(f'ROC Curve - Class {i} {np.max(f1_scores):.3f}')
         plt.scatter(fpr[np.argmax(tpr - fpr)], tpr[np.argmax(tpr - fpr)], c='red', marker='x', label=f'Best Threshold: {best_threshold:.3f}')
-
-        # 添加 F1 Score 文本
-        plt.text(0.5, 0.3, f'F1 Score: {np.max(f1_scores):.3f}', ha='center', va='center', backgroundcolor='white')
-
         plt.legend()
 
     plt.tight_layout()
