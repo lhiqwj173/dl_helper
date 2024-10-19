@@ -104,6 +104,10 @@ def plot_roc_curve(y_true, y_score, file_path):
         plt.ylabel('True Positive Rate')
         plt.title(f'ROC Curve - Class {i}')
         plt.scatter(fpr[np.argmax(tpr - fpr)], tpr[np.argmax(tpr - fpr)], c='red', marker='x', label=f'Best Threshold: {best_threshold:.3f}')
+
+        # 添加 F1 Score 文本
+        plt.text(0.5, 0.3, f'F1 Score: {np.max(f1_scores):.3f}', ha='center', va='center', backgroundcolor='white')
+
         plt.legend()
 
     plt.tight_layout()
@@ -240,7 +244,7 @@ class Tracker():
         with open(threshold_file, 'a')as f:
             f.write('comb,balance_acc,weighted_f1\n')
             for i, (comb, balance_acc, weighted_f1) in enumerate(rets):
-                comb_str = '_'.join([str(i) for i in comb])
+                comb_str = '_'.join([str(i.item()) for i in comb])
                 f.write(f"{comb_str},{balance_acc.item()},{weighted_f1.item()}\n")
 
     def update(self, test_dataloader=None):
