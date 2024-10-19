@@ -207,7 +207,7 @@ class Tracker():
             thresholds = [float(i) for i in thresholds]
 
         thresholds = torch.tensor(thresholds,device=self.temp['softmax_predictions'].device)
-        categories = [0, 1, 2]
+        categories = [i for i in range(self.params.y_n)]
 
         combinations = []
         for r in range(1, len(categories) + 1):
@@ -398,7 +398,12 @@ class Tracker():
                         begin = data_list[0][0]
                         end = data_list[-1][0]
                         with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                            f.write('timestamp,target,0,1,2\n')
+                            # f.write('timestamp,target,0,1,2\n')
+                            f.write('timestamp,target')
+                            for i in range(self.params.y_n):
+                                f.write(f',{i}')
+                            f.write('\n')
+
                             for timestamp, target, pro  in data_list:
                                 pro_str = ','.join([str(float(i)) for i in pro])
                                 f.write(f'{timestamp},{target},{pro_str}\n')
@@ -543,12 +548,16 @@ class Tracker():
             self.temp['_num'] += _y_true.shape[0]
 
     def get_mean_f1_socre_important(self):
+        assert self.params.classify, 'not classify'
+
         if self.accelerator.is_main_process:
-            return ((pd.Series(self.data[f'val_class_f1_0'].cpu().numpy()) + pd.Series(self.data[f'val_class_f1_1'].cpu().numpy())) / 2).tolist()
-            return (self.data[f'val_class_f1_0'][-1] + self.data[f'val_class_f1_1'][-1]) / 2
+            val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy())
+            for i in range(1, self.params.y_n - 1):
+                val_class_f1 += pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
+
+            return (val_class_f1 / (self.params.y_n - 1)).tolist()
         else:
             return []
-            return 0
 
     def save_result(self):
         self._plot()
@@ -717,20 +726,20 @@ class Tracker():
                 # 测试集f1
                 if 'test_f1' in data:
                     t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
-                    for i in range(len(colors) - 1):
+                    for i in range(params.y_n -1):
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
 
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f} ({last_value(data["train_f1"]):.4f})', c=colors[0][0])[0])
-                for i in range(len(colors) - 1):
+                for i in range(params.y_n -1):
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f} ({last_value(data[f"train_class_f1_{i}"]):.4f})', c=colors[i+1][0])[0])
 
                 # 标记f1最高点
                 t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f} ({max_train_f1:.4f})'))
-                for i in range(len(colors) - 1):
+                for i in range(params.y_n -1):
                     t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
                     t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f} ({max_train_class_f1s[i]:.4f})'))
 
@@ -772,9 +781,11 @@ class Tracker():
                     score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1].cpu().item()
                     score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
                     score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
-                    score_data[f'{_type}_class_f1_0'] = self.data[f'{_type}_class_f1_0'][-1].cpu().item()
-                    score_data[f'{_type}_class_f1_1'] = self.data[f'{_type}_class_f1_1'][-1].cpu().item()
-                    self.data[f'{_type}_mean_class_f1'] = (score_data[f'{_type}_class_f1_0'] + score_data[f'{_type}_class_f1_1']) / 2
+
+                    for i in range(params.y_n - 1):
+                        score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
+
+                    self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n - 1)]) / (params.y_n - 1)
 
                 # 计算增强说明文字
                 tag_texts = {}
@@ -787,8 +798,10 @@ class Tracker():
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
                 acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
                 f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
-                class_f1_0_score_data = [score_data[i] for i in score_data if 'class_f1_0' in i]
-                class_f1_1_score_data = [score_data[i] for i in score_data if 'class_f1_1' in i]
+
+                class_f1_score_datas = []
+                for j in range(params.y_n - 1):
+                    class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
 
                 labels = ['Train', 'Val', 'Final', 'Best', 'Dummy']
 
@@ -803,11 +816,13 @@ class Tracker():
                 bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
                 bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
                 bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
-                bar4 = ax.bar([i + 3*width for i in range(5)], class_f1_0_score_data, width, color=colors[3], label='Class F1 (0)', alpha=alpha)
-                bar5 = ax.bar([i + 4*width for i in range(5)], class_f1_1_score_data, width, color=colors[4], label='Class F1 (1)', alpha=alpha)
+
+                bars = []
+                for idx, class_f1_score_data in enumerate(class_f1_score_datas):
+                    bars.append(ax.bar([i + (3 + idx)*width + j*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
                 # 添加增强说明文字
                 tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
-                for i, bar in enumerate(bar5):
+                for i, bar in enumerate(bars[0]):
                     yval = bar.get_height()
                     ax.text(bar.get_x() + bar.get_width()/2, yval, tag_texts[tag_type[i]], ha='center', va='bottom')
 
