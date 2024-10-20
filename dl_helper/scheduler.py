@@ -157,8 +157,8 @@ class OneCycle_fast(OneCycle):
                 # 更改 各个调整区域的idx
                 diff = self.max_lr_epoch_idx - self.iteration
                 if diff > 0:
-                    self.max_lr_epoch_idx -=diff
-                    self.each_diff_lr = (self.each_diff_lr * self.max_lr_epoch_idx) /  (self.max_lr_epoch_idx + diff)# 改成延长第二段的时间
+                    self.max_lr_epoch_idx -= diff
+                    self.each_diff_lr = (self.each_diff_lr * self.max_lr_epoch_idx) /  (self.max_lr_epoch_idx + diff * 2)# 改成延长第二段的时间
                     # self.final_epoch_idx -=diff*2
 
         loss = loss_array[-1]
