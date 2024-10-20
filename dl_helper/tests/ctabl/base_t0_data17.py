@@ -166,11 +166,11 @@ if '__main__' == __name__:
 
     # 按照数据集分类
     dataset_type = ''
-    if 'top5' in data_folder_name.replace('_', ''):
+    if 'top5' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top5'
-    elif 'top10' in data_folder_name.replace('_', ''):
+    elif 'top10' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top10'
-    elif 'top20' in data_folder_name.replace('_', ''):
+    elif 'top20' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top20'
     else:
         raise Exception('dataset type not found')
