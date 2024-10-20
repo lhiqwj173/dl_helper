@@ -90,7 +90,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_filter_time_2_{dataset_type}'
+        return f'base_filter_time_1_{dataset_type}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
