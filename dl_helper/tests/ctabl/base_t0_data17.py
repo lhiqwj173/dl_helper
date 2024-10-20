@@ -99,10 +99,11 @@ class test(test_base):
         classify_idx = 0
         for predict_n in [3, 10, 30, 60, 100]:
             if predict_n in [3, 30, 60, 100]:
-                vars.append((predict_n, classify_idx))
+                for i in range(4):
+                    vars.append((predict_n, classify_idx, i))
             classify_idx+=1
 
-        predict_n, classify_idx = vars[self.idx]
+        predict_n, classify_idx, seed = vars[self.idx]
 
         self.y_n = 3
 
@@ -110,7 +111,7 @@ class test(test_base):
 
         self.lr_scheduler_class = functools.partial(OneCycle_fast, total_iters=epochs)
 
-        title = self.title_base() + f"_predict_n{predict_n}"
+        title = self.title_base() + f"_predict_n{predict_n}_seed{seed}"
 
         data_parm = {
             'predict_n': [3, 30, 60, 100],
@@ -136,7 +137,9 @@ class test(test_base):
             data_folder=self.data_folder,
 
             describe=f"predict_n{predict_n}",
-            amp=self.amp
+            amp=self.amp,
+            seed=seed,
+            no_better_stop=0,
         )
 
     def get_in_out_shape(self):
