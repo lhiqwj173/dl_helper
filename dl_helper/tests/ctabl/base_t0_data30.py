@@ -90,17 +90,18 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_filter_time_{dataset_type}'
+        return f'base_0930_1457_{dataset_type}'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
         vars = []
         classify_idx = 0
-        for predict_n in [3, 30, 60, 100]:
-            # 同一个训练使用4个随机种子，最终取均值
-            for seed in range(4):
-                vars.append((predict_n, classify_idx, seed))
+        for predict_n in [3, 10, 30, 60, 100]:
+            if predict_n in [3, 30, 60, 100]:
+                # 同一个训练使用4个随机种子，最终取均值
+                for seed in range(4):
+                    vars.append((predict_n, classify_idx, seed))
             classify_idx+=1
 
         predict_n, classify_idx, seed = vars[self.idx]
@@ -169,11 +170,11 @@ if '__main__' == __name__:
 
     # 按照数据集分类
     dataset_type = ''
-    if 'top5' in data_folder_name:
+    if 'top5' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top5'
-    elif 'top10' in data_folder_name:
+    elif 'top10' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top10'
-    elif 'top20' in data_folder_name:
+    elif 'top20' in data_folder_name.replace('_', '').replace('-', ''):
         dataset_type = 'top20'
     else:
         raise Exception('dataset type not found')
