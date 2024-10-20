@@ -97,7 +97,7 @@ def plot_roc_curve(y_true, y_score, file_path):
 
         # f1_scores nan -> 备份数据
         if math.isnan(np.max(f1_scores)):
-            pickle.dump((y_score, y_score), open(y_score.replace('ROC_curve.png', 'y_true_y_score_dump.pkl', 'wb')))
+            pickle.dump((y_score, y_score), open(file_path.replace('ROC_curve.png', 'y_true_y_score_dump.pkl', 'wb')))
 
         best_threshold = thresholds[np.argmax(f1_scores)]
         best_thresholds.append(best_threshold)
