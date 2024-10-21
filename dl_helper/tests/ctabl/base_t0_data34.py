@@ -75,7 +75,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'depth_god_label_{dataset_type}'
+        return f'depth_god_label'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -105,7 +105,7 @@ class test(test_base):
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': f'{dataset_type}',
+            'symbols': 'top5',
             'target': f'label 4',
             'std_mode': '中间标准化'
         }
@@ -148,17 +148,6 @@ if '__main__' == __name__:
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
-
-    # 按照数据集分类
-    dataset_type = ''
-    if 'top5' in data_folder_name.replace('_', '').replace('-', ''):
-        dataset_type = 'top5'
-    elif 'top10' in data_folder_name.replace('_', '').replace('-', ''):
-        dataset_type = 'top10'
-    elif 'top20' in data_folder_name.replace('_', '').replace('-', ''):
-        dataset_type = 'top20'
-    else:
-        raise Exception('dataset type not found')
 
     run(
         test, 
