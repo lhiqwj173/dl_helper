@@ -502,24 +502,25 @@ class DistributedSampler(Sampler):
         # # for debug
         # mini_dataset_length = 2
 
-        # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
-        _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
-        # debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
-        self.mini_dataset_length = _mini_dataset_length if dataset.type == 'train' else len(self.dataset.files)
-        self.mini_dataset_length = self.mini_dataset_length if self.mini_dataset_length > 0 else len(self.dataset.files)
-        # debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
-        assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
+        if self.dataset.files:
+            # 验证/测试 数据暂时全部load： mini_dataset_length = len(self.dataset.files)
+            _mini_dataset_length = find_nearest_mini_dataset_length(len(self.dataset.files), mini_dataset_length, self.world_size)
+            # debug(f'{self.dataset.type} _mini_dataset_length:{_mini_dataset_length}')
+            self.mini_dataset_length = _mini_dataset_length if dataset.type == 'train' else len(self.dataset.files)
+            self.mini_dataset_length = self.mini_dataset_length if self.mini_dataset_length > 0 else len(self.dataset.files)
+            # debug(f'{self.dataset.type} self.mini_dataset_length:{self.mini_dataset_length}')
+            assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
-        self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-        # debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
-        self.mini_epoch_indices_ramain = self.mini_epoch
-        if self.shuffle:
-            mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-        else:
-            mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
-        log(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
+            self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
+            # debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
+            self.mini_epoch_indices_ramain = self.mini_epoch
+            if self.shuffle:
+                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
+            else:
+                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+            log(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
-        self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+            self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
     def data_loader_close(self):
         self.mini_epoch_indices_ramain = 0
@@ -685,7 +686,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         #     logger.# debug(f"回归标签列表处理 使用标签idx:{params.regress_y_idx}")
         y_idx = params.regress_y_idx
         
-    elif params.classify_y_idx!=1:
+    elif params.classify_y_idx!= -1:
         # if log:
         #     logger.# debug(f"分类标签列表处理 使用标签idx:{params.classify_y_idx}")
         y_idx = params.classify_y_idx

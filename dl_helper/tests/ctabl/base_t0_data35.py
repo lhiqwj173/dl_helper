@@ -27,7 +27,7 @@ predict_n 100
 
 batch_size=128
 
-测试 全知标签 可盈利数量 win_v_long - win_v_short
+测试 全知标签 可盈利数量 win_v_long 二分类
 """
 
 class transform_stable(transform):
@@ -63,21 +63,17 @@ class transform_stable(transform):
             return x, y
 
 
-def yfunc(threshold, ys):
-    y = ys[0] - ys[1]
-
+def yfunc(threshold, y):
     if y > threshold:
         return 0
-    elif y < -threshold:
-        return 1
     else:
-        return 2
+        return 1
 
 class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'depth_god_label_win_diff'
+        return f'depth_god_label_win_long'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -87,12 +83,12 @@ class test(test_base):
         for predict_n in [3, 30, 60, 100]:
             # 同一个训练使用4个随机种子，最终取均值
             for seed in range(4):
-                vars.append((predict_n, (classify_idx,classify_idx+1), seed))
+                vars.append((predict_n, classify_idx, seed))
             classify_idx+=2
 
         predict_n, classify_idx, seed = vars[self.idx]
 
-        self.y_n = 3
+        self.y_n = 2
 
         epochs = 30
 
@@ -108,7 +104,7 @@ class test(test_base):
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
             'symbols': 'top5',
-            'target': f'god label win diff',
+            'target': f'god label win long',
             'std_mode': '中间标准化'
         }
 
