@@ -78,7 +78,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'depth_clear_keep_dup'
+        return f'train_depth_clear_keep_dup'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
