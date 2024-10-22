@@ -144,7 +144,7 @@ class test(test_base):
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
-        return transform_stable(device, self.para, 103, num_rows=21)
+        return transform_stable(device, self.para, 200, num_rows=21)
 
 if '__main__' == __name__:
 
