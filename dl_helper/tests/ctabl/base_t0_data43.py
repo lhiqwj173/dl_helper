@@ -41,8 +41,11 @@ class transform_stable(transform):
             # not cnn -> (batchsize, 50, 100)
             x = torch.transpose(x, 1, 2)
 
-            # 删除成交数据数据
-            x = torch.cat((x[:, :50, :], x[:, 70:, :]), dim=1)
+            # 中间价格 / 中间量
+            mid_vol = x[:, 91, -1].unsqueeze(1).unsqueeze(1).clone()
+
+            # 删除其他数据数据
+            x = x[:, :50, :]
 
             # random_mask_row
             if train and self.param.random_mask_row:
@@ -53,11 +56,7 @@ class transform_stable(transform):
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
 
-            # 中间价格 / 中间量
-            mid_vol = x[:, 71, -1].unsqueeze(1).unsqueeze(1).clone()
-
             # 量标准化
-            x = x[:, :50, :]
             x[:, :, :] /= mid_vol
                         
             return x, y
@@ -148,19 +147,19 @@ if '__main__' == __name__:
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
-    # input_folder = r'/kaggle/input'
-    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
-    # data_folder_name = os.listdir(input_folder)[0]
-    # data_folder = os.path.join(input_folder, data_folder_name)
+    data_folder_name = os.listdir(input_folder)[0]
+    data_folder = os.path.join(input_folder, data_folder_name)
 
-    # run(
-    #     test, 
-    #     # findbest_lr=True,
-    #     amp='fp16',
-    #     mode='cache_data',
-    #     data_folder=data_folder,
+    run(
+        test, 
+        # findbest_lr=True,
+        amp='fp16',
+        mode='cache_data',
+        data_folder=data_folder,
 
-    #     # debug=True,
-    #     # idx=0
-    # )
+        # debug=True,
+        # idx=0
+    )
