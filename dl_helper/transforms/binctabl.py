@@ -49,14 +49,12 @@ class transform():
 
         if self.num_rows in [40, 44]:
             self.vol_cond = torch.tensor([False, True] * (20 if self.num_rows==40 else 22), device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
-        elif self.num_rows in [41, 21, 71, 91]:
-            self.vol_cond = torch.tensor([True] * self.num_rows, device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
         elif self.num_rows == 146:
             self.vol_cond = torch.tensor(
                 [False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, False, False, False, False, False, True, True, True, True, True, True, True, True, True, True, False, True, True, True, True, True, True, True, True, True, True, True, True, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True], 
                 device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
         else:
-            raise ValueError('num_rows not supported')
+            self.vol_cond = torch.tensor([True] * self.num_rows, device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
 
         self.rand_scales = torch.where(self.vol_cond, self.rand_scales, torch.tensor(False, device=self.device))
 
