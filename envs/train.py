@@ -73,6 +73,8 @@ else:
     # !pip install torchmetrics
     # !pip install pympler # 弃用
     # !pip install requests_toolbelt
+    # !pip install torchstat
+    # !pip install torchinfo
     # # !pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0-py3-none-any.whl
     # !pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz
     for cmd in [
@@ -83,6 +85,8 @@ else:
             'pip install torchinfo',
             'pip install torchmetrics',
             'pip install requests_toolbelt',
+            'pip install torchstat',
+            'pip install torchinfo',
             'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
         ]:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
