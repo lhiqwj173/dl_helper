@@ -32,7 +32,7 @@ batch_size=128
 
 过滤时间 09:30 - 14:57
 
-测试 成交 特征数据
+测试 模型复杂度
 """
 
 class transform_stable(transform):
@@ -80,7 +80,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'train_depth_add_deal'
+        return f'train_depth_deal_model'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,12 +88,14 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 30, 60, 100]:
-            # 同一个训练使用4个随机种子，最终取均值
-            for seed in range(4):
-                vars.append((predict_n, classify_idx, seed))
+            if predict_n == 100:
+                for model_arg_idx in range(4):
+                    # 同一个训练使用4个随机种子，最终取均值
+                    for seed in range(4):
+                        vars.append((predict_n, classify_idx, seed, model_arg_idx))
             classify_idx+=1
 
-        predict_n, classify_idx, seed = vars[self.idx]
+        predict_n, classify_idx, seed, self.model_arg_idx = vars[self.idx]
 
         self.y_n = 3
 
@@ -101,7 +103,7 @@ class test(test_base):
 
         self.lr_scheduler_class = functools.partial(OneCycle_fast, total_iters=epochs)
 
-        title = self.title_base() + f"_predict_n{predict_n}_seed{seed}"
+        title = self.title_base() + f"_predict_n{predict_n}_model{self.model_arg_idx}_seed{seed}"
 
         data_parm = {
             'predict_n': [3, 30, 60, 100],
@@ -138,9 +140,29 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        # SMALL
-        t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [41, 20, 10, 3]
+        # # DEFAULT
+        # t1, t2, t3, t4 = [100, 30, 10, 1]
+        # d1, d2, d3, d4 = [41, 20, 10, 3]
+
+        if self.model_arg_idx == 0:
+            # 模型参数量: 7598
+            t1, t2, t3, t4 = [100, 30, 10, 1]
+            d1, d2, d3, d4 = [41, 40, 20, 3]
+        elif self.model_arg_idx == 1:
+            # 模型参数量: 14518
+            t1, t2, t3, t4 = [100, 60, 30, 1]
+            d1, d2, d3, d4 = [41, 40, 20, 3]
+        elif self.model_arg_idx == 2:
+            # 模型参数量: 21618
+            t1, t2, t3, t4 = [100, 60, 30, 1]
+            d1, d2, d3, d4 = [41, 80, 40, 3]
+        elif self.model_arg_idx == 3:
+            # 模型参数量: 39758
+            t1, t2, t3, t4 = [100, 100, 50, 1]
+            d1, d2, d3, d4 = [41, 80, 80, 3]
+        else:
+            raise ValueError(f'model_arg_idx={self.model_arg_idx}')
+
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
@@ -148,24 +170,36 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [41, 20, 10, 3]
-    model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
-    print(f"模型参数量: {model_params_num(model)}")
+    for idx in range(4):
+        if idx == 0:
+            t1, t2, t3, t4 = [100, 30, 10, 1]
+            d1, d2, d3, d4 = [41, 40, 20, 3]
+        elif idx == 1:
+            t1, t2, t3, t4 = [100, 60, 30, 1]
+            d1, d2, d3, d4 = [41, 40, 20, 3]
+        elif idx == 2:
+            t1, t2, t3, t4 = [100, 60, 30, 1]
+            d1, d2, d3, d4 = [41, 80, 40, 3]
+        elif idx == 3:
+            t1, t2, t3, t4 = [100, 100, 50, 1]
+            d1, d2, d3, d4 = [41, 80, 80, 3]
 
-    # input_folder = r'/kaggle/input'
-    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+        model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
+        print(f"模型参数量: {model_params_num(model)}")
 
-    # data_folder_name = os.listdir(input_folder)[0]
-    # data_folder = os.path.join(input_folder, data_folder_name)
+    input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
-    # run(
-    #     test, 
-    #     # findbest_lr=True,
-    #     amp='fp16',
-    #     mode='cache_data',
-    #     data_folder=data_folder,
+    data_folder_name = os.listdir(input_folder)[0]
+    data_folder = os.path.join(input_folder, data_folder_name)
 
-    #     # debug=True,
-    #     # idx=0
-    # )
+    run(
+        test, 
+        # findbest_lr=True,
+        amp='fp16',
+        mode='cache_data',
+        data_folder=data_folder,
+
+        # debug=True,
+        # idx=0
+    )

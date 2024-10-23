@@ -5,6 +5,17 @@ from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
+from torchstat import stat
+from torchinfo import summary
+from torch.nn.utils import parameters_to_vector
+
+def model_params_num(model):
+    # 将所有参数转换为一个向量
+    vector = parameters_to_vector(model.parameters())
+    # 获取参数数量
+    num_params = vector.numel()
+    return num_params
+
 def _check_nan(output):
     has_nan = torch.isnan(output).any(dim=-1)  # 检查是否有 NaN
     has_inf = torch.isinf(output).any(dim=-1)  # 检查是否有 inf
