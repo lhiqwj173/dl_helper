@@ -49,7 +49,7 @@ class transform():
 
         if self.num_rows in [40, 44]:
             self.vol_cond = torch.tensor([False, True] * (20 if self.num_rows==40 else 22), device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
-        elif self.num_rows in [41, 21]:
+        elif self.num_rows in [41, 21, 71, 91]:
             self.vol_cond = torch.tensor([True] * self.num_rows, device=self.device).unsqueeze(0).unsqueeze(2).expand(self.batch_size, -1, self.time_length)
         elif self.num_rows == 146:
             self.vol_cond = torch.tensor(
