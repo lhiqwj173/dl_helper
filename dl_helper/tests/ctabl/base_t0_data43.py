@@ -37,7 +37,7 @@ class transform_stable(transform):
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
-
+        
             # not cnn -> (batchsize, 50, 100)
             x = torch.transpose(x, 1, 2)
 
@@ -46,22 +46,6 @@ class transform_stable(transform):
 
             # 删除其他数据数据
             x = x[:, :50, :]
-
-            ####################################
-            # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
-            pickle.dump(x, open('x.pkl', 'wb'))
-            # 检查每一行是否全为零
-            all_zero_rows = (x == 0).all(dim=1)  # 这将返回一个布尔张量，每个元素表示对应行是否全为零
-            # 找到全为零的行
-            zero_rows = all_zero_rows.nonzero(as_tuple=False).squeeze()
-            # 遍历这些行，并在维度 1 的 39 和 40 位置上填充为 1
-            # OBC买10量, OSC卖10量 -> 1
-            # 对盘口的影响最小, 同时避免模型产生nan
-            if zero_rows.numel() > 0:
-                for row_index in zero_rows:
-                    x[row_index, 39] += 1
-                    x[row_index, 40] += 1
-            ####################################
 
             # random_mask_row
             if train and self.param.random_mask_row:

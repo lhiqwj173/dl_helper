@@ -611,6 +611,13 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     # report_memory_usage('begin')
     ids,mean_std, x, y, raw = pickle.load(open(file, 'rb'))
 
+    # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
+    all_cols = list(raw)
+    if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
+        order_cols = [i for i in all_cols if i.startswith('O')]
+        order_raw = raw.loc[:, order_cols]
+        raw.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
+
     # 40档位价量数据nan处理
     if raw.shape[1] in [40, 44]:
         # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
