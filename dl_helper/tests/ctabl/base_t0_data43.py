@@ -58,8 +58,8 @@ class transform_stable(transform):
             # 对盘口的影响最小, 同时避免模型产生nan
             if zero_rows.numel() > 0:
                 for row_index in zero_rows:
-                    x[row_index, 39] = 1
-                    x[row_index, 40] = 1
+                    x[row_index, 39] += 1
+                    x[row_index, 40] += 1
             ####################################
 
             # random_mask_row
