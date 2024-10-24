@@ -53,7 +53,7 @@ class test_base():
     def get_cache_data(self, _type, params, accelerator):
         dataset = Dataset_cahce(params, _type, accelerator.device)
         debug(f'{_type} dataset done')
-        sampler = DistributedSampler(dataset, accelerator, shuffle=True if _type == 'train' else False)
+        sampler = DistributedSampler(dataset, accelerator, shuffle=True if _type == 'train' and not self.debug else False)
         debug(f'{_type} sampler done')
         dataloader = DataLoaderDevice(
             dataset,
