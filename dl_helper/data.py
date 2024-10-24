@@ -614,9 +614,49 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
     all_cols = list(raw)
     if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
+        # 订单数据
         order_cols = [i for i in all_cols if i.startswith('O')]
         order_raw = raw.loc[:, order_cols]
         raw.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
+    if '卖10量' in all_cols and '卖10价' not in all_cols:
+        # 深度数据
+        depth_cols = ['卖10量',
+            '卖9量',
+            '卖8量',
+            '卖7量',
+            '卖6量',
+            '卖5量',
+            '卖4量',
+            '卖3量',
+            '卖2量',
+            '卖1量',
+            '买1量',
+            '买2量',
+            '买3量',
+            '买4量',
+            '买5量',
+            '买6量',
+            '买7量',
+            '买8量',
+            '买9量',
+            '买10量']
+        depth_raw = raw.loc[:, depth_cols]
+        wait_fix_index = depth_raw[(depth_raw == 0).all(axis=1)].index.to_list()
+        if wait_fix_index and wait_fix_index[0] == 0:
+            # 若第一个数据就为0，填充 卖10量/买10量 为1，最小化影响
+            raw.loc[0, '卖10量'] = 1
+            raw.loc[0, '买10量'] = 1
+            # 去掉第一个记录
+            wait_fix_index = wait_fix_index[1:]
+
+        raw.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
+        for col in depth_cols:
+            raw[col].fillna(method='ffill', inplace=True)
+    if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
+        # 成交数据
+        deal_cols = [i for i in all_cols if i.startswith('D')]
+        deal_raw = raw.loc[:, deal_cols]
+        raw.loc[(deal_raw == 0).all(axis=1), ['DB卖1量', 'DS买1量']] = 1
 
     # 40档位价量数据nan处理
     if raw.shape[1] in [40, 44]:
