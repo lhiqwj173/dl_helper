@@ -1,5 +1,5 @@
 import functools
-import sys, torch, os
+import sys, torch, os, pickle
 
 from accelerate.utils import set_seed
 
@@ -49,6 +49,7 @@ class transform_stable(transform):
 
             ####################################
             # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
+            pickle.dump(x, open('x.pkl', 'wb'))
             # 检查每一行是否全为零
             all_zero_rows = (x == 0).all(dim=1)  # 这将返回一个布尔张量，每个元素表示对应行是否全为零
             # 找到全为零的行
