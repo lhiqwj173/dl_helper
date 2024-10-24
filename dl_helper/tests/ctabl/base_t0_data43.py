@@ -56,9 +56,10 @@ class transform_stable(transform):
             # 遍历这些行，并在维度 1 的 39 和 40 位置上填充为 1
             # OBC买10量, OSC卖10量 -> 1
             # 对盘口的影响最小, 同时避免模型产生nan
-            for row_index in zero_rows:
-                x[row_index, 39] = 1
-                x[row_index, 40] = 1
+            if zero_rows.numel() > 0:
+                for row_index in zero_rows:
+                    x[row_index, 39] = 1
+                    x[row_index, 40] = 1
             ####################################
 
             # random_mask_row
