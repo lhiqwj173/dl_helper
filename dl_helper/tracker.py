@@ -26,10 +26,20 @@ from dl_helper.train_param import tpu_available, data_str2parm
 if tpu_available():
     import torch_xla.core.xla_model as xm
 
+# 允许的记录类型:
+# train / val / train_final / train_best / val_final / val_best / test_final / test_best / test_dummy
+
 MODEL_TYPES=['model_final', 'model_best', 'model_dummy']
-TEST_TYPES=[i.replace('model', 'test') for i in MODEL_TYPES]
 MODEL_FINAL, MODEL_BEST, MODEL_DUMMY = MODEL_TYPES
+
+TEST_TYPES=['test_final', 'test_best', 'test_dummy']
 TEST_FINAL, TEST_BEST, TEST_DUMMY = TEST_TYPES
+
+TYPES_NEED_LABEL_COUNT = ['train', 'val', 'test_final']
+TYPES_NEED_CAL_THRESHOLD = ['test_final', 'test_best']
+TYPES_NEED_OUTPUT = ['train_final', 'train_best', 'val_final', 'val_best', 'test_final', 'test_best']# 用于模型融合 基特征
+TYPES_NEED_PREDICT_OUT_TEST = ['test_final', 'test_best', 'test_dummy']
+TYPES_NEED_OUT = TYPES_NEED_OUTPUT + TYPES_NEED_PREDICT_OUT_TEST
 
 def last_value(data):
     """返回最后一个非nan值"""
@@ -250,7 +260,7 @@ class Tracker():
 
     def update(self, test_dataloader=None):
         # 标记label分布统计完成
-        if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update not in TEST_TYPES[1:]:
+        if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update in TYPES_NEED_LABEL_COUNT:
             self.label_count_done[self.track_update] = True
 
         # 计算变量 -> data
@@ -266,7 +276,7 @@ class Tracker():
             if self.params.classify:
                 self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
 
-                if self.track_update in TEST_TYPES[:2]:
+                if self.track_update in TYPES_NEED_CAL_THRESHOLD:
                     self.cal_threshold_f1score()
 
                 _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
@@ -298,7 +308,10 @@ class Tracker():
 
             # 记录数据
             if f'{self.track_update}_loss' not in self.data:
-                self.data[f'{self.track_update}_loss'] = _loss
+                if _loss >0:
+                    # 否则不需要记录，正常情况loss>0 -> 该loss是伪造的，实际不需要记录
+                    self.data[f'{self.track_update}_loss'] = _loss
+
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
@@ -308,7 +321,8 @@ class Tracker():
                 else:
                     self.data[f'{self.track_update}_r2'] = variance_weighted_r2
             else:
-                self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
+                if _loss >0:
+                    self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
@@ -373,9 +387,9 @@ class Tracker():
                 pic_file = os.path.join(self.params.root, MODEL_FINAL, f"ROC_curve.png")
                 plot_roc_curve(self.temp['_y_true'], self.temp['softmax_predictions'], pic_file)
 
-        if self.track_update in TEST_TYPES:
+        if self.track_update in TYPES_NEED_OUT:
             if self.accelerator.is_main_process:
-                save_folder = os.path.join(self.params.root, self.track_update.replace('test','model'))
+                save_folder = os.path.join(self.params.root, f"model_{self.track_update.split('_')[1]}")
 
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
@@ -387,34 +401,71 @@ class Tracker():
 
                 datas = {}
                 if '_' in all_ids[0]:
-                    # 按标的分类预测
-                    for i in range(all_targets.shape[0]):
-                        symbol, timestamp = all_ids[i].split('_')
-                        if symbol not in datas:
-                            datas[symbol] = []
-                        datas[symbol].append((int(timestamp), all_targets[i], softmax_predictions[i]))
+                    # 输出预测用于测试
+                    if self.track_update in TYPES_NEED_PREDICT_OUT_TEST:
+                        # 按标的分类预测
+                        for i in range(all_targets.shape[0]):
+                            symbol, timestamp = all_ids[i].split('_')
+                            if symbol not in datas:
+                                datas[symbol] = []
+                            datas[symbol].append((int(timestamp), all_targets[i], softmax_predictions[i]))
 
-                    # 储存预测结果
-                    # symbol_begin_end.csv
-                    # self.printer.print('save prediction')
-                    for symbol in datas:
-                        data_list = datas[symbol]
-                        # 按照 timestamp 排序
-                        data_list = sorted(data_list, key=lambda x: x[0])
-                        begin = data_list[0][0]
-                        end = data_list[-1][0]
-                        with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                            # f.write('timestamp,target,0,1,2\n')
-                            f.write('timestamp,target')
-                            for i in range(self.params.y_n):
-                                f.write(f',{i}')
-                            f.write('\n')
+                        # 储存预测结果
+                        # symbol_begin_end.csv
+                        # self.printer.print('save prediction')
+                        for symbol in datas:
+                            data_list = datas[symbol]
 
-                            for timestamp, target, pro  in data_list:
-                                pro_str = ','.join([str(float(i)) for i in pro])
-                                f.write(f'{timestamp},{target},{pro_str}\n')
-                    # self.printer.print('update test round done')
+                            # 按照 timestamp 排序
+                            data_list = sorted(data_list, key=lambda x: x[0])
+
+                            # 按照 timestamp 去重
+                            timestamp_list = set([i[0] for i in data_list])
+                            data_list = [i for i in data_list if i[0] in timestamp_list]
+
+                            begin = data_list[0][0]
+                            end = data_list[-1][0]
+                            with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                                # f.write('timestamp,target,0,1,2\n')
+                                f.write('timestamp,target')
+                                for i in range(self.params.y_n):
+                                    f.write(f',{i}')
+                                f.write('\n')
+
+                                for timestamp, target, pro  in data_list:
+                                    pro_str = ','.join([str(float(i)) for i in pro])
+                                    f.write(f'{timestamp},{target},{pro_str}\n')
+                        # self.printer.print('update test round done')
                 
+                    # 输出预测用于模型融合
+                    # > train/val/test > date_file
+                    # id,target,0,1,2
+                    if self.track_update in TYPES_NEED_OUTPUT:
+                        dataset_type = self.track_update.split('_')[1]
+                        assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
+                        out_folder = os.path.join(save_folder, dataset_type)
+                        os.makedirs(out_folder, exist_ok=True)
+
+                        # 按日期分类输出数据
+                        for i in range(all_targets.shape[0]):
+                            symbol, timestamp = all_ids[i].split('_')
+                            date = datetime.datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
+                            if date not in datas:
+                                datas[date] = []
+                            datas[date].append((all_ids[i], all_targets[i], softmax_predictions[i]))
+
+                        # 储存数据
+                        for date in datas:
+                            with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
+                                f.write('id,target')
+                                for i in range(self.params.y_n):
+                                    f.write(f',{i}')
+                                f.write('\n')
+
+                                for id, target, pro in datas[date]:
+                                    pro_str = ','.join([str(float(i)) for i in pro])
+                                    f.write(f'{timestamp},{target},{pro_str}\n')
+
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
@@ -482,7 +533,7 @@ class Tracker():
 
         self.printer.print(f"------------tracker data------------")
 
-    def track(self, output, target, loss, _type, test_dataloader=None):
+    def track(self, _type, output, target, loss=None, test_dataloader=None):
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
@@ -505,9 +556,13 @@ class Tracker():
         # self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
         # self.printer.print(f"{target}")
         # self.printer.print(f"{predict}")
+        if None is loss:
+            # 伪造一个loss
+            loss = torch.zeros(1, device=self.accelerator.device)
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+
         # self.printer.print('gather loss, y_true, y_pred done')
-        if _type in TEST_TYPES:
+        if _type in TYPES_NEED_OUT:
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             test_dataloader.dataset.use_data_id = []
 
@@ -525,7 +580,7 @@ class Tracker():
 
         # 记录label分布
         # test_best / test_dummy 不需要记录
-        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done and _type not in TEST_TYPES[1:]:
+        if self.params.classify and self.accelerator.is_main_process and _type not in self.label_count_done and _type in TYPES_NEED_LABEL_COUNT:
             # debug('统计 label_counts')
             if _type not in self.label_counts:
                 self.label_counts[_type] = torch.bincount(_y_true, minlength=self.params.y_n)
@@ -548,7 +603,7 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             # self.printer.print('temp data done')
 
-            if _type in TEST_TYPES:
+            if _type in TYPES_NEED_OUT:
                 self.temp['_ids'] += _ids
 
             self.temp['_num'] += _y_true.shape[0]

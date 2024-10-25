@@ -147,11 +147,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
     """
     不会主动load数据
     """
-    def __init__(self, params, _type, device=None):
+    def __init__(self, params, _type, device=None, predict_output=False):
         """Initialization"""
         self.params = params
         self.type = _type# 数据类型 train/val/test
         self.device = device
+        self.predict_output = predict_output
 
         self.use_data_id = []
 
@@ -294,8 +295,15 @@ class Dataset_cahce(torch.utils.data.Dataset):
         log(f"{self.type} init_data begin")
 
         for i in range(mini_epoch):
-            file_indices = mini_epoch_file_indices[:mini_dataset_length]
-            mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
+            if i == mini_epoch-1:
+                # 最后一个 mini_epoch 会读取全部文件
+                file_indices = mini_epoch_file_indices
+                mini_epoch_file_indices = []
+            else:
+                # 正常每次读取 mini_dataset_length 个文件
+                file_indices = mini_epoch_file_indices[:mini_dataset_length]
+                mini_epoch_file_indices = mini_epoch_file_indices[mini_dataset_length:]
+
             files = [self.files[i] for i in file_indices]
             # debug(f"{self.type} 读取文件 1: {files}")
 
@@ -306,7 +314,10 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
             offset = each_files_num * rank if len(files) > each_files_num else 0
             # 根据偏移分片 初始化 dataset 数据，而非全部数据
-            files = files[offset:offset+each_files_num] if self.type != 'test' else files # 若为测试集,加载全部文件,在内部再进行分发
+            # 若为测试集,加载全部文件,在内部再进行分发
+            if self.type != 'test':
+                files = files[offset:offset+each_files_num] if rank != world_size-1 else files[offset:]# 最后一个rank会loadoffset后的所有数据
+
             log(f"{self.type} rank:{rank} 读取文件: {files}")
 
             data_map = self._parse_data_map(files, world_size, rank)
@@ -359,13 +370,14 @@ class Dataset_cahce(torch.utils.data.Dataset):
             log('数据集内部分发设备')
             _each_length = len(data_map['ids']) // world_size
             diff = rank * _each_length
-            data_map['ids'] = data_map['ids'][diff:_each_length + diff]
-            data_map['mean_std'] = data_map['mean_std'][diff:_each_length + diff]
-            data_map['x'] = data_map['x'][diff:_each_length + diff]
-            data_map['y'] = data_map['y'][diff:_each_length + diff]
+            # 最后一个rank会loadoffset后的所有数据
+            data_map['ids'] = data_map['ids'][diff:_each_length + diff] if rank != world_size-1 else data_map['ids'][diff:]
+            data_map['mean_std'] = data_map['mean_std'][diff:_each_length + diff] if rank != world_size-1 else data_map['mean_std'][diff:]
+            data_map['x'] = data_map['x'][diff:_each_length + diff] if rank != world_size-1 else data_map['x'][diff:]
+            data_map['y'] = data_map['y'][diff:_each_length + diff] if rank != world_size-1 else data_map['y'][diff:]
 
-        # 分类训练集 数据平衡
-        if self.params.classify:
+        # 分类训练集 数据平衡(若用于预测输出，则不做数据平衡)
+        if self.params.classify and not self.predict_output:
         # 测试用
         # if self.params.classify and 0:
             if self.type == 'train':
@@ -426,6 +438,16 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
         self.use_data_id = []
 
+    def dup_more(self, length):
+        if length > self.length:
+            # 数据不足, 需要补齐
+            need_num = length - self.length
+            self.mean_std += self.mean_std[-need_num:]
+            self.ids += self.ids[-need_num:]
+            self.x_idx += self.x_idx[-need_num:]
+            self.y = torch.cat((self.y, self.y[-need_num:]))
+
+
     def __len__(self):
         """Denotes the total number of samples"""
         return self.length
@@ -442,16 +464,17 @@ class Dataset_cahce(torch.utils.data.Dataset):
         #     a+=data_diff
 
         x = self.data[a:b, :]
-        if (x == 0.0).all().item():
-            # 记录异常
-            log(f'[x all 0.0] index:{index} id:{self.ids[index]}')
-            # raise ValueError
+        # if (x == 0.0).all().item():
+        #     # 记录异常
+        #     log(f'[x all 0.0] index:{index} id:{self.ids[index]}')
+        #     # raise ValueError
 
         self.use_data_id.append(self.ids[index])
 
         mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
-        # 全0 异常
-        assert not torch.all(mean_std == 0).item(), 'mean_std all 0.0'
+
+        # # 全0 异常
+        # assert not torch.all(mean_std == 0).item(), 'mean_std all 0.0'
 
         return x, self.y[index], mean_std
 
@@ -488,7 +511,7 @@ class DistributedSampler(Sampler):
         """
         mini_dataset_length:
             每次分片加载数据集的长度
-            每个epoch会分成mini_epoch组的数据集，每组数据集长度为mini_dataset_length，暂时舍弃多余不能整除的数据
+            每个epoch会分成mini_epoch组的数据集，每组数据集长度为 mini_dataset_length, 最后一个 mini_epoch 会加载剩余的全部数据（无法被mini_dataset_length整除的部分）
         """
         # assert isinstance(dataset, Dataset_cahce), f'only support {Dataset_cahce}, get {type(dataset)}'
         self.dataset = dataset
@@ -512,15 +535,20 @@ class DistributedSampler(Sampler):
             assert self.mini_dataset_length > 0, f'mini_dataset_length must > 0, get {self.mini_dataset_length}'
 
             self.mini_epoch = len(self.dataset.files) // self.mini_dataset_length
-            # debug(f'{self.dataset.type} self.mini_epoch:{self.mini_epoch}')
-            self.mini_epoch_indices_ramain = self.mini_epoch
-            if self.shuffle:
-                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-            else:
-                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+            mini_epoch_file_indices = self._init_mini_epoch_data()
+
             log(f'{self.dataset.type} mini_epoch: {self.mini_epoch}, files: {len(self.dataset.files)}, mini_dataset_length: {self.mini_dataset_length}')
 
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
+
+    def _init_mini_epoch_data(self):
+        # 初始化 数据索引
+        self.mini_epoch_indices_ramain = self.mini_epoch
+        if self.shuffle:
+            mini_epoch_file_indices = list(torch.randperm(len(self.dataset.files)))
+        else:
+            mini_epoch_file_indices = list(torch.arange(len(self.dataset.files)))
+        return mini_epoch_file_indices
 
     def data_loader_close(self):
         self.mini_epoch_indices_ramain = 0
@@ -531,23 +559,19 @@ class DistributedSampler(Sampler):
     def __iter__(self):
         # 如果 mini_epoch_file_indices 为0，需要重新生成，说明该epoch训练结束
         if self.mini_epoch_indices_ramain == 0:
-            self.mini_epoch_indices_ramain = self.mini_epoch
-            if self.shuffle:
-                mini_epoch_file_indices = list(torch.randperm(self.mini_epoch * self.mini_dataset_length))
-                # debug(f'{self.dataset.type} new mini_epoch_file_indices')
-            else:
-                mini_epoch_file_indices = list(torch.arange(self.mini_epoch * self.mini_dataset_length))
+            mini_epoch_file_indices = self._init_mini_epoch_data()
             self.dataset.init_data_thread_start(mini_epoch_file_indices, self.mini_dataset_length, self.mini_epoch, self.world_size, self.rank)
 
         self.mini_epoch_indices_ramain -= 1
         self.dataset.load_data()
 
         # 同步数据长度
-        # data_length = torch.tensor([len(self.dataset)], device=self.accelerator.device)
         data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
-        data_length = torch.min(data_length)
+        data_length = torch.max(data_length)# 同步最大值, 数据量小的一方用多余的数据补齐
+        # 补齐数据
+        self.dataset.dup_more(data_length)
         log(f'{self.dataset.type} data_length: {data_length}')
 
         if self.shuffle:

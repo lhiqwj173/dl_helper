@@ -357,7 +357,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 追踪器 记录数据
         with torch.no_grad():
             # debug('track')
-            tracker.track(output, target, loss, 'train')
+            tracker.track('train', output, target, loss)
             # debug('track done')
 
     # 追踪器，计算必要的数据
@@ -457,7 +457,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # 追踪器 记录数据
             with torch.no_grad():
                 # debug('track')
-                tracker.track(output, target, loss, 'train')
+                tracker.track('train', output, target, loss)
                 # debug('track done')
 
         log(f"[{epoch}][{mini_epoch}] train done")
@@ -496,7 +496,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             loss = criterion(output, target)
 
             # 追踪器 记录数据
-            tracker.track(output, target, loss, 'val')
+            tracker.track('val', output, target, loss)
     
     # debug('val loop done')
 
@@ -544,7 +544,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
                 loss = criterion(output, target)
 
                 # 追踪器 记录数据
-                tracker.track(output, target, loss, test_types[i], test_data)
+                tracker.track(test_types[i], output, target, None, test_data)
 
         # 追踪器，计算必要的数据
         # printer.print('update')
@@ -554,6 +554,50 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         report_memory_usage(f"test done")       
+
+def output_fn(params, model, blank_model, criterion, train_loader, val_loader, test_loader, accelerator, tracker, printer, trans):
+    model_types = ['final', 'best']
+    models = [model]
+
+    # 读取最佳模型
+    load_checkpoint_in_model(blank_model, os.path.join(params.root, MODEL_BEST))
+    models.append(blank_model)
+    # 准备模型
+    models[1] = accelerator.prepare(models[1])
+
+    data_loaders = [train_loader, val_loader, test_loader]
+    loader_names = ['train', 'val', 'test']
+
+    for model_type, model in zip(model_types, models):
+        printer.print(f'模型output: {model_type}')
+        model.eval()
+        with torch.no_grad():
+            for i in range(len(data_loaders)):
+                data_loader = data_loaders[i]
+                loader_name = loader_names[i]
+
+                run_type = f'{loader_name}_{model_type}'
+                for batch in data_loader:
+                    data, target = trans(batch)
+
+                    # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                    if not params.classify and len(target.shape) == 1:
+                        target = target.unsqueeze(1)
+
+                    output = model(data)
+
+                    # 追踪器 记录数据
+                    tracker.track(run_type, output, target, None, data_loader)
+
+                # 追踪器，计算必要的数据
+                # printer.print('update')
+                tracker.update(data_loader)
+
+    # for debug
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        report_memory_usage(f"output done")       
+
 
 def save_model_fn(params, model, accelerator, input_shape):
     accelerator.wait_for_everyone()
@@ -788,8 +832,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     p.print(f'test start')
 
     # 准备测试数据
-    test_loader = test.get_cache_data('test', params, accelerator)
-
+    test_loader = test.get_cache_data('test', params, accelerator,predict_output=True)
     # 测试
     test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 
@@ -801,6 +844,12 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
     # 输出状态到日志
     tracker.print_state()
+
+    # 输出模型预测，用于模型融合
+    if not only_predict:
+        train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
+        val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
+    output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, test_loader, accelerator, tracker, p, trans)
 
     # 打包
     package_root(accelerator, params)

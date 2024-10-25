@@ -142,24 +142,29 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [20, 20, 10, 3]
+    t1, t2, t3, t4 = [100, 50, 25, 1]
+    d1, d2, d3, d4 = [91, 50, 25, 3]
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
-    input_folder = r'/kaggle/input'
-    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # t1, t2, t3, t4 = [100, 30, 10, 1]
+    # d1, d2, d3, d4 = [20, 20, 10, 3]
+    # model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
+    # print(f"模型参数量: {model_params_num(model)}")
 
-    data_folder_name = os.listdir(input_folder)[0]
-    data_folder = os.path.join(input_folder, data_folder_name)
+    # input_folder = r'/kaggle/input'
+    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
-    run(
-        test, 
-        # findbest_lr=True,
-        amp='fp16',
-        mode='cache_data',
-        data_folder=data_folder,
+    # data_folder_name = os.listdir(input_folder)[0]
+    # data_folder = os.path.join(input_folder, data_folder_name)
 
-        # debug=True,
-        # idx=0
-    )
+    # run(
+    #     test, 
+    #     # findbest_lr=True,
+    #     amp='fp16',
+    #     mode='cache_data',
+    #     data_folder=data_folder,
+
+    #     # debug=True,
+    #     # idx=0
+    # )
