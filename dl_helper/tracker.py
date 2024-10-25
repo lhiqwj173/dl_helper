@@ -466,7 +466,7 @@ class Tracker():
                         log(f'输出模型output: {model_type} {dataset_type} 共{len(datas)}天')
 
                         # 储存数据
-                        for date in datas:
+                        for date in sorted(datas.keys()):
                             log(f'输出模型output: {model_type} {dataset_type} {date}')
 
                             # 按照 id 去重
