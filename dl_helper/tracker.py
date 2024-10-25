@@ -193,6 +193,9 @@ class Tracker():
             'printer',
         ]
 
+        # 用于output输出
+        self.output_datas={}
+
         # 最终数据
         self.data = {}
 
@@ -238,6 +241,8 @@ class Tracker():
             # 预测类别
             y_pred = torch.argmax(thresholded_predictions_int[:, comb], dim=1)
 
+            # print(y_pred.shape)
+            # print(self.temp['_y_true'].shape)
             balance_acc = cal_balance_acc(
                 y_pred, self.temp['_y_true'], self.params.y_n
             ).unsqueeze(0)
@@ -262,6 +267,44 @@ class Tracker():
         # 标记label分布统计完成
         if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update in TYPES_NEED_LABEL_COUNT:
             self.label_count_done[self.track_update] = True
+
+        # 模型 output 输出，用于模型融合训练
+        # > train/val/test > date_file
+        # id,target,0,1,2
+        if self.track_update in TYPES_NEED_OUTPUT:
+            dataset_type, model_type = self.track_update.split('_')
+            save_folder = os.path.join(self.params.root, f"model_{model_type}")
+            assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
+
+            out_folder = os.path.join(save_folder, dataset_type)
+            os.makedirs(out_folder, exist_ok=True)
+
+            self.printer.print(f'输出模型output: {model_type} {dataset_type} 共{len(self.output_datas)}天')
+
+            # 储存数据
+            for date in sorted(self.output_datas.keys()):
+                self.printer.print(f'输出模型output: {model_type} {dataset_type} {date}')
+
+                # 按照 id 去重
+                _data_list = []
+                id_list = []
+                for i in self.output_datas[date]:
+                    if i[0] not in id_list:
+                        _data_list.append(i)
+                        id_list.append(i[0])
+                self.output_datas[date] = _data_list
+
+                with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
+                    f.write('id,target')
+                    for i in range(self.params.y_n):
+                        f.write(f',{i}')
+                    f.write('\n')
+
+                    for _id, target, pro in datas[date]:
+                        pro_str = ','.join([str(float(i)) for i in pro])
+                        f.write(f'{_id},{target},{pro_str}\n')
+
+            self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
 
         # 计算变量 -> data
         # 主进程计算data
@@ -575,7 +618,18 @@ class Tracker():
         if self.params.classify:
             predict = F.softmax(output, dim=1)
             
-            # """
+            # 模型 output 输出，用于模型融合训练
+            if self.track_update in TYPES_NEED_OUTPUT:
+                # 按日期分类输出数据
+                all_ids = test_dataloader.dataset.use_data_id
+                for i in range(predict.shape[0]):
+                    symbol, timestamp = all_ids[i].split('_')
+                    date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
+                    if date not in self.output_datas:
+                        self.output_datas[date] = []
+                    self.output_datas[date].append((all_ids[i], target[i], predict[i]))
+
+            """
             # 模型 output 输出，用于模型融合训练
             # > train/val/test > date_file
             # id,target,0,1,2
@@ -584,11 +638,10 @@ class Tracker():
                 save_folder = os.path.join(self.params.root, f"model_{model_type}")
                 assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
 
-                datas={}
-
                 out_folder = os.path.join(save_folder, dataset_type)
                 os.makedirs(out_folder, exist_ok=True)
 
+                datas={}
                 # 按日期分类输出数据
                 all_ids = test_dataloader.dataset.use_data_id
                 for i in range(predict.shape[0]):
@@ -622,7 +675,7 @@ class Tracker():
                         for _id, target, pro in datas[date]:
                             pro_str = ','.join([str(float(i)) for i in pro])
                             f.write(f'{_id},{target},{pro_str}\n')
-            # """
+            """
         else:
             predict = output
 

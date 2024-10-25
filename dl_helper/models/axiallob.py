@@ -2,10 +2,6 @@ import math
 import torch
 import torch.nn as nn
 
-"""
-
-"""
-
 def _conv1d1x1(in_channels, out_channels):
   return nn.Sequential(nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=1, bias=False),
                          nn.BatchNorm1d(out_channels))
@@ -101,7 +97,7 @@ class GatedAxialAttention(nn.Module):
         nn.init.normal_(self.relative, 0., math.sqrt(1. / self.dim_head_v))
 
 
-class AxialLOB(nn.Module):
+class m_axiallob(nn.Module):
     def __init__(self, W, H, c_in, c_out, c_final, n_heads, pool_kernel, pool_stride):
         super().__init__()
 
@@ -133,8 +129,8 @@ class AxialLOB(nn.Module):
         self.axial_width_2 = GatedAxialAttention(c_out, c_out, n_heads, W, flag=True)
 
         self.activation = nn.ReLU()
-        # self.linear = nn.Linear(1600, 3)
-        self.linear = nn.Linear(4000, 3)
+        self.linear = nn.Linear(1600, 3)
+        # self.linear = nn.Linear(4000, 3)
         self.pooling = nn.AvgPool2d(kernel_size=pool_kernel, stride=pool_stride)
 
     def forward(self, x):
@@ -190,17 +186,15 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = AxialLOB(100, 40, 32, 32, 4, 4, (1, 4), (1, 4))
-    # print(model)
-
-    # summary(model, (1, 1, 100, 40), device=device)
+    model = m_axiallob(40, 40, 32, 32, 4, 4, (1, 4), (1, 4))
+    summary(model, (1, 1, 40, 40), device=device)
     
 
-    model = model.to(device)
-    input = torch.randn((1, 1, 100, 40)).to(device)
+    # model = model.to(device)
+    # input = torch.randn((1, 1, 40, 40)).to(device)
 
-    output = model(input)
-    print(output.shape)
+    # output = model(input)
+    # print(output.shape)
 
     # # 导出模型为ONNX格式
     # onnx_path = "deeplob.onnx"
