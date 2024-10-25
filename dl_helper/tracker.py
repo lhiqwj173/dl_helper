@@ -441,7 +441,7 @@ class Tracker():
                     # > train/val/test > date_file
                     # id,target,0,1,2
                     if self.track_update in TYPES_NEED_OUTPUT:
-                        dataset_type = self.track_update.split('_')[1]
+                        dataset_type = self.track_update.split('_')[0]
                         assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
                         out_folder = os.path.join(save_folder, dataset_type)
                         os.makedirs(out_folder, exist_ok=True)
