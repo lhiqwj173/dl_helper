@@ -44,7 +44,7 @@ if match_num_processes() ==8:
       assert False, "Missing package syncfree; the package is available in torch-xla>=1.11"
 
 from accelerate import Accelerator, load_checkpoint_in_model
-from accelerate.utils import broadcast
+from accelerate.utils import broadcast, InitProcessGroupKwargs
 from accelerate.state import AcceleratorState, PartialState
 from accelerate.utils import (
     PrecisionType,
@@ -658,7 +658,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     params = test.get_param()
     set_seed(params.seed)
 
-    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handler=InitProcessGroupKwargs(timeout=3600))
     p = printer(lock, accelerator)
     
     # 检查下载训练文件
