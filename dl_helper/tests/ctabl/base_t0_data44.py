@@ -82,9 +82,10 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 30, 60, 100]:
-            # 同一个训练使用4个随机种子，最终取均值
-            for seed in range(4):
-                vars.append((predict_n, classify_idx, seed))
+            if predict_n == 100:
+                # 同一个训练使用4个随机种子，最终取均值
+                for seed in range(4):
+                    vars.append((predict_n, classify_idx, seed))
             classify_idx+=1
 
         predict_n, classify_idx, seed = vars[self.idx]
