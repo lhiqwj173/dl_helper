@@ -270,6 +270,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
                 self.files = self.files[begin_idx:end_idx]
 
+        # 排序
+        self.files.sort()
+
         if self.params.test:
             log('测试模式,只使用前5个数据文件')
             self.files = self.files[:5]

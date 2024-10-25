@@ -16,7 +16,6 @@ class fi2010_transform():
 
             return x, y
 
-
 class transform():
     def __init__(self, device, param, raw_time_length,num_rows=40, scale_prob=0.005, min_scale=0.97, max_scale=1.03):
         """

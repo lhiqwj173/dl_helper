@@ -577,17 +577,18 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, t
                 loader_name = loader_names[i]
 
                 run_type = f'{loader_name}_{model_type}'
-                for batch in data_loader:
-                    data, target = trans(batch)
+                for mini_epoch in range(data_loader.sampler.mini_epoch):
+                    for batch in data_loader:
+                        data, target = trans(batch)
 
-                    # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                    if not params.classify and len(target.shape) == 1:
-                        target = target.unsqueeze(1)
+                        # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+                        if not params.classify and len(target.shape) == 1:
+                            target = target.unsqueeze(1)
 
-                    output = model(data)
+                        output = model(data)
 
-                    # 追踪器 记录数据
-                    tracker.track(run_type, output, target, None, data_loader)
+                        # 追踪器 记录数据
+                        tracker.track(run_type, output, target, None, data_loader)
 
                 # 追踪器，计算必要的数据
                 # printer.print('update')
