@@ -420,8 +420,13 @@ class Tracker():
                             data_list = sorted(data_list, key=lambda x: x[0])
 
                             # 按照 timestamp 去重
-                            timestamp_list = set([i[0] for i in data_list])
-                            data_list = [i for i in data_list if i[0] in timestamp_list]
+                            _data_list = []
+                            timestamp_list = []
+                            for i in data_list:
+                                if i[0] not in timestamp_list:
+                                    _data_list.append(i)
+                                    timestamp_list.append(i[0])
+                            data_list = _data_list
 
                             begin = data_list[0][0]
                             end = data_list[-1][0]
@@ -457,6 +462,16 @@ class Tracker():
                         # 储存数据
                         for date in datas:
                             log(f'输出模型output: {date}')
+
+                            # 按照 id 去重
+                            _data_list = []
+                            id_list = []
+                            for i in datas[date]:
+                                if i[0] not in id_list:
+                                    _data_list.append(i)
+                                    id_list.append(i[0])
+                            datas[date] = _data_list
+
                             with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
                                 f.write('id,target')
                                 for i in range(self.params.y_n):
