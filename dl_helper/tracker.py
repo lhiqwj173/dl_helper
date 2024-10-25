@@ -389,7 +389,8 @@ class Tracker():
 
         if self.track_update in TYPES_NEED_OUT:
             if self.accelerator.is_main_process:
-                save_folder = os.path.join(self.params.root, f"model_{self.track_update.split('_')[1]}")
+                model_type = self.track_update.split('_')[1]
+                save_folder = os.path.join(self.params.root, f"model_{model_type}")
 
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
@@ -399,10 +400,11 @@ class Tracker():
 
                 assert len(all_ids) == all_targets.shape[0] == softmax_predictions.shape[0], f'{all_ids}, {all_targets.shape}, {softmax_predictions.shape} predict result length not match'
 
-                datas = {}
                 if '_' in all_ids[0]:
                     # 输出预测用于测试
                     if self.track_update in TYPES_NEED_PREDICT_OUT_TEST:
+                        datas={}
+
                         # 按标的分类预测
                         for i in range(all_targets.shape[0]):
                             symbol, timestamp = all_ids[i].split('_')
@@ -446,6 +448,8 @@ class Tracker():
                     # > train/val/test > date_file
                     # id,target,0,1,2
                     if self.track_update in TYPES_NEED_OUTPUT:
+                        datas={}
+
                         dataset_type = self.track_update.split('_')[0]
                         assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
                         out_folder = os.path.join(save_folder, dataset_type)
@@ -461,7 +465,7 @@ class Tracker():
 
                         # 储存数据
                         for date in datas:
-                            log(f'输出模型output: {date}')
+                            log(f'输出模型output: {model_type} {dataset_type} {date}')
 
                             # 按照 id 去重
                             _data_list = []
