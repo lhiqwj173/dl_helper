@@ -1292,6 +1292,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         idx: 训练索引
         amp: 混合精度训练
         findbest_lr: 搜索学习率模式
+        test: 测试运行, 设置epoch=10, 数据集取前4个数据文件
 
     """
     # # 测试用
@@ -1308,6 +1309,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['amp'] = arg.split('=')[1]
             if arg.startswith('findbest_lr='):
                 kwargs['findbest_lr'] = arg.split('=')[1]
+            if arg == 'test':
+                kwargs['test'] = True
 
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
     if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'

@@ -199,77 +199,79 @@ class Dataset_cahce(torch.utils.data.Dataset):
             log(f'使用文件夹方式读取数据 {self.type}: {folder_data_path}')
             self.files = sorted([i for i in os.listdir(folder_data_path)])
             self.files = [f'{self.type}/{i}' for i in self.files]
-            return
+        else:
+            # data_folder 路径下没有分配的文件夹
+            # 获取所有的文件
+            data_set_files = sorted([i for i in os.listdir(data_path)])
+            print(data_set_files)
 
-        # data_folder 路径下没有分配的文件夹
-        # 获取所有的文件
-        data_set_files = sorted([i for i in os.listdir(data_path)])
-        print(data_set_files)
-
-        # 判断数据名类型
-        _type_in_dataname = False
-        for file in data_set_files:
-            if self.type in file:
-                _type_in_dataname = True
-                break
-
-        if _type_in_dataname:
-            # 文件包含 数据类型 
-            # 按照数据类型读取数据集
+            # 判断数据名类型
+            _type_in_dataname = False
             for file in data_set_files:
                 if self.type in file:
-                    self.files.append(file)
-            self.files.sort()
+                    _type_in_dataname = True
+                    break
 
-        elif self.params.k_fold_k > 0:
-            # k折交叉验证
-            each_num = sum(self.params.k_fold_ratio)
-            total_num = each_num + (self.params.k_fold_k - 1)*self.params.k_fold_ratio[2]
-            
-            idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
-            each_1 = len(data_set_files) // total_num
-            diff = self.params.k_fold_idx * (self.params.k_fold_ratio[2] * each_1)
-            data_length = each_1 * self.params.k_fold_ratio[idx]
+            if _type_in_dataname:
+                # 文件包含 数据类型 
+                # 按照数据类型读取数据集
+                for file in data_set_files:
+                    if self.type in file:
+                        self.files.append(file)
+                self.files.sort()
 
-            if self.type in ['train', 'val']:
-                # 创建随机数生成器对象
-                rng = random.Random(self.params.k_fold_idx)
-                # 从原始列表中随机抽取
-                data_set_files = data_set_files[diff: diff + each_1 * sum(self.params.k_fold_ratio[:2])]
-                rng.shuffle(data_set_files)
-                begin = sum(self.params.k_fold_ratio[:idx]) * each_1
-                self.files = data_set_files[begin: begin + data_length]
+            elif self.params.k_fold_k > 0:
+                # k折交叉验证
+                each_num = sum(self.params.k_fold_ratio)
+                total_num = each_num + (self.params.k_fold_k - 1)*self.params.k_fold_ratio[2]
+                
+                idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
+                each_1 = len(data_set_files) // total_num
+                diff = self.params.k_fold_idx * (self.params.k_fold_ratio[2] * each_1)
+                data_length = each_1 * self.params.k_fold_ratio[idx]
+
+                if self.type in ['train', 'val']:
+                    # 创建随机数生成器对象
+                    rng = random.Random(self.params.k_fold_idx)
+                    # 从原始列表中随机抽取
+                    data_set_files = data_set_files[diff: diff + each_1 * sum(self.params.k_fold_ratio[:2])]
+                    rng.shuffle(data_set_files)
+                    begin = sum(self.params.k_fold_ratio[:idx]) * each_1
+                    self.files = data_set_files[begin: begin + data_length]
+
+                else:
+                    diff += sum(self.params.k_fold_ratio[:idx]) * each_1
+                    self.files = data_set_files[diff: diff + data_length]
 
             else:
-                diff += sum(self.params.k_fold_ratio[:idx]) * each_1
-                self.files = data_set_files[diff: diff + data_length]
+                # 按照日期读取回归数据集
+                begin_date = ''
+                totals = 0
+                if len(data_set_files[0]) == 12:
+                    # a股数据集 20240313.pkl
+                    begin_date = self.target_parm['begin_date'].replace('-', '') + '.pkl'
+                    totals = self.target_parm['total_hours'] // 24
+                else:
+                    # 数字货币数据集 20240427_10.pkl
+                    begin_date = self.target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
+                    totals = self.target_parm['total_hours'] // 2
 
-        else:
-            # 按照日期读取回归数据集
-            begin_date = ''
-            totals = 0
-            if len(data_set_files[0]) == 12:
-                # a股数据集 20240313.pkl
-                begin_date = self.target_parm['begin_date'].replace('-', '') + '.pkl'
-                totals = self.target_parm['total_hours'] // 24
-            else:
-                # 数字货币数据集 20240427_10.pkl
-                begin_date = self.target_parm['begin_date'].replace('-', '') + '_00' + '.pkl'
-                totals = self.target_parm['total_hours'] // 2
+                self.files = data_set_files[data_set_files.index(begin_date):]
 
-            self.files = data_set_files[data_set_files.index(begin_date):]
+                # 初始化各个部分的 begin end
+                _rate_sum = sum(self.target_parm['data_rate'])
+                idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
 
-            # 初始化各个部分的 begin end
-            _rate_sum = sum(self.target_parm['data_rate'])
-            idx = 0 if self.type=='train' else 1 if self.type=='val' else 2
+                # 起始索引，以begin_date为0索引
+                begin_idx = 0
+                for i in range(idx):
+                    begin_idx += int(totals * (self.target_parm['data_rate'][i] / _rate_sum))
+                end_idx = int(totals * (self.target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
 
-            # 起始索引，以begin_date为0索引
-            begin_idx = 0
-            for i in range(idx):
-                begin_idx += int(totals * (self.target_parm['data_rate'][i] / _rate_sum))
-            end_idx = int(totals * (self.target_parm['data_rate'][idx] / _rate_sum)) + begin_idx
+                self.files = self.files[begin_idx:end_idx]
 
-            self.files = self.files[begin_idx:end_idx]
+        if self.params.test:
+            self.files = self.files[:10]
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         # debug(f'{self.type} init_data_thread_start {rank}')

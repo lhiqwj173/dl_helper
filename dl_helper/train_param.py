@@ -199,6 +199,8 @@ class Params:
   # 模型类型 
   cnn=False
 
+  test=False
+
   def __init__(
       self,
       train_title, root, data_set,
@@ -231,7 +233,11 @@ class Params:
 
       describe='',
 
-      debug = False,seed = 42,amp='no'
+      debug = False,seed = 42,amp='no',
+
+      # 测试运行
+      test=False,
+
   ):
       # 添加训练后缀 (训练设备/混合精度)
       run_device = get_gpu_info()
@@ -276,6 +282,7 @@ class Params:
       self.data_folder = data_folder if data_folder else './data'
 
       self.debug = debug
+      self.test = test
       self.seed = seed
 
       self.k_fold_idx = k_fold_idx

@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from py_ext.tool import debug
 
 class test_base():
-    def __init__(self, idx, *args, data_folder='', amp='no', debug=False, findbest_lr=False, **kwargs):
+    def __init__(self, idx, *args, data_folder='', amp='no', debug=False, test=False, findbest_lr=False, **kwargs):
         self.idx = idx
         log(f'train begin :{self.idx}')
 
@@ -24,6 +24,7 @@ class test_base():
         # GPU: fp16
         self.amp = amp
         self.debug = debug
+        self.test = test
         self.para = None
         self.findbest_lr = findbest_lr
         self.lr_scheduler_class = ''
@@ -34,6 +35,9 @@ class test_base():
         if self.debug:
             self.para.epochs = 1
             self.para.debug = True
+
+        if self.test:
+            self.para.epochs = 10
 
         if self.findbest_lr:
             self.para.epochs = 45
