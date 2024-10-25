@@ -274,7 +274,8 @@ class Tracker():
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0)
 
             if self.params.classify:
-                self.temp['softmax_predictions'] = F.softmax(self.temp['_y_pred'], dim=1)
+
+                self.temp['softmax_predictions'] = self.temp['_y_pred']
 
                 if self.track_update in TYPES_NEED_CAL_THRESHOLD:
                     self.cal_threshold_f1score()
@@ -569,12 +570,10 @@ class Tracker():
         # epoch内的迭代次数
         self.step_count += 1
 
-        # 统计损失 tensor
-        predict = output
-        # 不在此处softmax, 输出测试数据预测结果时，需要附带概率
-        # if self.params.classify:
-        #     softmax_predictions = F.softmax(output, dim=1)
-        #     predict = torch.argmax(softmax_predictions, dim=1)
+        if self.params.classify:
+            predict = F.softmax(output, dim=1)
+        else:
+            predict = output
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')
