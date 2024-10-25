@@ -336,7 +336,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
                         log(f"{self.type} producer_thread_stop:{self.producer_thread_stop}")
                         stop = True
                         break
-                debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop} qsize:{self.q.qsize()}')
+                # debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop} qsize:{self.q.qsize()}')
 
             if stop:
                 break
