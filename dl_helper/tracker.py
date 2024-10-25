@@ -489,6 +489,7 @@ class Tracker():
                                     f.write(f'{_id},{target},{pro_str}\n')
 
                     log(f'{model_type} {dataset_type} 输出完毕')
+            self.accelerator.wait_for_everyone() 
 
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)

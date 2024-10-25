@@ -555,7 +555,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
     if accelerator.is_main_process:
         report_memory_usage(f"test done")       
 
-def output_fn(params, model, blank_model, criterion, train_loader, val_loader, test_loader, accelerator, tracker, printer, trans):
+def output_fn(params, model, blank_model, criterion, train_loader, val_loader, accelerator, tracker, printer, trans):
     model_types = ['final', 'best']
     models = [model]
 
@@ -565,16 +565,18 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, t
     # 准备模型
     models[1] = accelerator.prepare(models[1])
 
-    data_loaders = [train_loader, val_loader, test_loader]
-    loader_names = ['train', 'val', 'test']
+    data_loaders = [train_loader, val_loader]
+    loader_names = ['train', 'val']
 
     for model_type, model in zip(model_types, models):
         printer.print(f'模型output: {model_type}')
         model.eval()
         with torch.no_grad():
             for i in range(len(data_loaders)):
+
                 data_loader = data_loaders[i]
                 loader_name = loader_names[i]
+                printer.print(f'模型output: {model_type} {loader_name} 开始')
 
                 run_type = f'{loader_name}_{model_type}'
                 for mini_epoch in range(data_loader.sampler.mini_epoch):
@@ -596,6 +598,7 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, t
 
                 # 等待同步
                 accelerator.wait_for_everyone()
+                printer.print(f'模型output: {model_type} {loader_name} 完成')
 
     # for debug
     accelerator.wait_for_everyone()
