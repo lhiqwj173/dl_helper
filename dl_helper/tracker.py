@@ -449,7 +449,7 @@ class Tracker():
                         # 按日期分类输出数据
                         for i in range(all_targets.shape[0]):
                             symbol, timestamp = all_ids[i].split('_')
-                            date = datetime.datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
+                            date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
                             if date not in datas:
                                 datas[date] = []
                             datas[date].append((all_ids[i], all_targets[i], softmax_predictions[i]))
