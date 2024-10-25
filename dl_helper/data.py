@@ -549,6 +549,7 @@ class DistributedSampler(Sampler):
 
     def _init_mini_epoch_data(self):
         # 初始化 数据索引
+        log(f'{self.dataset.type} {self.rank} {id(self.dataset)} -> init')
         self.mini_epoch_indices_ramain = self.mini_epoch
         if self.shuffle:
             mini_epoch_file_indices = list(torch.randperm(len(self.dataset.files)))

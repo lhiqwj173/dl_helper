@@ -594,6 +594,9 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, t
                 # printer.print('update')
                 tracker.update(data_loader)
 
+                # 等待同步
+                accelerator.wait_for_everyone()
+
     # for debug
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:

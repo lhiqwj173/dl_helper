@@ -447,11 +447,11 @@ class Tracker():
                     # 输出预测用于模型融合
                     # > train/val/test > date_file
                     # id,target,0,1,2
+                    dataset_type = self.track_update.split('_')[0]
+                    assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
                     if self.track_update in TYPES_NEED_OUTPUT:
                         datas={}
 
-                        dataset_type = self.track_update.split('_')[0]
-                        assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
                         out_folder = os.path.join(save_folder, dataset_type)
                         os.makedirs(out_folder, exist_ok=True)
 
@@ -462,6 +462,8 @@ class Tracker():
                             if date not in datas:
                                 datas[date] = []
                             datas[date].append((all_ids[i], all_targets[i], softmax_predictions[i]))
+
+                        log(f'输出模型output: {model_type} {dataset_type} 共{len(datas)}天')
 
                         # 储存数据
                         for date in datas:
@@ -485,6 +487,8 @@ class Tracker():
                                 for _id, target, pro in datas[date]:
                                     pro_str = ','.join([str(float(i)) for i in pro])
                                     f.write(f'{_id},{target},{pro_str}\n')
+
+                    log(f'{model_type} {dataset_type} 输出完毕')
 
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
