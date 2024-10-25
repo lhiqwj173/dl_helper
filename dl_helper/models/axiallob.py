@@ -133,7 +133,8 @@ class AxialLOB(nn.Module):
         self.axial_width_2 = GatedAxialAttention(c_out, c_out, n_heads, W, flag=True)
 
         self.activation = nn.ReLU()
-        self.linear = nn.Linear(1600, 3)
+        # self.linear = nn.Linear(1600, 3)
+        self.linear = nn.Linear(4000, 3)
         self.pooling = nn.AvgPool2d(kernel_size=pool_kernel, stride=pool_stride)
 
     def forward(self, x):
@@ -189,13 +190,17 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = AxialLOB(40, 40, 32, 32, 4, 4, (1, 4), (1, 4))
+    model = AxialLOB(100, 40, 32, 32, 4, 4, (1, 4), (1, 4))
     # print(model)
 
-    summary(model, (1, 1, 100, 40), device=device)
+    # summary(model, (1, 1, 100, 40), device=device)
+    
 
-    # model = model.to(device)
-    # input = torch.randn((1, 1, 70, 46)).to(device)
+    model = model.to(device)
+    input = torch.randn((1, 1, 100, 40)).to(device)
+
+    output = model(input)
+    print(output.shape)
 
     # # 导出模型为ONNX格式
     # onnx_path = "deeplob.onnx"

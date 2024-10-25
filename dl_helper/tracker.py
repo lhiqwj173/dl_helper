@@ -445,7 +445,7 @@ class Tracker():
                                     f.write(f'{timestamp},{target},{pro_str}\n')
                         # self.printer.print('update test round done')
                 
-                    # """
+                    """
                     # 输出预测用于模型融合
                     # > train/val/test > date_file
                     # id,target,0,1,2
@@ -489,7 +489,7 @@ class Tracker():
                                 for _id, target, pro in datas[date]:
                                     pro_str = ','.join([str(float(i)) for i in pro])
                                     f.write(f'{_id},{target},{pro_str}\n')
-                    # """
+                    """
 
                     log(f'{model_type} {dataset_type} 输出完毕')
             
@@ -575,7 +575,7 @@ class Tracker():
         if self.params.classify:
             predict = F.softmax(output, dim=1)
             
-            """
+            # """
             # 模型 output 输出，用于模型融合训练
             # > train/val/test > date_file
             # id,target,0,1,2
@@ -622,7 +622,7 @@ class Tracker():
                         for _id, target, pro in datas[date]:
                             pro_str = ','.join([str(float(i)) for i in pro])
                             f.write(f'{_id},{target},{pro_str}\n')
-            """
+            # """
         else:
             predict = output
 
