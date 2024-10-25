@@ -276,7 +276,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         # debug(f'{self.type} init_data_thread_start {rank}')
-        self.producer_thread_stop = False
+        self.producer_thread_stop = Falsedata_loader_close
         producer_thread = threading.Thread(target=self._init_data, args=(mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank))
         producer_thread.start()
 
@@ -336,7 +336,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
                         log(f"{self.type} producer_thread_stop:{self.producer_thread_stop}")
                         stop = True
                         break
-                # debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop}')
+                debug(f'{self.type} {id(self)} put retry producer_thread_stop:{self.producer_thread_stop} full:{self.q.full()}')
 
             if stop:
                 break
