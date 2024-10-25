@@ -14,6 +14,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 import time, os, sys
 from datetime import datetime
+from datetime import timedelta
 import tempfile
 
 import torch
@@ -605,7 +606,6 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
     if accelerator.is_main_process:
         report_memory_usage(f"output done")       
 
-
 def save_model_fn(params, model, accelerator, input_shape):
     accelerator.wait_for_everyone()
     accelerator.save_model(model, os.path.join(params.root, MODEL_FINAL))
@@ -658,7 +658,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     params = test.get_param()
     set_seed(params.seed)
 
-    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=3600)])
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(seconds=3600))])
     p = printer(lock, accelerator)
     
     # 检查下载训练文件

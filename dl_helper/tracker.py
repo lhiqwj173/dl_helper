@@ -445,6 +445,7 @@ class Tracker():
                                     f.write(f'{timestamp},{target},{pro_str}\n')
                         # self.printer.print('update test round done')
                 
+                    # """
                     # 输出预测用于模型融合
                     # > train/val/test > date_file
                     # id,target,0,1,2
@@ -488,6 +489,7 @@ class Tracker():
                                 for _id, target, pro in datas[date]:
                                     pro_str = ','.join([str(float(i)) for i in pro])
                                     f.write(f'{_id},{target},{pro_str}\n')
+                    # """
 
                     log(f'{model_type} {dataset_type} 输出完毕')
             
@@ -572,6 +574,55 @@ class Tracker():
 
         if self.params.classify:
             predict = F.softmax(output, dim=1)
+            
+            """
+            # 模型 output 输出，用于模型融合训练
+            # > train/val/test > date_file
+            # id,target,0,1,2
+            if self.track_update in TYPES_NEED_OUTPUT:
+                dataset_type, model_type = self.track_update.split('_')
+                save_folder = os.path.join(self.params.root, f"model_{model_type}")
+                assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
+
+                datas={}
+
+                out_folder = os.path.join(save_folder, dataset_type)
+                os.makedirs(out_folder, exist_ok=True)
+
+                # 按日期分类输出数据
+                all_ids = test_dataloader.dataset.use_data_id
+                for i in range(predict.shape[0]):
+                    symbol, timestamp = all_ids[i].split('_')
+                    date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
+                    if date not in datas:
+                        datas[date] = []
+                    datas[date].append((all_ids[i], target[i], predict[i]))
+
+                log(f'输出模型output: {model_type} {dataset_type} 共{len(datas)}天')
+
+                # 储存数据
+                for date in sorted(datas.keys()):
+                    log(f'输出模型output: {model_type} {dataset_type} {date}')
+
+                    # 按照 id 去重
+                    _data_list = []
+                    id_list = []
+                    for i in datas[date]:
+                        if i[0] not in id_list:
+                            _data_list.append(i)
+                            id_list.append(i[0])
+                    datas[date] = _data_list
+
+                    with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
+                        f.write('id,target')
+                        for i in range(self.params.y_n):
+                            f.write(f',{i}')
+                        f.write('\n')
+
+                        for _id, target, pro in datas[date]:
+                            pro_str = ','.join([str(float(i)) for i in pro])
+                            f.write(f'{_id},{target},{pro_str}\n')
+            """
         else:
             predict = output
 
