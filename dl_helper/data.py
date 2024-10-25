@@ -271,7 +271,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
                 self.files = self.files[begin_idx:end_idx]
 
         if self.params.test:
-            self.files = self.files[:10]
+            log('测试模式,只使用前6个数据文件')
+            self.files = self.files[:6]
 
     def init_data_thread_start(self, mini_epoch_file_indices, mini_dataset_length, mini_epoch, world_size, rank):
         # debug(f'{self.type} init_data_thread_start {rank}')

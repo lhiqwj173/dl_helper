@@ -456,15 +456,16 @@ class Tracker():
 
                         # 储存数据
                         for date in datas:
+                            log(f'输出模型output: {date}')
                             with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
                                 f.write('id,target')
                                 for i in range(self.params.y_n):
                                     f.write(f',{i}')
                                 f.write('\n')
 
-                                for id, target, pro in datas[date]:
+                                for _id, target, pro in datas[date]:
                                     pro_str = ','.join([str(float(i)) for i in pro])
-                                    f.write(f'{timestamp},{target},{pro_str}\n')
+                                    f.write(f'{_id},{target},{pro_str}\n')
 
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
