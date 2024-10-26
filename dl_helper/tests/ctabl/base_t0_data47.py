@@ -115,7 +115,7 @@ if '__main__' == __name__:
     # test_train_func(r"D:\L2_DATA_T0_ETF\train_data\market_top_20\train\20240726.pkl", '159920_1721973243', test)
 
     input_folder = r'/kaggle/input'
-    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -127,6 +127,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        debug=True,
-        idx=0
+        # debug=True,
+        # idx=0
     )
