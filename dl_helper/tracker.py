@@ -434,7 +434,7 @@ class Tracker():
 
         if self.track_update in TYPES_NEED_OUT:
             if self.accelerator.is_main_process:
-                model_type = self.track_update.split('_')[1]
+                dataset_type, model_type = self.track_update.split('_')
                 save_folder = os.path.join(self.params.root, f"model_{model_type}")
 
                 # self.printer.print('update test round')
