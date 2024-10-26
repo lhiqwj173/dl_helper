@@ -387,6 +387,7 @@ class Tracker():
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
+            # 学习率调整记录
             lr_change = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
                 # self.printer.print('scheduler.step')

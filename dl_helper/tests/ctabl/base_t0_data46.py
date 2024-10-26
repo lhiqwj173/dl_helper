@@ -127,6 +127,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        debug=True,
-        idx=0
+        # debug=True,
+        # idx=0
     )
