@@ -32,6 +32,8 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.children_num = 12
+
         # 同一个训练使用4个随机种子，最终取均值
         seed = range(4)[self.idx]
 
@@ -73,12 +75,12 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 3*3), (1, self.y_n)
+        return (1, self.children_num*3), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        return m_meta(9, 3)
+        return m_meta(self.children_num*3, 3)
 
     def get_transform(self, device):
         return blank()
