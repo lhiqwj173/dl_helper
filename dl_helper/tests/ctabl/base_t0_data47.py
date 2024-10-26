@@ -10,6 +10,7 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.axiallob import m_axiallob
 from dl_helper.transforms.axiallob import transform
 from dl_helper.trainer import run
+from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
