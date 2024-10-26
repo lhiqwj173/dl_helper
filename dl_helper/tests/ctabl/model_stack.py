@@ -21,6 +21,12 @@ class blank(transform):
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
+
+            # torch.Size([128, 1, 36]) -> torch.Size([128, 36])
+            x = x.squeeze(1)
+            # # torch.Size([128]) -> torch.Size([128, 1])
+            # y = y.unsqueeze(1)
+
             return x, y
 
 class test(test_base):
