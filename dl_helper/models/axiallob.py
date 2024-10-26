@@ -98,6 +98,10 @@ class GatedAxialAttention(nn.Module):
 
 
 class m_axiallob(nn.Module):
+    @classmethod
+    def model_name(cls):
+        return "axiallob"
+
     def __init__(self, W, H, c_in, c_out, c_final, n_heads, pool_kernel, pool_stride):
         super().__init__()
 

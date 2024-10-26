@@ -7,8 +7,8 @@ from dl_helper.tester import test_base
 from dl_helper.train_param import Params
 from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
-from dl_helper.models.deeplob import m_deeplob
-from dl_helper.transforms.deeplob import transform
+from dl_helper.models.axiallob import m_axiallob
+from dl_helper.transforms.axiallob import transform
 from dl_helper.trainer import run
 
 from py_ext.tool import log, init_logger
@@ -24,11 +24,11 @@ predict_n 100
 量: d / mid_vol 
 
 只使用订单簿价量数据 lh_q_t0_base_top5_filter_time
-100*40
+40*40
 
 batch_size=128
 
-测试 deeplob 
+测试 axiallob
 """
 price_cols = [i*2 for i in range(20)]
 other_cols = [i*2 + 1 for i in range(20)]
@@ -45,7 +45,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_deeplob_top5'
+        return f'base_axiallob_top5'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -99,12 +99,12 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 40, 100), (1, self.y_n)
+        return (1, 1, 40, 40), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        return m_deeplob(self.y_n)
+        return m_axiallob(40, 40, 32, 32, 4, 4, (1, 4), (1, 4))
 
     def get_transform(self, device):
         return transform()
@@ -115,7 +115,7 @@ if '__main__' == __name__:
     # test_train_func(r"D:\L2_DATA_T0_ETF\train_data\market_top_20\train\20240726.pkl", '159920_1721973243', test)
 
     input_folder = r'/kaggle/input'
-    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -127,6 +127,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        # debug=True,
-        # idx=0
+        debug=True,
+        idx=0
     )

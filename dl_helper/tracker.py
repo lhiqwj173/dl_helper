@@ -1029,7 +1029,7 @@ class Tracker():
                 plt.savefig(pic_file)
 
             except Exception as e:
-                print(e)
+                self.printer.print(f'plot score error: {e}')
 
         self.accelerator.wait_for_everyone()
         # debug('plot done')

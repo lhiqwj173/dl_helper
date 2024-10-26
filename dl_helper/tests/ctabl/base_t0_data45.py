@@ -16,7 +16,7 @@ from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
-成交数据
+成交数据 
 100 * 20
 
 predict_n 100
