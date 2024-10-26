@@ -8,7 +8,7 @@ class m_meta(nn.Module):
 
     def __init__(self, input_len, y_len):
         super(m_meta, self).__init__()
-        self.linear = nn.Linear(input_len, y_len)
+        self.fc = nn.Linear(input_len, y_len)
 
     def forward(self, x):
         return self.fc(x)
