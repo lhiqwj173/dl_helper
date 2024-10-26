@@ -307,6 +307,9 @@ class Tracker():
             self.output_datas = {}# 重置
             self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
 
+        # 等待同步
+        self.accelerator.wait_for_everyone()
+
         # 计算变量 -> data
         # 主进程计算data
         if self.accelerator.is_main_process:
