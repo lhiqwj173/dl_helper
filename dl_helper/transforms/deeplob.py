@@ -22,4 +22,7 @@ class transform():
             # 量归一化
             x[:, self.other_cols, :] /= mid_vol
 
+            # 增加一个维度 [batch_size, time_length, num_rows] -> [batch_size, 1，time_length, num_rows]
+            x = x.unsqueeze(1)
+            
             return x, y

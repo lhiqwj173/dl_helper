@@ -27,6 +27,17 @@ class m_deeplob(nn.Module):
             nn.LeakyReLU(negative_slope=0.01),
             nn.BatchNorm2d(32),
         )
+
+        self.a = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(1,2), stride=(1,2))
+        self.b = nn.LeakyReLU(negative_slope=0.01)
+        self.c = nn.BatchNorm2d(32)
+        self.d = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
+        self.e = nn.LeakyReLU(negative_slope=0.01)
+        self.f = nn.BatchNorm2d(32)
+        self.g = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
+        self.h = nn.LeakyReLU(negative_slope=0.01)
+        self.i = nn.BatchNorm2d(32)
+
         self.conv2 = nn.Sequential(
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(1,2), stride=(1,2)),
             nn.Tanh(),

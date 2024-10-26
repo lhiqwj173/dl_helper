@@ -123,10 +123,10 @@ if '__main__' == __name__:
     run(
         test, 
         # findbest_lr=True,
-        amp='fp16',
+        # amp='fp16',
         mode='cache_data',
         data_folder=data_folder,
 
-        # debug=True,
-        # idx=0
+        debug=True,
+        idx=0
     )
