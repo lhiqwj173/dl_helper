@@ -19,7 +19,7 @@ class m_meta_level2(nn.Module):
         return "meta_level2"
 
     def __init__(self, input_len, y_len):
-        super(m_meta, self).__init__()
+        super(m_meta_level2, self).__init__()
 
         middle_size = input_len // 2
 
