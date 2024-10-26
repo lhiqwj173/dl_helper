@@ -770,10 +770,11 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         y_idx = params.classify_y_idx
 
     # 多个可迭代
-    if isinstance(y_idx, Iterable):
-        y = [[i[j] for j in y_idx] for i in y]
-    else:
-        y = [i[y_idx] for i in y]
+    if isinstance(y[0], (list, tuple)) or not isinstance(y[0], (int, float, complex)):
+        if isinstance(y_idx, Iterable):
+            y = [[i[j] for j in y_idx] for i in y]
+        else:
+            y = [i[y_idx] for i in y]
 
     # 预处理
     if not params.y_func is None:
