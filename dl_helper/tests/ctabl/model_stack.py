@@ -87,7 +87,7 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    model = m_meta(9, 3)
+    model = m_meta(3*12, 3)
     print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'

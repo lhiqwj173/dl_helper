@@ -111,8 +111,8 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    # from dl_helper.trainer import test_train_func
-    # test_train_func(r"D:\L2_DATA_T0_ETF\train_data\market_top_20\train\20240726.pkl", '159920_1721973243', test)
+    model = m_axiallob(40, 40, 32, 32, 4, 4, (1, 4), (1, 4))
+    print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
