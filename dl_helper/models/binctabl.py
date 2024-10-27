@@ -125,9 +125,12 @@ class m_bin_btabl(nn.Module):
     self.max_norm_(self.TABL.W.data)
     self.max_norm_(self.TABL.W2.data)
     x = self.TABL(x)
-    x = torch.squeeze(x)
-    x = torch.softmax(x, 1)
+    
+    # x = torch.squeeze(x)
+    x = torch.squeeze(x,dim=2)# 保留batch维度
 
+    # # 不应该在这里 softmax
+    # x = torch.softmax(x, 1)
 
     return x
 
