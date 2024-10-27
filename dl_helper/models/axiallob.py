@@ -179,8 +179,8 @@ class m_axiallob(nn.Module):
         y = self.pooling(y)
         y = torch.flatten(y, 1)
         y = self.linear(y)
-        forecast_y = torch.softmax(y, dim=1)
-        return forecast_y
+        # forecast_y = torch.softmax(y, dim=1)
+        return y
 
 if __name__ == "__main__":
     
