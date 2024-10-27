@@ -21,7 +21,7 @@ predict_n 100
 依据市值top 5选股
 
 标准化
-价格: d / mid_price
+价格: d / bid_10_price - 1
 量: d / mid_vol 
 
 只使用订单簿价量数据 lh_q_t0_base_top5_filter_time
@@ -31,8 +31,32 @@ batch_size=128
 
 测试 axiallob
 """
+
 price_cols = [i*2 for i in range(20)]
 other_cols = [i*2 + 1 for i in range(20)]
+class transform_bid_10_price(transform):
+
+    def __call__(self, batch, train=False):
+        with torch.no_grad():
+            x, y, mean_std = batch
+            
+            x = x[:, -100:, :40]
+
+            # 买10价格 / 中间量
+            bid_10_price = (x[:, -1, 38]).unsqueeze(1).unsqueeze(1).clone()
+            mid_vol = ((x[:, -1, 1] + x[:, -1, 3]) / 2).unsqueeze(1).unsqueeze(1).clone()
+
+            # 价归一化
+            x[:, : , price_cols] /= bid_10_price
+            x[:, : , price_cols] -= 1
+
+            # 量归一化
+            x[:, : , other_cols] /= mid_vol
+
+            # not cnn -> (batchsize, 40, 100)
+            x = torch.transpose(x, 1, 2)
+
+            return x, y
 
 def yfunc(threshold, y):
     if y > threshold:
@@ -108,7 +132,7 @@ class test(test_base):
         return m_axiallob(40, 40, 32, 32, 4, 4, (1, 4), (1, 4))
 
     def get_transform(self, device):
-        return transform()
+        return transform_bid_10_price()
 
 if '__main__' == __name__:
 

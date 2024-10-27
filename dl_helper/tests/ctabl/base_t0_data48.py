@@ -7,8 +7,9 @@ from dl_helper.tester import test_base
 from dl_helper.train_param import Params
 from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
-from dl_helper.models.deeplob import m_deeplob
-from dl_helper.transforms.deeplob import transform
+from dl_helper.models.binctabl import m_bin_ctabl
+from dl_helper.transforms.binctabl import transform
+
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num
 
@@ -22,18 +23,19 @@ predict_n 100
 
 标准化
 价格: d / bid_10_price - 1
-量: d / mid_vol 
+量: d / mid_vol  
 
 只使用订单簿价量数据 lh_q_t0_base_top5_filter_time
 100*40
 
 batch_size=128
 
-测试 deeplob 
+测试 binctabl
 """
 price_cols = [i*2 for i in range(20)]
 other_cols = [i*2 + 1 for i in range(20)]
-class transform_bid_10_price(transform):
+
+class transform_stable(transform):
 
     def __call__(self, batch, train=False):
         with torch.no_grad():
@@ -57,7 +59,6 @@ class transform_bid_10_price(transform):
 
             return x, y
 
-
 def yfunc(threshold, y):
     if y > threshold:
         return 0
@@ -70,7 +71,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_deeplob_top5'
+        return f'base_binctabl_top5'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -129,14 +130,18 @@ class test(test_base):
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        return m_deeplob(self.y_n)
+        t1, t2, t3, t4 = [100, 30, 10, 1]
+        d1, d2, d3, d4 = [40, 20, 10, 3]
+        return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
-        return transform_bid_10_price()
+        return transform()
 
 if '__main__' == __name__:
 
-    model = m_deeplob(3)
+    t1, t2, t3, t4 = [100, 30, 10, 1]
+    d1, d2, d3, d4 = [40, 20, 10, 3]
+    model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
