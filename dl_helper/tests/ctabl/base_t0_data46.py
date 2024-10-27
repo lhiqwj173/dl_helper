@@ -52,8 +52,8 @@ class transform_bid_10_price(transform):
             # 量归一化
             x[:, : , other_cols] /= mid_vol
 
-            # not cnn -> (batchsize, 40, 100)
-            x = torch.transpose(x, 1, 2)
+            # 增加一个维度 [batch_size, time_length, num_rows] -> [batch_size, 1，time_length, num_rows]
+            x = x.unsqueeze(1)
 
             return x, y
 
