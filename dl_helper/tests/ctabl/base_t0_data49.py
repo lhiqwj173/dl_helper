@@ -136,7 +136,7 @@ class test(test_base):
         return m_bin_btabl(d2, d1, t1, t2, 3, 1)
 
     def get_transform(self, device):
-        return transform()
+        return transform_stable(device, self.para, 103, num_rows=40)
 
 if '__main__' == __name__:
 
