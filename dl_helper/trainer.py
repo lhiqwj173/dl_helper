@@ -1321,6 +1321,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
 
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
     if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
+    if kwargs['test']:
+        kwargs['idx'] = 0
     if 'idx' not in kwargs:
         kwargs['idx'] = get_idx(base_title)
 
