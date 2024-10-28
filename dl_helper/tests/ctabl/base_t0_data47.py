@@ -40,7 +40,7 @@ class transform_bid_10_price(transform):
         with torch.no_grad():
             x, y, mean_std = batch
             
-            x = x[:, -100:, :40]
+            x = x[:, -40:, :40]
 
             # 买10价格 / 中间量
             bid_10_price = (x[:, -1, 38]).unsqueeze(1).unsqueeze(1).clone()
