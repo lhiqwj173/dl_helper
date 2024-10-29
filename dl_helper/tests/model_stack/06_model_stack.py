@@ -79,6 +79,7 @@ class test(test_base):
             amp=self.amp,
             seed=seed,
             no_better_stop=0,
+            need_meta_output = False,
         )
 
     def get_in_out_shape(self):

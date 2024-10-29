@@ -271,7 +271,8 @@ class Tracker():
         # 模型 output 输出，用于模型融合训练
         # > train/val/test > date_file
         # id,target,0,1,2
-        if self.track_update in TYPES_NEED_OUTPUT:
+        if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
+
             dataset_type, model_type = self.track_update.split('_')
             save_folder = os.path.join(self.params.root, f"model_{model_type}")
             assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
@@ -624,7 +625,7 @@ class Tracker():
             predict = F.softmax(output, dim=1)
             
             # 模型 output 输出，用于模型融合训练
-            if self.track_update in TYPES_NEED_OUTPUT:
+            if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
                 # 按日期分类输出数据
                 all_ids = test_dataloader.dataset.use_data_id
                 for i in range(predict.shape[0]):

@@ -201,6 +201,9 @@ class Params:
 
   test=False
 
+  # 用于模型融合 
+  need_meta_output=True
+
   def __init__(
       self,
       train_title, root, data_set,
@@ -237,6 +240,9 @@ class Params:
 
       # 测试运行
       test=False,
+
+      # 模型融合
+      need_meta_output=True,
 
   ):
       # 添加训练后缀 (训练设备/混合精度)
@@ -284,6 +290,7 @@ class Params:
       self.debug = debug
       self.test = test
       self.seed = seed
+      self.need_meta_output = need_meta_output
 
       self.k_fold_idx = k_fold_idx
       self.k_fold_k = k_fold_k
