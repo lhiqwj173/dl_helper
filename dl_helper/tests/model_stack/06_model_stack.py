@@ -16,7 +16,7 @@ from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 """
 模型融合
-lh_q_t0_base_meta_depth_deal_order_binbasex2_deeplob
+lh_q_t0_meta_depth_deal_order_binbasex2_deeplob
 """
 class blank(transform):
     def __call__(self, batch, train=False):
