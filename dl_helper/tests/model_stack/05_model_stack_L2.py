@@ -23,7 +23,7 @@ lh_q_t0_meta_depth_deal_order_binbasex2_deeplob
 """
 
 top_n = 15
-children_num = top_n * 3
+children_num = top_n
 
 class blank(transform):
     def __call__(self, batch, train=False):
@@ -37,8 +37,6 @@ class blank(transform):
             x =  x[:, :top_n*3]
 
             return x, y
-
-children_num = 32
 
 class test(test_base):
 
