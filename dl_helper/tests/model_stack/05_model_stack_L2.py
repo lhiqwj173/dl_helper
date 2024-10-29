@@ -17,9 +17,14 @@ init_logger('base', level='INFO')
 """
 模型融合
 lh_q_t0_meta_depth_deal_order_binbasex2_deeplob
-
 多层
+
+使用 top15 的模型
 """
+
+top_n = 15
+children_num = top_n * 3
+
 class blank(transform):
     def __call__(self, batch, train=False):
         with torch.no_grad():
@@ -27,8 +32,9 @@ class blank(transform):
 
             # torch.Size([128, 1, 36]) -> torch.Size([128, 36])
             x = x.squeeze(1)
-            # # torch.Size([128]) -> torch.Size([128, 1])
-            # y = y.unsqueeze(1)
+
+            # 取用前 top_n * 3 个数据
+            x =  x[:, :top_n*3]
 
             return x, y
 
