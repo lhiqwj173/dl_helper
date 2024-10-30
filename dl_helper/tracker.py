@@ -613,6 +613,7 @@ class Tracker():
 
         self.temp['_loss'] = None
         self.temp['_num'] = 0
+        self.temp['_codes'] = []
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
 
