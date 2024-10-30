@@ -3,6 +3,7 @@
 """
 import time, math, os, copy, pickle, datetime
 import itertools
+import dataframe_image as dfi
 
 import pandas as pd
 
@@ -83,7 +84,7 @@ def class_f1_score(y_pred, y_true, y_n):
     print('compute', flush=True)
     return class_f1
 
-def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n):
+def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n, root):
     total_codes = set(codes)
     for _code in total_codes:
         match_ids = [i for i in range(len(codes)) if codes[i] == _code]
@@ -95,8 +96,25 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n)
         if _code not in symbol_f1_score:
             symbol_f1_score[_code] = {}
 
+        sum_score = 0
         for i in range(y_n - 1):
-            symbol_f1_score[_code][f'{_type}_class_f1_{i}'] = class_f1[i].cpu().item()
+            sum_score += class_f1[i].cpu().item()
+
+        symbol_f1_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
+
+    # 保存到pic
+    df = pd.DataFrame(symbol_f1_score).T.sort_values('train_class_f1', ascending=False)
+    for col in list(df):
+        df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
+    idx = range(len(df))
+
+    for col in ['test_class_f1', 'val_class_f1']:
+        if col not in df:
+            continue
+        rank = df[col].rank(method='first', ascending=False)
+        rank_change = (idx - rank).astype(int)
+        df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')')
+    dfi.export(df, os.path.join(root, 'symbol_f1_rank.png'))
 
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
@@ -365,7 +383,8 @@ class Tracker():
                 print('class_f1', flush=True)
 
                 # 各个类别按照 code 分类计数 f1 score
-                class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+
                 print('class_f1_each_code', flush=True)
                 # self.printer.print('class_f1_each_code')
 
