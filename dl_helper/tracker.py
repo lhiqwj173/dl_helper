@@ -118,7 +118,7 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
         if col not in list(df):
             continue
  
-        if col == 'train_class_f1' and 'val_class_f1' not in list(df): 
+        if col == 'train_class_f1' and 'test_class_f1' not in list(df): 
             continue
 
         rank = df[col].rank(method='first', ascending=False)
