@@ -104,14 +104,22 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
         symbol_f1_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
 
     # 保存到pic
-    df = pd.DataFrame(symbol_f1_score).T.sort_values('train_class_f1', ascending=False)
+    if 'test_class_f1' not in list(df):
+        df = pd.DataFrame(symbol_f1_score).T.sort_values('train_class_f1', ascending=False)
+    else:
+        df = pd.DataFrame(symbol_f1_score).T.sort_values('test_class_f1', ascending=False)
+
     for col in list(df):
         df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
     idx = range(len(df))
 
-    for col in ['test_class_f1', 'val_class_f1']:
-        if col not in df:
+    for col in ['train_class_f1', 'val_class_f1']:
+        if col not in list(df):
             continue
+ 
+        if col == 'train_class_f1' and 'val_class_f1' not in list(df): 
+            continue
+
         rank = df[col].rank(method='first', ascending=False)
         rank_change = (idx - rank).astype(int)
         df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')')
