@@ -83,6 +83,21 @@ def class_f1_score(y_pred, y_true, y_n):
     print('compute', flush=True)
     return class_f1
 
+def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n):
+    total_codes = set(codes)
+    for _code in total_codes:
+        match_ids = [i for i in range(len(codes)) if codes[i] == _code]
+        match_y_pred = y_pred[match_ids]
+        match_y_true = y_true[match_ids]
+
+        class_f1 = class_f1_score(match_y_pred, match_y_true, y_n)
+
+        if _code not in symbol_f1_score:
+            symbol_f1_score[_code] = {}
+
+        for i in range(y_n - 1):
+            symbol_f1_score[_code][f'{_type}_class_f1_{i}'] = class_f1[i].cpu().item()
+
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
     f1_score = F1Score(num_classes=y_n, average='weighted', task='multiclass').to(y_pred.device)
@@ -209,6 +224,10 @@ class Tracker():
         self.temp = {}
 
         self.reset_temp()
+
+        # 储存各个标的的各过程的 0, 1 类f1 score
+        self.symbol_f1_score = {}
+
 
     def update_mini_batch(self):
         self.mini_epoch_count += 1
@@ -344,6 +363,11 @@ class Tracker():
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 print('class_f1', flush=True)
+
+                # 各个类别按照 code 分类计数 f1 score
+                class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                print('class_f1_each_code', flush=True)
+                # self.printer.print('class_f1_each_code')
 
             else:
                 # 计算方差加权 R2
@@ -625,63 +649,15 @@ class Tracker():
             predict = F.softmax(output, dim=1)
             
             # 模型 output 输出，用于模型融合训练
+            all_ids = test_dataloader.dataset.use_data_id
             if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
                 # 按日期分类输出数据
-                all_ids = test_dataloader.dataset.use_data_id
                 for i in range(predict.shape[0]):
                     symbol, timestamp = all_ids[i].split('_')
                     date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
                     if date not in self.output_datas:
                         self.output_datas[date] = []
                     self.output_datas[date].append((all_ids[i], target[i], predict[i]))
-
-            """
-            # 模型 output 输出，用于模型融合训练
-            # > train/val/test > date_file
-            # id,target,0,1,2
-            if self.track_update in TYPES_NEED_OUTPUT:
-                dataset_type, model_type = self.track_update.split('_')
-                save_folder = os.path.join(self.params.root, f"model_{model_type}")
-                assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
-
-                out_folder = os.path.join(save_folder, dataset_type)
-                os.makedirs(out_folder, exist_ok=True)
-
-                datas={}
-                # 按日期分类输出数据
-                all_ids = test_dataloader.dataset.use_data_id
-                for i in range(predict.shape[0]):
-                    symbol, timestamp = all_ids[i].split('_')
-                    date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
-                    if date not in datas:
-                        datas[date] = []
-                    datas[date].append((all_ids[i], target[i], predict[i]))
-
-                log(f'输出模型output: {model_type} {dataset_type} 共{len(datas)}天')
-
-                # 储存数据
-                for date in sorted(datas.keys()):
-                    log(f'输出模型output: {model_type} {dataset_type} {date}')
-
-                    # 按照 id 去重
-                    _data_list = []
-                    id_list = []
-                    for i in datas[date]:
-                        if i[0] not in id_list:
-                            _data_list.append(i)
-                            id_list.append(i[0])
-                    datas[date] = _data_list
-
-                    with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
-                        f.write('id,target')
-                        for i in range(self.params.y_n):
-                            f.write(f',{i}')
-                        f.write('\n')
-
-                        for _id, target, pro in datas[date]:
-                            pro_str = ','.join([str(float(i)) for i in pro])
-                            f.write(f'{_id},{target},{pro_str}\n')
-            """
         else:
             predict = output
 
@@ -700,18 +676,15 @@ class Tracker():
         # self.printer.print('gather loss, y_true, y_pred done')
         if _type in TYPES_NEED_OUT:
             _ids = gather_object(test_dataloader.dataset.use_data_id)
-            test_dataloader.dataset.use_data_id = []
-
-            ##################
-            # # 测试
-            # if '159329_1722216951' in _ids:
-            #     _test_idx = _ids.index('159329_1722216951')
-            #     print('label:', _y_true[_test_idx])
-            #     raise
-            ##################
+            codes = [i.split('_')[0] for i in _ids]
 
         else:
             _ids = []
+            codes = [i.split('_')[0] for i in test_dataloader.dataset.use_data_id]
+            codes = gather_object(codes)# 汇总到主设备
+
+        # 置空
+        test_dataloader.dataset.use_data_id = []
         # self.printer.print('_ids done')
 
         # 记录label分布
@@ -742,6 +715,7 @@ class Tracker():
             if _type in TYPES_NEED_OUT:
                 self.temp['_ids'] += _ids
 
+            self.temp['_codes'] += codes
             self.temp['_num'] += _y_true.shape[0]
 
     def get_mean_f1_socre_important(self):
