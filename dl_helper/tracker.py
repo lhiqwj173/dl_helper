@@ -3,7 +3,7 @@
 """
 import time, math, os, copy, pickle, datetime
 import itertools
-import dataframe_image as dfi
+# import dataframe_image as dfi
 
 import pandas as pd
 
