@@ -64,12 +64,11 @@ else:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
     # !pip install "pandas<2.0.0"
-    # !pip install dataframe_image
+    # !pip install pip install df2img
     # !pip install loguru
     # !pip install einops
     # !pip install dill
     # !pip install torchinfo
-    # !pip install dataframe_image # 弃用
     # !pip install telethon # 弃用
     # !pip install torchmetrics
     # !pip install pympler # 弃用
@@ -80,7 +79,7 @@ else:
     # !pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz
     for cmd in [
             'pip install "pandas<2.0.0"',
-            'pip install dataframe_image',
+            'pip install df2img',
             'pip install loguru',
             'pip install einops',
             'pip install dill',

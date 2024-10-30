@@ -8,6 +8,11 @@ if match_num_processes() ==8:
 from torchstat import stat
 from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
+import df2img
+
+def save_df_pic(title, df, fig_size=(500, 140)):
+    fig = df2img.plot_dataframe(df, row_fill_color=("#ffffff", "#f2f2f2"), fig_size=fig_size)
+    df2img.save_dataframe(fig=fig, filename=title)
 
 def model_params_num(model):
     # 将所有参数转换为一个向量
