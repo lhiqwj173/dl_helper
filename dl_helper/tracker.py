@@ -282,7 +282,7 @@ class Tracker():
                 comb_str = '_'.join([str(i.item()) for i in comb])
                 f.write(f"{comb_str},{balance_acc.item()},{weighted_f1.item()}\n")
 
-    def update(self, test_dataloader=None):
+    def update(self):
         # 标记label分布统计完成
         if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update in TYPES_NEED_LABEL_COUNT:
             self.label_count_done[self.track_update] = True
@@ -636,7 +636,7 @@ class Tracker():
 
         self.printer.print(f"------------tracker data------------")
 
-    def track(self, _type, output, target, loss=None, test_dataloader=None):
+    def track(self, _type, output, target, test_dataloader, loss=None):
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)

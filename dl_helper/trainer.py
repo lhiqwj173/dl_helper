@@ -446,7 +446,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # record_grad(1, model, accelerator.process_index)
             with torch.no_grad():
                 check_nan(output, ids=active_dataloader.dataset.use_data_id)
-                active_dataloader.dataset.use_data_id = []
+
             # debug(f'criterion')
             accelerator.backward(loss)
             # record_grad(2, model, accelerator.process_index)
@@ -458,7 +458,7 @@ def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader
             # 追踪器 记录数据
             with torch.no_grad():
                 # debug('track')
-                tracker.track('train', output, target, loss)
+                tracker.track('train', output, target, active_dataloader, loss)
                 # debug('track done')
 
         log(f"[{epoch}][{mini_epoch}] train done")
@@ -497,7 +497,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             loss = criterion(output, target)
 
             # 追踪器 记录数据
-            tracker.track('val', output, target, loss)
+            tracker.track('val', output, target, active_dataloader, loss)
     
     # debug('val loop done')
 
@@ -545,7 +545,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
                 loss = criterion(output, target)
 
                 # 追踪器 记录数据
-                tracker.track(test_types[i], output, target, loss, test_data)
+                tracker.track(test_types[i], output, target, test_data, loss)
 
         # 追踪器，计算必要的数据
         # printer.print('update')
@@ -591,7 +591,7 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
                         output = model(data)
 
                         # 追踪器 记录数据
-                        tracker.track(run_type, output, target, None, data_loader)
+                        tracker.track(run_type, output, target, data_loader, None)
 
                 # 追踪器，计算必要的数据
                 # printer.print('update')
