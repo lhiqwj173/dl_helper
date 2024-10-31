@@ -105,7 +105,7 @@ class m_deeplob(nn.Module):
         x = self.fc1(x)
         return x
 
-class m_deeplob_dropout(m_deeplob_dropout):
+class m_deeplob_dropout(m_deeplob):
     @classmethod
     def model_name(cls):
         return "deeplob_dropout"
