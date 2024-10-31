@@ -68,7 +68,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'train_depth_max_nor_deeplob'
+        return f'train_depth_deeplob'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
