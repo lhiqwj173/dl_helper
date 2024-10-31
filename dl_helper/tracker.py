@@ -37,6 +37,8 @@ MODEL_FINAL, MODEL_BEST, MODEL_DUMMY = MODEL_TYPES
 TEST_TYPES=['test_final', 'test_best', 'test_dummy']
 TEST_FINAL, TEST_BEST, TEST_DUMMY = TEST_TYPES
 
+TYPES_NO_NEED_SYMBOL_F1_SCORE = ['train', 'val']
+
 TYPES_NEED_LABEL_COUNT = ['train', 'val', 'test_final']
 TYPES_NEED_CAL_THRESHOLD = ['test_final', 'test_best']
 TYPES_NEED_OUTPUT = ['train_final', 'train_best', 'val_final', 'val_best', 'test_final', 'test_best']# 用于模型融合 基特征
@@ -86,6 +88,7 @@ def class_f1_score(y_pred, y_true, y_n):
     return class_f1
 
 def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n, root):
+    # train/val/test_final/test_best/test_dummy/final_train/final_val/best_train/best_val
     total_codes = set(codes)
     for _code in total_codes:
         match_ids = [i for i in range(len(codes)) if codes[i] == _code]
@@ -103,30 +106,37 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
 
         symbol_f1_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
 
-    # 保存到pic
-    df = pd.DataFrame(symbol_f1_score).T
-    if 'test_class_f1' not in list(df):
-        df = df.sort_values('train_class_f1', ascending=False)
-    else:
-        df = df.sort_values('test_class_f1', ascending=False)
+    df_all = pd.DataFrame(symbol_f1_score).T
+    for model_type in ['final', 'best']:
+        # 保存到pic
+        need_cols = [i for i in list(df_all) if model_type in i]
+        test_col = [i for i in need_cols if 'test' in i][0]
+        train_col = f'{model_type}_train_class_f1'
+        val_col = f'{model_type}_val_class_f1'
 
-    for col in list(df):
-        df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
-    idx = range(len(df))
+        df = df_all.loc[:,need_cols].copy()
+        if test_col not in list(df):
+            df = df.sort_values(train_col, ascending=False)
+        else:
+            df = df.sort_values(test_col, ascending=False)
 
-    for col in ['train_class_f1', 'val_class_f1']:
-        if col not in list(df):
-            continue
- 
-        if col == 'train_class_f1' and 'test_class_f1' not in list(df): 
-            continue
+        for col in list(df):
+            df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
+        idx = range(len(df))
 
-        rank = df[col].rank(method='first', ascending=False)
-        rank_change = (idx - rank).astype(int)
-        df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')')
+        for col in [train_col, val_col]:
+            if col not in list(df):
+                continue
+    
+            if col == train_col and test_col not in list(df): 
+                continue
 
-    save_df_pic(os.path.join(root, 'symbol_f1_rank.png'),df,(500, 140))
-    # dfi.export(df, os.path.join(root, 'symbol_f1_rank.png'))
+            rank = df[col].rank(method='first', ascending=False)
+            rank_change = (idx - rank).astype(int)
+            df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')')
+
+        save_df_pic(os.path.join(root, f'{model_type}_symbol_f1_rank.png'),df,(500, 140))
+        # dfi.export(df, os.path.join(root, 'symbol_f1_rank.png'))
 
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
@@ -395,7 +405,9 @@ class Tracker():
                 print('class_f1', flush=True)
 
                 # 各个类别按照 code 分类计数 f1 score
-                class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+                # train/val 不需要计算
+                if self.track_update not in TYPES_NO_NEED_SYMBOL_F1_SCORE:
+                    class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
 
                 print('class_f1_each_code', flush=True)
                 # self.printer.print('class_f1_each_code')
@@ -706,10 +718,12 @@ class Tracker():
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
 
         # self.printer.print('gather loss, y_true, y_pred done')
-        if _type in TYPES_NEED_OUT:
+        if _type in TYPES_NO_NEED_SYMBOL_F1_SCORE:
+            # train/val 不需要, 避免浪费计算
+            codes = []
+        elif _type in TYPES_NEED_OUT:
             _ids = gather_object(test_dataloader.dataset.use_data_id)
             codes = [i.split('_')[0] for i in _ids]
-
         else:
             _ids = []
             codes = [i.split('_')[0] for i in test_dataloader.dataset.use_data_id]
