@@ -1,5 +1,5 @@
 import functools
-import sys, torch, os
+import sys, torch, os, pickle
 
 from accelerate.utils import set_seed
 
@@ -10,38 +10,43 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
+from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
-稳健市场深度表示法
-100 * 21
-lh_q_t0_depth_clear_keep_dup
+只使用盘口深度数据
+100 * 20
+lh_q_t0_depth_add_deal_order
 
 predict_n 100
 标签 4
-依据市值top 20/10/5选股
+依据市值top 5选股
 
 标准化
-量: d / max(all d) 
-中间价: (d / mid_price) / 0.001
+量: d / max_vol 
 
 batch_size=128
 
 过滤时间 09:30 - 14:57
 
-测试 max归一化
+测试 max 归一化
 """
-
 class transform_stable(transform):
 
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
-
-            # not cnn -> (batchsize, 21, 100)
+        
+            # not cnn -> (batchsize, feature_num, 100)
             x = torch.transpose(x, 1, 2)
+
+
+            # 删除其他数据数据
+            x = x[:, 70:90, :]
+
+            max_vol = torch.max(x)
 
             # random_mask_row
             if train and self.param.random_mask_row:
@@ -52,19 +57,9 @@ class transform_stable(transform):
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
 
-            # 中间价格 / 中间量
-            mid_price = x[:, 20, -1].unsqueeze(1).unsqueeze(1).clone()
-            # 获取张量中的最大值
-            max_vol = torch.max(x[:, :20, :])
-
-            # 价归一化
-            x[:, 20:21, :] /= mid_price
-            x[:, 20:21, :] /= 0.001
-
             # 量标准化
-            x[:, :20, :] /= max_vol
+            x[:, :, :] /= max_vol
                         
-            x = x[:, :21, :]
             return x, y
 
 
@@ -88,8 +83,8 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 30, 60, 100]:
-            # 同一个训练使用4个随机种子，最终取均值
             if predict_n == 100:
+                # 同一个训练使用4个随机种子，最终取均值
                 for seed in range(4):
                     vars.append((predict_n, classify_idx, seed))
             classify_idx+=1
@@ -134,20 +129,25 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 21, 100), (1, self.y_n)
+        return (1, 20, 100), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
         # SMALL
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [21, 20, 10, 3]
+        d1, d2, d3, d4 = [20, 20, 10, 3]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
-        return transform_stable(device, self.para, 103, num_rows=21)
+        return transform_stable(device, self.para, 103, num_rows=20)
 
 if '__main__' == __name__:
+
+    t1, t2, t3, t4 = [100, 30, 10, 1]
+    d1, d2, d3, d4 = [20, 20, 10, 3]
+    model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
+    print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
