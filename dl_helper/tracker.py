@@ -111,15 +111,15 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
     for model_type in ['final', 'best']:
         # 保存到pic
         need_cols = [i for i in list(df_all) if model_type in i]
-        test_col = [i for i in need_cols if 'test' in i][0]
+        test_col = [i for i in need_cols if 'test' in i]
+        if len(test_col) == 0:
+            continue
+
+        test_col = test_col[0]
         train_col = f'{model_type}_train_class_f1'
         val_col = f'{model_type}_val_class_f1'
 
-        df = df_all.loc[:,need_cols].copy()
-        if test_col not in list(df):
-            df = df.sort_values(train_col, ascending=False)
-        else:
-            df = df.sort_values(test_col, ascending=False)
+        df = df_all.loc[:,need_cols].copy().sort_values(test_col, ascending=False)
 
         for col in list(df):
             df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
@@ -127,9 +127,6 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
 
         for col in [train_col, val_col]:
             if col not in list(df):
-                continue
-    
-            if col == train_col and test_col not in list(df): 
                 continue
 
             rank = df[col].rank(method='first', ascending=False)
