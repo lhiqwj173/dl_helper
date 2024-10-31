@@ -129,8 +129,8 @@ class test(test_base):
 
 if '__main__' == __name__:
 
-    model = m_deeplob_dropout(3)
-    print(f"模型参数量: {model_params_num(model)}")
+    # model = m_deeplob_dropout(3)
+    # print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
     input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
@@ -145,6 +145,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        # debug=True,
-        # idx=0
+        debug=True,
+        idx=0
     )
