@@ -129,7 +129,7 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
             if col not in list(df):
                 continue
 
-            rank = df[col].rank(method='first', ascending=False)
+            rank = df[col].rank(method='first', ascending=False) - 1
             rank_change = (idx - rank).astype(int)
             df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')')
 
