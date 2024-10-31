@@ -131,7 +131,7 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
 
             rank = df[col].rank(method='first', ascending=False) - 1
             rank_change = (idx - rank).astype(int)
-            df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')' if x < 0 else '')
+            df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')' if x != 0 else '')
 
         save_df_pic(os.path.join(root, f'{model_type}_symbol_f1_rank.png'),df,(500, 140))
         # dfi.export(df, os.path.join(root, 'symbol_f1_rank.png'))
