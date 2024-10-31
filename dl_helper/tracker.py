@@ -116,8 +116,8 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
             continue
 
         test_col = test_col[0]
-        train_col = f'{model_type}_train_class_f1'
-        val_col = f'{model_type}_val_class_f1'
+        train_col = f'train_{model_type}_class_f1'
+        val_col = f'val_{model_type}_class_f1'
 
         df = df_all.loc[:,need_cols].copy().sort_values(test_col, ascending=False)
 
