@@ -786,6 +786,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
             # 计算平均 f1 score 
             _max_mean_f1_list = tracker.get_mean_f1_socre_important()
+            p.print(f'_max_mean_f1_list:\n{_max_mean_f1_list}')
             need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
             if len(_max_mean_f1_list) > 0:
                 _max_mean_f1 = max(_max_mean_f1_list)
@@ -802,6 +803,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             accelerator.wait_for_everyone()
             need_save_best_model = broadcast(need_save_best_model)
             no_better_need_stop = broadcast(no_better_need_stop)
+            p.print(f'need_save_best_model: {need_save_best_model}')
+            p.print(f'no_better_need_stop: {no_better_need_stop}')
+            if need_save_best_model:
+                # 记录最佳模型的 epoch
+                tracker.best_epoch = epoch
 
             if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
 

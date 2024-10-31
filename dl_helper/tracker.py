@@ -220,6 +220,7 @@ class Tracker():
         self.epoch_count = 0
         self.mini_epoch_count = 0
         self.step_count = 0
+        self.best_model_epoch = 0
         # 每个epoch训练中的阶段
         # 0: 训练 1: 验证
         self.step_in_epoch = 0
@@ -266,6 +267,8 @@ class Tracker():
         # 储存各个标的的各过程的 0, 1 类f1 score
         self.symbol_f1_score = {}
 
+    def record_best_model_epoch(self):
+        self.best_model_epoch = self.epoch_count - 1
 
     def update_mini_batch(self):
         self.mini_epoch_count += 1
@@ -771,8 +774,11 @@ class Tracker():
 
         if self.accelerator.is_main_process:
             val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy().copy())
+            self.printer.print(f'val_class_f1_0:\n{val_class_f1}')
             for i in range(1, self.params.y_n - 1):
-                val_class_f1 += pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
+                _f1 = pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
+                val_class_f1 += _f1
+                self.printer.print(f'val_class_f1_{i}:\n{_f1}')
 
             return (val_class_f1 / (self.params.y_n - 1)).tolist()
         else:
@@ -821,10 +827,15 @@ class Tracker():
             if params.classify:
                 # 分类模型
                 fig, axs = plt.subplots(2, 1, figsize=(15, 10), gridspec_kw={'height_ratios': [7, 3]})
-                ax1 = axs[0]
             else:
                 fig, axs = plt.subplots(figsize=(15, 10))
-                ax1 = axs
+                axs = [axs]# 转成可迭代对象，统一管理
+            
+            # 绘制最佳模型指示线
+            for _ax in axs:
+                _ax.axvline(x=self.best_model_epoch, color='r', linewidth=5, alpha=0.3)
+            
+            ax1 = axs[0]
 
             # 用于添加图例
             ax1_handles = []
@@ -1022,7 +1033,7 @@ class Tracker():
                 for j in range(params.y_n - 1):
                     class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
 
-                labels = ['Train', 'Val', 'Final', 'Best', 'Dummy']
+                labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
 
                 # 自定义颜色
                 colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537']
