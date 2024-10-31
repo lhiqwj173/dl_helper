@@ -7,7 +7,7 @@ from dl_helper.tester import test_base
 from dl_helper.train_param import Params
 from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
-from dl_helper.models.deeplob import m_deeplob_dropout
+from dl_helper.models.deeplob import m_deeplob_depth
 from dl_helper.transforms.deeplob import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num
@@ -20,30 +20,28 @@ predict_n 100
 标签 4
 依据市值top 5选股
 
-标准化
-价格: d / bid_10_price - 1
-量: d / mid_vol 
+历史均值方差标准化
 
-只使用订单簿价量数据 lh_q_t0_base_top5_filter_time
-100*40
+只使用订单簿价量数据 lh_q_t0_base_top5_of
+100*20
 
 batch_size=128
 
 测试 of 数据
 """
-price_cols = [i*2 for i in range(20)]
-other_cols = [i*2 + 1 for i in range(20)]
-class transform_bid_10_price(transform):
+class transform_of(transform):
 
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
+
+            mean_std = torch.transpose(mean_std, 1, 2)
             
             x = x[:, -100:, :20]
 
             # 标准化
-            x -= mean_std[:, :, :1]
-            x /= mean_std[:, :, 1:]
+            x -= mean_std[:, :1, :]
+            x /= mean_std[:, 1:, :]
 
             # 增加一个维度 [batch_size, time_length, num_rows] -> [batch_size, 1，time_length, num_rows]
             x = x.unsqueeze(1)
@@ -63,14 +61,14 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_deeplob_dropout_top5'
+        return f'base_of_top5'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
         vars = []
         classify_idx = 0
-        for predict_n in [3, 10, 30, 60, 100]:
+        for predict_n in [3, 30, 60, 100]:
             if predict_n == 100:
                 # 同一个训练使用4个随机种子，最终取均值
                 for seed in range(4):
@@ -96,7 +94,7 @@ class test(test_base):
             'total_hours': int(24*20),
             'symbols': f'top5',
             'target': f'label 4',
-            'std_mode': '中间价量标准化'
+            'std_mode': '简单标准化'
         }
 
         # 实例化 参数对象
@@ -117,23 +115,23 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 40, 100), (1, self.y_n)
+        return (1, 1, 20, 100), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
-        return m_deeplob_dropout(self.y_n)
+        return m_deeplob_depth(self.y_n)
 
     def get_transform(self, device):
-        return transform_bid_10_price()
+        return transform_of()
 
 if '__main__' == __name__:
 
-    # model = m_deeplob_dropout(3)
-    # print(f"模型参数量: {model_params_num(model)}")
+    model = m_deeplob_depth(3)
+    print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
-    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -145,6 +143,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        debug=True,
-        idx=0
+        # debug=True,
+        # idx=0
     )

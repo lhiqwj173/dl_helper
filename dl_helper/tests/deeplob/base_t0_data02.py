@@ -124,7 +124,7 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 40, 100), (1, self.y_n)
+        return (1, 1, 100, 40), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
