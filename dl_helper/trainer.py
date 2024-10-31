@@ -549,7 +549,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
 
         # 追踪器，计算必要的数据
         # printer.print('update')
-        tracker.update(test_data)
+        tracker.update()
 
     # for debug
     accelerator.wait_for_everyone()
@@ -595,7 +595,7 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
 
                 # 追踪器，计算必要的数据
                 # printer.print('update')
-                tracker.update(data_loader)
+                tracker.update()
 
                 # 等待同步
                 accelerator.wait_for_everyone()
