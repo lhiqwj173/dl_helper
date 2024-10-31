@@ -107,6 +107,7 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
         symbol_f1_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
 
     df_all = pd.DataFrame(symbol_f1_score).T
+    print(list(df_all))
     for model_type in ['final', 'best']:
         # 保存到pic
         need_cols = [i for i in list(df_all) if model_type in i]
