@@ -105,6 +105,82 @@ class m_deeplob(nn.Module):
         x = self.fc1(x)
         return x
 
+class m_deeplob_dropout(m_deeplob):
+    @classmethod
+    def model_name(cls):
+        return "deeplob_dropout"
+
+    def __init__(self, y_len):
+        super().__init__(y_len)
+
+        self.drop_layer1 = nn.Dropout(p=0.2)
+        self.drop_layer2 = nn.Dropout(p=0.2)
+        
+
+    def forward(self, x):
+        # x = x[:, :, :, :40]
+
+        # h0: (number of hidden layers, batch size, hidden size)
+        h0 = torch.zeros(1, x.size(0), 64).to(x.device)
+        c0 = torch.zeros(1, x.size(0), 64).to(x.device)
+    
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        
+        x_inp1 = self.inp1(x)
+        x_inp2 = self.inp2(x)
+        x_inp3 = self.inp3(x)  
+        
+        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)
+        
+        x = self.drop_layer1(x)
+
+        x = x.permute(0, 2, 1, 3)
+        x = torch.reshape(x, (-1, x.shape[1], x.shape[2]))
+
+        x = self.drop_layer2(x)
+        
+        x, _ = self.lstm(x, (h0, c0))
+        x = x[:, -1, :]
+        x = self.fc1(x)
+        return x
+
+
+class m_deeplob_depth(m_deeplob_dropout):
+    @classmethod
+    def model_name(cls):
+        return "deeplob_depth"
+
+    def forward(self, x):
+        # x = x[:, :, :, :40]
+
+        # h0: (number of hidden layers, batch size, hidden size)
+        h0 = torch.zeros(1, x.size(0), 64).to(x.device)
+        c0 = torch.zeros(1, x.size(0), 64).to(x.device)
+    
+        x = self.conv1(x)
+        # x = self.conv2(x)
+        x = self.conv3(x)
+        
+        x_inp1 = self.inp1(x)
+        x_inp2 = self.inp2(x)
+        x_inp3 = self.inp3(x)  
+        
+        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)
+        
+        x = self.drop_layer1(x)
+
+        x = x.permute(0, 2, 1, 3)
+        x = torch.reshape(x, (-1, x.shape[1], x.shape[2]))
+
+        x = self.drop_layer2(x)
+        
+        x, _ = self.lstm(x, (h0, c0))
+        x = x[:, -1, :]
+        x = self.fc1(x)
+        return x
+
 
 if __name__ == "__main__":
     
@@ -114,10 +190,10 @@ if __name__ == "__main__":
 
     device = 'cuda'
 
-    model = m_deeplob(y_len=3)
+    model = m_deeplob_depth(y_len=3)
     # print(model)
 
-    summary(model, (1, 1, 100, 40), device=device)
+    summary(model, (1, 1, 100, 20), device=device)
 
     # model = model.to(device)
     # input = torch.randn((1, 1, 70, 46)).to(device)
