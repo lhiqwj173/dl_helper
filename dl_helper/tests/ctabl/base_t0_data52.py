@@ -55,7 +55,7 @@ class transform_stable(transform):
             # 中间价格 / 中间量
             mid_price = x[:, 20, -1].unsqueeze(1).unsqueeze(1).clone()
             # 获取张量中的最大值
-            max_vol, max_index = torch.max(x[:, :20, :])
+            max_vol = torch.max(x[:, :20, :])
 
             # 价归一化
             x[:, 20:21, :] /= mid_price
