@@ -616,10 +616,9 @@ def save_model_fn(params, model, accelerator, input_shape):
         try:
             torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
             input_names=['input'], output_names=['output'])
-        except:
+        except Exception as e:
             log('导出onnx失败')
-            log(f"模型的设备：{next(model.parameters()).device}")
-            log(f"数据的设备：{torch.randn(input_shape).to(accelerator.device).device}")
+            log(e)
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
@@ -812,6 +811,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
                 if need_save_best_model and accelerator.is_local_main_process:
                     # 拷贝记录最佳模型
+                    p.print(f'epoch {epoch} save_model_bset')
                     model_folder = os.path.join(params.root, MODEL_FINAL)
                     best_folder = os.path.join(params.root, MODEL_BEST)
                     if os.path.exists(best_folder):

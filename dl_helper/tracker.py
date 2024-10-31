@@ -676,6 +676,10 @@ class Tracker():
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
 
+        for _code in self.symbol_f1_score:
+            for k in self.symbol_f1_score[_code]:
+                self.printer.print(f"[symbol_f1_score] {_code} {k}: {self.symbol_f1_score[_code][k]}")
+
         self.printer.print(f"------------tracker data------------")
 
     def track(self, _type, output, target, test_dataloader, loss=None):
@@ -766,7 +770,7 @@ class Tracker():
         assert self.params.classify, 'not classify'
 
         if self.accelerator.is_main_process:
-            val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy())
+            val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy().copy())
             for i in range(1, self.params.y_n - 1):
                 val_class_f1 += pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
 
@@ -1034,7 +1038,7 @@ class Tracker():
 
                 bars = []
                 for idx, class_f1_score_data in enumerate(class_f1_score_datas):
-                    bars.append(ax.bar([i + (3 + idx)*width + j*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
+                    bars.append(ax.bar([i + (3 + idx)*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
                 # 添加增强说明文字
                 tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
                 for i, bar in enumerate(bars[0]):
