@@ -733,6 +733,9 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         x = [x[i] for i in idxs]
         y = [y[i] for i in idxs]
 
+    if len(x) == 0:
+        return diff_length
+
     length = 0
 
     if None is device:
