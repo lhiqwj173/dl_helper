@@ -807,7 +807,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             p.print(f'no_better_need_stop: {no_better_need_stop}')
             if need_save_best_model:
                 # 记录最佳模型的 epoch
-                tracker.best_epoch = epoch
+                tracker.record_best_model_epoch()
 
             if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
 
