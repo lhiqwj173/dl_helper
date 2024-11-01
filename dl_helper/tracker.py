@@ -721,6 +721,7 @@ class Tracker():
         self.printer.print(f"target,{target.shape}", main=False)
         self.printer.print(f"predict,{predict.shape}", main=False)
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
+        self.printer.print(f"gather_for_metrics done", main=False)
 
         # self.printer.print('gather loss, y_true, y_pred done')
         if _type in TYPES_NO_NEED_SYMBOL_F1_SCORE:
