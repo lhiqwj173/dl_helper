@@ -717,9 +717,9 @@ class Tracker():
         if None is loss:
             # 伪造一个loss
             loss = torch.zeros(1, device=self.accelerator.device)
-        self.printer.print(f"loss,{loss.shape}:\n{loss}", main=False)
-        self.printer.print(f"target,{target.shape}:\n{target}", main=False)
-        self.printer.print(f"predict,{predict.shape}:\n{predict}", main=False)
+        self.printer.print(f"loss,{loss.shape}", main=False)
+        self.printer.print(f"target,{target.shape}", main=False)
+        self.printer.print(f"predict,{predict.shape}", main=False)
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
 
         # self.printer.print('gather loss, y_true, y_pred done')
