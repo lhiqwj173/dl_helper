@@ -717,9 +717,9 @@ class Tracker():
         if None is loss:
             # 伪造一个loss
             loss = torch.zeros(1, device=self.accelerator.device)
-        self.printer.print(f"loss,{loss.shape}", main=False)
-        self.printer.print(f"target,{target.shape}", main=False)
-        self.printer.print(f"predict,{predict.shape}", main=False)
+        # self.printer.print(f"loss,{loss.shape}", main=False)
+        # self.printer.print(f"target,{target.shape}", main=False)
+        # self.printer.print(f"predict,{predict.shape}", main=False)
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
         self.printer.print(f"gather_for_metrics done", main=False)
 
@@ -737,7 +737,7 @@ class Tracker():
 
         # 置空
         test_dataloader.dataset.use_data_id = []
-        # self.printer.print('_ids done')
+        self.printer.print('_ids done', main=False)
 
         # 记录label分布
         # test_best / test_dummy 不需要记录
@@ -769,6 +769,8 @@ class Tracker():
 
             self.temp['_codes'] += codes
             self.temp['_num'] += _y_true.shape[0]
+
+        self.printer.print(f"track done", main=False)
 
     def get_mean_f1_socre_important(self):
         assert self.params.classify, 'not classify'
