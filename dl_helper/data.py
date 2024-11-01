@@ -588,7 +588,6 @@ class DistributedSampler(Sampler):
 
         return iter(indices)
 
-   
 def re_blance_sample(ids, price_mean_std, test_x, test_y, test_raw):
 
     # 索引数组
@@ -721,7 +720,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     # 过滤掉不需要的symbol
     if not None is target_parm:
         symbols = target_parm['symbols'].split('@')
-        if (symbols not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]) and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]) and ('top' not in symbols[0]):
+        if (symbols[0] not in [['ETHFDUSD', 'ETHUSDT', 'BTCFDUSD', 'BTCUSDT']]) and ('成交量 >=' not in symbols[0]) and ('成交额 >=' not in symbols[0]) and ('fi2010' != symbols[0]) and ('top' not in symbols[0]):
             symbols = [i.lower() for i in symbols]
             # id: btcusdt_1710289478588
             idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]

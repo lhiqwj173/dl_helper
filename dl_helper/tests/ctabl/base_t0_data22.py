@@ -10,6 +10,7 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
+from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
@@ -144,6 +145,11 @@ class test(test_base):
         return transform_stable(device, self.para, 103, num_rows=21)
 
 if '__main__' == __name__:
+
+    t1, t2, t3, t4 = [100, 30, 10, 1]
+    d1, d2, d3, d4 = [21, 20, 10, 3]
+    model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
+    print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
 

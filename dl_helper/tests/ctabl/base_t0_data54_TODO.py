@@ -10,24 +10,28 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
+from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
-稳健移动窗口表示法
+稳健市场深度表示法
 100 * 21
 
 predict_n 100
-标签 4
+标签 1
 依据市值top 20/10/5选股
 
 标准化
-各列单独简单标准化
+量: d / mid_vol 
+中间价: (d / mid_price) / 0.001
 
 batch_size=128
 
-测试 各列单独简单标准化
+过滤时间 09:30 - 14:57
+
+测试 标签1
 """
 
 class transform_stable(transform):
@@ -35,9 +39,6 @@ class transform_stable(transform):
     def __call__(self, batch, train=False):
         with torch.no_grad():
             x, y, mean_std = batch
-            # debug('x', x.shape, x.device)
-            # debug('y', y.shape, y.device)
-            # debug('mean_std', mean_std.shape, mean_std.device)
 
             # not cnn -> (batchsize, 21, 100)
             x = torch.transpose(x, 1, 2)
@@ -50,17 +51,19 @@ class transform_stable(transform):
             else:
                 if x.shape[2] > self.time_length:
                     x = x[:, :, -self.time_length:]
-            
-            if x.shape[1] > self.num_rows:
-                x = x[:, :self.num_rows, :]
 
-            # 标准化
-            x -= mean_std[:, :, :1]
-            x /= mean_std[:, :, 1:]
+            # 中间价格 / 中间量
+            mid_price = x[:, 20, -1].unsqueeze(1).unsqueeze(1).clone()
+            mid_vol = x[:, 21, -1].unsqueeze(1).unsqueeze(1).clone()
 
-            if train and self.param.random_scale>0:
-                x = self.random_scale(x)
+            # 价归一化
+            x[:, 20:21, :] /= mid_price
+            x[:, 20:21, :] /= 0.001
 
+            # 量标准化
+            x[:, :20, :] /= mid_vol
+                        
+            x = x[:, :21, :]
             return x, y
 
 
@@ -76,7 +79,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'stable_rolling_window_{dataset_type}_each_std'
+        return f'train_depth_label_1'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -106,9 +109,9 @@ class test(test_base):
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': f'{dataset_type}',
+            'symbols': f'top5',
             'target': f'label 4',
-            'std_mode': '简单标准化'
+            'std_mode': '中间标准化'
         }
 
         # 实例化 参数对象
@@ -125,6 +128,7 @@ class test(test_base):
             describe=f"predict_n{predict_n}_seed{seed}",
             amp=self.amp,
             seed=seed,
+            no_better_stop=0,
         )
 
     def get_in_out_shape(self):
@@ -142,22 +146,16 @@ class test(test_base):
         return transform_stable(device, self.para, 103, num_rows=21)
 
 if '__main__' == __name__:
+    t1, t2, t3, t4 = [100, 30, 10, 1]
+    d1, d2, d3, d4 = [21, 20, 10, 3]
+    model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
+    print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
-
-    # 按照数据集分类
-    dataset_type = ''
-    if 'top5' in data_folder_name:
-        dataset_type = 'top5'
-    elif 'top10' in data_folder_name:
-        dataset_type = 'top10'
-    elif 'top20' in data_folder_name:
-        dataset_type = 'top20'
-    else:
-        raise Exception('dataset type not found')
 
     run(
         test, 
