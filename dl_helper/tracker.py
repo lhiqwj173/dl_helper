@@ -714,12 +714,12 @@ class Tracker():
         # self.printer.print('sync track...')
         self.accelerator.wait_for_everyone()
         
-        # self.printer.print(f"{loss}, {type(loss)}, {loss.device}")
-        # self.printer.print(f"{target}")
-        # self.printer.print(f"{predict}")
         if None is loss:
             # 伪造一个loss
             loss = torch.zeros(1, device=self.accelerator.device)
+        self.printer.print(f"{loss}, {type(loss)}, {loss.device}", main=False)
+        self.printer.print(f"{target}", main=False)
+        self.printer.print(f"{predict}", main=False)
         _loss, _y_true, _y_pred = self.accelerator.gather_for_metrics((loss, target, predict))
 
         # self.printer.print('gather loss, y_true, y_pred done')
