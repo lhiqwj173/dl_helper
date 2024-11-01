@@ -128,7 +128,7 @@ class test(test_base):
 
         self.lr_scheduler_class = functools.partial(OneCycle_fast, total_iters=epochs)
 
-        title = self.title_base() + f"_predict_n{predict_n}_seed{seed}"
+        title = self.title_base() + f"_predict_n{predict_n}_{code}_seed{seed}"
 
         data_parm = {
             'predict_n': [3, 30, 60, 100],
