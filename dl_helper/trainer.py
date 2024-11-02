@@ -7,6 +7,7 @@ from dl_helper.idx_manager import get_idx
 from dl_helper.models.dummy import m_dummy
 
 import copy
+import traceback
 import pickle
 import shutil
 import multiprocessing as mp
@@ -652,221 +653,227 @@ def get_data_sampler(data_set, _type):
 def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     # 训练实例
     test = test_class(*args, **kwargs)
+    try:
 
-    # 训练参数
-    params = test.get_param()
-    set_seed(params.seed)
+        # 训练参数
+        params = test.get_param()
+        set_seed(params.seed)
 
-    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(seconds=3600))])
-    p = printer(lock, accelerator)
-    
-    # 检查下载训练文件
-    if (not params.debug) and accelerator.is_local_main_process:
-        p.print('check alist download')
+        accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(seconds=3600))])
+        p = printer(lock, accelerator)
         
-        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-        try:
-            _file = f'alist/{params.train_title}.7z'
-            # 下载文件
-            client.download(f'/train_data/{params.train_title}.7z', 'alist/')
-            p.print(f'download {_file}')
+        # 检查下载训练文件
+        if (not params.debug) and accelerator.is_local_main_process:
+            p.print('check alist download')
+            
+            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+            try:
+                _file = f'alist/{params.train_title}.7z'
+                # 下载文件
+                client.download(f'/train_data/{params.train_title}.7z', 'alist/')
+                p.print(f'download {_file}')
 
-        except:
-            pass
+            except:
+                pass
 
-        if os.path.exists(_file):
-            # 解压文件
-            decompress(_file)
-            p.print(f'decompress {_file}')
-            # move 
-            folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
-            p.print(f'checkpoint folder {folder}')
-            if os.path.exists(folder):
-                wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
-                p.print(f"使用alist缓存文件继续训练")
-                shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
-        else:
+            if os.path.exists(_file):
+                # 解压文件
+                decompress(_file)
+                p.print(f'decompress {_file}')
+                # move 
+                folder = os.path.join('/kaggle/working/alist', params.train_title, 'checkpoint')
+                p.print(f'checkpoint folder {folder}')
+                if os.path.exists(folder):
+                    wx.send_message(f'[{params.train_title}] 使用alist缓存文件继续训练')
+                    p.print(f"使用alist缓存文件继续训练")
+                    shutil.copytree(os.path.join('/kaggle/working/alist', params.train_title), params.root, dirs_exist_ok=True)
+            else:
+                os.makedirs(params.root, exist_ok=True)
+
+        if params.debug:
+            # 删除重建文件夹
+            if os.path.exists(params.root):
+                shutil.rmtree(params.root)
             os.makedirs(params.root, exist_ok=True)
 
-    if params.debug:
-        # 删除重建文件夹
-        if os.path.exists(params.root):
-            shutil.rmtree(params.root)
-        os.makedirs(params.root, exist_ok=True)
+        # 调整参数
+        if num_processes >= 2:
+            # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
+            b = params.batch_size
+            params.batch_size //= num_processes
+            p.print(f'batch_size: {b} -> {params.batch_size}')
+        
+            if not params.abs_learning_rate:
+                # 若不存在绝对学习率，需要基于设备调整lr
+                l = params.learning_rate
+                params.learning_rate *= num_processes
+                p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
-    # 调整参数
-    if num_processes >= 2:
-        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
-        b = params.batch_size
-        params.batch_size //= num_processes
-        p.print(f'batch_size: {b} -> {params.batch_size}')
-    
-        if not params.abs_learning_rate:
-            # 若不存在绝对学习率，需要基于设备调整lr
-            l = params.learning_rate
-            params.learning_rate *= num_processes
-            p.print(f'learning_rate: {l} -> {params.learning_rate}')
+        # 临时额外的训练参数
+        if train_param:
+            for k, v in train_param.items():
+                setattr(params, k, v)
+                p.print(f'{k}-> {v}')
 
-    # 临时额外的训练参数
-    if train_param:
-        for k, v in train_param.items():
-            setattr(params, k, v)
-            p.print(f'{k}-> {v}')
+        if None is model:
+            model = test.get_model()
 
-    if None is model:
-        model = test.get_model()
+        if not only_predict:
+            train_loader = test.get_cache_data('train', params, accelerator)
+            val_loader = test.get_cache_data('val', params, accelerator)
+            p.print(f'data init')
 
-    if not only_predict:
-        train_loader = test.get_cache_data('train', params, accelerator)
-        val_loader = test.get_cache_data('val', params, accelerator)
-        p.print(f'data init')
+        # 绝对学习率优先
+        # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        scheduler = test.get_lr_scheduler(optimizer, params)
+        criterion = nn.CrossEntropyLoss()
 
-    # 绝对学习率优先
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
-    scheduler = test.get_lr_scheduler(optimizer, params)
-    criterion = nn.CrossEntropyLoss()
+        # # TEST
+        # tracker = Tracker_None()
+        # 训练跟踪
+        tracker = Tracker(model.model_name(), params, accelerator, scheduler, num_processes, p)
+        # 新增到 状态 管理
+        accelerator.register_for_checkpointing(tracker)
+        accelerator.register_for_checkpointing(scheduler)
 
-    # # TEST
-    # tracker = Tracker_None()
-    # 训练跟踪
-    tracker = Tracker(model.model_name(), params, accelerator, scheduler, num_processes, p)
-    # 新增到 状态 管理
-    accelerator.register_for_checkpointing(tracker)
-    accelerator.register_for_checkpointing(scheduler)
+        # 不需要准备数据
+        if not only_predict:
+            model, optimizer, scheduler = accelerator.prepare(
+                model, optimizer, scheduler
+            )
+        else:
+            model = accelerator.prepare(model)
+        # model = model.to(accelerator.device)
 
-    # 不需要准备数据
-    if not only_predict:
-        model, optimizer, scheduler = accelerator.prepare(
-            model, optimizer, scheduler
-        )
-    else:
-        model = accelerator.prepare(model)
-    # model = model.to(accelerator.device)
+        p.print(f'prepare done')
 
-    p.print(f'prepare done')
+        # 数据增强
+        trans = test.get_transform(accelerator.device)
 
-    # 数据增强
-    trans = test.get_transform(accelerator.device)
+        # 读取可能存在的训练数据（继续训练）
+        checkpoint_folder = os.path.join(params.root, 'checkpoint')
+        resume_from_checkpoint = os.path.exists(checkpoint_folder)
+        if resume_from_checkpoint:
+            accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
+            accelerator.load_state(checkpoint_folder)
 
-    # 读取可能存在的训练数据（继续训练）
-    checkpoint_folder = os.path.join(params.root, 'checkpoint')
-    resume_from_checkpoint = os.path.exists(checkpoint_folder)
-    if resume_from_checkpoint:
-        accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
-        accelerator.load_state(checkpoint_folder)
+            # 输出
+            tracker.print_state()
 
-        # 输出
+        os.makedirs(os.path.join(params.root, MODEL_BEST), exist_ok=True)
+        os.makedirs(os.path.join(params.root, MODEL_FINAL), exist_ok=True)
+        os.makedirs(os.path.join(params.root, MODEL_DUMMY), exist_ok=True)
+        
+        # # for debug
+        # tracker.need_test = True
+        # only_predict = True
+
+        # 训练循环
+        if not only_predict:
+            p.print(f'train start')
+            for epoch in range(tracker.epoch_count, params.epochs):
+                p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
+                if tracker.step_in_epoch == 0:
+                    # debug(f'train_fn_mini_epoch')
+                    train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+
+                # 验证
+                p.print(f'epoch {epoch} val_fn')
+                val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
+
+                # 保存结果
+                p.print(f'epoch {epoch} save_result')
+                tracker.save_result()
+
+                # 计算平均 f1 score 
+                _max_mean_f1_list = tracker.get_mean_f1_socre_important()
+                p.print(f'_max_mean_f1_list:\n{_max_mean_f1_list}')
+                need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
+                if len(_max_mean_f1_list) > 0:
+                    _max_mean_f1 = max(_max_mean_f1_list)
+                    max_idx = _max_mean_f1_list.index(_max_mean_f1)
+                    if max_idx == len(_max_mean_f1_list) - 1:
+                        # 当前的模型版本最优
+                        need_save_best_model += 1
+
+                    if params.no_better_stop > 0 and (len(_max_mean_f1_list) - 1 - max_idx) >= params.no_better_stop:
+                        # 长时间无优化，停止训练
+                        no_better_need_stop += 1
+
+                # 同步
+                accelerator.wait_for_everyone()
+                need_save_best_model = broadcast(need_save_best_model)
+                no_better_need_stop = broadcast(no_better_need_stop)
+                p.print(f'need_save_best_model: {need_save_best_model}')
+                p.print(f'no_better_need_stop: {no_better_need_stop}')
+                if need_save_best_model:
+                    # 记录最佳模型的 epoch
+                    tracker.record_best_model_epoch()
+
+                if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
+
+                    # 保存模型
+                    p.print(f'epoch {epoch} save_model_fn')
+                    save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+
+                    if need_save_best_model and accelerator.is_local_main_process:
+                        # 拷贝记录最佳模型
+                        p.print(f'epoch {epoch} save_model_bset')
+                        model_folder = os.path.join(params.root, MODEL_FINAL)
+                        best_folder = os.path.join(params.root, MODEL_BEST)
+                        if os.path.exists(best_folder):
+                            shutil.rmtree(best_folder)
+                        shutil.copytree(model_folder, best_folder)
+
+                # 打包
+                # debug(f'package_root')
+                package_root(accelerator, params)
+
+                p.print(f'epoch {epoch} done')
+
+                # 训练可用时长不足 / 早停
+                # 开始 test/predict
+                if tracker.need_test or no_better_need_stop:
+                    break
+
+        # 停止继续读取数据
+        if not only_predict:
+            p.print(f'close train data_loading')
+            train_loader.sampler.data_loader_close()
+            p.print(f'close val data_loading')
+            val_loader.sampler.data_loader_close()
+
+        p.print(f'test start')
+
+        # 准备测试数据
+        test_loader = test.get_cache_data('test', params, accelerator,predict_output=True)
+        # 测试
+        test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
+
+        # 保存模型
+        save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+
+        # 绘图
+        tracker.save_result()
+
+        # 输出状态到日志
         tracker.print_state()
 
-    os.makedirs(os.path.join(params.root, MODEL_BEST), exist_ok=True)
-    os.makedirs(os.path.join(params.root, MODEL_FINAL), exist_ok=True)
-    os.makedirs(os.path.join(params.root, MODEL_DUMMY), exist_ok=True)
-    
-    # # for debug
-    # tracker.need_test = True
-    # only_predict = True
+        # 输出模型预测，用于模型融合
+        if not only_predict:
+            train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
+            val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
+        output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
 
-    # 训练循环
-    if not only_predict:
-        p.print(f'train start')
-        for epoch in range(tracker.epoch_count, params.epochs):
-            p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
-            if tracker.step_in_epoch == 0:
-                # debug(f'train_fn_mini_epoch')
-                train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+        # 打包
+        package_root(accelerator, params)
+        accelerator.wait_for_everyone()
+    except Exception as e:
+        exception_str = traceback.format_exc()
+        wx.send_message(f'[{params.train_title}] 训练异常:\n{exception_str}')
+        raise e
 
-            # 验证
-            p.print(f'epoch {epoch} val_fn')
-            val_fn(epoch, params, model, criterion, val_loader, accelerator, tracker, p, trans)
-
-            # 保存结果
-            p.print(f'epoch {epoch} save_result')
-            tracker.save_result()
-
-            # 计算平均 f1 score 
-            _max_mean_f1_list = tracker.get_mean_f1_socre_important()
-            p.print(f'_max_mean_f1_list:\n{_max_mean_f1_list}')
-            need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
-            if len(_max_mean_f1_list) > 0:
-                _max_mean_f1 = max(_max_mean_f1_list)
-                max_idx = _max_mean_f1_list.index(_max_mean_f1)
-                if max_idx == len(_max_mean_f1_list) - 1:
-                    # 当前的模型版本最优
-                    need_save_best_model += 1
-
-                if params.no_better_stop > 0 and (len(_max_mean_f1_list) - 1 - max_idx) >= params.no_better_stop:
-                    # 长时间无优化，停止训练
-                    no_better_need_stop += 1
-
-            # 同步
-            accelerator.wait_for_everyone()
-            need_save_best_model = broadcast(need_save_best_model)
-            no_better_need_stop = broadcast(no_better_need_stop)
-            p.print(f'need_save_best_model: {need_save_best_model}')
-            p.print(f'no_better_need_stop: {no_better_need_stop}')
-            if need_save_best_model:
-                # 记录最佳模型的 epoch
-                tracker.record_best_model_epoch()
-
-            if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
-
-                # 保存模型
-                p.print(f'epoch {epoch} save_model_fn')
-                save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
-
-                if need_save_best_model and accelerator.is_local_main_process:
-                    # 拷贝记录最佳模型
-                    p.print(f'epoch {epoch} save_model_bset')
-                    model_folder = os.path.join(params.root, MODEL_FINAL)
-                    best_folder = os.path.join(params.root, MODEL_BEST)
-                    if os.path.exists(best_folder):
-                        shutil.rmtree(best_folder)
-                    shutil.copytree(model_folder, best_folder)
-
-            # 打包
-            # debug(f'package_root')
-            package_root(accelerator, params)
-
-            p.print(f'epoch {epoch} done')
-
-            # 训练可用时长不足 / 早停
-            # 开始 test/predict
-            if tracker.need_test or no_better_need_stop:
-                break
-
-    # 停止继续读取数据
-    if not only_predict:
-        p.print(f'close train data_loading')
-        train_loader.sampler.data_loader_close()
-        p.print(f'close val data_loading')
-        val_loader.sampler.data_loader_close()
-
-    p.print(f'test start')
-
-    # 准备测试数据
-    test_loader = test.get_cache_data('test', params, accelerator,predict_output=True)
-    # 测试
-    test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
-
-    # 保存模型
-    save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
-
-    # 绘图
-    tracker.save_result()
-
-    # 输出状态到日志
-    tracker.print_state()
-
-    # 输出模型预测，用于模型融合
-    if not only_predict:
-        train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
-        val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
-    output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
-
-    # 打包
-    package_root(accelerator, params)
-    accelerator.wait_for_everyone()
 
 def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     set_seed(42)
