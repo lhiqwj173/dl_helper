@@ -445,7 +445,7 @@ class Dataset_cahce(torch.utils.data.Dataset):
         self.use_data_id = []
 
     def dup_more(self, length):
-        if length > self.length:
+        while (length > self.length):
             # 数据不足, 需要补齐
             print(f'dup_more {self.length} -> {length}')
             need_num = length - self.length
@@ -453,6 +453,9 @@ class Dataset_cahce(torch.utils.data.Dataset):
             self.ids += self.ids[-need_num:]
             self.x_idx += self.x_idx[-need_num:]
             self.y = torch.cat((self.y, self.y[-need_num:]))
+
+            self.length = len(self.y)
+
 
     def __len__(self):
         """Denotes the total number of samples"""
