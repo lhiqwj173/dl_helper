@@ -447,12 +447,12 @@ class Dataset_cahce(torch.utils.data.Dataset):
     def dup_more(self, length):
         if length > self.length:
             # 数据不足, 需要补齐
+            print(f'dup_more {self.length} -> {length}')
             need_num = length - self.length
             self.mean_std += self.mean_std[-need_num:]
             self.ids += self.ids[-need_num:]
             self.x_idx += self.x_idx[-need_num:]
             self.y = torch.cat((self.y, self.y[-need_num:]))
-
 
     def __len__(self):
         """Denotes the total number of samples"""
@@ -462,27 +462,31 @@ class Dataset_cahce(torch.utils.data.Dataset):
         """Generates samples of data
         x, y, mean_std
         """
-        # 切片范围
-        a, b = self.x_idx[index]
-        # data_pass_n = b-a
-        # data_diff = self.pass_n - data_pass_n
-        # if data_diff>0:
-        #     a+=data_diff
+        try:
+            # 切片范围
+            a, b = self.x_idx[index]
+            # data_pass_n = b-a
+            # data_diff = self.pass_n - data_pass_n
+            # if data_diff>0:
+            #     a+=data_diff
 
-        x = self.data[a:b, :]
-        # if (x == 0.0).all().item():
-        #     # 记录异常
-        #     log(f'[x all 0.0] index:{index} id:{self.ids[index]}')
-        #     # raise ValueError
+            x = self.data[a:b, :]
+            # if (x == 0.0).all().item():
+            #     # 记录异常
+            #     log(f'[x all 0.0] index:{index} id:{self.ids[index]}')
+            #     # raise ValueError
 
-        self.use_data_id.append(self.ids[index])
+            self.use_data_id.append(self.ids[index])
 
-        mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
+            mean_std = torch.tensor(self.mean_std[index], dtype=torch.float)
 
-        # # 全0 异常
-        # assert not torch.all(mean_std == 0).item(), 'mean_std all 0.0'
+            # # 全0 异常
+            # assert not torch.all(mean_std == 0).item(), 'mean_std all 0.0'
 
-        return x, self.y[index], mean_std
+            return x, self.y[index], mean_std
+        except Exception as e:
+            print(f'index:{index} length:{len(self.x_idx)}')
+
 
 def find_nearest_mini_dataset_length(a, b, world_size):
     if a % b == 0 and b%world_size == 0:
@@ -574,13 +578,17 @@ class DistributedSampler(Sampler):
 
         # 同步数据长度
         data_length = torch.tensor(len(self.dataset), device=self.accelerator.device)
+        log(f'{self.dataset.type} origin length: {data_length} rank:{self.rank}')
+
         self.accelerator.wait_for_everyone()
         data_length = self.accelerator.gather_for_metrics(data_length)
         data_length = torch.max(data_length)# 同步最大值, 数据量小的一方用多余的数据补齐
+        log(f'{self.dataset.type} max length: {data_length} rank:{self.rank}')
+
         # 补齐数据
         self.dataset.dup_more(data_length)
-        log(f'{self.dataset.type} data_length: {data_length}')
 
+        log(f'{self.dataset.type} final length: {data_length} rank:{self.rank}')
         if self.shuffle:
             indices = list(torch.randperm(data_length))
         else:
