@@ -872,6 +872,9 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
     except Exception as e:
         exception_str = traceback.format_exc()
         wx.send_message(f'[{params.train_title}] 训练异常:\n{exception_str}')
+
+        os.system('pkill -f jupyter')
+
         raise e
 
 
