@@ -91,7 +91,7 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 10, 30, 60, 100]:
-            if predict_n in [3, 30, 60, 100]:
+            if predict_n in [60, 100]:
                 # 检查 classify_idx 是否存在阈值
                 if classify_idx in thresholds:
                     for code in [

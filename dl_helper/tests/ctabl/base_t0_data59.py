@@ -78,24 +78,24 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 30, 60, 100]:
-            # if predict_n in [3, 30, 60, 100]:
-            # 检查 classify_idx 是否存在阈值
-            if classify_idx in thresholds:
-                for code in [
-                    '513050',
-                    '513330',
-                    '518880',
-                    '159941',
-                    '513180'
-                ]:
+            if predict_n in [60, 100]:
+                # 检查 classify_idx 是否存在阈值
+                if classify_idx in thresholds:
+                    for code in [
+                        '513050',
+                        '513330',
+                        '518880',
+                        '159941',
+                        '513180'
+                    ]:
 
-                    # 检查 code 是否存在阈值
-                    if code not in thresholds[classify_idx]:
-                        continue
-                    
-                    # 同一个训练使用 5 个随机种子，最终取均值
-                    for seed in range( 5 ):
-                        vars.append((predict_n, classify_idx, seed, code, thresholds[classify_idx][code]))
+                        # 检查 code 是否存在阈值
+                        if code not in thresholds[classify_idx]:
+                            continue
+                        
+                        # 同一个训练使用 5 个随机种子，最终取均值
+                        for seed in range( 5 ):
+                            vars.append((predict_n, classify_idx, seed, code, thresholds[classify_idx][code]))
             classify_idx+=1
         # 将 vars 反转, 从predict_n=100开始
         vars.reverse()
