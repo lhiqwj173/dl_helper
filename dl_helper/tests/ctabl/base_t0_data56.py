@@ -11,7 +11,7 @@ from dl_helper.models.binctabl import m_bin_btabl
 from dl_helper.transforms.binctabl import transform
 
 from dl_helper.trainer import run
-from dl_helper.tool import model_params_num
+from dl_helper.tool import model_params_num, cal_symbol_y_idx_thresholds
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
