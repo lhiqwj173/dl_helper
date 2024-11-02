@@ -874,7 +874,29 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         wx.send_message(f'[{params.train_title}] 训练异常:\n{exception_str}')
 
         print(f'[{params.train_title}] 训练异常:\n{exception_str}', flush=True)
+
+        print('pkill -f jupyter', flush=True)
         os.system('pkill -f jupyter')
+
+        # 方法1：停止当前cell的运行
+        print('sys.exit()', flush=True)
+        import sys
+        sys.exit()
+
+        # 方法2：中断内核
+        print('os._exit(0)', flush=True)
+        import os
+        os._exit(0)
+
+        # 方法3：直接退出notebook
+        print('HTML("<script>window.close();</script>")', flush=True)
+        from IPython.core.display import HTML
+        HTML("<script>window.close();</script>")
+
+        # 方法4：重启内核
+        print('kill_kernel()', flush=True)
+        from IPython.kernel import kill_kernel
+        kill_kernel()
 
         raise e
 
