@@ -878,13 +878,18 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         print('pkill -f jupyter', flush=True)
         os.system('pkill -f jupyter')
 
-        # 方法1：停止当前cell的运行
-        print('sys.exit()', flush=True)
-        import sys
-        sys.exit()
+        # # 方法1：停止当前cell的运行
+        # print('sys.exit()', flush=True)
+        # import sys
+        # sys.exit()
 
-        # 方法2：中断内核
-        print('os._exit(0)', flush=True)
+        # # 方法2：中断内核
+        # print('os._exit(0)', flush=True)
+        # os._exit(0)
+
+        torch.cuda.empty_cache()
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
         os._exit(0)
 
         # 方法3：直接退出notebook
