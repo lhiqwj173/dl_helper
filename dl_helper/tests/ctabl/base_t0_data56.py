@@ -86,6 +86,8 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.y_n = 3
+        print(f'y_n: {self.y_n}')
+
         thresholds = cal_symbol_y_idx_thresholds(os.path.join(self.data_folder, 'train'), self.y_n)
 
         vars = []
