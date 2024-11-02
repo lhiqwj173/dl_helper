@@ -876,7 +876,6 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         print(f'[{params.train_title}] 训练异常:\n{exception_str}', flush=True)
 
         print('pkill -f jupyter', flush=True)
-        import os
         os.system('pkill -f jupyter')
 
         # 方法1：停止当前cell的运行
