@@ -10,19 +10,19 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.binctabl import transform
 from dl_helper.trainer import run
-from dl_helper.tool import model_params_num, cal_symbol_y_idx_thresholds
+from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
 稳健市场深度表示法
-lh_q_t0_depth_clear_keep_dup
-100 * 21
+增加成交数据
+100 * 41
 
 predict_n 100
 标签 4
-依据市值top 20/10/5选股
+依据市值top 5选股
 
 标准化
 量: d / mid_vol 
@@ -41,8 +41,11 @@ class transform_stable(transform):
         with torch.no_grad():
             x, y, mean_std = batch
 
-            # not cnn -> (batchsize, 21, 100)
+            # not cnn -> (batchsize, 41, 100)
             x = torch.transpose(x, 1, 2)
+
+            # 删除成交数据数据
+            x = x[:, 50:, :]
 
             # random_mask_row
             if train and self.param.random_mask_row:
@@ -54,17 +57,17 @@ class transform_stable(transform):
                     x = x[:, :, -self.time_length:]
 
             # 中间价格 / 中间量
-            mid_price = x[:, 20, -1].unsqueeze(1).unsqueeze(1).clone()
-            mid_vol = x[:, 21, -1].unsqueeze(1).unsqueeze(1).clone()
+            mid_price = x[:, 40, -1].unsqueeze(1).unsqueeze(1).clone()
+            mid_vol = x[:, 41, -1].unsqueeze(1).unsqueeze(1).clone()
 
             # 价归一化
-            x[:, 20:21, :] /= mid_price
-            x[:, 20:21, :] /= 0.001
+            x[:, 40:41, :] /= mid_price
+            x[:, 40:41, :] /= 0.001
 
             # 量标准化
-            x[:, :20, :] /= mid_vol
+            x[:, :40, :] /= mid_vol
                         
-            x = x[:, :21, :]
+            x = x[:, :41, :]
             return x, y
 
 
@@ -85,34 +88,21 @@ def yfunc(threshold_data, y_len, y):
         else:
             return 1
     raise Exception('y_len 必须为 2 或 3')
-
 class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'train_depth_each_symbol'
+        return f'once_depth_add_deal'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.y_n = 3
-
-        # 读取训练数据类别阈值
-        # 513050 1 (-0.1666666666666483, 0.11666666666676484) 1.445
-        # 518880 1 (-0.20000000000042206, 0.20000000000042206) 0.976
-        
-        # 513050 2 (-0.3333333333332966, 0.2500000000000835) 0.835
-        # 513180 2 (-0.150000000000039, 0.08333333333332416) 0.92
-        # 518880 2 (-0.36666666666551606, 0.3666666666672924) 0.936
-        # 513050 3 (-0.4449999999999177, 0.34999999999996145) 0.938
-        # 513180 3 (-0.25999999999998247, 0.170000000000059) 1.036
-        # 513330 3 (-0.1100000000000545, 0.04499999999996174) 1.07
-        # 518880 3 (-0.4949999999999122, 0.4949999999999122) 1.007
         thresholds = cal_symbol_y_idx_thresholds(os.path.join(self.data_folder, 'train'), self.y_n)
 
         vars = []
         classify_idx = 0
         for predict_n in [3, 30, 60, 100]:
+            # if predict_n in [3, 30, 60, 100]:
             # 检查 classify_idx 是否存在阈值
             if classify_idx in thresholds:
                 for code in [
@@ -127,12 +117,16 @@ class test(test_base):
                     if code not in thresholds[classify_idx]:
                         continue
                     
-                    # 同一个训练使用4个随机种子，最终取均值
-                    for seed in range(4):
+                    # 同一个训练使用 5 个随机种子，最终取均值
+                    for seed in range( 5 ):
                         vars.append((predict_n, classify_idx, seed, code, thresholds[classify_idx][code]))
             classify_idx+=1
+        # 将 vars 反转, 从predict_n=100开始
+        vars.reverse()
+        vars = vars[:8*5]
 
         predict_n, classify_idx, seed, code, threshold_data = vars[self.idx]
+
 
         epochs = 30
 
@@ -170,30 +164,31 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 21, 100), (1, self.y_n)
+        return (1, 41, 100), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
         # SMALL
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [21, 20, 10, 3]
+        d1, d2, d3, d4 = [41, 20, 10, 3]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
-        return transform_stable(device, self.para, 103, num_rows=21)
+        return transform_stable(device, self.para, 103, num_rows=41)
 
 if '__main__' == __name__:
+
     t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [21, 20, 10, 3]
+    d1, d2, d3, d4 = [41, 20, 10, 3]
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
-    # data_folder = r'D:\L2_DATA_T0_ETF\train_data\depth_clear_keep_dup'
 
     run(
         test, 
