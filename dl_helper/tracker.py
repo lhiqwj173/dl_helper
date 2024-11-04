@@ -562,7 +562,7 @@ class Tracker():
 
                                 for timestamp, target, pro  in data_list:
                                     pro_str = ','.join([str(float(i)) for i in pro])
-                                    f.write(f'{timestamp},{target},{pro_str}\n')
+                                    f.write(f'{timestamp},{target.item()},{pro_str}\n')
                         # self.printer.print('update test round done')
                 
                     log(f'{model_type} {dataset_type} 输出完毕')
@@ -653,19 +653,19 @@ class Tracker():
 
         if self.params.classify:
             predict = F.softmax(output, dim=1)
-            
-            # 模型 output 输出，用于模型融合训练
-            all_ids = test_dataloader.dataset.use_data_id
-            if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
-                # 按日期分类输出数据
-                for i in range(predict.shape[0]):
-                    symbol, timestamp = all_ids[i].split('_')
-                    date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
-                    if date not in self.output_datas:
-                        self.output_datas[date] = []
-                    self.output_datas[date].append((all_ids[i], target[i], predict[i]))
         else:
             predict = output
+
+        # 模型 output 输出，用于模型融合训练
+        all_ids = test_dataloader.dataset.use_data_id
+        if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
+            # 按日期分类输出数据
+            for i in range(predict.shape[0]):
+                symbol, timestamp = all_ids[i].split('_')
+                date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
+                if date not in self.output_datas:
+                    self.output_datas[date] = []
+                self.output_datas[date].append((all_ids[i], target[i], predict[i]))
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')
@@ -972,29 +972,45 @@ class Tracker():
             try:
                 for _type in ['train', 'val', 'test_best', 'test_final', 'test_dummy']:
                     score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1].cpu().item()
-                    score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
-                    score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
 
-                    for i in range(params.y_n - 1):
-                        score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
+                    if self.params.classify:
+                        score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
+                        score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
 
-                    self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n - 1)]) / (params.y_n - 1)
+                        for i in range(params.y_n - 1):
+                            score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
+
+                        self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n - 1)]) / (params.y_n - 1)
+                    else:
+                        score_data[f'{_type}_r2'] = self.data[f'{_type}_r2'][-1].cpu().item()
 
                 # 计算增强说明文字
                 tag_texts = {}
                 for _type in ['train', 'val', 'test_best', 'test_final']:
-                    self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
-                    tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct']:.2f}%)"
-                tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
-
-                # 按照不同指标分组
+                    if self.params.classify:
+                        self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
+                        tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct']:.2f}%)"
+                    else:
+                        self.data[f'{_type}_r2_enhanced_pct'] = 100 * (self.data[f'{_type}_r2'] - self.data['test_dummy_r2']) / self.data['test_dummy_r2']
+                        tag_texts[_type] = f"{self.data[f'{_type}_r2']:.2f}({self.data[f'{_type}_r2_enhanced_pct']:.2f}%)"
+                
+                # loss分组
                 loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
-                acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
-                f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
+                if self.params.classify:
+                    tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
 
-                class_f1_score_datas = []
-                for j in range(params.y_n - 1):
-                    class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
+                    # 按照不同指标分组
+                    acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
+                    f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
+                    
+                    class_f1_score_datas = []
+                    for j in range(params.y_n - 1):
+                        class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
+
+                else:
+                    tag_texts['test_dummy'] = f"{self.data['test_dummy_r2']:.2f}"
+                    # 按照不同指标分组
+                    r2_score_data = [score_data[i] for i in score_data if 'r2' in i]
 
                 labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
 
@@ -1007,15 +1023,23 @@ class Tracker():
                 alpha = 0.6
 
                 bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
-                bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
-                bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
+                text_bar = None
+                if self.params.classify:
+                    bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
+                    bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
 
-                bars = []
-                for idx, class_f1_score_data in enumerate(class_f1_score_datas):
-                    bars.append(ax.bar([i + (3 + idx)*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
+                    bars = []
+                    for idx, class_f1_score_data in enumerate(class_f1_score_datas):
+                        bars.append(ax.bar([i + (3 + idx)*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
+                
+                    text_bar = bars[0]
+                else:
+                    bar2 = ax.bar([i + width for i in range(5)], r2_score_data, width, color=colors[1], label='R2', alpha=alpha)
+                    text_bar = bar2
+                
                 # 添加增强说明文字
                 tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
-                for i, bar in enumerate(bars[0]):
+                for i, bar in enumerate(text_bar):
                     yval = bar.get_height()
                     ax.text(bar.get_x() + bar.get_width()/2, yval, tag_texts[tag_type[i]], ha='center', va='bottom')
 
