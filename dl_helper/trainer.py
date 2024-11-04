@@ -727,7 +727,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
         optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
         scheduler = test.get_lr_scheduler(optimizer, params)
-        criterion = nn.CrossEntropyLoss()
+        criterion = test.get_criterion()
 
         # # TEST
         # tracker = Tracker_None()

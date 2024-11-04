@@ -48,35 +48,27 @@ class transform_of(transform):
             return x, y
 
 
-def yfunc(threshold, y):
-    if y > threshold:
-        return 0
-    elif y < -threshold:
-        return 1
-    else:
-        return 2
-
 class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'base_of_top5_bincatbl'
+        return f'base_of_top5_bincatbl_reg'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
         vars = []
-        classify_idx = 0
+        regress_idx = 0
         for predict_n in [3, 30, 60, 100]:
             if predict_n == 100:
                 # 同一个训练使用4个随机种子，最终取均值
                 for seed in range(4):
-                    vars.append((predict_n, classify_idx, seed))
-            classify_idx+=1
+                    vars.append((predict_n, regress_idx, seed))
+            regress_idx+=1
 
-        predict_n, classify_idx, seed = vars[self.idx]
+        predict_n, regress_idx, seed = vars[self.idx]
 
-        self.y_n = 3
+        self.y_n = 1
 
         epochs = 30
 
@@ -101,9 +93,9 @@ class test(test_base):
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
             batch_size=64*2, epochs=epochs,
 
-            # 3分类
-            classify=True,
-            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 0.5),
+            # 回归模型
+            classify=False,
+            regress_y_idx=regress_idx,
 
             data_folder=self.data_folder,
 
@@ -120,7 +112,7 @@ class test(test_base):
     # 返回一个 torch model
     def get_model(self):
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [20, 20, 10, 3]
+        d1, d2, d3, d4 = [20, 20, 10, self.y_n]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
@@ -128,7 +120,7 @@ class test(test_base):
 
 if '__main__' == __name__:
     t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [20, 20, 10, 3]
+    d1, d2, d3, d4 = [20, 20, 10, 1]
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
