@@ -513,10 +513,13 @@ class Tracker():
                 # self.printer.print('update test round')
                 # 保存测试数据预测结果
                 all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
-                softmax_predictions = self.temp['softmax_predictions'].to('cpu')
                 all_targets = self.temp['_y_true'].to('cpu')
+                if self.params.classify:
+                    all_predictions = self.temp['softmax_predictions'].to('cpu')
+                else:
+                    all_predictions = self.temp['_y_pred'].to('cpu')
 
-                assert len(all_ids) == all_targets.shape[0] == softmax_predictions.shape[0], f'{all_ids}, {all_targets.shape}, {softmax_predictions.shape} predict result length not match'
+                assert len(all_ids) == all_targets.shape[0] == all_predictions.shape[0], f'{all_ids}, {all_targets.shape}, {all_predictions.shape} predict result length not match'
 
                 if '_' in all_ids[0]:
                     # 输出预测用于测试
@@ -528,7 +531,7 @@ class Tracker():
                             symbol, timestamp = all_ids[i].split('_')
                             if symbol not in datas:
                                 datas[symbol] = []
-                            datas[symbol].append((int(timestamp), all_targets[i], softmax_predictions[i]))
+                            datas[symbol].append((int(timestamp), all_targets[i], all_predictions[i]))
 
                         # 储存预测结果
                         # symbol_begin_end.csv
@@ -562,52 +565,6 @@ class Tracker():
                                     f.write(f'{timestamp},{target},{pro_str}\n')
                         # self.printer.print('update test round done')
                 
-                    """
-                    # 输出预测用于模型融合
-                    # > train/val/test > date_file
-                    # id,target,0,1,2
-                    dataset_type = self.track_update.split('_')[0]
-                    assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
-                    if self.track_update in TYPES_NEED_OUTPUT:
-                        datas={}
-
-                        out_folder = os.path.join(save_folder, dataset_type)
-                        os.makedirs(out_folder, exist_ok=True)
-
-                        # 按日期分类输出数据
-                        for i in range(all_targets.shape[0]):
-                            symbol, timestamp = all_ids[i].split('_')
-                            date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
-                            if date not in datas:
-                                datas[date] = []
-                            datas[date].append((all_ids[i], all_targets[i], softmax_predictions[i]))
-
-                        log(f'输出模型output: {model_type} {dataset_type} 共{len(datas)}天')
-
-                        # 储存数据
-                        for date in sorted(datas.keys()):
-                            log(f'输出模型output: {model_type} {dataset_type} {date}')
-
-                            # 按照 id 去重
-                            _data_list = []
-                            id_list = []
-                            for i in datas[date]:
-                                if i[0] not in id_list:
-                                    _data_list.append(i)
-                                    id_list.append(i[0])
-                            datas[date] = _data_list
-
-                            with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
-                                f.write('id,target')
-                                for i in range(self.params.y_n):
-                                    f.write(f',{i}')
-                                f.write('\n')
-
-                                for _id, target, pro in datas[date]:
-                                    pro_str = ','.join([str(float(i)) for i in pro])
-                                    f.write(f'{_id},{target},{pro_str}\n')
-                    """
-
                     log(f'{model_type} {dataset_type} 输出完毕')
             
             self.printer.print('TYPES_NEED_OUT wait')
