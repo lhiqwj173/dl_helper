@@ -781,7 +781,7 @@ def fix_raw_data(date, code, result_folder):
 
         # nan/inf 检查
         has_nan = result.isna().any().any()
-        has_inf = (_raw == float('inf')).any().any()
+        has_inf = (result == float('inf')).any().any()
         if has_nan or has_inf:
             # 发送微信提醒 
             msg += f'{date} {code} fix数据 包含 NaN 或 Inf'
