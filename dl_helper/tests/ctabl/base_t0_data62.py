@@ -52,7 +52,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_of_top5_bincatbl_reg'
+        return f'once_of_reg'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
