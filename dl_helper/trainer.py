@@ -787,7 +787,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                 tracker.save_result()
 
                 # 计算平均评价指标
-                _max_mean_score_list = tracker.get_mean_f1_important()
+                _max_mean_score_list = tracker.get_mean_socre_important()
                 p.print(f'_max_mean_score_list:\n{_max_mean_score_list}')
                 need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
                 if len(_max_mean_score_list) > 0:
