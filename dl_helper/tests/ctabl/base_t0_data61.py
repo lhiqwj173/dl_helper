@@ -10,7 +10,7 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
-from dl_helper.tool import model_params_num
+from dl_helper.tool import model_params_num, cal_symbol_y_idx_thresholds
 
 from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
@@ -22,15 +22,12 @@ predict_n 100
 
 历史均值方差标准化
 
-of 数据 lh_q_t0_lable_1_combine_data
-[20] + [40] + [15 + 15 + 10 + 10] + [10 + 10] + [20] + 4 -> 154
-[20] + [40] + [50] +                [20] +      [20] + 4 -> 154
-of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基础数据
+of 数据 lh_q_t0_base_top5_of
 100*20
 
 batch_size=128
 
-测试 模型 binctabl
+测试 按照标的读取阈值，训练模型
 """
 class transform_of(transform):
 
@@ -48,42 +45,69 @@ class transform_of(transform):
             return x, y
 
 
-def yfunc(threshold, y):
-    if y > threshold:
-        return 0
-    elif y < -threshold:
-        return 1
-    else:
-        return 2
+def yfunc(threshold_data, y_len, y):
+    if y_len == 3:
+        a, b = threshold_data
+
+        if y > b:
+            return 0
+        elif y < a:
+            return 1
+        else:
+            return 2
+
+    elif y_len == 2:
+        if y > threshold_data[0]:
+            return 0
+        else:
+            return 1
+    raise Exception('y_len 必须为 2 或 3')
 
 class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_of_top5_bincatbl'
+        return f'once_of_data'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
+        self.y_n = 3
+        thresholds = cal_symbol_y_idx_thresholds(os.path.join(self.data_folder, 'train'), self.y_n)
 
         vars = []
         classify_idx = 0
         for predict_n in [3, 5, 10, 15, 30, 60, 100]:
             for label in ['paper', 'paper_pct', 'label_1', 'label_1_pct']:
-                if predict_n == 100 and label == 'paper':
-                    # 同一个训练使用 6 个随机种子，最终取均值
-                    for seed in range(6):
-                        vars.append((predict_n, classify_idx, seed))
+                if predict_n in [60, 100] and label == 'paper':
+                    # 检查 classify_idx 是否存在阈值
+                    if classify_idx in thresholds:
+                        for code in [
+                            '513050',
+                            '513330',
+                            '518880',
+                            '159941',
+                            '513180'
+                        ]:
+
+                            # 检查 code 是否存在阈值
+                            if code not in thresholds[classify_idx]:
+                                continue
+                            
+                            # 同一个训练使用 5 个随机种子，最终取均值
+                            for seed in range( 5 ):
+                                vars.append((predict_n, classify_idx, seed, code, thresholds[classify_idx][code]))
                 classify_idx+=1
+        # 将 vars 反转, 从predict_n=100开始
+        vars.reverse()
+        vars = vars[:8*5]
 
-        predict_n, classify_idx, seed = vars[self.idx]
-
-        self.y_n = 3
+        predict_n, classify_idx, seed, code, threshold_data = vars[self.idx]
 
         epochs = 30
 
         self.lr_scheduler_class = functools.partial(OneCycle_fast, total_iters=epochs)
 
-        title = self.title_base() + f"_predict_n{predict_n}_seed{seed}"
+        title = self.title_base() + f"_predict_n{predict_n}_{code}_seed{seed}"
 
         data_parm = {
             'predict_n': [3, 30, 60, 100],
@@ -92,7 +116,7 @@ class test(test_base):
             'begin_date': '2024-05-01',
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
-            'symbols': f'top5',
+            'symbols': f'{code}',# 过滤标的
             'target': f'label 4',
             'std_mode': '简单标准化'
         }
@@ -104,7 +128,7 @@ class test(test_base):
 
             # 3分类
             classify=True,
-            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 0.5),
+            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, threshold_data, self.y_n),
 
             data_folder=self.data_folder,
 
@@ -134,7 +158,7 @@ if '__main__' == __name__:
     print(f"模型参数量: {model_params_num(model)}")
 
     input_folder = r'/kaggle/input'
-    input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
 
     data_folder_name = os.listdir(input_folder)[0]
     data_folder = os.path.join(input_folder, data_folder_name)
@@ -146,6 +170,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        debug=True,
-        idx=0
+        # debug=True,
+        # idx=0
     )
