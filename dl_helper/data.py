@@ -656,9 +656,14 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
     all_cols = list(raw)
     if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
         # 订单数据
-        order_cols = [i for i in all_cols if i.startswith('O')]
+        order_cols = [i for i in all_cols if i.startswith('OS') or i.startswith('OB')]
         order_raw = raw.loc[:, order_cols]
         raw.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
+    if 'OF买10量' in all_cols and 'OF卖10量' in all_cols:
+        # OF数据
+        OF_cols = [i for i in all_cols if i.startswith('OF')]
+        OF_raw = raw.loc[:, OF_cols]
+        raw.loc[(OF_raw == 0).all(axis=1), ['OF买10量', 'OF卖10量']] = 1
     if '卖10量' in all_cols and '卖10价' not in all_cols:
         # 深度数据
         depth_cols = ['卖10量',
