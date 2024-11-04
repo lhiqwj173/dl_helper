@@ -364,7 +364,7 @@ class Tracker():
 
                     for _id, target, pro in self.output_datas[date]:
                         pro_str = ','.join([str(float(i)) for i in pro])
-                        f.write(f'{_id},{target},{pro_str}\n')
+                        f.write(f'{_id},{target.item()},{pro_str}\n')
 
             self.output_datas = {}# 重置
             self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
