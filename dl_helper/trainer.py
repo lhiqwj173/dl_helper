@@ -786,18 +786,18 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
                 p.print(f'epoch {epoch} save_result')
                 tracker.save_result()
 
-                # 计算平均 f1 score 
-                _max_mean_f1_list = tracker.get_mean_f1_socre_important()
-                p.print(f'_max_mean_f1_list:\n{_max_mean_f1_list}')
+                # 计算平均评价指标
+                _max_mean_score_list = tracker.get_mean_f1_important()
+                p.print(f'_max_mean_score_list:\n{_max_mean_score_list}')
                 need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
-                if len(_max_mean_f1_list) > 0:
-                    _max_mean_f1 = max(_max_mean_f1_list)
-                    max_idx = _max_mean_f1_list.index(_max_mean_f1)
-                    if max_idx == len(_max_mean_f1_list) - 1:
+                if len(_max_mean_score_list) > 0:
+                    _max_mean_f1 = max(_max_mean_score_list)
+                    max_idx = _max_mean_score_list.index(_max_mean_f1)
+                    if max_idx == len(_max_mean_score_list) - 1:
                         # 当前的模型版本最优
                         need_save_best_model += 1
 
-                    if params.no_better_stop > 0 and (len(_max_mean_f1_list) - 1 - max_idx) >= params.no_better_stop:
+                    if params.no_better_stop > 0 and (len(_max_mean_score_list) - 1 - max_idx) >= params.no_better_stop:
                         # 长时间无优化，停止训练
                         no_better_need_stop += 1
 
