@@ -436,7 +436,7 @@ class Tracker():
                         self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
 
                 else:
-                    self.data[f'{self.track_update}_r2'] = variance_weighted_r2
+                    self.data[f'{self.track_update}_r2'] = variance_weighted_r2.unsqueeze(0)
             else:
                 if _loss >0:
                     self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
