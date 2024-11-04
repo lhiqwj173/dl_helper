@@ -38,7 +38,7 @@ MODEL_FINAL, MODEL_BEST, MODEL_DUMMY = MODEL_TYPES
 TEST_TYPES=['test_final', 'test_best', 'test_dummy']
 TEST_FINAL, TEST_BEST, TEST_DUMMY = TEST_TYPES
 
-TYPES_NO_NEED_SYMBOL_F1_SCORE = ['train', 'val']
+TYPES_NO_NEED_SYMBOL_SCORE = ['train', 'val']
 
 TYPES_NEED_LABEL_COUNT = ['train', 'val', 'test_final']
 TYPES_NEED_CAL_THRESHOLD = ['test_final', 'test_best']
@@ -88,7 +88,13 @@ def class_f1_score(y_pred, y_true, y_n):
     print('compute', flush=True)
     return class_f1
 
-def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n, root):
+def r2_score(y_pred, y_true):
+    # 计算方差加权 R2
+    _r2_score = R2Score(multioutput='variance_weighted').to(y_pred.device)
+    variance_weighted_r2 = _r2_score(y_pred, y_true)
+    return variance_weighted_r2
+
+def class_f1_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
     # train/val/test_final/test_best/test_dummy/final_train/final_val/best_train/best_val
     total_codes = set(codes)
     for _code in total_codes:
@@ -98,16 +104,16 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
 
         class_f1 = class_f1_score(match_y_pred, match_y_true, y_n)
 
-        if _code not in symbol_f1_score:
-            symbol_f1_score[_code] = {}
+        if _code not in symbol_score:
+            symbol_score[_code] = {}
 
         sum_score = 0
         for i in range(y_n - 1):
             sum_score += class_f1[i].cpu().item()
 
-        symbol_f1_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
+        symbol_score[_code][f'{_type}_class_f1'] = sum_score / (y_n - 1)
 
-    df_all = pd.DataFrame(symbol_f1_score).T
+    df_all = pd.DataFrame(symbol_score).T
     print(list(df_all))
     for model_type in ['final', 'best']:
         # 保存到pic
@@ -136,6 +142,51 @@ def class_f1_score_each_code(_type, symbol_f1_score, codes, y_pred, y_true, y_n,
 
         save_df_pic(os.path.join(root, f'{model_type}_symbol_f1_rank.png'),df,(500, 140))
         # dfi.export(df, os.path.join(root, 'symbol_f1_rank.png'))
+
+def r2_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
+    # train/val/test_final/test_best/test_dummy/final_train/final_val/best_train/best_val
+    total_codes = set(codes)
+    for _code in total_codes:
+        match_ids = [i for i in range(len(codes)) if codes[i] == _code]
+        match_y_pred = y_pred[match_ids]
+        match_y_true = y_true[match_ids]
+
+        score = r2_score(match_y_pred, match_y_true)
+
+        if _code not in symbol_score:
+            symbol_score[_code] = {}
+
+        symbol_score[_code][f'{_type}_r2'] = score
+
+    df_all = pd.DataFrame(symbol_score).T
+    print(list(df_all))
+    for model_type in ['final', 'best']:
+        # 保存到pic
+        need_cols = [i for i in list(df_all) if model_type in i]
+        test_col = [i for i in need_cols if 'test' in i]
+        if len(test_col) == 0:
+            continue
+
+        test_col = test_col[0]
+        train_col = f'train_{model_type}_r2'
+        val_col = f'val_{model_type}_r2'
+
+        df = df_all.loc[:,need_cols].copy().sort_values(test_col, ascending=False)
+
+        for col in list(df):
+            df[col] = df[col].apply(lambda x: '{:.4f}'.format(x))
+        idx = range(len(df))
+
+        for col in [train_col, val_col]:
+            if col not in list(df):
+                continue
+
+            rank = df[col].rank(method='first', ascending=False) - 1
+            rank_change = (idx - rank).astype(int)
+            df[col] = df[col] + rank_change.apply(lambda x: '(' + ('+' + str(x) if x > 0 else str(x)) + ')' if x != 0 else '')
+
+        save_df_pic(os.path.join(root, f'{model_type}_symbol_r2.png'),df,(500, 140))
+
 
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
@@ -266,7 +317,7 @@ class Tracker():
         self.reset_temp()
 
         # 储存各个标的的各过程的 0, 1 类f1 score
-        self.symbol_f1_score = {}
+        self.symbol_score = {}
 
     def record_best_model_epoch(self):
         self.best_model_epoch = self.epoch_count - 1
@@ -408,17 +459,21 @@ class Tracker():
 
                 # 各个类别按照 code 分类计数 f1 score
                 # train/val 不需要计算
-                if self.track_update not in TYPES_NO_NEED_SYMBOL_F1_SCORE:
-                    class_f1_score_each_code(self.track_update, self.symbol_f1_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+                if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
+                    class_f1_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
 
                 print('class_f1_each_code', flush=True)
                 # self.printer.print('class_f1_each_code')
 
             else:
                 # 计算方差加权 R2
-                r2_score = R2Score(multioutput='variance_weighted').to(self.temp['_y_pred'].device)
                 variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
-                # self.printer.print('variance_weighted_r2')
+
+                # 各个类别按照 code 分类计数 r2 score
+                # train/val 不需要计算
+                if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
+                    r2_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+                print('r2_each_code', flush=True)
         
             # self.printer.print(f'_loss: {_loss.shape}')
             # self.printer.print(f'balance_acc: {balance_acc.shape}')
@@ -637,9 +692,9 @@ class Tracker():
         for i in self.data:
             self.printer.print(f"{i}: {self.data[i]}")
 
-        for _code in self.symbol_f1_score:
-            for k in self.symbol_f1_score[_code]:
-                self.printer.print(f"[symbol_f1_score] {_code} {k}: {self.symbol_f1_score[_code][k]}")
+        for _code in self.symbol_score:
+            for k in self.symbol_score[_code]:
+                self.printer.print(f"[symbol_score] {_code} {k}: {self.symbol_score[_code][k]}")
 
         self.printer.print(f"------------tracker data------------")
 
@@ -682,7 +737,7 @@ class Tracker():
         # self.printer.print(f"gather_for_metrics done", main=False)
 
         # self.printer.print('gather loss, y_true, y_pred done')
-        if _type in TYPES_NO_NEED_SYMBOL_F1_SCORE:
+        if _type in TYPES_NO_NEED_SYMBOL_SCORE:
             # train/val 不需要, 避免浪费计算
             codes = []
         elif _type in TYPES_NEED_OUT:
