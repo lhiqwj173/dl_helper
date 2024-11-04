@@ -19,6 +19,7 @@ init_logger('base', level='INFO')
 稳健市场深度表示法
 增加成交数据
 100 * 41
+lh_q_t0_depth_add_deal_order
 
 predict_n 100
 标签 4
