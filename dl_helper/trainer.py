@@ -902,6 +902,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         from IPython.kernel import kill_kernel
         kill_kernel()
 
+        # 方法5：
+        import IPython
+        IPython.Application.instance().kernel.do_shutdown(False)
+
         raise e
 
 
