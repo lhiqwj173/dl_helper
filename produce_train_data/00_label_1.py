@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings("ignore")
 import subprocess
 import sys
-import os
+import os, torch
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
 if kaggle:
