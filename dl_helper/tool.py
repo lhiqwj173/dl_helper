@@ -81,19 +81,9 @@ def cal_symbol_y_idx_thresholds(train_folder, y_len=3):
     thresholds = {key: value for key, value in thresholds.items() if len(value) != 0}
     return thresholds
 
-def cal_symbol_class_pct(train_folder, y_len=3, thresholds=[-0.5, 0.5]):
-
-    """
-    返回各个标的标签 在指定阈值下 各分类的占比
-    {
-        y_idx:{
-            code1: (0.12, 0.11, 0.5),
-            code2: (0.12, 0.11, 0.5),
-        }
-    }
-    """
+def cal_symbol_class_pct(train_folder, y_len=3, thresholds=[-0.5, 0.5], min_class_pct=0.1):
+    res = {}
     ys = {}
-    thresholds = {}
 
     train_files = os.listdir(train_folder)
     _,_, _, y, _ = pickle.load(open(os.path.join(train_folder, train_files[0]), 'rb'))
@@ -106,7 +96,7 @@ def cal_symbol_class_pct(train_folder, y_len=3, thresholds=[-0.5, 0.5]):
         for y_idx in y_idxs:
             if y_idx not in ys:
                 ys[y_idx] = {}
-                thresholds[y_idx] = {}
+                res[y_idx] = []
 
             for i, _id in enumerate(ids):
                 code, _ = _id.split('_')
@@ -116,35 +106,25 @@ def cal_symbol_class_pct(train_folder, y_len=3, thresholds=[-0.5, 0.5]):
 
     for y_idx in ys:
         for code in ys[y_idx]:
-            # 计算 33% 和 66% 分位数
-            threshold = (np.percentile(ys[y_idx][code], 33), np.percentile(ys[y_idx][code], 66)) if y_len == 3 else (np.percentile(ys[y_idx][code], 50),) if y_len == 2 else []
+            pct = []
+            _y = ys[y_idx][code]
+            _thresholds = [i for i in thresholds]
+            # 添加一个无穷大
+            _thresholds.append(float('inf'))
+            for i in range(y_len):
+                _y2 = [x for x in _y if x >= _thresholds[0]]
+                num = len(_y) - len(_y2)
+                pct.append(100*num/len(ys[y_idx][code]))
+                _thresholds = _thresholds[1:]
+                _y = _y2
 
-            if y_len == 3:
-                c_0 = len([i for i in ys[y_idx][code] if i <= threshold[0]])
-                c_1 = len([i for i in ys[y_idx][code] if i > threshold[0] and i <= threshold[1]])
-                c_2 = len([i for i in ys[y_idx][code] if i > threshold[1]])
-                _max = max(c_0, c_1, c_2)
-                _min = min(c_0, c_1, c_2)
-            elif y_len == 2:
-                c_0 = len([i for i in ys[y_idx][code] if i <= threshold[0]])
-                c_1 = len([i for i in ys[y_idx][code] if i > threshold[0]])
-                _max = max(c_0, c_1)
-                _min = min(c_0, c_1)
-            else:
-                raise Exception('y_len 必须为 2 或 3')
-
-            max_diff = _max - _min
-            max_diff_pct = max_diff / len(ys[y_idx][code]) * 100
-            if max_diff_pct > 3:
-                continue
-
-            thresholds[y_idx][code] = threshold
-            print(code, y_idx, thresholds[y_idx][code], round(max_diff_pct, 3))
+            if min(pct) > min_class_pct * 100:
+                print(f"{y_idx} {code} {[f'{i:.2f}%' for i in pct]}")
+                res[y_idx].append(code)
 
     # 删除值长度为0的键
-    thresholds = {key: value for key, value in thresholds.items() if len(value) != 0}
-    return thresholds
-
+    res = {key: value for key, value in res.items() if len(value) != 0}
+    return res
 
 def model_params_num(model):
     # 将所有参数转换为一个向量
