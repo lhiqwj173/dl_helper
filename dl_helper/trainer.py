@@ -523,6 +523,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
     models.append(blank_model)
 
     # dummy 模型
+    printer.print(f'params.y_n: {params.y_n}')
     model_dummy = m_dummy(params.y_n)
     models.append(model_dummy)
 
