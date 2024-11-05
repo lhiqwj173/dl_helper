@@ -13,6 +13,7 @@ from datetime import datetime
 import torch
 import torch.nn.functional as F
 from torchmetrics import F1Score, R2Score
+from sklearn.metrics import r2_score as sk_r2_score
 
 from py_ext.tool import debug, log
 
@@ -93,6 +94,15 @@ def r2_score(y_pred, y_true):
     _r2_score = R2Score(multioutput='variance_weighted').to(y_pred.device)
     variance_weighted_r2 = _r2_score(y_pred, y_true)
     return variance_weighted_r2
+
+def sklearn_r2_score(y_pred, y_true):
+    # 转换为numpy计算
+    y_pred_np = y_pred.cpu().numpy()
+    y_true_np = y_true.cpu().numpy()
+    
+    r2 = sk_r2_score(y_true_np, y_pred_np, multioutput='variance_weighted')
+    return torch.tensor(r2, device=y_pred.device, dtype=torch.float32)
+
 
 def class_f1_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
     # train/val/test_final/test_best/test_dummy/final_train/final_val/best_train/best_val
