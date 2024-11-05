@@ -421,7 +421,7 @@ class Tracker():
                     f.write('id')
 
                     # target
-                    target_length = len(self.output_datas[date][0][1])
+                    target_length = 1 if len(self.output_datas[date][0][1].shape)==0 else self.output_datas[date][0][1].shape[0]
                     if target_length > 1:
                         for i in range(target_length):
                             f.write(f',target{i}')
@@ -633,7 +633,7 @@ class Tracker():
                                 f.write('timestamp')
 
                                 # target
-                                target_length = len(data_list[0][1])
+                                target_length = 1 if len(data_list[0][1].shape)==0 else data_list[0][1].shape[0]
                                 if target_length > 1:
                                     for i in range(target_length):
                                         f.write(f',target{i}')
