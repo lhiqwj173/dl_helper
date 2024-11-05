@@ -51,7 +51,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_of_label_1_reg'
+        return f'once_of_label_1_reg_2'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
