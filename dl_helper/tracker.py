@@ -161,7 +161,7 @@ def r2_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
         match_y_pred = y_pred[match_ids]
         match_y_true = y_true[match_ids]
 
-        score = r2_score(match_y_pred, match_y_true)
+        score = sklearn_r2_score(match_y_pred, match_y_true)
 
         if _code not in symbol_score:
             symbol_score[_code] = {}
@@ -477,7 +477,7 @@ class Tracker():
 
             else:
                 # 计算方差加权 R2
-                variance_weighted_r2 = r2_score(self.temp['_y_pred'], self.temp['_y_true'])
+                variance_weighted_r2 = sklearn_r2_score(self.temp['_y_pred'], self.temp['_y_true'])
 
                 # 各个类别按照 code 分类计数 r2 score
                 # train/val 不需要计算
