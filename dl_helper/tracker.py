@@ -418,14 +418,24 @@ class Tracker():
                 self.output_datas[date] = _data_list
 
                 with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
-                    f.write('id,target')
+                    f.write('id')
+
+                    # target
+                    target_length = len(self.output_datas[date][1])
+                    if target_length > 1:
+                        for i in range(target_length):
+                            f.write(f',target{i}')
+                    else:
+                        f.write(f',target')
+
                     for i in range(self.params.y_n):
                         f.write(f',{i}')
                     f.write('\n')
 
                     for _id, target, pro in self.output_datas[date]:
                         pro_str = ','.join([str(float(i)) for i in pro])
-                        f.write(f'{_id},{target.item()},{pro_str}\n')
+                        target_str = ','.join([str(float(i)) for i in target]) if target_length > 1 else str(target.item())
+                        f.write(f'{_id},{target_str},{pro_str}\n')
 
             self.output_datas = {}# 重置
             self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
