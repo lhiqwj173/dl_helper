@@ -29,7 +29,7 @@ of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基
 
 batch_size=128
 
-测试 predict_n 60
+测试 predict_n 30/60
 """
 class transform_of(transform):
 
@@ -68,7 +68,7 @@ class test(test_base):
         classify_idx = 0
         for predict_n in [3, 5, 10, 15, 30, 60, 100]:
             for label in ['paper', 'paper_pct', 'label_1', 'label_1_pct']:
-                if predict_n == 60 and label == 'label_1':
+                if predict_n in [30, 60] and label == 'label_1':
                     # 同一个训练使用 6 个随机种子，最终取均值
                     for seed in range(6):
                         vars.append((predict_n, classify_idx, seed))
