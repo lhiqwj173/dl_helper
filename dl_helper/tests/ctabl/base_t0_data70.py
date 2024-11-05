@@ -94,6 +94,8 @@ class test(test_base):
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
             batch_size=64*2, epochs=epochs,
 
+            y_n = self.y_n,
+
             # 回归模型
             classify=False,
             regress_y_idx=regress_idxs,
