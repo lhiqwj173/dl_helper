@@ -421,7 +421,7 @@ class Tracker():
                     f.write('id')
 
                     # target
-                    target_length = len(self.output_datas[date][1])
+                    target_length = len(self.output_datas[date][0][1])
                     if target_length > 1:
                         for i in range(target_length):
                             f.write(f',target{i}')
@@ -630,21 +630,10 @@ class Tracker():
                             begin = data_list[0][0]
                             end = data_list[-1][0]
                             with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                                # f.write('timestamp,target,0,1,2\n')
-                                f.write('timestamp,target')
-                                for i in range(self.params.y_n):
-                                    f.write(f',{i}')
-                                f.write('\n')
-
-                                for timestamp, target, pro  in data_list:
-                                    pro_str = ','.join([str(float(i)) for i in pro])
-                                    f.write(f'{timestamp},{target.item()},{pro_str}\n')
-
-                            with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
                                 f.write('timestamp')
 
                                 # target
-                                target_length = len(data_list[1])
+                                target_length = len(data_list[0][1])
                                 if target_length > 1:
                                     for i in range(target_length):
                                         f.write(f',target{i}')
