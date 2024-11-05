@@ -639,6 +639,27 @@ class Tracker():
                                 for timestamp, target, pro  in data_list:
                                     pro_str = ','.join([str(float(i)) for i in pro])
                                     f.write(f'{timestamp},{target.item()},{pro_str}\n')
+
+                            with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
+                                f.write('timestamp')
+
+                                # target
+                                target_length = len(data_list[1])
+                                if target_length > 1:
+                                    for i in range(target_length):
+                                        f.write(f',target{i}')
+                                else:
+                                    f.write(f',target')
+
+                                for i in range(self.params.y_n):
+                                    f.write(f',{i}')
+                                f.write('\n')
+
+                                for timestamp, target, pro  in data_list:
+                                    pro_str = ','.join([str(float(i)) for i in pro])
+                                    target_str = ','.join([str(float(i)) for i in target]) if target_length > 1 else str(target.item())
+                                    f.write(f'{timestamp},{target_str},{pro_str}\n')
+
                         # self.printer.print('update test round done')
                 
                     log(f'{model_type} {dataset_type} 输出完毕')
