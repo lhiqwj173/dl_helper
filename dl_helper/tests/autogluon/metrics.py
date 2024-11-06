@@ -35,7 +35,7 @@ def mean_class_f1(y_true, y_pred):
 
 
 mean_class_f1_scorer = make_scorer(name='mean_class_f1',
-                                 score_func=sklearn.metrics.accuracy_score,
+                                 score_func=mean_class_f1,
                                  optimum=1,
                                  greater_is_better=True,
                                  needs_class=True)
