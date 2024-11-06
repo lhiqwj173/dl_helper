@@ -43,5 +43,7 @@ mobilenet_v2_data_v6/
 *.csv
 *.png
 
+AutogluonModels
+
 /temp
 /logs

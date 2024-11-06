@@ -697,7 +697,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
 
         raw.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
         for col in depth_cols:
-            raw[col].fillna(method='ffill', inplace=True)
+            raw[col] = raw[col].ffill()
     if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
         # 成交数据
         deal_cols = [i for i in all_cols if i.startswith('D')]
@@ -705,17 +705,17 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         raw.loc[(deal_raw == 0).all(axis=1), ['DB卖1量', 'DS买1量']] = 1
 
     # 40档位价量数据nan处理
-    if raw.shape[1] in [40, 44]:
+    if 'BASE卖1量' in all_cols and 'BASE买1量' in all_cols:
         # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
         for i in range(2, 11):
             # 买价
-            raw[f'买{i}价'].fillna(raw[f'买{i-1}价'] - 0.001, inplace=True)
+            raw.loc[:, f'BASE买{i}价'] = raw[f'BASE买{i}价'].fillna(raw[f'BASE买{i-1}价'] - 0.001)
 
             # 卖价
-            raw[f'卖{i}价'].fillna(raw[f'卖{i-1}价'] + 0.001, inplace=True)
+            raw.loc[:, f'BASE卖{i}价'] = raw[f'BASE卖{i}价'].fillna(raw[f'BASE卖{i-1}价'] + 0.001)
 
         # 量nan，用0填充
-        vol_cols = [i for i in list(raw)[:40] if '价' not in i]
+        vol_cols = [i for i in list(raw) if i.startswith('BASE') and '价' not in i]
         raw[vol_cols] = raw[vol_cols].fillna(0)
 
     # # 异常全0检查
