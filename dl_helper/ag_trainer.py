@@ -40,9 +40,12 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
     yfunc : 标签预处理函数
     train_data_folder : 训练数据路径
     """
+    if kaggle:
+        train_data_folder = '/kaggle/input/' + os.listdir('/kaggle/input')[0]
+
     time_info = time.strftime("%Y%m%d_%H%M_", time.localtime())
     if '' == title:
-        title = 'ag_train'
+        title = os.path.basename(train_data_folder)
     title = time_info + title
 
     # gpu后缀
@@ -50,13 +53,10 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
     if gpu_name:
         title += '_' + gpu_name
         
-    root=f'/ag_train_data/{title}', 
+    root=f'/ag_train_data/{title}'
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
-
-    if kaggle:
-        train_data_folder = '/kaggle/input/' + os.listdir('/kaggle/input')[0]
 
     # 读取训练数据
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
