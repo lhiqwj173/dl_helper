@@ -2,7 +2,7 @@ from autogluon.tabular import TabularDataset, TabularPredictor
 from metrics import mean_class_f1_scorer
 import pandas as pd
 import numpy as np
-import os,pickle
+import os,pickle,subprocess
 
 def get_gpu_num():
     if 'CUDA_VERSION' in os.environ:
