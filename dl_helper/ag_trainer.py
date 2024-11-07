@@ -1,5 +1,5 @@
 from autogluon.tabular import TabularDataset, TabularPredictor
-from metrics import mean_class_f1_scorer
+from dl_helper.tests.autogluon.metrics import mean_class_f1_scorer
 import pandas as pd
 import numpy as np
 import os,pickle,subprocess
@@ -19,17 +19,15 @@ def get_gpu_num():
 
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
-def autogluon_train_func(id, label, y_len, root='/train_result', yfunc=None, train_data_folder=''):
+def autogluon_train_func(id='id', label='label', use_length=500000, root='/train_result', yfunc=None, train_data_folder=''):
     """
     id, label : id/标签列名
-    y_len : 标签类别数
     root : 训练结果保存路径
     yfunc : 标签预处理函数
     train_data_folder : 训练数据路径
     """
 
     # id, label = 'id', 'label'
-    # y_len = 3
     os.makedirs(root, exist_ok=True)
 
     if kaggle:
@@ -38,6 +36,8 @@ def autogluon_train_func(id, label, y_len, root='/train_result', yfunc=None, tra
     # 读取训练数据
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     train_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
+    if use_length > 0:
+        train_data = train_data.iloc[-min(use_length, len(train_data)):].reset_index(drop=True)
     print(f'训练数据长度: {len(train_data)}')
     # 预处理标签
     if not None is yfunc:
@@ -51,14 +51,17 @@ def autogluon_train_func(id, label, y_len, root='/train_result', yfunc=None, tra
     # 读取测试数据
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     test_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
+    if use_length > 0:
+        test_data = test_data.iloc[-min(use_length, len(test_data)):].reset_index(drop=True)
+    print(f'测试数据长度: {len(test_data)}')
     # 预处理标签
     if not None is yfunc:
         test_data[label] = test_data[label].apply(yfunc)
-    print(f'测试数据长度: {len(test_data)}')
 
     # 预测 储存
     test_to_save = test_data.loc[:, [id, label]].copy()
-    test_to_save[[str(i) for i in range(y_len)]] = predictor.predict_proba(test_data.drop(columns=[id, label])).values
+    predict_proba = predictor.predict_proba(test_data.drop(columns=[id, label]))
+    test_to_save[[str(i) for i in range(len(list(predict_proba)))]] = predict_proba.values
     # 重命名 label -> target
     test_to_save.rename(columns={label: 'target'}, inplace=True)
     symbol, test_begin = test_data[id].iloc[0].split('_')
