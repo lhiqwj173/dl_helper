@@ -2,7 +2,6 @@ from autogluon.core.metrics import make_scorer
 from sklearn.metrics import f1_score
 import numpy as np
 
-
 def class_f1_score_sklearn(y_true, y_pred):
     """
     计算每个类别的F1 score

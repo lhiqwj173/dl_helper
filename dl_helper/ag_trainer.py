@@ -3,6 +3,7 @@ from dl_helper.tests.autogluon.metrics import mean_class_f1_scorer
 import pandas as pd
 import numpy as np
 import os,pickle,subprocess
+import time
 
 def get_gpu_num():
     if 'CUDA_VERSION' in os.environ:
@@ -19,13 +20,22 @@ def get_gpu_num():
 
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
-def autogluon_train_func(id='id', label='label', use_length=500000, root='/train_result', yfunc=None, train_data_folder=''):
+os.environ['ALIST_USER'] = 'admin'
+os.environ['ALIST_PWD'] = 'LHss6632673'
+
+def autogluon_train_func(title='', id='id', label='label', use_length=500000, yfunc=None, train_data_folder=''):
     """
+    title : 训练标题,用于存储的文件夹名, 默认为空, 为空时使用时间戳
     id, label : id/标签列名
-    root : 训练结果保存路径
     yfunc : 标签预处理函数
     train_data_folder : 训练数据路径
     """
+    time_info = time.strftime("%Y%m%d_%H%M_", time.localtime())
+    if '' == title:
+        title = 'ag_train'
+    title = time_info + title
+        
+    root=f'/ag_train_data/{title}', 
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
@@ -80,8 +90,15 @@ def autogluon_train_func(id='id', label='label', use_length=500000, root='/train
     importance = predictor.feature_importance(test_data.drop(columns = [id]))
     importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
 
-    
+    # 打包文件夹 并 上传到alist
+    zip_file = f'{title}.7z'
+    compress_folder(root, zip_file, 9, inplace=False)
+    print('compress_folder done')
 
+    # 上传更新到alist
+    client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+    client.upload(zip_file, '/ag_train_data/')
+    print('upload done')
 
 
 
