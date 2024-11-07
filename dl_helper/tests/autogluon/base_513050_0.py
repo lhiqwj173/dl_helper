@@ -10,4 +10,4 @@ def yfunc(y):
         return 2
 
 if __name__ == '__main__':
-    autogluon_train_func(use_length=5e5, yfunc=yfunc)   
+    autogluon_train_func(use_length=3e5, yfunc=yfunc)   
