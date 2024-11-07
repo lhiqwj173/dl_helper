@@ -5,15 +5,25 @@ import numpy as np
 import os,pickle,subprocess
 import time
 
-def get_gpu_num():
+def get_gpu_name():
     if 'CUDA_VERSION' in os.environ:
         # 执行 nvidia-smi 命令，并捕获输出
         result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # 解析输出，去掉标题行
         gpu_info = result.stdout.split('\n')[1].strip()
         if 'T4' in gpu_info:
-            return 2
+            return 'T4x2'
         elif 'P100' in gpu_info:
+            return 'P100'
+    else:
+        return ''
+
+def get_gpu_num():
+    gpu_name = get_gpu_name()
+    if gpu_name:
+        if 'T4' in gpu_name:
+            return 2
+        elif 'P100' in gpu_name:
             return 1
     else:
         return 'auto'
@@ -34,6 +44,11 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
     if '' == title:
         title = 'ag_train'
     title = time_info + title
+
+    # gpu后缀
+    gpu_name = get_gpu_name()
+    if gpu_name:
+        title += '_' + gpu_name
         
     root=f'/ag_train_data/{title}', 
 
