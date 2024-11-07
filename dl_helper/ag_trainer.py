@@ -37,7 +37,7 @@ def autogluon_train_func(id='id', label='label', use_length=500000, root='/train
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     train_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     if use_length > 0:
-        train_data = train_data.iloc[-min(use_length, len(train_data)):].reset_index(drop=True)
+        train_data = train_data.iloc[-int(min(use_length, len(train_data))):].reset_index(drop=True)
     print(f'训练数据长度: {len(train_data)}')
     # 预处理标签
     if not None is yfunc:
@@ -52,7 +52,7 @@ def autogluon_train_func(id='id', label='label', use_length=500000, root='/train
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     test_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     if use_length > 0:
-        test_data = test_data.iloc[-min(use_length, len(test_data)):].reset_index(drop=True)
+        test_data = test_data.iloc[-int(min(use_length, len(test_data))):].reset_index(drop=True)
     print(f'测试数据长度: {len(test_data)}')
     # 预处理标签
     if not None is yfunc:
