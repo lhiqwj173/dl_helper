@@ -69,7 +69,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
 
     time_info = time.strftime("%Y%m%d_%H%M_", time.localtime())
     if '' == title:
-        title = os.path.basename(train_data_folder)
+        title = os.path.basename(train_data_folder).replace('lh_q_t0_', '')
     title = time_info + title
 
     # gpu后缀
