@@ -10,6 +10,8 @@ from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from py_ext.alist import alist
 
+logger_ag = logging.getLogger("autogluon")
+
 def get_gpu_name():
     if 'CUDA_VERSION' in os.environ:
         # 执行 nvidia-smi 命令，并捕获输出
@@ -37,12 +39,12 @@ def compress_update(title, root):
     # 打包文件夹 并 上传到alist
     zip_file = f'{title}.7z'
     compress_folder(root, zip_file, 9, inplace=False)
-    print('compress_folder done')
+    logger.log('compress_folder done')
 
     # 上传更新到alist
     client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
     client.upload(zip_file, '/ag_train_data/')
-    print('upload done')
+    logger.log('upload done')
 
 # 共享的标志变量
 stop_flag = False
@@ -52,9 +54,7 @@ def keep_update(title, root):
         # 执行更新操作
         compress_update(title, root)
         # 等待一段时间后再次执行
-        time.sleep(60 * 3)  # 10分钟
-        # time.sleep(600)  # 10分钟
-
+        time.sleep(600)  # 10分钟
 
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
@@ -92,32 +92,32 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     thread = threading.Thread(target=keep_update, args=(title, root))
     thread.start()
 
-    # 读取训练数据
+    logger.log(f'读取训练数据')
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     train_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     if use_length > 0:
         train_data = train_data.iloc[-int(min(use_length, len(train_data))):].reset_index(drop=True)
-    print(f'训练数据长度: {len(train_data)}')
+    logger.log(f'训练数据长度: {len(train_data)}')
     # 预处理标签
     if not None is yfunc:
         train_data[label] = train_data[label].apply(yfunc)
 
-    # 训练模型
+    logger.log(f'开始训练模型')
     predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
     predictor.fit(clear_train_data, num_gpus=get_gpu_num())
 
-    # 读取测试数据
+    logger.log(f'读取测试数据')
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     test_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     if use_length > 0:
         test_data = test_data.iloc[-int(min(use_length, len(test_data))):].reset_index(drop=True)
-    print(f'测试数据长度: {len(test_data)}')
+    logger.log(f'测试数据长度: {len(test_data)}')
     # 预处理标签
     if not None is yfunc:
         test_data[label] = test_data[label].apply(yfunc)
 
-    # 预测 储存
+    logger.log(f'储存预测测试数据集')
     test_to_save = test_data.loc[:, [id, label]].copy()
     predict_proba = predictor.predict_proba(test_data.drop(columns=[id, label]))
     test_to_save[[str(i) for i in range(len(list(predict_proba)))]] = predict_proba.values
@@ -127,9 +127,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     test_end = test_data[id].iloc[-1].split('_')[-1]
     test_to_save.to_csv(os.path.join(root, f'{symbol}_{test_begin}_{test_end}.csv'), index=False)
 
-    # 评估
-    predictor.evaluate(test_data, silent=True)
-
+    logger.log(f'评估模型')
     leaderboard = predictor.leaderboard(test_data)
     cols = list(leaderboard)
     leaderboard['rank'] = leaderboard['score_val'].rank(ascending=False)
