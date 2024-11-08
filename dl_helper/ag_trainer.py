@@ -126,7 +126,7 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     logger_ag.log(20, f'开始训练模型({((time.time() - begin_time) / 3600):2f}h)')
     predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, path=ag_data_folder, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
-    predictor.fit(clear_train_data, num_gpus=get_gpu_num(), presets=quality)
+    predictor.fit(clear_train_data, num_gpus=get_gpu_num(), presets=quality, time_limit=int(3600*10.5))
 
     logger_ag.log(20, f'读取测试数据({((time.time() - begin_time) / 3600):2f}h)')
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
