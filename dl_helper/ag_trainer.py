@@ -98,12 +98,14 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     if gpu_name:
         title += '_' + gpu_name
 
-    send_wx(f'开始ag训练: \n{title}')
+    send_wx(f'开始ag训练({((time.time() - begin_time) / 3600):2}h): \n{title}')
         
     root=f'/ag_train_data/{title}'
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
+    train_data_folder = os.path.join(root, 'ag')
+    os.makedirs(train_data_folder, exist_ok=True)
 
     # 启动报告线程
     global stop_flag
@@ -111,32 +113,32 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     thread = threading.Thread(target=keep_update, args=(title, root))
     thread.start()
 
-    logger_ag.log(20, f'读取训练数据')
+    logger_ag.log(20, f'读取训练数据({((time.time() - begin_time) / 3600):2}h)')
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     train_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
     if use_length > 0:
         train_data = train_data.iloc[-int(min(use_length, len(train_data))):].reset_index(drop=True)
-    logger_ag.log(20, f'训练数据长度: {len(train_data)}')
+    logger_ag.log(20, f'训练数据长度: {len(train_data)}({((time.time() - begin_time) / 3600):2}h)')
     # 预处理标签
     if not None is yfunc:
         train_data[label] = train_data[label].apply(yfunc)
 
-    logger_ag.log(20, f'开始训练模型')
-    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
+    logger_ag.log(20, f'开始训练模型({((time.time() - begin_time) / 3600):2}h)')
+    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, path=os.path.join(root, 'ag'), log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
     predictor.fit(clear_train_data, num_gpus=get_gpu_num(), presets=quality)
 
-    logger_ag.log(20, f'读取测试数据')
+    logger_ag.log(20, f'读取测试数据({((time.time() - begin_time) / 3600):2}h)')
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     test_data = TabularDataset(pd.read_pickle(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
     if use_length > 0:
         test_data = test_data.iloc[-int(min(use_length, len(test_data))):].reset_index(drop=True)
-    logger_ag.log(20, f'测试数据长度: {len(test_data)}')
+    logger_ag.log(20, f'测试数据长度: {len(test_data)}({((time.time() - begin_time) / 3600):2}h)')
     # 预处理标签
     if not None is yfunc:
         test_data[label] = test_data[label].apply(yfunc)
 
-    logger_ag.log(20, f'储存预测测试数据集')
+    logger_ag.log(20, f'储存预测测试数据集({((time.time() - begin_time) / 3600):2}h)')
     test_to_save = test_data.loc[:, [id, label]].copy()
     predict_proba = predictor.predict_proba(test_data.drop(columns=[id, label]))
     test_to_save[[str(i) for i in range(len(list(predict_proba)))]] = predict_proba.values
@@ -146,28 +148,27 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     test_end = test_data[id].iloc[-1].split('_')[-1]
     test_to_save.to_csv(os.path.join(root, f'{symbol}_{test_begin}_{test_end}.csv'), index=False)
 
-    logger_ag.log(20, f'评估模型')
+    logger_ag.log(20, f'评估模型({((time.time() - begin_time) / 3600):2}h)')
     leaderboard = predictor.leaderboard(test_data)
     cols = list(leaderboard)
     leaderboard['rank'] = leaderboard['score_val'].rank(ascending=False)
     leaderboard = leaderboard.loc[:, ['rank'] + cols]
     leaderboard.to_csv(os.path.join(root, f'leaderboard.csv'), index=False)
-    output_leaderboard_png(leaderboard, os.path.join(root, f'leaderboard.png'))
+    output_leaderboard_png(leaderboard, os.path.join(root, f'leaderboard.jpg'))
 
-    # 停止报告线程
+    logger_ag.log(20, f'停止报告线程({((time.time() - begin_time) / 3600):2}h)')
     stop_flag = True
     thread.join()
 
-    # 特征重要性
-    importance = predictor.feature_importance(test_data.drop(columns = [id]))
+    logger_ag.log(20, f'特征重要性({((time.time() - begin_time) / 3600):2}h)')
+    importance = predictor.feature_importance(test_data.drop(columns = [id]), time_limit=3600)
     importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
 
-    # 压缩更新
+    logger_ag.log(20, f'压缩更新({((time.time() - begin_time) / 3600):2}h)')
     compress_update(title, root)
 
     # 计算耗时
-    cost_time_h = (time.time() - begin_time) / 3600
-    msg = f'ag训练完成({cost_time_h:1f}h): \n{title}'
+    msg = f'ag训练完成({((time.time() - begin_time) / 3600):2}h): \n{title}'
     logger_ag.log(20, msg)
     send_wx(msg)
 
