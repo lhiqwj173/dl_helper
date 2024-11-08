@@ -69,7 +69,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
         train_data[label] = train_data[label].apply(yfunc)
 
     # 训练模型
-    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=4, log_file_path=os.path.join(root, 'log.txt'))
+    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
     predictor.fit(clear_train_data, num_gpus=get_gpu_num())
 
