@@ -104,8 +104,8 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
-    train_data_folder = os.path.join(root, 'ag')
-    os.makedirs(train_data_folder, exist_ok=True)
+    ag_data_folder = os.path.join(root, 'ag')
+    os.makedirs(ag_data_folder, exist_ok=True)
 
     # 启动报告线程
     global stop_flag
@@ -124,7 +124,7 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
         train_data[label] = train_data[label].apply(yfunc)
 
     logger_ag.log(20, f'开始训练模型({((time.time() - begin_time) / 3600):2}h)')
-    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, path=os.path.join(root, 'ag'), log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
+    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, path=ag_data_folder, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
     predictor.fit(clear_train_data, num_gpus=get_gpu_num(), presets=quality)
 
