@@ -3,7 +3,9 @@ from dl_helper.tests.autogluon.metrics import mean_class_f1_scorer
 import pandas as pd
 import numpy as np
 import os,pickle,subprocess
+import pytz
 import time
+from datetime import datetime
 import threading
 import logging
 
@@ -72,7 +74,10 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     if kaggle:
         train_data_folder = '/kaggle/input/' + os.listdir('/kaggle/input')[0]
 
-    time_info = time.strftime("%Y%m%d_%H%M_", time.localtime())
+    # 设置时区为北京时间
+    tz = pytz.timezone('Asia/Shanghai')
+    local_time = datetime.fromtimestamp(time.time(), tz)
+    time_info = local_time.strftime("%Y%m%d_%H%M_")
     if '' == title:
         title = os.path.basename(train_data_folder).replace('lh_q_t0_', '')
     title = time_info + title
