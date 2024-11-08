@@ -5,6 +5,7 @@ import numpy as np
 import os,pickle,subprocess
 import time
 import threading
+import logging
 
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import send_wx
