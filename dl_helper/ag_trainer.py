@@ -56,10 +56,12 @@ stop_flag = False
 
 def keep_update(title, root):
     while not stop_flag:
-        # 执行更新操作
-        compress_update(title, root)
         # 等待一段时间后再次执行
         time.sleep(600)  # 10分钟
+
+        # 执行更新操作
+        logger_ag.log(20, 'compress_update')
+        compress_update(title, root)
 
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
@@ -100,11 +102,11 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
 
     send_wx(f'开始ag训练({((time.time() - begin_time) / 3600):2f}h): \n{title}')
         
-    root=f'/ag_train_data/{title}'
+    root=f'/{title}'
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
-    ag_data_folder = os.path.join(root, 'ag')
+    ag_data_folder = '/ag'
     os.makedirs(ag_data_folder, exist_ok=True)
 
     # 启动报告线程
@@ -165,6 +167,8 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
 
     logger_ag.log(20, f'压缩更新({((time.time() - begin_time) / 3600):2f}h)')
+    # 拷贝 训练文件夹
+    shutil.copytree(ag_data_folder, os.path.join(root, 'ag'))
     compress_update(title, root)
 
     # 计算耗时
