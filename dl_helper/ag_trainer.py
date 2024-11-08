@@ -64,13 +64,22 @@ kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 os.environ['ALIST_USER'] = 'admin'
 os.environ['ALIST_PWD'] = 'LHss6632673'
 
-def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=None, train_data_folder=''):
+
+def autogluon_train_func(quality='medium', title='', id='id', label='label', use_length=0, yfunc=None, train_data_folder=''):
     """
+    自动Gluon训练函数
+    quality : 训练质量, 默认为medium, 可选值为: ['best_quality', 'high_quality', 'good_quality', 'medium_quality', 'optimize_for_deployment', 'interpretable', 'ignore_text']
+
     title : 训练标题,用于存储的文件夹名, 默认为空, 为空时使用时间戳
     id, label : id/标签列名
     yfunc : 标签预处理函数
     train_data_folder : 训练数据路径
     """
+    begin_time = time.time()
+
+    if '_quality' not in quality:
+        quality += '_quality'
+
     if kaggle:
         train_data_folder = '/kaggle/input/' + os.listdir('/kaggle/input')[0]
 
@@ -113,7 +122,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     logger_ag.log(20, f'开始训练模型')
     predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
-    predictor.fit(clear_train_data, num_gpus=get_gpu_num())
+    predictor.fit(clear_train_data, num_gpus=get_gpu_num(), presets=quality)
 
     logger_ag.log(20, f'读取测试数据')
     # test_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'test.pkl'), 'rb')))
@@ -142,16 +151,22 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     leaderboard = leaderboard.loc[:, ['rank'] + cols]
     leaderboard.to_csv(os.path.join(root, f'leaderboard.csv'), index=False)
 
-    importance = predictor.feature_importance(test_data.drop(columns = [id]))
-    importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
-
     # 停止报告线程
     stop_flag = True
     thread.join()
 
+    # 特征重要性
+    importance = predictor.feature_importance(test_data.drop(columns = [id]))
+    importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
+
     # 压缩更新
     compress_update(title, root)
-    send_wx(f'ag训练完成: \n{title}')
+
+    # 计算耗时
+    cost_time_h = (time.time() - begin_time) / 3600
+    msg = f'ag训练完成({cost_time_h:1f}h): \n{title}'
+    logger_ag.log(20, msg)
+    send_wx(msg)
 
 
 
