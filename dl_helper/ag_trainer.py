@@ -61,7 +61,7 @@ kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 os.environ['ALIST_USER'] = 'admin'
 os.environ['ALIST_PWD'] = 'LHss6632673'
 
-def autogluon_train_func(title='', id='id', label='label', use_length=500000, yfunc=None, train_data_folder=''):
+def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=None, train_data_folder=''):
     """
     title : 训练标题,用于存储的文件夹名, 默认为空, 为空时使用时间戳
     id, label : id/标签列名
@@ -103,7 +103,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
         train_data[label] = train_data[label].apply(yfunc)
 
     # 训练模型
-    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_file_path=os.path.join(root, 'log.txt'))
+    predictor = TabularPredictor(label=label, eval_metric=mean_class_f1_scorer, verbosity=3, log_to_file=True, log_file_path=os.path.join(root, 'log.txt'))
     clear_train_data = train_data.drop(columns = [id])
     predictor.fit(clear_train_data, num_gpus=get_gpu_num())
 
