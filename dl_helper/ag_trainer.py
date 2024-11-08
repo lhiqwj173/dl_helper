@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os,pickle,subprocess
 import time
+import threading
 
 def get_gpu_name():
     if 'CUDA_VERSION' in os.environ:
@@ -27,6 +28,29 @@ def get_gpu_num():
             return 1
     else:
         return 'auto'
+
+def compress_update(title, root):
+    # 打包文件夹 并 上传到alist
+    zip_file = f'{title}.7z'
+    compress_folder(root, zip_file, 9, inplace=False)
+    print('compress_folder done')
+
+    # 上传更新到alist
+    client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+    client.upload(zip_file, '/ag_train_data/')
+    print('upload done')
+
+# 共享的标志变量
+stop_flag = False
+
+def keep_update(title, root):
+    while not stop_flag:
+        # 执行更新操作
+        compress_update(title, root)
+        # 等待一段时间后再次执行
+        time.sleep(60 * 3)  # 10分钟
+        # time.sleep(600)  # 10分钟
+
 
 kaggle = any(key.startswith("KAGGLE") for key in os.environ.keys())
 
@@ -57,6 +81,12 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
 
     # id, label = 'id', 'label'
     os.makedirs(root, exist_ok=True)
+
+    # 启动报告线程
+    global stop_flag
+    stop_flag = False
+    thread = threading.Thread(target=keep_update, args=(title, root))
+    thread.start()
 
     # 读取训练数据
     # train_data = TabularDataset(pickle.load(open(os.path.join(train_data_folder, 'train.pkl'), 'rb')))
@@ -105,15 +135,13 @@ def autogluon_train_func(title='', id='id', label='label', use_length=500000, yf
     importance = predictor.feature_importance(test_data.drop(columns = [id]))
     importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
 
-    # 打包文件夹 并 上传到alist
-    zip_file = f'{title}.7z'
-    compress_folder(root, zip_file, 9, inplace=False)
-    print('compress_folder done')
+    # 停止报告线程
+    stop_flag = True
+    thread.join()
 
-    # 上传更新到alist
-    client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-    client.upload(zip_file, '/ag_train_data/')
-    print('upload done')
+    # 压缩更新
+    compress_update(title, root)
+
 
 
 
