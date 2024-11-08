@@ -7,7 +7,7 @@ import time
 import threading
 
 from py_ext.lzma import compress_folder, decompress
-from py_ext.wechat import wx
+from py_ext.wechat import send_wx
 from py_ext.alist import alist
 
 logger_ag = logging.getLogger("autogluon")
@@ -80,6 +80,8 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
     gpu_name = get_gpu_name()
     if gpu_name:
         title += '_' + gpu_name
+
+    send_wx(f'开始ag训练: \n{title}')
         
     root=f'/ag_train_data/{title}'
 
@@ -143,6 +145,7 @@ def autogluon_train_func(title='', id='id', label='label', use_length=0, yfunc=N
 
     # 压缩更新
     compress_update(title, root)
+    send_wx(f'ag训练完成: \n{title}')
 
 
 
