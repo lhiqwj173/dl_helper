@@ -1,5 +1,7 @@
 from autogluon.tabular import TabularDataset, TabularPredictor
 from dl_helper.tests.autogluon.metrics import mean_class_f1_scorer
+from dl_helper.tool import output_leaderboard_png
+
 import pandas as pd
 import numpy as np
 import os,pickle,subprocess
@@ -150,6 +152,7 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     leaderboard['rank'] = leaderboard['score_val'].rank(ascending=False)
     leaderboard = leaderboard.loc[:, ['rank'] + cols]
     leaderboard.to_csv(os.path.join(root, f'leaderboard.csv'), index=False)
+    output_leaderboard_png(leaderboard, os.path.join(root, f'leaderboard.png'))
 
     # 停止报告线程
     stop_flag = True

@@ -2,6 +2,13 @@ import psutil, pickle, torch, os
 import numpy as np
 from tqdm import tqdm
 
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import io
+import base64
+import imgkit
+
 from py_ext.wechat import wx
 from py_ext.tool import debug, log
 from dl_helper.train_param import logger, match_num_processes
@@ -12,6 +19,80 @@ from torchstat import stat
 from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
 import df2img
+
+def hex_to_rgb(hex_color):
+    # 将十六进制颜色转换为RGB
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def output_leaderboard_png(df, out_png_file):
+    # # 直接从CSV文件读取数据
+    # df = pd.read_csv(csv_path)
+    
+    # 定义颜色
+    color_good = hex_to_rgb('#93ff93')
+    color_bad = hex_to_rgb('#ff4444') 
+    
+    # 定义需要着色的数值列
+    numeric_cols = ['score_test', 'score_val', 'pred_time_test', 'pred_time_val', 
+                   'fit_time', 'pred_time_test_marginal', 'pred_time_val_marginal', 
+                   'fit_time_marginal']
+    
+    html = '''
+    <html>
+    <head>
+        <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #000000; padding: 8px; text-align: left; }
+            th { background-color: #e1e1e1; }  /* 淡灰色背景 */
+        </style>
+    </head>
+    <body>
+    '''
+    
+    # 创建表格
+    table = '<table>'
+    
+    # 添加表头
+    table += '<tr>'
+    for col in df.columns:
+        table += f'<th>{col}</th>'
+    table += '</tr>'
+    
+    # 添加数据行
+    for _, row in df.iterrows():
+        table += '<tr>'
+        for col in df.columns:
+            value = row[col]
+            if col in numeric_cols:
+                # 对于数值列，计算相对位置并设置颜色
+                min_val = df[col].min()
+                max_val = df[col].max()
+                if col in ['score_test', 'score_val']:  # 这些指标越大越好
+                    norm_val = (value - min_val) / (max_val - min_val)
+                    # 在两个颜色之间进行插值
+                    red = int(color_good[0] + (color_bad[0] - color_good[0]) * (1-norm_val))
+                    green = int(color_good[1] + (color_bad[1] - color_good[1]) * (1-norm_val))
+                    blue = int(color_good[2] + (color_bad[2] - color_good[2]) * (1-norm_val))
+                else:  # 其他指标越小越好
+                    norm_val = (value - min_val) / (max_val - min_val)
+                    red = int(color_good[0] + (color_bad[0] - color_good[0]) * norm_val)
+                    green = int(color_good[1] + (color_bad[1] - color_good[1]) * norm_val)
+                    blue = int(color_good[2] + (color_bad[2] - color_good[2]) * norm_val)
+                color = f'rgb({red}, {green}, {blue})'
+                table += f'<td style="background-color: {color}">{value:.4f}</td>'
+            else:
+                table += f'<td>{value}</td>'
+        table += '</tr>'
+    
+    table += '</table>'
+    html += table + '</body></html>'
+    
+    # 保存为HTML
+    with open('table.html', 'w') as f:
+        f.write(html)
+    
+    imgkit.from_file('table.html', out_png_file)
 
 def save_df_pic(title, df, fig_size=(500, 140)):
     fig = df2img.plot_dataframe(df, row_fill_color=("#ffffff", "#f2f2f2"), fig_size=fig_size)
