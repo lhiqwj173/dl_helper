@@ -6,6 +6,10 @@ import os,pickle,subprocess
 import time
 import threading
 
+from py_ext.lzma import compress_folder, decompress
+from py_ext.wechat import wx
+from py_ext.alist import alist
+
 def get_gpu_name():
     if 'CUDA_VERSION' in os.environ:
         # 执行 nvidia-smi 命令，并捕获输出
