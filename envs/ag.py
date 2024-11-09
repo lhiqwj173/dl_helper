@@ -11,15 +11,15 @@ subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 cmd = 'cd /kaggle/working/3rd/dl_helper && pip install -e .'
 subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
-# !wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.bionic_amd64.deb
-# !cp wkhtmltox_0.12.6-1.bionic_amd64.deb /usr/bin
-# !sudo apt install /usr/bin/wkhtmltox_0.12.6-1.bionic_amd64.deb -y
-cmd = 'wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.bionic_amd64.deb'
-subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
-cmd = 'cp wkhtmltox_0.12.6-1.bionic_amd64.deb /usr/bin'
-subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
-cmd ='sudo apt install /usr/bin/wkhtmltox_0.12.6-1.bionic_amd64.deb -y'
-subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+# # !wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.bionic_amd64.deb
+# # !cp wkhtmltox_0.12.6-1.bionic_amd64.deb /usr/bin
+# # !sudo apt install /usr/bin/wkhtmltox_0.12.6-1.bionic_amd64.deb -y
+# cmd = 'wget https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.bionic_amd64.deb'
+# subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+# cmd = 'cp wkhtmltox_0.12.6-1.bionic_amd64.deb /usr/bin'
+# subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+# cmd ='sudo apt install /usr/bin/wkhtmltox_0.12.6-1.bionic_amd64.deb -y'
+# subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
 for cmd in [
         'pip install autogluon',

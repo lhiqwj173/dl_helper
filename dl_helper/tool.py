@@ -25,7 +25,7 @@ def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-def output_leaderboard_png(df, out_png_file):
+def output_leaderboard_html(df, out_png_file):
     # # 直接从CSV文件读取数据
     # df = pd.read_csv(csv_path)
     
@@ -89,10 +89,10 @@ def output_leaderboard_png(df, out_png_file):
     html += table + '</body></html>'
     
     # 保存为HTML
-    with open(out_png_file.replace('jpg', 'html'), 'w') as f:
+    with open(out_file, 'w') as f:
         f.write(html)
     
-    imgkit.from_file(out_png_file.replace('jpg', 'html'), out_png_file)
+    # imgkit.from_file(out_png_file.replace('jpg', 'html'), out_png_file)
 
 def save_df_pic(title, df, fig_size=(500, 140)):
     fig = df2img.plot_dataframe(df, row_fill_color=("#ffffff", "#f2f2f2"), fig_size=fig_size)
