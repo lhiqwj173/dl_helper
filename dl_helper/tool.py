@@ -25,7 +25,7 @@ def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-def output_leaderboard_html(df, out_png_file):
+def output_leaderboard_html(df, out_file):
     # # 直接从CSV文件读取数据
     # df = pd.read_csv(csv_path)
     
