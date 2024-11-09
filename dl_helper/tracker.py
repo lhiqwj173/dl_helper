@@ -14,6 +14,7 @@ import torch
 import torch.nn.functional as F
 from torchmetrics import F1Score, R2Score
 from sklearn.metrics import r2_score as sk_r2_score
+from sklearn.metrics import matthews_corrcoef
 
 from py_ext.tool import debug, log
 
@@ -79,6 +80,25 @@ def class_accuracy(y_pred, y_true, y_n):
     class_acc = [class_correct[i] / class_total[i] if class_total[i] > 0 else 0 for i in range(y_n)]
     
     return torch.tensor(class_acc, device=y_pred.device)
+
+
+def class_mcc_score(y_pred, y_true, y_n):
+    # 转换为numpy计算
+    y_pred_np = y_pred.cpu().numpy()
+    y_true_np = y_true.cpu().numpy()
+
+    # 计算每个类别的 MCC
+    mcc_values = []
+    for i in range(y_n):
+        # 创建二元分类问题: 类别 i vs. 其他类别
+        y_true_binary = np.where(y_true_np == i, 1, 0)
+        y_pred_binary = np.where(y_pred_np == i, 1, 0)
+
+        # 计算 MCC
+        mcc = matthews_corrcoef(y_true_binary, y_pred_binary)
+        mcc_values.append(mcc)
+    
+    return torch.tensor(mcc_values, device=y_pred.device)
 
 def class_f1_score(y_pred, y_true, y_n):
     # 计算每个类别的 F1 分数
@@ -477,6 +497,11 @@ class Tracker():
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 print('class_f1', flush=True)
 
+                # 计算各个类别 mcc
+                class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                print('class_mcc', flush=True)
+
+
                 # 各个类别按照 code 分类计数 f1 score
                 # train/val 不需要计算
                 if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
@@ -509,6 +534,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
                     for i in range(len(class_f1) - 1):
+                        self.data[f'{self.track_update}_class_mcc_{i}'] = class_mcc[i].unsqueeze(0)
                         self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
 
                 else:
@@ -520,6 +546,7 @@ class Tracker():
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                     for i in range(len(class_f1) - 1):
+                        self.data[f'{self.track_update}_class_mcc_{i}'] = torch.cat([self.data[f'{self.track_update}_class_mcc_{i}'], class_mcc[i].unsqueeze(0)])
                         self.data[f'{self.track_update}_class_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_class_f1_{i}'], class_f1[i].unsqueeze(0)])
 
                 else:
