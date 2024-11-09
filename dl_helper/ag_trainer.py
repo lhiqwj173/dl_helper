@@ -163,7 +163,7 @@ def autogluon_train_func(quality='medium', title='', id='id', label='label', use
     thread.join()
 
     print(f'特征重要性({((time.time() - begin_time) / 3600):2f}h)')
-    importance = predictor.feature_importance(test_data.drop(columns = [id]), time_limit=3600)
+    importance = predictor.feature_importance(test_data.drop(columns = [id]).reset_index(drop=True), time_limit=3600)
     importance.to_csv(os.path.join(root, f'feature_importance.csv'), index=False)
 
     print(f'压缩更新({((time.time() - begin_time) / 3600):2f}h)')
