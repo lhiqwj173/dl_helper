@@ -30,7 +30,7 @@ of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基
 
 batch_size=128
 
-测试 标签阈值 +=0.5
+测试 标签阈值 +=1
 """
 class transform_of(transform):
 
@@ -60,7 +60,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_of_label_1_cls_t1'
+        return f'once_of_label_1_cls_tr1'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -104,7 +104,7 @@ class test(test_base):
 
             # 3分类
             classify=True,
-            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 0.5),
+            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 1),
 
             data_folder=self.data_folder,
 

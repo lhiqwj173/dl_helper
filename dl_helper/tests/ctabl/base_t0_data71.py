@@ -30,7 +30,7 @@ of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基
 
 batch_size=128
 
-测试 标签阈值 +=1
+测试 标签阈值 +=0.5
 """
 class transform_of(transform):
 
