@@ -80,6 +80,7 @@ else:
     for cmd in [
             'pip install "pandas<2.0.0"',
             'pip install df2img',
+            'pip install imgkit',
             'pip install loguru',
             'pip install einops',
             'pip install dill',
