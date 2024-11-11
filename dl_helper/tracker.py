@@ -55,6 +55,7 @@ def last_value(data):
             return data[i]
     raise ValueError("没有找到非nan值")
 
+
 def cal_balance_acc(y_pred, y_true, y_n):
     unique_labels = [torch.tensor(i, device=y_pred.device) for i in range(y_n)]
     recall_values = []

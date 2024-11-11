@@ -3,6 +3,8 @@ import numpy as np
 from tqdm import tqdm
 
 import pandas as pd
+import numpy as np
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
@@ -15,10 +17,53 @@ from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
 
+import torch
 from torchstat import stat
 from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
 import df2img
+
+def adjust_class_weights_df(predict_df):
+    # timestamp,target,0,1,2
+    min_class_count = predict_df['target'].value_counts().min()
+    
+    sampled_indices = []
+    for class_label in predict_df['target'].unique():
+        indices = predict_df.index[predict_df['target'] == class_label]
+        sampled_indices.extend(np.random.choice(indices, min_class_count, replace=False))
+    
+    adjusted_df = predict_df.loc[sampled_indices].reset_index(drop=True)
+    return adjusted_df
+
+
+def adjust_class_weights_numpy(y_true, y_pred):
+    unique_classes, class_counts = np.unique(y_true, return_counts=True)
+    min_class_count = np.min(class_counts)
+    
+    sampled_indices = []
+    for class_label in unique_classes:
+        indices = np.where(y_true == class_label)[0]
+        sampled_indices.extend(np.random.choice(indices, min_class_count, replace=False))
+    
+    adjusted_y_true = y_true[sampled_indices]
+    adjusted_y_pred = y_pred[sampled_indices]
+    
+    return adjusted_y_true, adjusted_y_pred
+
+def adjust_class_weights_torch(y_true, y_pred):
+    unique_classes, class_counts = torch.unique(y_true, return_counts=True)
+    min_class_count = torch.min(class_counts)
+    
+    sampled_indices = []
+    for class_label in unique_classes:
+        indices = (y_true == class_label).nonzero().squeeze()
+        sampled_indices.extend(torch.tensor(np.random.choice(indices, min_class_count, replace=False)), device=y_true.device)
+    
+    adjusted_y_true = y_true[sampled_indices]
+    adjusted_y_pred = y_pred[sampled_indices]
+    
+    return adjusted_y_true, adjusted_y_pred
+    
 
 def hex_to_rgb(hex_color):
     # 将十六进制颜色转换为RGB

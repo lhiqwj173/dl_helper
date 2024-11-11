@@ -663,6 +663,10 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(seconds=3600))])
         p = printer(lock, accelerator)
         
+        # 在root/title中添加 idx
+        params.train_title = f'{params.train_title}_IDX{test.idx}'
+        params.root = f'{params.train_title}_IDX{test.idx}'
+
         # 检查下载训练文件
         if (not params.debug) and accelerator.is_local_main_process:
             p.print('check alist download')
