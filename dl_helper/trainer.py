@@ -665,7 +665,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         
         # 在root/title中添加 idx
         params.train_title = f'{params.train_title}_IDX{test.idx}'
-        params.root = f'{params.train_title}_IDX{test.idx}'
+        params.root = f'{params.root}_IDX{test.idx}'
 
         # 检查下载训练文件
         if (not params.debug) and accelerator.is_local_main_process:
