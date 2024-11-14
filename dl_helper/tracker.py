@@ -68,6 +68,10 @@ def cal_balance_acc(y_pred, y_true, y_n):
 
     # 计算均衡 ACC
     balanced_acc = torch.mean(torch.stack(recall_values))
+    if math.isnan(balanced_acc):
+        pickle.dump((y_pred, y_true, y_n), open(f'nan_acc_data.pkl', 'wb'))
+        raise Exception("acc nan")
+    
     return balanced_acc
 
 def class_accuracy(y_pred, y_true, y_n):
