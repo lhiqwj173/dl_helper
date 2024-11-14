@@ -371,6 +371,8 @@ class Dataset_cahce(torch.utils.data.Dataset):
             diff_length = load_data(self.target_parm, self.params, os.path.join(data_path, file), diff_length, data_map, self.device)
             # report_memory_usage()
 
+        log(f"\n标签分布 {rank}\n{pd.Series(data_map['y']).value_counts()}")
+
         # 数据集内部分发
         if (file_name_list == self.files and world_size >1) or (self.type == "test"):
             log('数据集内部分发设备')
@@ -910,18 +912,8 @@ def read_data(_type, params, device=None, max_num=10000, need_id=False, log=Fals
     # # data = torch.randn(num_samples, 3, 64, 64)
     # target = torch.randint(0, num_classes, (num_samples,))
     # dataset_test = torch.utils.data.TensorDataset(data, target)
-    dataset_test = Dataset(params, data_map, params.classify, train=_type == 'train', log=log)
-    # if log:
-    #     if params.classify:
-    #         logger.# debug(f'\n标签分布\n{pd.Series(dataset_test.y).value_counts()}')
-    #     else:
-    #         try:
-    #             logger.# debug(f'\n标签分布\n{pd.Series(dataset_test.y).describe()}')
-    #         except:
-    #             _df = pd.DataFrame(dataset_test.y)
-    #             for col in list(_df):
-    #                 logger.# debug(f'\n标签 {col} 分布\n{_df[col].describe()}')
-
+    dataset_test = Dataset(params, data_map, params.classify, train=_type == 'train', log=log) 
+        
     train_sampler = None
     if not None is data_sample_getter_func:
         train_sampler = data_sample_getter_func(dataset_test, _type)
