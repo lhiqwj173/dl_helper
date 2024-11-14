@@ -744,7 +744,7 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
         else:
             y = [i[y_idx] for i in y]
     
-    print(file, pd.Series(y).value_counts())
+    # print(file, pd.Series(y).value_counts())
 
     reindex = False
     # 每3个降采样
