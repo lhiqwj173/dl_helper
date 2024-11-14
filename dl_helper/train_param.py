@@ -192,6 +192,7 @@ class Params:
   regress_y_idx = -1
   classify_y_idx = -1
   y_func = None
+  y_filter = None
   classify = False
 
   data_folder = ''
@@ -226,7 +227,7 @@ class Params:
 
       # 使用回归数据集参数
       classify = False,cnn=False,
-      y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,
+      y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,y_filter=None,
       
       # 数据集路径
       data_folder = '',
@@ -281,6 +282,7 @@ class Params:
       self.regress_y_idx = regress_y_idx
       self.classify_y_idx = classify_y_idx
       self.y_func = y_func
+      self.y_filter = y_filter
 
       self.describe = describe
       self.workers = workers

@@ -742,6 +742,11 @@ def load_data(target_parm, params, file, diff_length, data_map, device=None, log
             idxs = [i for i in idxs if ids[i].split('_')[0] in symbols]
             reindex = True
 
+    # 标签过滤
+    if not params.y_filter is None:
+        idxs = [i for i in idxs if params.y_filter(y[i])]
+        reindex = True
+
     # 重新取样
     if reindex:
         ids = [ids[i] for i in idxs]
