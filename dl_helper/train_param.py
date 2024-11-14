@@ -215,7 +215,7 @@ class Params:
       abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
       epochs=100, 
       no_better_stop=15, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
-
+      
       # 数据增强
       random_mask=0, random_scale=0, random_mask_row=0, down_freq=0,
 
@@ -243,7 +243,7 @@ class Params:
       test=False,
 
       # 模型融合
-      need_meta_output=True,
+      need_meta_output=False,
 
   ):
       # 添加训练后缀 (训练设备/混合精度)

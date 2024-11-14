@@ -866,10 +866,11 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
         tracker.print_state()
 
         # 输出模型预测，用于模型融合
-        if not only_predict:
-            train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
-            val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
-        output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
+        if params.need_meta_output:
+            if not only_predict:
+                train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
+                val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
+            output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
 
         # 打包
         package_root(accelerator, params)
