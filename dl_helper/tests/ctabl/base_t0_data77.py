@@ -67,8 +67,8 @@ class test(test_base):
         classify_idx = 0
         for predict_n in [3, 5, 10, 15, 30, 60, 100]:
             for label in ['label_2']:
-                # 同一个训练使用 5 个随机种子，最终取均值
-                for seed in range(5):
+                # 同一个训练使用 6 个随机种子，最终取均值
+                for seed in range(6):
                     vars.append((predict_n, classify_idx, seed))
                 classify_idx+=1
 
