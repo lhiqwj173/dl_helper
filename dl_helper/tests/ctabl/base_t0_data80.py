@@ -16,12 +16,13 @@ from py_ext.tool import log, init_logger
 init_logger('base', level='INFO')
 
 """
-标签 2
-单标的 513050
+predict_n [3, 5, 10, 15, 30, 60, 100]
+标签 1
+依据市值top 5选股
 
-中间价量标准化
+历史均值方差标准化
 
-of 数据 lh_q_t0_lable_2_combine_data
+of 数据 lh_q_t0_lable_1_combine_data
 [20] + [40] + [15 + 15 + 10 + 10] + [10 + 10] + [20] + 4 -> 154
 [20] + [40] + [50] +                [20] +      [20] + 4 -> 154
 of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基础数据
@@ -29,7 +30,7 @@ of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基
 
 batch_size=128
 
-测试 predict_n 3, 5, 10, 15, 30, 60
+测试 标签阈值 +=0
 """
 class transform_of(transform):
 
@@ -37,31 +38,29 @@ class transform_of(transform):
         with torch.no_grad():
             x, y, mm = batch
 
-            mid_vol = x[:, -1:, 152:153]
-
             x = x[:, -100:, :20]
-
-            # 中间量标准化
-            x /= mid_vol
-
             x = torch.transpose(x, 1, 2)
+
+            # 归一化
+            x -= mm[:, :20, :1]
+            x /= (mm[:, :20, 1:] -  mm[:, :20, :1])
+
             return x, y
 
-def yfunc(y):
-    if y==3: return 2
-    else: return y
 
-def y_filter(y):
-    # 只是用 0/1/2
-    # 3 为软边界类型
-    if y< 3: return True
-    else: return False
+def yfunc(threshold, y):
+    if y > threshold:
+        return 0
+    elif y < -threshold:
+        return 1
+    else:
+        return 2
 
 class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_of_label2_cls_midstd'
+        return f'once_of_label_1_t0'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -69,10 +68,10 @@ class test(test_base):
         vars = []
         classify_idx = 0
         for predict_n in [3, 5, 10, 15, 30, 60, 100]:
-            for label in ['label_2']:
-                if predict_n != 100:
-                    # 同一个训练使用 6 个随机种子，最终取均值
-                    for seed in range(6):
+            for label in ['paper', 'paper_pct', 'label_1', 'label_1_pct']:
+                if label == 'label_1':
+                    # 同一个训练使用 5 个随机种子，最终取均值
+                    for seed in range(5):
                         vars.append((predict_n, classify_idx, seed))
                 classify_idx+=1
 
@@ -94,8 +93,8 @@ class test(test_base):
             'data_rate': (8, 3, 1),
             'total_hours': int(24*20),
             'symbols': f'top5',
-            'target': f'label 2',
-            'std_mode': '简单标准化'
+            'target': f'label 1',
+            'std_mode': '历史均值方差标准化'
         }
 
         # 实例化 参数对象
@@ -105,7 +104,7 @@ class test(test_base):
 
             # 3分类
             classify=True,
-            y_n=self.y_n, classify_y_idx=classify_idx, y_func=yfunc, y_filter=y_filter if predict_n in [15, 30, 60] else None,
+            y_n=self.y_n, classify_y_idx=classify_idx, y_func=functools.partial(yfunc, 0),
 
             data_folder=self.data_folder,
 
