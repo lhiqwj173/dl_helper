@@ -105,6 +105,7 @@ class test(test_base):
         # 实例化 参数对象
         self.para = Params(
             train_title=title, root=f'./{title}', data_set=f'{data_parm2str(data_parm)}.7z',
+            alist_upload_folder = self.title_base(),
             batch_size=64*2, epochs=epochs,
 
             # 3分类
