@@ -27,8 +27,8 @@ lh_q_t0_lable_1_combine_data
 [20] + [40] + [50] +                [20] +      [20] + 4 -> 154
 of数据 + 原始价量数据 + 委托数据 + 成交数据 + 深度数据 + 基础数据
 
-原始价量数据
-100*40
+成交数据
+100*20
 
 batch_size=128
 
@@ -40,8 +40,8 @@ class transform_of(transform):
         with torch.no_grad():
             x, y, mm = batch
 
-            # 原始价量数据
-            a, b = 20, 60
+            # 成交数据
+            a, b = 110, 130
 
             x = x[:, -100:, a:b]
             x = torch.transpose(x, 1, 2)
@@ -65,7 +65,7 @@ class test(test_base):
 
     @classmethod
     def title_base(cls):
-        return f'once_base_label_1_t0'
+        return f'once_deal_label_1_t0'
 
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
@@ -120,13 +120,13 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 40, 100), (1, self.y_n)
+        return (1, 20, 100), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [40, 20, 10, 3]
+        d1, d2, d3, d4 = [20, 20, 10, 3]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
@@ -134,7 +134,7 @@ class test(test_base):
 
 if '__main__' == __name__:
     t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [40, 20, 10, 3]
+    d1, d2, d3, d4 = [20, 20, 10, 3]
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 

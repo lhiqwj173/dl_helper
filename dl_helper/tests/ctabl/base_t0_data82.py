@@ -120,13 +120,13 @@ class test(test_base):
         )
 
     def get_in_out_shape(self):
-        return (1, 20, 100), (1, self.y_n)
+        return (1, 50, 100), (1, self.y_n)
 
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):
         t1, t2, t3, t4 = [100, 30, 10, 1]
-        d1, d2, d3, d4 = [20, 20, 10, 3]
+        d1, d2, d3, d4 = [50, 20, 10, 3]
         return m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
 
     def get_transform(self, device):
@@ -134,7 +134,7 @@ class test(test_base):
 
 if '__main__' == __name__:
     t1, t2, t3, t4 = [100, 30, 10, 1]
-    d1, d2, d3, d4 = [20, 20, 10, 3]
+    d1, d2, d3, d4 = [50, 20, 10, 3]
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
