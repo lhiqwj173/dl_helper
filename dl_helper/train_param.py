@@ -138,6 +138,8 @@ class Params:
   # 项目路径
   root = './train_title'
 
+  alist_upload_folder = 'train_data'
+
   workers = 0
 
   debug = False
@@ -216,6 +218,8 @@ class Params:
       epochs=100, 
       no_better_stop=15, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
       
+      alist_upload_folder = 'train_data',
+
       # 数据增强
       random_mask=0, random_scale=0, random_mask_row=0, down_freq=0,
 
@@ -245,12 +249,16 @@ class Params:
       # 模型融合
       need_meta_output=False,
 
+
+
   ):
       # 添加训练后缀 (训练设备/混合精度)
       run_device = get_gpu_info()
       self.train_title = f'{train_title}_{run_device}'
       self.root = f'{root}_{run_device}'
-      
+
+      self.alist_upload_folder = alist_upload_folder
+
       if amp not in ['no', 'fp8', 'fp16', 'bf16']:
         self.amp = 'no'
       else:

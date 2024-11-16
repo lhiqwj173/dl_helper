@@ -305,7 +305,10 @@ def package_root(accelerator, params):
         if not params.debug:
             # 上传更新到alist
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-            client.upload(zip_file, '/train_data/')
+            # 上传文件夹
+            upload_folder = f'/{params.alist_upload_folder}/'
+            client.mkdir(upload_folder)
+            client.upload(zip_file, upload_folder)
         print('upload done')
 
     accelerator.wait_for_everyone()
@@ -675,7 +678,8 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             try:
                 _file = f'alist/{params.train_title}.7z'
                 # 下载文件
-                client.download(f'/train_data/{params.train_title}.7z', 'alist/')
+                download_folder = f'/{params.alist_upload_folder}/'
+                client.download(f'{download_folder}{params.train_title}.7z', 'alist/')
                 p.print(f'download {_file}')
 
             except:
