@@ -1387,8 +1387,6 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
 
     num_processes = match_num_processes()
 
-    os.environ['ALIST_USER'] = 'admin'
-    os.environ['ALIST_PWD'] = 'LHss6632673'
     try:
         os.environ.pop('TPU_PROCESS_ADDRESSES')
         os.environ.pop('CLOUD_TPU_TASK_ID')
