@@ -23,6 +23,66 @@ from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
 import df2img
 
+def calc_sharpe_ratio(returns, risk_free_rate=0.0):
+    """计算夏普比率
+    Args:
+        returns: 收益率序列
+        risk_free_rate: 无风险利率,默认0
+    """
+    if isinstance(returns, (pd.Series, pd.DataFrame)):
+        returns = returns.values
+    excess_returns = returns - risk_free_rate
+    if excess_returns.std() == 0:
+        return 0
+    return excess_returns.mean() / excess_returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+
+def calc_sortino_ratio(returns, risk_free_rate=0.0):
+    """计算索提诺比率
+    Args:
+        returns: 收益率序列
+        risk_free_rate: 无风险利率,默认0
+    """
+    if isinstance(returns, (pd.Series, pd.DataFrame)):
+        returns = returns.values
+    excess_returns = returns - risk_free_rate
+    # 只考虑负收益的标准差
+    downside_returns = excess_returns[excess_returns < 0]
+    if len(downside_returns) == 0 or downside_returns.std() == 0:
+        return 0
+    return excess_returns.mean() / downside_returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+
+def calc_max_drawdown(returns):
+    """计算最大回撤
+    Args:
+        returns: 收益率序列
+    """
+    if isinstance(returns, (pd.Series, pd.DataFrame)):
+        returns = returns.values
+    cumulative = (1 + returns).cumprod()
+    running_max = np.maximum.accumulate(cumulative)
+    drawdown = cumulative/running_max - 1
+    return np.min(drawdown)
+
+def calc_total_return(returns):
+    """计算总收益率
+    Args:
+        returns: 收益率序列
+    """
+    if isinstance(returns, (pd.Series, pd.DataFrame)):
+        returns = returns.values
+    total_return = (1 + returns).prod() - 1
+    return total_return / len(returns)  # 根据序列长度标准化
+
+def calc_volatility(returns):
+    """计算波动率
+    Args:
+        returns: 收益率序列
+    """
+    if isinstance(returns, (pd.Series, pd.DataFrame)):
+        returns = returns.values
+    return returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+
+
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
     min_class_count = predict_df['target'].value_counts().min()

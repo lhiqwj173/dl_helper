@@ -133,11 +133,11 @@ if '__main__' == __name__:
     model = m_bin_ctabl(d2, d1, t1, t2, d3, t3, d4, t4)
     print(f"模型参数量: {model_params_num(model)}")
 
-    input_folder = r'/kaggle/input'
-    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # input_folder = r'/kaggle/input'
 
-    data_folder_name = os.listdir(input_folder)[0]
-    data_folder = os.path.join(input_folder, data_folder_name)
+    # data_folder_name = os.listdir(input_folder)[0]
+    # data_folder = os.path.join(input_folder, data_folder_name)
+    data_folder = r'D:\L2_DATA_T0_ETF\train_data\lable_1_combine_data'
 
     run(
         test, 
@@ -146,6 +146,6 @@ if '__main__' == __name__:
         mode='cache_data',
         data_folder=data_folder,
 
-        # debug=True,
-        # idx=0
+        debug=True,
+        idx=0
     )
