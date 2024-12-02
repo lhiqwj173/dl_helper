@@ -229,6 +229,7 @@ class DQN(BaseAgent):
             epsilon,
             target_update,
             device,
+            buffer_size,
             wait_trade_close = True,
             features_extractor_kwargs=None,
             net_arch=None,

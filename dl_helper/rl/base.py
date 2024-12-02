@@ -1,4 +1,6 @@
 import torch
+import os
+import shutil
 
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
