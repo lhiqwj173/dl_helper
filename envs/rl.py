@@ -13,6 +13,7 @@ subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
 for cmd in [
         'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
+        'pip install gym',
     ]:
     subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
