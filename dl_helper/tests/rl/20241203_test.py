@@ -22,9 +22,6 @@ t1, t2, t3, t4 = [100, 30, 10, 1]
 d1, d2, d3, d4 = [132, 60, 30, 3]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
-os.environ['ALIST_USER'] = 'admin'
-os.environ['ALIST_PWD'] = 'LHss6632673'
-
 if __name__ == '__main__':
     dqn = DQN(
         action_dim=3,
