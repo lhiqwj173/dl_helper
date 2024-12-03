@@ -8,6 +8,39 @@ import pickle
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_max_drawdown, calc_total_return
 
+USE_CODES = [
+    '513050',
+    '513330',
+    '518880',
+    '159941',
+    '513180',
+    '159920',
+    '513500',
+    '513130',
+    '159792',
+    '513100',
+    '159937',
+    '510900',
+    '513060',
+    '159934',
+    '159509',
+    '159632',
+    '159605',
+    '513010',
+    '159513',
+    '513120',
+    '159501',
+    '518800',
+    '513300',
+    '513660',
+    '513090',
+    '513980',
+    '159892',
+    '159740',
+    '159636',
+    '159659',
+]
+
 class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
@@ -66,7 +99,7 @@ class data_producer:
         for symbol in unique_symbols:
             symbol_mask = symbols == symbol
             symbol_indices = np.where(symbol_mask)[0]
-            self.idxs.append([symbol_indices[0], symbol_indices[-1]])
+            self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
             
         # 训练数据随机选择一个标的
         # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
@@ -167,7 +200,7 @@ class data_producer:
     def get(self):
         """
         输出观察值
-        返回 x, done, need_close
+        返回 symbol_id,x, done, need_close
         """
         # 检查日期文件结束
         if self.date_file_done:
@@ -206,7 +239,7 @@ class data_producer:
         else:
             self.idxs[0][0] += 1
 
-        return x, all_done, need_close
+        return self.idxs[0][2], x, all_done, need_close
 
     def reset(self):
         self._pre_files()
@@ -354,9 +387,9 @@ class LOB_trade_env(gym.Env):
 
     def _get_data(self):
         # 获取数据
-        x, all_data_done, need_close = self.data_producer.get()
+        symbol_id, x, all_data_done, need_close = self.data_producer.get()
         x = x.values.reshape(-1)
-        return x, all_data_done, need_close
+        return symbol_id, x, all_data_done, need_close
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -397,9 +430,9 @@ class LOB_trade_env(gym.Env):
         reward, acc_done, pos, profit = self._cal_reward(action, self.need_close, info)
 
         # 获取下一个状态的数据
-        observation, data_done, self.need_close = self._get_data()
-        # 添加持仓数据
-        observation = np.concatenate([observation, [pos,profit]])
+        symbol_id, observation, data_done, self.need_close = self._get_data()
+        # 添加标的持仓数据
+        observation = np.concatenate([observation, [symbol_id, pos,profit]])
         if self.need_close:
             info['close'] = True
 
@@ -412,11 +445,11 @@ class LOB_trade_env(gym.Env):
         super().reset(seed=seed)
         # 数据
         self.data_producer.reset()
-        x, _, self.need_close = self._get_data()
+        symbol_id, x, _, self.need_close = self._get_data()
         # 账户
         pos, profit = self.acc.reset()
-        # 添加持仓数据
-        x = np.concatenate([x, [pos,profit]])
+        # 添加标的持仓数据
+        x = np.concatenate([x, [symbol_id, pos,profit]])
         return x, {}
 
     def render(self):

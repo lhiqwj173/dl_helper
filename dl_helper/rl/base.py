@@ -57,24 +57,15 @@ class BaseAgent:
         state_dict[model_key + self.model_key_suffix] = model_obj.state_dict()
 
     def state_dict(self):
-        """返回需要保存的状态字典
-        
-        Returns:
-            dict: 包含模型参数等需要保存的状态
-        """
-        # 只保存关键参数
-        return {
-            "features_extractor_class": self.features_extractor_class,
-            "features_extractor_kwargs": self.features_extractor_kwargs,
-            "features_dim": self.features_dim,
-            "net_arch": self.net_arch
-        }
+        """只保存模型参数"""
+        raise NotImplementedError
 
     def load_state_dict(self, state_dict):
-        """加载保存的状态
+        """
+        加载模型参数
         
         Args:
-            state_dict (dict): 包含模型参数和配置的状态字典
+            state_dict (dict): 包含模型参数的状态字典
         """
         for key, value in state_dict.items():
             if key.endswith(self.model_key_suffix): 
@@ -83,39 +74,44 @@ class BaseAgent:
                 if hasattr(self, attr_name):
                     # 加载模型参数
                     getattr(self, attr_name).load_state_dict(value)
-            else:
-                # 加载普通配置
-                setattr(self, key, value)
 
-    def save(self, root):
-        """保存参数
+    def save(self, root=''):
+        """
+        保存参数
         """
         torch.save(self.state_dict(), os.path.join(root, 'agent_data.pth'))
 
-    def load(self, root):
-        """加载参数
+    def load(self, root=''):
+        """
+        加载参数
         """
         self.load_state_dict(torch.load(os.path.join(root, 'agent_data.pth')))
 
     def learn(self, train_title):
         self.root = f'{train_title}'
+
         if not self.sync_alist:
             os.makedirs(self.root, exist_ok=True)
-            return
+        else:
+            # 尝试alist拉取
+            try:
+                # 下载
+                _file = f'alist/{train_title}.7z'
+                # 下载文件
+                download_folder = f'/train_data/'
+                self.client.download(f'{download_folder}{train_title}.7z', 'alist/')
+                # 解压文件
+                decompress(_file)
+                # 移动
+                shutil.copytree(os.path.join('alist', train_title), self.root, dirs_exist_ok=True)
+            except Exception as e:
+                print(f'下载失败: {e}')
+                os.makedirs(self.root, exist_ok=True)
 
-        try:
-            # 下载
-            _file = f'alist/{train_title}.7z'
-            # 下载文件
-            download_folder = f'/train_data/'
-            self.client.download(f'{download_folder}{train_title}.7z', 'alist/')
-            # 解压文件
-            decompress(_file)
-            # 移动
-            shutil.copytree(os.path.join('alist', train_title), self.root, dirs_exist_ok=True)
-            # 读取训练参数
-            self.load(self.root)
-        except Exception as e:
-            print(f'下载失败: {e}')
-            os.makedirs(self.root, exist_ok=True)
+            if os.path.exists(os.path.join(self.root, 'agent_data.pth')):
+                # 读取训练参数
+                self.load(self.root)
+            else:
+                os.makedirs(self.root, exist_ok=True)
+
         

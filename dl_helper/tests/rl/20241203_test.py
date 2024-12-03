@@ -20,7 +20,7 @@ device = torch.device("cuda") if torch.cuda.is_available() else torch.device(
     "cpu")
 
 t1, t2, t3, t4 = [100, 30, 10, 1]
-d1, d2, d3, d4 = [130, 60, 30, 3]
+d1, d2, d3, d4 = [130, 60, 30, 7]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
 if __name__ == '__main__':
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     dqn = DQN(
         obs_shape=(100, 130),
         action_dim=3,
-        features_dim=d4+2,
+        features_dim=d4+3,
         features_extractor_class=m_bin_ctabl_fix_shape,
         learning_rate=lr,
         gamma=gamma,
@@ -45,25 +45,35 @@ if __name__ == '__main__':
         device=device,
         wait_trade_close = True,
         features_extractor_kwargs=features_extractor_kwargs,
-        net_arch=None,
-        dqn_type=VANILLA_DQN,
+        net_arch=[6, 3],
+        dqn_type=DD_DQN,
         sync_alist=True if in_kaggle else False,
     )
 
-    # 训练数据
-    if in_kaggle:
-        input_folder = r'/kaggle/input'
-        # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-        data_folder_name = os.listdir(input_folder)[0]
-        data_folder = os.path.join(input_folder, data_folder_name)
-    else:
-        os.environ['ALIST_USER'] = 'admin'
-        os.environ['ALIST_PWD'] = 'LHss6632673'
-        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+    print(dqn.q_net)
+    print(dqn.target_q_net)
+    # 计算模型参数大小
+    param_size = 0
+    for param in dqn.q_net.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = param_size / 1024  # 转换为 KB
+    print(f'模型参数占用大小: {buffer_size:.2f} KB')
+    dqn.save(r'D:\code\dl_helper\dl_helper\tests\rl')
 
-    data_producer = data_producer(data_folder=data_folder)
-    env = LOB_trade_env(data_producer=data_producer)
+    # # 训练数据
+    # if in_kaggle:
+    #     input_folder = r'/kaggle/input'
+    #     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    #     data_folder_name = os.listdir(input_folder)[0]
+    #     data_folder = os.path.join(input_folder, data_folder_name)
+    # else:
+    #     os.environ['ALIST_USER'] = 'admin'
+    #     os.environ['ALIST_PWD'] = 'LHss6632673'
+    #     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-    # 开始训练
-    dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
+    # data_producer = data_producer(data_folder=data_folder)
+    # env = LOB_trade_env(data_producer=data_producer)
+
+    # # 开始训练
+    # dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
 

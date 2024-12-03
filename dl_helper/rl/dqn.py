@@ -7,6 +7,7 @@ import numpy as np
 
 from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
+from py_ext.lzma import compress_folder
 
 VANILLA_DQN = 'VanillaDQN'
 DOUBLE_DQN = 'DoubleDQN'
@@ -246,7 +247,6 @@ class DQN(BaseAgent):
             target_update,
             device,
             buffer_size,
-            
             wait_trade_close = True,
             features_extractor_kwargs=None,
             net_arch=None,
@@ -294,22 +294,11 @@ class DQN(BaseAgent):
         self.need_epsilon = True
 
     def state_dict(self):
-        state = super().state_dict()  # 获取父类的状态
-        state.update({
-            'action_dim': self.action_dim,
-            'gamma': self.gamma,
-            'epsilon': self.epsilon,
-            'target_update': self.target_update,
-            'count': self.count,
-            'dqn_type': self.dqn_type,
-            'device': self.device,
-            'replay_buffer': self.replay_buffer,
-        })
+        state = {}
 
         # 模型参数
         self.state_dict_model(state, 'q_net', self.q_net)
         self.state_dict_model(state, 'target_q_net', self.target_q_net) 
-
         return state
 
     def build_model(self):
