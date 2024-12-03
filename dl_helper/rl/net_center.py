@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import socket, time, sys, os, re
 import pickle
 import struct
