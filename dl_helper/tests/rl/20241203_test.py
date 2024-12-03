@@ -2,7 +2,7 @@ import os
 import torch
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
-from dl_helper.rl.env.lob_env import data_producer, LOB_trade_env
+from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.models.binctabl import m_bin_ctabl
 
 lr = 1e-2
