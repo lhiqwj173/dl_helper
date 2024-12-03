@@ -468,8 +468,8 @@ class DQN(BaseAgent):
                         learning_start = True
                         # 截断 max_q_value_list / return_list
                         # 之前都还每开始训练，记录无意义
-                        max_q_value_list = max_q_value_list[-1:]
-                        return_list = return_list[-1:]
+                        watch_data['max_q_value_list'] = watch_data['max_q_value_list'][-1:]
+                        watch_data['return_list'] = watch_data['return_list'][-1:]
 
                     b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(
                         batch_size)

@@ -368,7 +368,8 @@ class LOB_trade_env(gym.Env):
         # 合法性检查
         if not legal:
             # 非法动作
-            return -10, True, pos, profit
+            info['close'] = True
+            return -10, False, pos, profit
 
         # 只有平仓才给与reward
         # 同时记录评价指标
