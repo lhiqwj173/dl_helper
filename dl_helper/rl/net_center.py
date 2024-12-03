@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 import socket, time, sys, os, re
 import pickle
 import struct
@@ -113,7 +116,7 @@ def run_param_center(model, tau= 0.005):
             client_socket.close()
             continue
 
-        print(f"Accepted connection from: {client_address}")
+        # print(f"Accepted connection from: {client_address}")
 
         need_block = False
         try:
@@ -134,6 +137,7 @@ def run_param_center(model, tau= 0.005):
                             # 发送模型参数
                             params_data = pickle.dumps(model.state_dict())
                             send_msg(client_socket, params_data)
+                            print(f'Parameters sent to {client_ip}')
                         elif cmd == 'update':
                             # 接收新参数
                             params_data = recv_msg(client_socket)
@@ -146,7 +150,7 @@ def run_param_center(model, tau= 0.005):
                                     model.state_dict()[key].copy_(
                                         tau * new_params[key] + (1-tau) * model.state_dict()[key]
                                     )
-                                print('Parameters updated')
+                                print(f'Parameters updated from {client_ip}')
                                 send_msg(client_socket, b'ok')
                         else:
                             need_block = True
