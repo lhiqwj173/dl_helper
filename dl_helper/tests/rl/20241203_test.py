@@ -4,6 +4,7 @@ import torch
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
+from dl_helper.train_param import in_kaggle
 
 lr = 1e-2
 num_episodes = 5000
@@ -38,19 +39,19 @@ if __name__ == '__main__':
         features_extractor_kwargs=features_extractor_kwargs,
         net_arch=None,
         dqn_type=VANILLA_DQN,
-        # sync_alist=True
-        sync_alist=False
+        sync_alist=True if in_kaggle else False,
     )
 
-    # # 训练数据
-    # input_folder = r'/kaggle/input'
-    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-    # data_folder_name = os.listdir(input_folder)[0]
-    # data_folder = os.path.join(input_folder, data_folder_name)
-
-    os.environ['ALIST_USER'] = 'admin'
-    os.environ['ALIST_PWD'] = 'LHss6632673'
-    data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+    # 训练数据
+    if in_kaggle:
+        input_folder = r'/kaggle/input'
+        # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+        data_folder_name = os.listdir(input_folder)[0]
+        data_folder = os.path.join(input_folder, data_folder_name)
+    else:
+        os.environ['ALIST_USER'] = 'admin'
+        os.environ['ALIST_PWD'] = 'LHss6632673'
+        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
     data_producer = data_producer(data_folder=data_folder)
     env = LOB_trade_env(data_producer=data_producer)
