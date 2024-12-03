@@ -422,7 +422,7 @@ class DQN(BaseAgent):
             self.client.mkdir(upload_folder)
             self.client.upload(zip_file, upload_folder)
 
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=10, test_interval=30, update_interval=4):
+    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=5, test_interval=30, update_interval=4):
         # 准备
         super().learn(train_title)
 
