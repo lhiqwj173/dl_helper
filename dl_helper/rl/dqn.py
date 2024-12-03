@@ -246,6 +246,7 @@ class DQN(BaseAgent):
             target_update,
             device,
             buffer_size,
+            
             wait_trade_close = True,
             features_extractor_kwargs=None,
             net_arch=None,
@@ -275,16 +276,22 @@ class DQN(BaseAgent):
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
+        self.need_epsilon = True,
         self.target_update = target_update
         self.count = 0
         self.dqn_type = dqn_type
         self.device = device
         self.wait_trade_close = wait_trade_close    
         self.replay_buffer = ReplayBuffer(buffer_size) if not wait_trade_close else ReplayBufferWaitClose(buffer_size)
-
         self.q_net, self.target_q_net = self.build_model()
         self.optimizer = torch.optim.Adam(self.q_net.parameters(),
                                           lr=learning_rate)
+
+    def eval(self):
+        self.need_epsilon = False
+
+    def train(self):
+        self.need_epsilon = True
 
     def state_dict(self):
         state = super().state_dict()  # 获取父类的状态
@@ -312,7 +319,7 @@ class DQN(BaseAgent):
         return q_net, target_q_net
 
     def take_action(self, state):
-        if np.random.random() < self.epsilon:
+        if np.random.random() < self.epsilon and self.need_epsilon:
             action = np.random.randint(self.action_dim)
         else:
             state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
@@ -360,6 +367,9 @@ class DQN(BaseAgent):
         'max_q_value_list' # 验证集最大Q值
     ]
     def val_test(self, env, data_type='val'):
+        # 验证模式
+        self.eval()
+
         # 训练监控指标 / 每回合
         watch_data = {f'{i}_{data_type}': [] for i in self.rl_training_ind}
         max_q_value = 0
@@ -397,6 +407,7 @@ class DQN(BaseAgent):
         # 返回均值
         for k in watch_data:
             watch_data[k] = np.mean(watch_data[k])
+
         return watch_data
 
     def package_root(self, watch_data):
@@ -427,6 +438,9 @@ class DQN(BaseAgent):
         # 学习是否开始
         learning_start = False
         for i in range(num_episodes):
+            # 训练模式
+            self.train()
+
             episode_return = 0
             episode_len = 0 
             # 回合的评价指标
@@ -448,7 +462,7 @@ class DQN(BaseAgent):
 
                 # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
                 if info.get('close', False) and self.wait_trade_close:
-                    self.replay_buffer.update_reward(reward)
+                    self.replay_buffer.update_reward(reward if reward>-1000 else None)
                     # 更新评价指标
                     for k, v in info.items():
                         if k != 'close':

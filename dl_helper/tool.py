@@ -47,9 +47,14 @@ def calc_sortino_ratio(returns, risk_free_rate=0.0):
     excess_returns = returns - risk_free_rate
     # 只考虑负收益的标准差
     downside_returns = excess_returns[excess_returns < 0]
-    if len(downside_returns) == 0 or downside_returns.std() == 0:
-        return 0
-    return excess_returns.mean() / downside_returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+
+    # 可能出现没有下行收益率
+    # if len(downside_returns) == 0 or downside_returns.std() == 0:
+    #     return 0
+    # return excess_returns.mean() / downside_returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+
+    # 引入一个小的正数作为下行波动率， 避免产生除以零的情况
+    return excess_returns.mean() / (np.sqrt(downside_returns.var() + 1e-6)) * np.sqrt(len(returns))  # 根据序列长度标准化
 
 def calc_max_drawdown(returns):
     """计算最大回撤

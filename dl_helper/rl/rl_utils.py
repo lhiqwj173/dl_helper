@@ -29,10 +29,11 @@ class ReplayBufferWaitClose(ReplayBuffer):
         # 如果done 则将temp加入buffer
         self.buffer_temp.append([state, action, reward, next_state, done])
 
-    def update_reward(self, reward):
-        # 修改 buffer_temp 中的所有 reawrd 为 reward
-        for i in range(len(self.buffer_temp)):
-            self.buffer_temp[i][2] = reward
+    def update_reward(self, reward=None):
+        if not None is reward:
+            # 修改 buffer_temp 中的所有 reawrd 为 reward
+            for i in range(len(self.buffer_temp)):
+                self.buffer_temp[i][2] = reward
         # 移动到buffer
         self.buffer.extend(self.buffer_temp)
         self.buffer_temp = []

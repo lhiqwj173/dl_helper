@@ -272,7 +272,7 @@ class Account:
             else:
                 legal = False
         elif action == 2:   # 不操作
-            if self.pos == 0:
+            if self.pos == 0 and len(self.net_raw):
                 self.net_raw.append(self.net_raw[-1])
             else:
                 self.net_raw.append(bid_price)
@@ -287,8 +287,9 @@ class Account:
             # 需要平仓 或 卖出， 需要计算评价指标， 储存在info中
             if (len(self.net_raw) > 1) and (need_close or action==1):
                 # 平均税费(买入卖出)到每一步
-                step_fee = (self.buy_fee + self.sell_fee) / len(self.net_raw)
-                self.net = [i - step_fee for i in self.net_raw]
+                # 第一步买入，等价较好，不平均税费
+                step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
+                self.net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
                 # 计算对数收益率序列
                 log_returns = np.diff(np.log(self.net))
 
@@ -297,6 +298,10 @@ class Account:
                 res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
                 res['max_drawdown'] = calc_max_drawdown(log_returns)
                 res['total_return'] = calc_total_return(log_returns)
+
+        else:
+            # 不合法的操作，交易全部清空
+            self.reset()
 
         return legal, self.pos, unrealized_profit, res
         
@@ -356,7 +361,7 @@ class LOB_trade_env(gym.Env):
     def _cal_reward(self, action, need_close, info):
         """
         计算奖励
-        非法动作 reward=-10
+        非法动作 reward=-1000
         只有平仓 reward=收益率
         其他 reward=0
 
@@ -369,7 +374,7 @@ class LOB_trade_env(gym.Env):
         if not legal:
             # 非法动作
             info['close'] = True
-            return -10, False, pos, profit
+            return -1000, False, pos, profit
 
         # 只有平仓才给与reward
         # 同时记录评价指标
