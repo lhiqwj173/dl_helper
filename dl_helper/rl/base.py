@@ -87,7 +87,6 @@ class BaseAgent:
                 # 加载普通配置
                 setattr(self, key, value)
 
-
     def save(self, root):
         """保存参数
         """
@@ -114,6 +113,9 @@ class BaseAgent:
             decompress(_file)
             # 移动
             shutil.copytree(os.path.join('alist', train_title), self.root, dirs_exist_ok=True)
-        except:
+            # 读取训练参数
+            self.load(self.root)
+        except Exception as e:
+            print(f'下载失败: {e}')
             os.makedirs(self.root, exist_ok=True)
         
