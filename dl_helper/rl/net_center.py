@@ -92,7 +92,7 @@ def update_block_ips(ips):
     with open(record_file, 'w') as f:
         f.write('\n'.join(ips))
 
-def run_param_center(model):
+def run_param_center(model, tau= 0.005):
     """参数中心服务器"""
     HOST = '0.0.0.0'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -101,7 +101,6 @@ def run_param_center(model):
     print(f"Parameter center server started: {HOST}:{PORT}")
 
     # 软更新系数
-    tau = 0.005
     block_ips = read_block_ips()
 
     while True:
@@ -195,7 +194,7 @@ if "__main__" == __name__:
         if sys.argv[1] == 'server':
             # 运行服务端
             print('Starting server...')
-            run_net_center(model, tau)
+            run_param_center(model, tau)
         elif sys.argv[1] == 'client':
             # 运行客户端
             print('Starting client...')
