@@ -1,4 +1,4 @@
-import os
+import os, sys
 import torch
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
@@ -24,6 +24,14 @@ d1, d2, d3, d4 = [130, 60, 30, 3]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
 if __name__ == '__main__':
+
+    # 检查是否有命令行参数
+    train_title = ''
+    if len(sys.argv) > 1:
+        for arg in sys.argv[1:]:
+            if arg.startswith('train_title=') or arg.startswith('title='):
+                train_title = arg.split('=')[1]
+
     dqn = DQN(
         obs_shape=(100, 130),
         action_dim=3,
@@ -57,5 +65,5 @@ if __name__ == '__main__':
     env = LOB_trade_env(data_producer=data_producer)
 
     # 开始训练
-    dqn.learn('rl_test', env, num_episodes, minimal_size, batch_size)
+    dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
 
