@@ -47,8 +47,12 @@ class test_features_extractor_class(torch.nn.Module):
         return F.relu(self.fc1(x))
 
 class dqn_network(torch.nn.Module):
-    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
+    def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
+        """
+        features_dim: features_extractor_class输出维度  + 2(持仓 + 为实现收益率)
+        """
         super().__init__()
+        self.obs_shape = obs_shape
         self.features_extractor = features_extractor_class(
             **features_extractor_kwargs
         )
@@ -69,7 +73,18 @@ class dqn_network(torch.nn.Module):
             self.fc_v = torch.nn.Linear(features_dim, 1)
 
     def forward(self, x):
-        feature = self.features_extractor(x)
+        """
+        先将x分成两个tensor
+        lob: x[:, :-2]
+        acc: x[:, -2:]
+        """
+        # -> batchsize, 100， 130
+        lob_data = x[:, :-2].view(-1, self.obs_shape[0], self.obs_shape[1])
+        acc_data = x[:, -2:]
+
+        feature = self.features_extractor(lob_data)# -> batchsize, 3
+        # concat acc
+        feature = torch.cat([feature, acc_data], dim=1)
 
         x = feature
         if self.fc_a_length > 1:
@@ -221,6 +236,7 @@ def report_learning_process(watch_data, root):
 
 class DQN(BaseAgent):
     def __init__(self,
+            obs_shape,
             action_dim,
             features_dim,
             features_extractor_class,
@@ -233,7 +249,8 @@ class DQN(BaseAgent):
             wait_trade_close = True,
             features_extractor_kwargs=None,
             net_arch=None,
-            dqn_type=VANILLA_DQN
+            dqn_type=VANILLA_DQN,
+            sync_alist=True,
     ):
         """
         DQN算法
@@ -251,9 +268,10 @@ class DQN(BaseAgent):
             net_arch: 网络架构参数,可选
             dqn_type: DQN类型,可选 VANILLA_DQN/DOUBLE_DQN/DUELING_DQN/DD_DQN
         """
-        super().__init__(action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)   
+        super().__init__(action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch, sync_alist)   
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
+        self.obs_shape = obs_shape
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
@@ -288,8 +306,8 @@ class DQN(BaseAgent):
         return state
 
     def build_model(self):
-        q_net = dqn_network(self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
-        target_q_net = dqn_network(self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
+        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
+        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
         # print(f'q_net: {id(q_net)}, target_q_net: {id(target_q_net)}')
         return q_net, target_q_net
 
@@ -391,10 +409,12 @@ class DQN(BaseAgent):
         if os.path.exists(zip_file):
             os.remove(zip_file)
         compress_folder(self.root, zip_file, 9, inplace=False)
-        # 上传alist
-        upload_folder = f'/train_data/'
-        self.client.mkdir(upload_folder)
-        self.client.upload(zip_file, upload_folder)
+
+        if self.sync_alist:
+            # 上传alist
+            upload_folder = f'/train_data/'
+            self.client.mkdir(upload_folder)
+            self.client.upload(zip_file, upload_folder)
 
     def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=50, test_interval=1000, update_interval=4):
         # 准备

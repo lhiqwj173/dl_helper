@@ -308,9 +308,13 @@ class Account:
         self.cost = 0 
         self.profit = 0
 
+        return self.pos, 0
+
 class LOB_trade_env(gym.Env):
     """
     用于 LOB 的强化学习环境
+    返回的 obs 结构:
+        lob数据 + 持仓 + 未实现收益率
     """
     metadata = {"render_modes": ["ansi"]}
 
@@ -404,7 +408,9 @@ class LOB_trade_env(gym.Env):
         self.data_producer.reset()
         x, _, self.need_close = self._get_data()
         # 账户
-        self.acc.reset()
+        pos, profit = self.acc.reset()
+        # 添加持仓数据
+        x = np.concatenate([x, [pos,profit]])
         return x, {}
 
     def render(self):

@@ -213,6 +213,11 @@ class m_bin_ctabl(nn.Module):
     desired = torch.clamp(norm, min=0.0, max=10.0)
     p.data.mul_(torch.where(norm > 10.0, desired / (1e-8 + norm), torch.tensor(1., device=p.data.device)) )
   
+class m_bin_ctabl_fix_shape(m_bin_ctabl):
+  def forward(self, x):
+    x = torch.transpose(x, 1, 2)
+    return super().forward(x)
+  
 if __name__ == "__main__":
     
     from torchinfo import summary   

@@ -13,7 +13,8 @@ class BaseAgent:
                  features_dim,
                  features_extractor_class,
                  features_extractor_kwargs=None,
-                 net_arch=None
+                 net_arch=None,
+                 sync_alist=True,
     ):
         """Agent 基类
         
@@ -43,7 +44,8 @@ class BaseAgent:
         else:
             raise ValueError("net_arch 必须是列表或字典, 表示mlp每层的神经元个数")
 
-        self.client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+        self.sync_alist = sync_alist
+        self.client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD')) if sync_alist else None
 
     def build_model(self):
         """构建Q网络,子类需要实现具体的网络结构"""
@@ -98,6 +100,10 @@ class BaseAgent:
 
     def learn(self, train_title):
         self.root = f'{train_title}'
+        if not self.sync_alist:
+            os.makedirs(self.root, exist_ok=True)
+            return
+
         try:
             # 下载
             _file = f'alist/{train_title}.7z'
