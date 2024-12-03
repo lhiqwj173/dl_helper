@@ -27,7 +27,7 @@ class ReplayBufferWaitClose(ReplayBuffer):
     def add(self, state, action, reward, next_state, done): 
         # 先加入temp
         # 如果done 则将temp加入buffer
-        self.buffer_temp.append((state, action, reward, next_state, done))
+        self.buffer_temp.append([state, action, reward, next_state, done])
 
     def update_reward(self, reward):
         # 修改 buffer_temp 中的所有 reawrd 为 reward
