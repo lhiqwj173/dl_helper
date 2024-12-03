@@ -422,7 +422,7 @@ class DQN(BaseAgent):
             self.client.mkdir(upload_folder)
             self.client.upload(zip_file, upload_folder)
 
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=10, test_interval=1000, update_interval=4):
+    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=10, test_interval=30, update_interval=4):
         # 准备
         super().learn(train_title)
 
@@ -506,6 +506,7 @@ class DQN(BaseAgent):
             # 验证和测试
             for data_type, interval in [('val', report_interval), ('test', test_interval)]:
                 if (i+1) % interval == 0 and learning_start:
+                    print(f'episodes {i} {data_type}')
                     watch_data_new = self.val_test(env, data_type=data_type)
                     for k in watch_data_new:
                         if k not in watch_data:
