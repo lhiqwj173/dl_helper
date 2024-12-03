@@ -38,18 +38,19 @@ if __name__ == '__main__':
         features_extractor_kwargs=features_extractor_kwargs,
         net_arch=None,
         dqn_type=VANILLA_DQN,
-        sync_alist=True
+        # sync_alist=True
+        sync_alist=False
     )
 
-    # 训练数据
-    input_folder = r'/kaggle/input'
-    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-    data_folder_name = os.listdir(input_folder)[0]
-    data_folder = os.path.join(input_folder, data_folder_name)
+    # # 训练数据
+    # input_folder = r'/kaggle/input'
+    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    # data_folder_name = os.listdir(input_folder)[0]
+    # data_folder = os.path.join(input_folder, data_folder_name)
 
-    # os.environ['ALIST_USER'] = 'admin'
-    # os.environ['ALIST_PWD'] = 'LHss6632673'
-    # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+    os.environ['ALIST_USER'] = 'admin'
+    os.environ['ALIST_PWD'] = 'LHss6632673'
+    data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
     data_producer = data_producer(data_folder=data_folder)
     env = LOB_trade_env(data_producer=data_producer)

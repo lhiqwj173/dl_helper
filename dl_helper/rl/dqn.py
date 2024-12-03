@@ -331,16 +331,11 @@ class DQN(BaseAgent):
         return self.q_net(state).max().item()
 
     def update(self, transition_dict):
-        states = torch.from_numpy(transition_dict['states'],
-                              dtype=torch.float).to(self.device)
-        actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(
-            self.device)
-        rewards = torch.from_numpy(transition_dict['rewards'],
-                               dtype=torch.float).view(-1, 1).to(self.device)
-        next_states = torch.from_numpy(transition_dict['next_states'],
-                                   dtype=torch.float).to(self.device)
-        dones = torch.from_numpy(transition_dict['dones'],
-                             dtype=torch.float).view(-1, 1).to(self.device)
+        states = torch.from_numpy(transition_dict['states']).to(self.device)
+        actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
+        rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
+        next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
+        dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
 
         q_values = self.q_net(states).gather(1, actions)
         if self.dqn_type in [DOUBLE_DQN, DD_DQN] :
@@ -350,13 +345,13 @@ class DQN(BaseAgent):
         else:
             max_next_q_values = self.target_q_net(next_states).max(1)[0].view(
                 -1, 1)
-        q_targets = rewards + self.gamma * max_next_q_values * (1 - dones)
+        q_targets = (rewards + self.gamma * max_next_q_values * (1 - dones))
         dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
         self.optimizer.zero_grad()
         dqn_loss.backward()
         self.optimizer.step()
 
-        if self.count % self.target_update == 0:
+        if self.count > 0 and self.count % self.target_update == 0:
             self.target_q_net.load_state_dict(self.q_net.state_dict())
         self.count += 1
 
@@ -447,7 +442,10 @@ class DQN(BaseAgent):
             episode_metrics = {}
             state, info = env.reset()
             done = False
+            step = 0
             while not done:
+                step += 1
+
                 # 动作
                 action = self.take_action(state)
                 max_q_value = self.max_q_value(
@@ -477,7 +475,7 @@ class DQN(BaseAgent):
                 episode_len += 1
 
                 # 更新网络
-                if self.replay_buffer.size() > minimal_size and i % update_interval == 0:
+                if self.replay_buffer.size() > minimal_size and step % update_interval == 0:
                     if not learning_start:
                         learning_start = True
                         # 截断 max_q_value_list / return_list
@@ -507,7 +505,7 @@ class DQN(BaseAgent):
 
             # 验证和测试
             for data_type, interval in [('val', report_interval), ('test', test_interval)]:
-                if (i + 1) % interval == 0 and learning_start:
+                if step % interval == 0 and learning_start:
                     watch_data_new = self.val_test(env, data_type=data_type)
                     for k in watch_data_new:
                         if k not in watch_data:
