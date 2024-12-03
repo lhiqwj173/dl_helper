@@ -12,6 +12,16 @@ cmd = 'cd /kaggle/working/3rd/dl_helper && pip install -e .'
 subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
 for cmd in [
+        'pip install df2img',
+        'pip install imgkit',
+        'pip install loguru',
+        'pip install einops',
+        'pip install dill',
+        'pip install torchinfo',
+        'pip install torchmetrics',
+        'pip install requests_toolbelt',
+        'pip install torchstat',
+        'pip install torchinfo',
         'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
         'pip install gym',
     ]:
