@@ -549,7 +549,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     if _run_device == 'TPU':  # 如果是TPU环境
         import torch_xla.core.xla_model as xm
         device = xm.xla_device()
-    elif _run_device in ['T4x2', 'P100']
+    elif _run_device in ['T4x2', 'P100']:
         device = torch.device(f'cuda:{rank}' if num_processes > 1 else 'cuda')
     else:
         device = torch.device('cpu')
