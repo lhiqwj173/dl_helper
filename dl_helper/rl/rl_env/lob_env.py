@@ -47,7 +47,12 @@ class data_producer:
     遍历日期文件，每天随机选择一个标的
     当天的数据读取完毕后，需要强制平仓
     """
-    def __init__(self, data_folder, _type='train', his_len=100, file_num=0):
+    def __init__(self, data_folder, _type='train', his_len=100, file_num=0, simple_test=False):
+        # 快速测试
+        self.simple_test = simple_test
+        if self.simple_test:
+            file_num = 1
+
         self.his_len = his_len
         self.file_num = file_num
 
@@ -92,6 +97,11 @@ class data_producer:
         file = self.files.pop(0)
         log(f'load date file({self.data_type}): {file}')
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
+
+        if self.simple_test:
+            self.ids = self.ids[:1000]
+            self.mean_std = self.mean_std[:1000]
+            self.x = self.x[:1000]
 
         # 解析标的 随机挑选一个标的数据
         symbols = np.array([i.split('_')[0] for i in self.ids])

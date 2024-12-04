@@ -40,29 +40,31 @@ def run_client_learning(train_func_device, args, kwargs={}):
     else:
         # 多设备
         if get_gpu_info() == "TPU":
-            # TPU多设备训练
-            import torch_xla.distributed.xla_multiprocessing as xmp
+            pass
+
+            # # TPU多设备训练
+            # import torch_xla.distributed.xla_multiprocessing as xmp
             
-            # 清理TPU环境变量,避免冲突
-            try:
-                os.environ.pop('TPU_PROCESS_ADDRESSES')
-                os.environ.pop('CLOUD_TPU_TASK_ID')
-                # 添加必要的环境变量
-                os.environ['TPU_NUM_DEVICES'] = str(num_processes)
-                os.environ['XRT_TPU_CONFIG'] = 'tpu_worker;0;localhost:51011'  # TPU worker配置
-            except:
-                pass
+            # # 清理TPU环境变量,避免冲突
+            # try:
+            #     os.environ.pop('TPU_PROCESS_ADDRESSES')
+            #     os.environ.pop('CLOUD_TPU_TASK_ID')
+            #     # 添加必要的环境变量
+            #     os.environ['TPU_NUM_DEVICES'] = str(num_processes)
+            #     os.environ['XRT_TPU_CONFIG'] = 'tpu_worker;0;localhost:51011'  # TPU worker配置
+            # except:
+            #     pass
                 
-            # 将kwargs打包到args中传递
-            combined_args = (train_func_device, num_processes, *args, kwargs)  # 把kwargs作为最后一个位置参数
+            # # 将kwargs打包到args中传递
+            # combined_args = (train_func_device, num_processes, *args, kwargs)  # 把kwargs作为最后一个位置参数
             
-            # 使用XLA的多进程启动器
-            xmp.spawn(
-                train_func_device_tpu,
-                args=combined_args,
-                nprocs=num_processes,
-                start_method='fork'  # 显式指定启动方法
-            )
+            # # 使用XLA的多进程启动器
+            # xmp.spawn(
+            #     train_func_device_tpu,
+            #     args=combined_args,
+            #     nprocs=num_processes,
+            #     start_method='fork'  # 显式指定启动方法
+            # )
 
         else:
             print('GPU/CPU多进程训练')

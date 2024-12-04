@@ -557,7 +557,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     dqn.to(device)
     
     # 初始化环境
-    dp = data_producer(data_folder=data_folder)
+    dp = data_producer(data_folder=data_folder, simple_test=True)
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
