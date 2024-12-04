@@ -386,7 +386,8 @@ def run_param_center(agent, tau= 0.005):
                                 # 更新训练数据
                                 watch_data = pickle.loads(train_data_new)
                                 for k in train_data[data_type]:
-                                    train_data[data_type][k].append(watch_data[k])
+                                    if k in watch_data:
+                                        train_data[data_type][k].append(watch_data[k])
                                                                 
                                 log(f'Train data updated from {client_ip}')
                                 send_msg(client_socket, b'ok')

@@ -543,7 +543,18 @@ class DQN(BaseAgent):
 
             log(f'episodes {i} done')
 
-def run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+    # 根据环境获取对应设备
+    _run_device = get_gpu_info()
+    if _run_device == 'TPU':  # 如果是TPU环境
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+    elif _run_device in ['T4x2', 'P100']
+        device = torch.device(f'cuda:{rank}' if num_processes > 1 else 'cuda')
+    else:
+        device = torch.device('cpu')
+    log(f'rank: {rank}, num_processes: {num_processes} device: {device}, run...')
+    
     # 移动到设备
     dqn.to(device)
     
@@ -553,31 +564,6 @@ def run_client_learning_device(device, train_title, data_folder, dqn, num_episod
 
     # 开始训练
     dqn.learn(train_title, env, num_episodes, minimal_size, batch_size)
-
-def _run_client_learning(train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
-    # 准备设备
-    accelerator = Accelerator()
-    device = accelerator.device
-    # 使用设备运行
-    run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
-
-def run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, train_title='rl_test', val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
-    num_processes = match_num_processes()
-    try:
-        # fix tpu
-        os.environ.pop('TPU_PROCESS_ADDRESSES')
-        os.environ.pop('CLOUD_TPU_TASK_ID')
-    except:
-        pass
-
-    if num_processes == 1:
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        # 使用设备运行
-        run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
-    else:
-        # 使用 Accelerator 来分配多设备
-        notebook_launcher(_run_client_learning, args=(train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step), num_processes=num_processes)
-
 
 if __name__ == '__main__':
     agent = DQN(

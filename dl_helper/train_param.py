@@ -82,7 +82,7 @@ def match_num_processes():
     elif device == 'P100':
         return 1
     else:
-        return 0
+        return 1
 
 def tpu_available():
     return tpu

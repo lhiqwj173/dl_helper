@@ -4,8 +4,9 @@ import torch
 from py_ext.tool import log, init_logger
 init_logger('rl', level='INFO')
 
-from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning
+from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
 from dl_helper.rl.net_center import run_param_center
+from dl_helper.rl.run import run_client_learning
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 
@@ -66,7 +67,8 @@ if __name__ == '__main__':
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-        run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+        args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+        run_client_learning(run_client_learning_device, **args)
     else:
         # 服务端
         run_param_center(dqn)
