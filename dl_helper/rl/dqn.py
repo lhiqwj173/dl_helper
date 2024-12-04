@@ -395,10 +395,6 @@ class DQN(BaseAgent):
         # 返回均值
         for k in watch_data:
             watch_data[k] = np.mean(watch_data[k])
-
-        # 训练模式
-        self.train()
-
         return watch_data
 
     def package_root(self, watch_data):
@@ -508,9 +504,11 @@ class DQN(BaseAgent):
                     # 验证和测试
                     learn_step += 1
                     net_synced = False
+                    need_train_back = False
                     for data_type, interval in [('val', val_interval_learn_step), ('test', test_interval_learn_step)]:
                         if learn_step % interval == 0:
                             print(f'episodes {i} {learn_step} begin {data_type}')
+                            need_train_back = True
 
                             # 同步最新参数
                             if not net_synced:
@@ -524,6 +522,13 @@ class DQN(BaseAgent):
                             print(f'watch_data: {watch_data_new}')
                             # 发送验证数据
                             send_val_test_data(data_type, watch_data_new)
+                    
+                    # 切换回训练模式
+                    if need_train_back:
+                        self.train()
+                        env.set_data_type('train')
+                        state, info = env.reset()
+                        done = False
 
             print(f'episodes {i} done')
 
