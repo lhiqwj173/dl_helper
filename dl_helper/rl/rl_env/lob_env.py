@@ -5,6 +5,7 @@ import pandas as pd
 import gymnasium as gym
 import gymnasium.spaces as spaces
 import pickle
+from py_ext.tool import log
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_max_drawdown, calc_total_return
 
@@ -89,7 +90,7 @@ class data_producer:
         每次完成后从文件列表中剔除
         """
         file = self.files.pop(0)
-        print(f'load date file: {file}')
+        log(f'load date file: {file}')
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
         # 解析标的 随机挑选一个标的数据
@@ -226,16 +227,16 @@ class data_producer:
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
             need_close = True
-            print(f'need_close')
+            log(f'need_close')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                print(f'date done')
+                log(f'date done')
                 self.date_file_done = True
                 if not self.files:
                     # 没有下一个可以读取的日期数据文件
-                    print('all date files done')
+                    log('all date files done')
                     all_done = True
         else:
             self.idxs[0][0] += 1

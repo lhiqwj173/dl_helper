@@ -2,6 +2,8 @@
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+from py_ext.tool import log
+
 import socket, time, sys, os, re
 import pickle
 import struct
@@ -311,7 +313,7 @@ def run_param_center(agent, tau= 0.005):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen(20)
-    print(f"Parameter center server started: {HOST}:{PORT}")
+    log(f"Parameter center server started: {HOST}:{PORT}")
 
     # 软更新系数
     block_ips = read_block_ips()
@@ -329,11 +331,11 @@ def run_param_center(agent, tau= 0.005):
 
         # 检查是否是block ip
         if client_ip in block_ips:
-            print(f"Blocked connection from {client_ip}")
+            log(f"Blocked connection from {client_ip}")
             client_socket.close()
             continue
 
-        # print(f"Accepted connection from: {client_address}")
+        log(f"Accepted connection from: {client_address}")
 
         need_block = False
         try:
@@ -354,7 +356,7 @@ def run_param_center(agent, tau= 0.005):
                             # 发送模型参数
                             params_data = pickle.dumps(model.state_dict())
                             send_msg(client_socket, params_data)
-                            print(f'Parameters sent to {client_ip}')
+                            log(f'Parameters sent to {client_ip}')
 
                         elif cmd == 'update':
                             # 接收新参数
@@ -367,17 +369,17 @@ def run_param_center(agent, tau= 0.005):
                                 model = update_model_params(model, new_params)
                                 # 也更新 target 模型
                                 agent.target_q_net = update_model_params(agent.target_q_net, new_params)
-                                print(f'Parameters updated from {client_ip}')
+                                log(f'Parameters updated from {client_ip}')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                print(f'agent saved to {alist_folder}')
+                                log(f'agent saved to {alist_folder}')
 
                         elif cmd in ['val', 'test']:
                             # 接收训练数据
                             data_type = cmd
                             train_data_new = recv_msg(client_socket)
-                            print(f'train_data: {train_data_new}')
+                            log(f'train_data: {train_data_new}')
                             if train_data_new is None:
                                 need_block = True
                             else:
@@ -386,7 +388,7 @@ def run_param_center(agent, tau= 0.005):
                                 for k in train_data[data_type]:
                                     train_data[data_type][k].append(watch_data[k])
                                                                 
-                                print(f'Train data updated from {client_ip}')
+                                log(f'Train data updated from {client_ip}')
                                 send_msg(client_socket, b'ok')
 
                                 # 增加北京时间(每4小时)
@@ -407,13 +409,13 @@ def run_param_center(agent, tau= 0.005):
         except ConnectionResetError:
             pass
         except Exception as e:
-            print(f"Error processing request: {e}")
+            log(f"Error processing request: {e}")
             need_block = True
 
         if need_block:
             block_ips.append(client_ip)
             update_block_ips(block_ips)
-            print(f'Added block IP: {client_ip}')
+            log(f'Added block IP: {client_ip}')
 
         client_socket.close()
 

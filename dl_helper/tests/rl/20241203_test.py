@@ -1,6 +1,9 @@
 import os, sys
 import torch
 
+from py_ext.tool import log, init_logger
+init_logger('rl', level='INFO')
+
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.net_center import run_param_center

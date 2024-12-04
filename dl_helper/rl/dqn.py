@@ -1,5 +1,6 @@
 import os
 import matplotlib.pyplot as plt
+from py_ext.tool import log
 
 import torch
 import torch.nn.functional as F
@@ -507,7 +508,7 @@ class DQN(BaseAgent):
                     need_train_back = False
                     for data_type, interval in [('val', val_interval_learn_step), ('test', test_interval_learn_step)]:
                         if learn_step % interval == 0:
-                            print(f'episodes {i} {learn_step} begin {data_type}')
+                            log(f'episodes {i} {learn_step} begin {data_type}')
                             need_train_back = True
 
                             # 同步最新参数
@@ -518,8 +519,9 @@ class DQN(BaseAgent):
                                 self.update_params_from_server(env)
                                 net_synced = True
 
+                            log(f'wait watch_data')
                             watch_data_new = self.val_test(env, data_type=data_type)
-                            print(f'watch_data: {watch_data_new}')
+                            log(f'watch_data: {watch_data_new}')
                             # 发送验证数据
                             send_val_test_data(data_type, watch_data_new)
                     
@@ -530,7 +532,7 @@ class DQN(BaseAgent):
                         state, info = env.reset()
                         done = False
 
-            print(f'episodes {i} done')
+            log(f'episodes {i} done')
 
 if __name__ == '__main__':
     agent = DQN(
