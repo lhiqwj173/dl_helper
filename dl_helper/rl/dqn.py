@@ -549,8 +549,8 @@ def run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_s
     dqn.to(device)
     
     # 初始化环境
-    data_producer = data_producer(data_folder=data_folder)
-    env = LOB_trade_env(data_producer=data_producer)
+    dp = data_producer(data_folder=data_folder)
+    env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
     dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
