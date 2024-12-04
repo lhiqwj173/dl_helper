@@ -77,12 +77,12 @@ class dqn_network(torch.nn.Module):
     def forward(self, x):
         """
         先将x分成两个tensor
-        lob: x[:, :-2]
-        acc: x[:, -2:]
+        lob: x[:, :-3]
+        acc: x[:, -3:]
         """
         # -> batchsize, 100， 130
-        lob_data = x[:, :-2].view(-1, self.obs_shape[0], self.obs_shape[1])
-        acc_data = x[:, -2:]
+        lob_data = x[:, :-3].view(-1, self.obs_shape[0], self.obs_shape[1])
+        acc_data = x[:, -3:]
 
         feature = self.features_extractor(lob_data)# -> batchsize, 3
         # concat acc
