@@ -97,6 +97,7 @@ class data_producer:
         symbols = np.array([i.split('_')[0] for i in self.ids])
         unique_symbols = np.unique(symbols)
         # 获取所有标的的起止索引
+        self.idxs = []
         for symbol in unique_symbols:
             symbol_mask = symbols == symbol
             symbol_indices = np.where(symbol_mask)[0]

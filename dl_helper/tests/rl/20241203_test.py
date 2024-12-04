@@ -65,8 +65,6 @@ if __name__ == '__main__':
             data_folder_name = os.listdir(input_folder)[0]
             data_folder = os.path.join(input_folder, data_folder_name)
         else:
-            os.environ['ALIST_USER'] = 'admin'
-            os.environ['ALIST_PWD'] = 'LHss6632673'
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
         data_producer = data_producer(data_folder=data_folder)
