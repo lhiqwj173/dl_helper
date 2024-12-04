@@ -561,7 +561,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
-    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size)
+    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(
