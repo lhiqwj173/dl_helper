@@ -7,5 +7,9 @@ seaborn
 imgkit
 torchstat
 torchinfo
+scikit-learn
+accelerate
+requests_toolbelt
+torchmetrics
 df2img==0.2.11
 py-ext @ https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz
