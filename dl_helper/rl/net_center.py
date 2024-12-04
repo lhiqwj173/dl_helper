@@ -109,7 +109,11 @@ def update_model_params(model, new_params, tau=0.005):
     params = model.state_dict()
     for name, param in params.items():
         if name in new_params:
-            param.copy_((1 - tau) * param + tau * new_params[name])
+            # 确保新参数在同一设备上
+            new_param = new_params[name]
+            if new_param.device != device:
+                new_param = new_param.to(device)
+            param.copy_((1 - tau) * param + tau * new_param)
     return model
 
 # 记录block ip的文件
