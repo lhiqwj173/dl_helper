@@ -18,7 +18,6 @@ for cmd in [
         'pip install loguru',
         'pip install einops',
         'pip install dill',
-        'pip install torchinfo',
         'pip install torchmetrics',
         'pip install requests_toolbelt',
         'pip install torchstat',
