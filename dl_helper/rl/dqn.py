@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from dl_helper.rl.base import BaseAgent
+from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from py_ext.lzma import compress_folder
 
@@ -251,7 +252,6 @@ class DQN(BaseAgent):
             features_extractor_kwargs=None,
             net_arch=None,
             dqn_type=VANILLA_DQN,
-            sync_alist=True,
     ):
         """
         DQN算法
@@ -269,7 +269,7 @@ class DQN(BaseAgent):
             net_arch: 网络架构参数,可选
             dqn_type: DQN类型,可选 VANILLA_DQN/DOUBLE_DQN/DUELING_DQN/DD_DQN
         """
-        super().__init__(action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch, sync_alist)   
+        super().__init__(action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)   
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
         self.obs_shape = obs_shape
@@ -319,6 +319,9 @@ class DQN(BaseAgent):
         state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
         return self.q_net(state).max().item()
 
+    def _update_target_q_net_params(self):
+        self.target_q_net.load_state_dict(self.q_net.state_dict())
+
     def update(self, transition_dict):
         states = torch.from_numpy(transition_dict['states']).to(self.device)
         actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
@@ -341,7 +344,7 @@ class DQN(BaseAgent):
         self.optimizer.step()
 
         if self.count > 0 and self.count % self.target_update == 0:
-            self.target_q_net.load_state_dict(self.q_net.state_dict())
+            self._update_target_q_net_params()
         self.count += 1
 
     rl_training_ind = [
@@ -350,12 +353,13 @@ class DQN(BaseAgent):
         'episode_lens',     # 验证集回合长度
         'max_q_value_list' # 验证集最大Q值
     ]
+
     def val_test(self, env, data_type='val'):
         # 验证模式
         self.eval()
 
         # 训练监控指标 / 每回合
-        watch_data = {f'{i}_{data_type}': [] for i in self.rl_training_ind}
+        watch_data = {f'{i}': [] for i in self.rl_training_ind}
         max_q_value = 0
         episode_return = 0
         episode_len = 0
@@ -376,21 +380,24 @@ class DQN(BaseAgent):
                     for k, v in info.items():
                         if k != 'close':
                             if k not in watch_data:
-                                watch_data[f'{k}_{data_type}'] = []
-                            watch_data[f'{k}_{data_type}'].append(v)
+                                watch_data[f'{k}'] = []
+                            watch_data[f'{k}'].append(v)
                 state = next_state
                 episode_return += reward
                 episode_len += 1
 
         # 更新监控指标
-        watch_data[f'return_list_{data_type}'].append(episode_return)
-        watch_data[f'avg_return_list_{data_type}'].append(episode_return / episode_len)
-        watch_data[f'episode_lens_{data_type}'].append(episode_len)
-        watch_data[f'max_q_value_list_{data_type}'].append(max_q_value)
+        watch_data[f'return_list'].append(episode_return)
+        watch_data[f'avg_return_list'].append(episode_return / episode_len)
+        watch_data[f'episode_lens'].append(episode_len)
+        watch_data[f'max_q_value_list'].append(max_q_value)
 
         # 返回均值
         for k in watch_data:
             watch_data[k] = np.mean(watch_data[k])
+
+        # 训练模式
+        self.train()
 
         return watch_data
 
@@ -405,26 +412,48 @@ class DQN(BaseAgent):
             os.remove(zip_file)
         compress_folder(self.root, zip_file, 9, inplace=False)
 
-        if self.sync_alist:
-            # 上传alist
-            upload_folder = f'/train_data/'
-            self.client.mkdir(upload_folder)
-            self.client.upload(zip_file, upload_folder)
+    def update_params_from_server(self, env):
+        new_params = get_net_params()
+        if new_params:
+            self.q_net = update_model_params(self.q_net, new_params)
+            self.target_q_net = update_model_params(self.target_q_net, new_params)
+            # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
+            self.replay_buffer.reset()
+            # 重置环境中的账户
+            env.acc.reset()
 
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, report_interval=5, test_interval=30, update_interval=4):
+    def push_params_to_server(self):
+        # 更新目标网络参数
+        self._update_target_q_net_params()
+        # 上传参数
+        send_net_params(self.q_net.state_dict())
+
+    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
+        """
+        训练
+
+        Args:
+            train_title: 训练标题
+            env: 环境
+            num_episodes: 训练回合数
+            minimal_size: 最小训练次数
+            batch_size: 批次大小
+            val_interval_learn_step:    验证间隔, val 会触发一次服务器同步参数
+            test_interval_learn_step:   测试间隔, test 会触发一次服务器同步参数
+            learn_interval_step:     学习更新间隔
+        """
         # 准备
         super().learn(train_title)
 
-        # 训练监控指标 / 每回合
-        watch_data = {i: [] for i in self.rl_training_ind}
-        max_q_value = 0
+        # 学习步数
+        learn_step = 0
+
+        # 拉取服务器的最新参数并更新
+        self.update_params_from_server(env)
 
         # 学习是否开始
         learning_start = False
         for i in range(num_episodes):
-            # 训练模式
-            self.train()
-
             episode_return = 0
             episode_len = 0 
             # 回合的评价指标
@@ -437,8 +466,6 @@ class DQN(BaseAgent):
 
                 # 动作
                 action = self.take_action(state)
-                max_q_value = self.max_q_value(
-                    state) * 0.005 + max_q_value * 0.995  # 平滑处理
 
                 # 环境交互
                 next_state, reward, done1, done2, info = env.step(action)
@@ -455,7 +482,6 @@ class DQN(BaseAgent):
                         if k != 'close':
                             if k not in episode_metrics:
                                 episode_metrics[k] = []
-                                watch_data[k] = []
                             episode_metrics[k].append(v)
                     
                 # 更新状态
@@ -464,13 +490,9 @@ class DQN(BaseAgent):
                 episode_len += 1
 
                 # 更新网络
-                if self.replay_buffer.size() > minimal_size and step % update_interval == 0:
+                if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
                     if not learning_start:
                         learning_start = True
-                        # 截断 max_q_value_list / return_list
-                        # 之前都还每开始训练，记录无意义
-                        watch_data['max_q_value_list'] = watch_data['max_q_value_list'][-1:]
-                        watch_data['return_list'] = watch_data['return_list'][-1:]
 
                     b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(
                         batch_size)
@@ -483,26 +505,24 @@ class DQN(BaseAgent):
                     }
                     self.update(transition_dict)
 
-            # 更新每回和的监控列表
-            watch_data['return_list'].append(episode_return)
-            watch_data['avg_return_list'].append(episode_return / episode_len)
-            watch_data['episode_lens'].append(episode_len)
-            watch_data['max_q_value_list'].append(max_q_value)
-            # 更新每回合的平均评价指标
-            for k, v in episode_metrics.items():
-                watch_data[k].append(np.mean(v))
+                    # 验证和测试
+                    learn_step += 1
+                    net_synced = False
+                    for data_type, interval in [('val', val_interval_learn_step), ('test', test_interval_learn_step)]:
+                        if learn_step % interval == 0:
+                            print(f'episodes {i} {learn_step} begin {data_type}')
 
-            # 验证和测试
-            for data_type, interval in [('val', report_interval), ('test', test_interval)]:
-                if (i+1) % interval == 0 and learning_start:
-                    print(f'episodes {i} {data_type}')
-                    watch_data_new = self.val_test(env, data_type=data_type)
-                    for k in watch_data_new:
-                        if k not in watch_data:
-                            watch_data[k] = []
-                        # 补齐长度
-                        watch_data[k] += [watch_data_new[k]] * (len(watch_data['return_list']) - len(watch_data[k]))
-                    self.package_root(watch_data)
+                            # 同步最新参数
+                            if not net_synced:
+                                # 推送参数更新
+                                self.push_params_to_server()
+                                # 拉取服务器的最新参数并更新
+                                self.update_params_from_server(env)
+                                net_synced = True
+
+                            watch_data_new = self.val_test(env, data_type=data_type)
+                            # 发送验证数据
+                            send_val_test_data(data_type, watch_data_new)
 
             print(f'episodes {i} done')
 

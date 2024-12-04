@@ -5,7 +5,6 @@ import shutil
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
-from py_ext.alist import alist
 
 class BaseAgent:
     def __init__(self,
@@ -14,7 +13,6 @@ class BaseAgent:
                  features_extractor_class,
                  features_extractor_kwargs=None,
                  net_arch=None,
-                 sync_alist=True,
     ):
         """Agent 基类
         
@@ -43,9 +41,6 @@ class BaseAgent:
                 raise ValueError("net_arch 字典需包含 'pi' 和 'vf' 键")
         else:
             raise ValueError("net_arch 必须是列表或字典, 表示mlp每层的神经元个数")
-
-        self.sync_alist = sync_alist
-        self.client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD')) if sync_alist else None
 
     def build_model(self):
         """构建Q网络,子类需要实现具体的网络结构"""
@@ -85,33 +80,10 @@ class BaseAgent:
         """
         加载参数
         """
-        self.load_state_dict(torch.load(os.path.join(root, 'agent_data.pth')))
+        file = os.path.join(root, 'agent_data.pth')
+        if os.path.exists(file):
+            self.load_state_dict(torch.load(file))
 
     def learn(self, train_title):
         self.root = f'{train_title}'
-
-        if not self.sync_alist:
-            os.makedirs(self.root, exist_ok=True)
-        else:
-            # 尝试alist拉取
-            try:
-                # 下载
-                _file = f'alist/{train_title}.7z'
-                # 下载文件
-                download_folder = f'/train_data/'
-                self.client.download(f'{download_folder}{train_title}.7z', 'alist/')
-                # 解压文件
-                decompress(_file)
-                # 移动
-                shutil.copytree(os.path.join('alist', train_title), self.root, dirs_exist_ok=True)
-            except Exception as e:
-                print(f'下载失败: {e}')
-                os.makedirs(self.root, exist_ok=True)
-
-            if os.path.exists(os.path.join(self.root, 'agent_data.pth')):
-                # 读取训练参数
-                self.load(self.root)
-            else:
-                os.makedirs(self.root, exist_ok=True)
-
-        
+        os.makedirs(self.root, exist_ok=True)

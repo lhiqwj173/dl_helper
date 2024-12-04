@@ -3,6 +3,7 @@ import torch
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
+from dl_helper.rl.net_center import run_param_center
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 
@@ -15,7 +16,6 @@ target_update = 50
 buffer_size = 5000
 minimal_size = 1000
 batch_size = 64
-seed = 42
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device(
     "cpu")
 
@@ -27,10 +27,15 @@ if __name__ == '__main__':
 
     # 检查是否有命令行参数
     train_title = ''
+    is_server = False
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith('train_title=') or arg.startswith('title='):
                 train_title = arg.split('=')[1]
+            elif arg == 'server':
+                is_server = True
+            elif arg == 'client':
+                is_server = False
 
     dqn = DQN(
         obs_shape=(100, 130),
@@ -50,30 +55,23 @@ if __name__ == '__main__':
         sync_alist=True if in_kaggle else False,
     )
 
-    print(dqn.q_net)
-    print(dqn.target_q_net)
-    # 计算模型参数大小
-    param_size = 0
-    for param in dqn.q_net.parameters():
-        param_size += param.nelement() * param.element_size()
-    buffer_size = param_size / 1024  # 转换为 KB
-    print(f'模型参数占用大小: {buffer_size:.2f} KB')
-    dqn.save(r'D:\code\dl_helper\dl_helper\tests\rl')
+    if not is_server:
+        # 训练数据
+        if in_kaggle:
+            input_folder = r'/kaggle/input'
+            # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+            data_folder_name = os.listdir(input_folder)[0]
+            data_folder = os.path.join(input_folder, data_folder_name)
+        else:
+            os.environ['ALIST_USER'] = 'admin'
+            os.environ['ALIST_PWD'] = 'LHss6632673'
+            data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-    # # 训练数据
-    # if in_kaggle:
-    #     input_folder = r'/kaggle/input'
-    #     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-    #     data_folder_name = os.listdir(input_folder)[0]
-    #     data_folder = os.path.join(input_folder, data_folder_name)
-    # else:
-    #     os.environ['ALIST_USER'] = 'admin'
-    #     os.environ['ALIST_PWD'] = 'LHss6632673'
-    #     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+        data_producer = data_producer(data_folder=data_folder)
+        env = LOB_trade_env(data_producer=data_producer)
 
-    # data_producer = data_producer(data_folder=data_folder)
-    # env = LOB_trade_env(data_producer=data_producer)
-
-    # # 开始训练
-    # dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
-
+        # 开始训练
+        dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
+    else:
+        # 服务端
+        run_param_center(dqn)

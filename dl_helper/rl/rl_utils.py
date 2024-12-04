@@ -19,6 +19,9 @@ class ReplayBuffer:
     def size(self): 
         return len(self.buffer)
 
+    def reset(self):
+        self.buffer.clear()
+
 class ReplayBufferWaitClose(ReplayBuffer):
     def __init__(self, capacity):
         super().__init__(capacity)
@@ -36,6 +39,10 @@ class ReplayBufferWaitClose(ReplayBuffer):
                 self.buffer_temp[i][2] = reward
         # 移动到buffer
         self.buffer.extend(self.buffer_temp)
+        self.buffer_temp = []
+
+    def reset(self):
+        super().reset()
         self.buffer_temp = []
 
 def moving_average(a, window_size):
