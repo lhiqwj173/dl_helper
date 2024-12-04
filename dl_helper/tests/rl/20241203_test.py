@@ -30,7 +30,7 @@ features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, '
 if __name__ == '__main__':
 
     # 检查是否有命令行参数
-    train_title = ''
+    train_title = 'rl_test'
     is_server = False
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
