@@ -90,7 +90,7 @@ class data_producer:
         每次完成后从文件列表中剔除
         """
         file = self.files.pop(0)
-        log(f'load date file: {file}')
+        log(f'load date file({self.data_type}): {file}')
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
         # 解析标的 随机挑选一个标的数据
@@ -226,9 +226,10 @@ class data_producer:
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
             need_close = True
-            log(f'need_close')
+            log(f'need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
+            log(f'idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
                 log(f'date done')
