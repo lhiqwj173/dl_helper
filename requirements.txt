@@ -1,0 +1,11 @@
+matplotlib
+beautifulsoup4
+tqdm
+gymnasium
+psutil
+seaborn
+imgkit
+torchstat
+torchinfo
+df2img==0.2.11
+py-ext @ https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz

@@ -52,7 +52,6 @@ if __name__ == '__main__':
         features_extractor_kwargs=features_extractor_kwargs,
         net_arch=[6, 3],
         dqn_type=DD_DQN,
-        sync_alist=True if in_kaggle else False,
     )
 
     if not is_server:
