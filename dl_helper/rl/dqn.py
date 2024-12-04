@@ -440,7 +440,6 @@ class DQN(BaseAgent):
         训练
 
         Args:
-            train_title: 训练标题
             env: 环境
             num_episodes: 训练回合数
             minimal_size: 最小训练次数
@@ -544,7 +543,7 @@ class DQN(BaseAgent):
 
             log(f'episodes {i} done')
 
-def run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+def run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
     # 移动到设备
     dqn.to(device)
     
@@ -553,16 +552,16 @@ def run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_s
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
-    dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
+    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size)
 
-def _run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+def _run_client_learning(train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
     # 准备设备
     accelerator = Accelerator()
     device = accelerator.device
     # 使用设备运行
-    run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+    run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
 
-def run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
+def run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, train_title='rl_test', val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
     num_processes = match_num_processes()
     try:
         # fix tpu
@@ -574,10 +573,10 @@ def run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size
     if num_processes == 1:
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         # 使用设备运行
-        run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+        run_client_learning_device(device, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
     else:
         # 使用 Accelerator 来分配多设备
-        notebook_launcher(_run_client_learning, args=(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step), num_processes=num_processes)
+        notebook_launcher(_run_client_learning, args=(train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step), num_processes=num_processes)
 
 
 if __name__ == '__main__':
