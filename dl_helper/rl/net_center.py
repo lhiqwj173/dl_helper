@@ -117,8 +117,8 @@ def update_model_params(model, new_params, tau=0.005):
         if name in new_params:
             # 确保新参数在同一设备上
             new_param = new_params[name]
-            if new_param.device != device:
-                new_param = new_param.to(device)
+            if new_param.device != model.device:
+                new_param = new_param.to(model.device)
             param.copy_((1 - tau) * param + tau * new_param)
     return model
 
