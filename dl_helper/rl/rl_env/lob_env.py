@@ -107,6 +107,8 @@ class data_producer:
         if self.data_type == 'train':
             self.idxs = [random.choice(self.idxs)]
 
+        log(f'init idxs: {self.idxs}')
+
         # 调整数据
         # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
         all_cols = list(self.all_raw_data)
@@ -220,6 +222,9 @@ class data_producer:
         raw, ms = self.use_data_split(raw, ms)
         x = (raw - ms.iloc[:, 0].values) / ms.iloc[:, 1].values
 
+        # 标的id
+        symbol_id = self.idxs[0][2]
+
         # 检查下一个数据是否是最后一个数据
         all_done = False
         need_close = False
@@ -234,6 +239,7 @@ class data_producer:
                 # 当天的数据没有下一个可读取的 begin/end 组
                 log(f'date done')
                 self.date_file_done = True
+                log(f'files: {self.files}')
                 if not self.files:
                     # 没有下一个可以读取的日期数据文件
                     log('all date files done')
@@ -241,7 +247,7 @@ class data_producer:
         else:
             self.idxs[0][0] += 1
 
-        return self.idxs[0][2], x, all_done, need_close
+        return symbol_id, x, all_done, need_close
 
     def reset(self):
         self._pre_files()
