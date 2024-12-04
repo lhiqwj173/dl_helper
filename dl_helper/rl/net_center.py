@@ -62,6 +62,12 @@ def get_net_params():
 
 def send_net_params(params):
     """推送更新net参数"""
+    # 将GPU上的参数转移到CPU
+    cpu_params = {
+        k: v.cpu() if hasattr(v, 'cpu') else v 
+        for k, v in params.items()
+    }
+
     HOST = '146.235.33.108'
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -71,7 +77,7 @@ def send_net_params(params):
         send_msg(client_socket, message.encode())
         
         # 发送参数数据
-        params_data = pickle.dumps(params)
+        params_data = pickle.dumps(cpu_params)
         send_msg(client_socket, params_data)
         
         # 等待确认
