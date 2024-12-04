@@ -10,7 +10,7 @@ from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
-from dl_helper.train_param import match_num_processes
+from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher 
 from py_ext.lzma import compress_folder
 
