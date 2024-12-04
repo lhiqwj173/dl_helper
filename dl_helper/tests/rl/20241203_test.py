@@ -4,8 +4,7 @@ import torch
 from py_ext.tool import log, init_logger
 init_logger('rl', level='INFO')
 
-from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
+from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning
 from dl_helper.rl.net_center import run_param_center
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
@@ -19,8 +18,9 @@ target_update = 50
 buffer_size = 5000
 minimal_size = 1000
 batch_size = 64
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device(
-    "cpu")
+val_interval_learn_step=5
+test_interval_learn_step=30
+learn_interval_step=4
 
 t1, t2, t3, t4 = [100, 30, 10, 1]
 d1, d2, d3, d4 = [130, 60, 30, 7]
@@ -50,7 +50,6 @@ if __name__ == '__main__':
         epsilon=epsilon,
         target_update=target_update,
         buffer_size=buffer_size,
-        device=device,
         wait_trade_close = True,
         features_extractor_kwargs=features_extractor_kwargs,
         net_arch=[6, 3],
@@ -67,11 +66,7 @@ if __name__ == '__main__':
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-        data_producer = data_producer(data_folder=data_folder)
-        env = LOB_trade_env(data_producer=data_producer)
-
-        # 开始训练
-        dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
+        run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
     else:
         # 服务端
         run_param_center(dqn)

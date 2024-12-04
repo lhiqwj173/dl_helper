@@ -6,9 +6,12 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+from accelerate import Accelerator
+
 from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
+from dl_helper.train_param import match_num_processes
 from py_ext.lzma import compress_folder
 
 VANILLA_DQN = 'VanillaDQN'
@@ -247,7 +250,6 @@ class DQN(BaseAgent):
             gamma,
             epsilon,
             target_update,
-            device,
             buffer_size,
             wait_trade_close = True,
             features_extractor_kwargs=None,
@@ -265,7 +267,6 @@ class DQN(BaseAgent):
             gamma: 折扣因子
             epsilon: epsilon-贪婪策略中的epsilon
             target_update: 目标网络更新频率
-            device: 设备
             features_extractor_kwargs: 特征提取器参数,可选
             net_arch: 网络架构参数,可选
             dqn_type: DQN类型,可选 VANILLA_DQN/DOUBLE_DQN/DUELING_DQN/DD_DQN
@@ -281,12 +282,18 @@ class DQN(BaseAgent):
         self.target_update = target_update
         self.count = 0
         self.dqn_type = dqn_type
-        self.device = device
+        # TODO
+        self.device = None
         self.wait_trade_close = wait_trade_close    
         self.replay_buffer = ReplayBuffer(buffer_size) if not wait_trade_close else ReplayBufferWaitClose(buffer_size)
         self.q_net, self.target_q_net = self.build_model()
         self.optimizer = torch.optim.Adam(self.q_net.parameters(),
                                           lr=learning_rate)
+
+    def to(self, device):
+        self.device = device
+        self.q_net = self.q_net.to(device)
+        self.target_q_net = self.target_q_net.to(device)
 
     def eval(self):
         self.need_epsilon = False
@@ -303,8 +310,8 @@ class DQN(BaseAgent):
         return state
 
     def build_model(self):
-        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
-        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type).to(self.device)
+        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
+        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
         # print(f'q_net: {id(q_net)}, target_q_net: {id(target_q_net)}')
         return q_net, target_q_net
 
@@ -367,7 +374,8 @@ class DQN(BaseAgent):
 
         env.set_data_type(data_type)
         # 10 次求平均
-        for _ in range(10):
+        for i in range(10):
+            log(f'{data_type} loop {i}')
             state, info = env.reset()
             done = False
             while not done:
@@ -425,7 +433,7 @@ class DQN(BaseAgent):
         # 上传参数
         send_net_params(self.q_net.state_dict())
 
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
+    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
         """
         训练
 
@@ -533,6 +541,42 @@ class DQN(BaseAgent):
                         done = False
 
             log(f'episodes {i} done')
+
+def run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+    # 移动到设备
+    dqn.to(device)
+    
+    # 初始化环境
+    data_producer = data_producer(data_folder=data_folder)
+    env = LOB_trade_env(data_producer=data_producer)
+
+    # 开始训练
+    dqn.learn('rl_test' if not train_title else train_title, env, num_episodes, minimal_size, batch_size)
+
+def _run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+    # 准备设备
+    accelerator = Accelerator()
+    device = accelerator.device
+    # 使用设备运行
+    run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+
+def run_client_learning(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step=5, test_interval_learn_step=30, learn_interval_step=4):
+    num_processes = match_num_processes()
+    try:
+        # fix tpu
+        os.environ.pop('TPU_PROCESS_ADDRESSES')
+        os.environ.pop('CLOUD_TPU_TASK_ID')
+    except:
+        pass
+
+    if num_processes == 1:
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        # 使用设备运行
+        run_client_learning_device(device, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+    else:
+        # 使用 Accelerator 来分配多设备
+        notebook_launcher(_run_client_learning, args=(data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step), num_processes=num_processes)
+
 
 if __name__ == '__main__':
     agent = DQN(
