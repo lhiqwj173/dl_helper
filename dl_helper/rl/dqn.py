@@ -521,6 +521,7 @@ class DQN(BaseAgent):
                                 net_synced = True
 
                             watch_data_new = self.val_test(env, data_type=data_type)
+                            print(f'watch_data: {watch_data_new}')
                             # 发送验证数据
                             send_val_test_data(data_type, watch_data_new)
 

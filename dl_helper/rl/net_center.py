@@ -377,6 +377,7 @@ def run_param_center(agent, tau= 0.005):
                             # 接收训练数据
                             data_type = cmd
                             train_data_new = recv_msg(client_socket)
+                            print(f'train_data: {train_data_new}')
                             if train_data_new is None:
                                 need_block = True
                             else:
