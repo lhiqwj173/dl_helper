@@ -6,8 +6,6 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from accelerate import Accelerator
-
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data
