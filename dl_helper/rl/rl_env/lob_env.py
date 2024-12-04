@@ -178,6 +178,7 @@ class data_producer:
 
     def set_data_type(self, _type):
         self.data_type = _type
+        self.reset()
 
     def data_size(self):
         return 130*100
