@@ -91,7 +91,7 @@ def check_need_val_test():
         # 接收响应
         response = recv_msg(client_socket)
         if response:
-            return response.decode()
+            return pickle.loads(response)
     finally:
         client_socket.close()
     
