@@ -8,7 +8,7 @@ import numpy as np
 
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.base import BaseAgent
-from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data
+from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher 
@@ -433,7 +433,7 @@ class DQN(BaseAgent):
         # 上传参数
         send_net_params(self.q_net.state_dict())
 
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
         """
         训练
 
@@ -442,9 +442,8 @@ class DQN(BaseAgent):
             num_episodes: 训练回合数
             minimal_size: 最小训练次数
             batch_size: 批次大小
-            val_interval_learn_step:    验证间隔, val 会触发一次服务器同步参数
-            test_interval_learn_step:   测试间隔, test 会触发一次服务器同步参数
-            learn_interval_step:     学习更新间隔
+            sync_interval_learn_step:   同步参数间隔，会询问是否需要验证/测试
+            learn_interval_step:        学习更新间隔
         """
         # 准备
         super().learn(train_title)
@@ -456,7 +455,6 @@ class DQN(BaseAgent):
         self.update_params_from_server(env)
 
         # 学习是否开始
-        learning_start = False
         for i in range(num_episodes):
             episode_return = 0
             episode_len = 0 
@@ -495,9 +493,7 @@ class DQN(BaseAgent):
 
                 # 更新网络
                 if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
-                    if not learning_start:
-                        learning_start = True
-
+                    # 学习经验
                     b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(
                         batch_size)
                     transition_dict = {
@@ -509,29 +505,34 @@ class DQN(BaseAgent):
                     }
                     self.update(transition_dict)
 
-                    # 验证和测试
+                    #################################
+                    # 服务器通讯
+                    #################################
                     learn_step += 1
-                    net_synced = False
                     need_train_back = False
-                    for data_type, interval in [('val', val_interval_learn_step), ('test', test_interval_learn_step)]:
-                        if learn_step % interval == 0:
-                            log(f'episodes {i} {learn_step} begin {data_type}')
-                            need_train_back = True
+                    if learn_step % sync_interval_learn_step == 0:
+                        log(f'episodes {i} {learn_step} sync params')
 
-                            # 同步最新参数
-                            if not net_synced:
-                                # 推送参数更新
-                                self.push_params_to_server()
-                                # 拉取服务器的最新参数并更新
-                                self.update_params_from_server(env)
-                                net_synced = True
+                        # 同步最新参数
+                        # 推送参数更新
+                        self.push_params_to_server()
+                        # 拉取服务器的最新参数并更新
+                        self.update_params_from_server(env)
 
-                            log(f'wait watch_data')
-                            watch_data_new = self.val_test(env, data_type=data_type)
-                            log(f'watch_data: {watch_data_new}')
-                            # 发送验证数据
-                            send_val_test_data(data_type, watch_data_new)
-                    
+                        # 验证/测试
+                        need_val_test_res = check_need_val_test()
+                        for test_type in ['val', 'test']:
+                            if need_val_test_res[test_type]:
+                                need_train_back = True  
+                                log(f'wait watch_data for {test_type}')
+                                watch_data_new = self.val_test(env, data_type=test_type)
+                                log(f'watch_data: {watch_data_new}')
+                                # 发送验证数据
+                                send_val_test_data(test_type, watch_data_new)
+                    #################################
+                    # 服务器通讯
+                    #################################
+
                     # 切换回训练模式
                     if need_train_back:
                         self.train()
@@ -541,7 +542,7 @@ class DQN(BaseAgent):
 
             log(f'episodes {i} done')
 
-def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step):
+def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -557,11 +558,11 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     dqn.to(device)
     
     # 初始化环境
-    dp = data_producer(data_folder=data_folder, simple_test=True)
+    dp = data_producer(data_folder=data_folder, simple_test=simple_test)
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
-    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
+    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(

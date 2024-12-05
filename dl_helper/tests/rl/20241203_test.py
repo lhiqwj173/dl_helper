@@ -19,8 +19,7 @@ target_update = 50
 buffer_size = 5000
 minimal_size = 1000
 batch_size = 64
-val_interval_learn_step=5
-test_interval_learn_step=30
+sync_interval_learn_step=10
 learn_interval_step=4
 
 t1, t2, t3, t4 = [100, 30, 10, 1]
@@ -67,8 +66,8 @@ if __name__ == '__main__':
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-        args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, val_interval_learn_step, test_interval_learn_step, learn_interval_step)
-        run_client_learning(run_client_learning_device, args)
+        args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        run_client_learning(run_client_learning_device, args, simple_test=True)
     else:
         # 服务端
         run_param_center(dqn)

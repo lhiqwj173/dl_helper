@@ -42,6 +42,17 @@ def send_msg(sock, msg):
     msg = struct.pack('>I', len(msg)) + msg
     sock.sendall(msg)
 
+def connect_client():
+    """连接到参数中心服务器并返回socket连接"""
+    HOST = '146.235.33.108'
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        client_socket.connect((HOST, PORT))
+        return client_socket
+    except Exception as e:
+        log(f"连接服务器失败: {e}")
+        return None
+
 def get_net_params():
     """获取net参数"""
     HOST = '146.235.33.108'
@@ -62,6 +73,29 @@ def get_net_params():
         return net_params
     finally:
         client_socket.close()
+
+def check_need_val_test():
+    """查询是否需要验证测试
+    返回:
+        {'val': 需要验证
+        'test': 需要测试}
+    """
+    HOST = '146.235.33.108'
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        client_socket.connect((HOST, PORT))
+        # 发送查询请求
+        message = f'{CODE}_check'
+        send_msg(client_socket, message.encode())
+        
+        # 接收响应
+        response = recv_msg(client_socket)
+        if response:
+            return response.decode()
+    finally:
+        client_socket.close()
+    
+    return {'val': False, 'test': False}
 
 def send_net_params(params):
     """推送更新net参数"""
@@ -325,6 +359,13 @@ def run_param_center(agent, tau= 0.005):
         'test': blank_watch_data(),
         'dt': [],
     }
+    
+    # 参数更新计数
+    update_count = 0
+
+    # 是否需要验证测试
+    need_val = False
+    need_test = False
 
     while True:
         client_socket, client_address = server_socket.accept()
@@ -359,6 +400,16 @@ def run_param_center(agent, tau= 0.005):
                             send_msg(client_socket, params_data)
                             log(f'Parameters sent to {client_ip}')
 
+                        elif cmd == 'check':
+                            # 检查是否需要验证测试
+                            send_msg(client_socket, pickle.dumps({'val': need_val, 'test': need_test}))
+                            log(f'Check response sent to {client_ip}')
+                            # 重置
+                            if need_val:
+                                need_val = False
+                            if need_test:
+                                need_test = False
+
                         elif cmd == 'update':
                             # 接收新参数
                             params_data = recv_msg(client_socket)
@@ -375,6 +426,13 @@ def run_param_center(agent, tau= 0.005):
                                 # 保存最新参数
                                 agent.save(alist_folder)
                                 log(f'agent saved to {alist_folder}')
+                                # 更新计数
+                                update_count += 1
+                                # 更新是否需要验证测试
+                                if update_count % 5000 == 0:
+                                    need_test = True
+                                elif update_count % 100 == 0:
+                                    need_val = True
 
                         elif cmd in ['val', 'test']:
                             # 接收训练数据
@@ -412,7 +470,6 @@ def run_param_center(agent, tau= 0.005):
             pass
         except Exception as e:
             log(f"Error processing request: {e}")
-            need_block = True
 
         if need_block:
             block_ips.append(client_ip)
