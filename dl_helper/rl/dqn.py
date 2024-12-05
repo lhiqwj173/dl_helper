@@ -269,7 +269,7 @@ class DQN(BaseAgent):
             watch_data[f'max_q_value'].append(max_q_value)
 
         # 返回箱型图统计量(除异常值)和均值
-        for k in watch_data:
+        for k in watch_data.keys():
             data = np.array(watch_data[k])
             q1 = np.percentile(data, 25)
             q3 = np.percentile(data, 75)

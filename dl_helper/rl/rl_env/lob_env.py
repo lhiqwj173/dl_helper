@@ -250,7 +250,7 @@ class data_producer:
                 # 当天的数据没有下一个可读取的 begin/end 组
                 log(f'date done')
                 self.date_file_done = True
-                log(f'files: {self.files}')
+                log(f'len(files): {len(self.files)}')
                 if not self.files:
                     # 没有下一个可以读取的日期数据文件
                     log('all date files done')
