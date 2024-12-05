@@ -483,8 +483,8 @@ def run_param_center(agent, tau= 0.005):
                                 # 更新是否需要验证测试
                                 _test_count = 50000
                                 _val_count = 1000
-                                _test_count = 20
-                                _val_count = 10
+                                # _test_count = 20
+                                # _val_count = 10
                                 if update_count % _test_count == 0:
                                     need_test = True
                                 elif update_count % _val_count == 0:
