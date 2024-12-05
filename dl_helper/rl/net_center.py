@@ -178,10 +178,10 @@ def update_block_ips(ips):
 def plot_learning_process(root, watch_data):
     """
     强化学习性能指标:
-        return_list: 回合累计奖励
-        avg_return_list: 回合平均长度奖励
+        return: 回合累计奖励
+        avg_return: 回合平均长度奖励
         episode_lens: 回合长度
-        max_q_value_list: 最大Q值
+        max_q_value: 最大Q值
     
     交易评价指标:
         sharpe_ratio: 夏普比率
@@ -190,7 +190,7 @@ def plot_learning_process(root, watch_data):
         total_return: 总回报
     """
     # 获取数据键,将交易评价指标单独处理
-    rl_keys = ['return_list', 'avg_return_list', 'episode_lens', 'max_q_value_list']
+    rl_keys = ['return', 'avg_return', 'episode_lens', 'max_q_value']
     trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
     
     # 固定颜色
@@ -218,18 +218,21 @@ def plot_learning_process(root, watch_data):
     # 获取时间变化点的索引
     dt_changes = []
     last_dt = None
+    # 先处理dt列表,但不修改原数据
     for i, dt in enumerate(watch_data['dt']):
-        if dt != last_dt:
-            dt_changes.append((i, dt))
-            last_dt = dt
+        # 按4小时对齐
+        processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
+        if processed_dt != last_dt:
+            dt_changes.append((i, processed_dt))
+            last_dt = processed_dt
             
     # 绘制强化学习指标
-    # 1. return_list和avg_return_list
+    # 1. return和avg_return
     ax = axes[0]
-    ax.plot(watch_data['val']['return_list'], color=colors['return'], alpha=0.3, label='val_return')
-    ax.plot(watch_data['val']['avg_return_list'], color=colors['avg_return'], alpha=0.3, label='val_avg_return')
-    ax.plot(watch_data['test']['return_list'], color=colors['return'], label='test_return')
-    ax.plot(watch_data['test']['avg_return_list'], color=colors['avg_return'], label='test_avg_return')
+    ax.plot(watch_data['val']['return'], color=colors['return'], alpha=0.3, label='val_return')
+    ax.plot(watch_data['val']['avg_return'], color=colors['avg_return'], alpha=0.3, label='val_avg_return')
+    ax.plot(watch_data['test']['return'], color=colors['return'], label='test_return')
+    ax.plot(watch_data['test']['avg_return'], color=colors['avg_return'], label='test_avg_return')
     ax.set_ylabel('Return')
     ax.grid(True)
     ax.legend()
@@ -242,10 +245,10 @@ def plot_learning_process(root, watch_data):
     ax.grid(True)
     ax.legend()
     
-    # 3. max_q_value_list
+    # 3. max_q_value
     ax = axes[2]
-    ax.plot(watch_data['val']['max_q_value_list'], color=colors['max_q_value'], alpha=0.3, label='val_max_q_value')
-    ax.plot(watch_data['test']['max_q_value_list'], color=colors['max_q_value'], label='test_max_q_value')
+    ax.plot(watch_data['val']['max_q_value'], color=colors['max_q_value'], alpha=0.3, label='val_max_q_value')
+    ax.plot(watch_data['test']['max_q_value'], color=colors['max_q_value'], label='test_max_q_value')
     ax.set_ylabel('Max Q Value')
     ax.grid(True)
     ax.legend()
@@ -319,24 +322,48 @@ def handle_val_test_data(train_data):
         for k in train_data[dtype]:
             train_data[dtype][k] = train_data[dtype][k][:500]
     train_data['dt'] = train_data['dt'][:500]
+
+    root_folder = '' if not os.path.exists(alist_folder) else alist_folder
+    
+    # 增量保存最新的验证测试数据到csv
+    csv_path = os.path.join(root_folder, 'val_test.csv')
+    
+    # 准备最新数据
+    latest_data = {}
+    for dtype in ['val', 'test']:
+        for k in train_data[dtype]:
+            if len(train_data[dtype][k]) > 0:
+                latest_data[f'{dtype}_{k}'] = train_data[dtype][k][-1]
+    
+    # 添加时间
+    if len(train_data['dt']) > 0:
+        latest_data['dt'] = train_data['dt'][-1]
+    
+    # 检查文件是否存在
+    file_exists = os.path.exists(csv_path)
+    
+    # 获取表头和数据行
+    headers = sorted(latest_data.keys())
+    values = [str(latest_data[h]) for h in headers]
+    
+    if file_exists:
+        # 读取已有数据
+        old_df = pd.read_csv(csv_path)
+        # 构建新数据行
+        new_df = pd.DataFrame([values], columns=headers)
+        # 合并数据
+        df = pd.concat([old_df, new_df], ignore_index=True)
+    else:
+        # 创建新DataFrame
+        df = pd.DataFrame([values], columns=headers)
+        
+    # 写入文件
+    df.to_csv(csv_path, index=False)
     
     # 绘制数据
-    plot_learning_process('' if not os.path.exists(alist_folder) else alist_folder, train_data)
+    plot_learning_process(root_folder, train_data)
 
     return train_data
-
-def blank_watch_data():
-    """返回空白watch_data"""
-    return {
-        'return_list': [],
-        'avg_return_list': [],
-        'episode_lens': [],
-        'max_q_value_list': [],
-        'sharpe_ratio': [],
-        'sortino_ratio': [],
-        'max_drawdown': [],
-        'total_return': []
-    }
 
 def run_param_center(agent, tau= 0.005):
     """参数中心服务器"""
@@ -355,8 +382,8 @@ def run_param_center(agent, tau= 0.005):
     
     # 训练数据
     train_data = {
-        'val': blank_watch_data(),
-        'test': blank_watch_data(),
+        'val': {},
+        'test': {},
         'dt': [],
     }
     
@@ -402,7 +429,12 @@ def run_param_center(agent, tau= 0.005):
                         elif cmd == 'check':
                             # 检查是否需要验证测试
                             send_msg(client_socket, pickle.dumps({'val': need_val, 'test': need_test}))
-                            log(f'{msg_header} Check response sent')
+                            msg = f'{msg_header} Check response sent'
+                            if need_val:
+                                msg += ' val:True'
+                            if need_test:
+                                msg += ' test:True'
+                            log(msg)
                             # 重置
                             if need_val:
                                 need_val = False
@@ -420,11 +452,11 @@ def run_param_center(agent, tau= 0.005):
                                 model = update_model_params(model, new_params)
                                 # 也更新 target 模型
                                 agent.target_q_net = update_model_params(agent.target_q_net, new_params)
-                                log(f'{msg_header} Parameters updated')
+                                log(f'{msg_header}[{update_count}] Parameters updated')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                log(f'{msg_header} agent saved to {alist_folder}')
+                                log(f'{msg_header}[{update_count}] agent saved to {alist_folder}')
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
@@ -437,22 +469,22 @@ def run_param_center(agent, tau= 0.005):
                             # 接收训练数据
                             data_type = cmd
                             train_data_new = recv_msg(client_socket)
-                            log(f'{msg_header} train_data: {train_data_new}')
                             if train_data_new is None:
                                 need_block = True
                             else:
                                 # 更新训练数据
                                 watch_data = pickle.loads(train_data_new)
-                                for k in train_data[data_type]:
-                                    if k in watch_data:
-                                        train_data[data_type][k].append(watch_data[k])
+                                log(f'{msg_header} train_data: {watch_data}')
+                                for k in watch_data:
+                                    if k not in train_data[data_type]:
+                                        train_data[data_type][k] = []
+                                    train_data[data_type][k].append(watch_data[k])
                                                                 
                                 log(f'{msg_header} Train data updated')
                                 send_msg(client_socket, b'ok')
 
                                 # 增加北京时间(每4小时)
                                 dt = datetime.now(timezone(timedelta(hours=8)))  # 使用timezone确保是北京时间
-                                dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
                                 train_data['dt'].append(dt)
                                 train_data = handle_val_test_data(train_data)
 
@@ -521,10 +553,10 @@ if "__main__" == __name__:
             
             # 发送训练数据
             watch_data = {
-                'return_list': 1.0,
-                'avg_return_list': 0.5,
+                'return': 1.0,
+                'avg_return': 0.5,
                 'episode_lens': 10,
-                'max_q_value_list': 0.8,
+                'max_q_value': 0.8,
                 'sharpe_ratio': 1.2,
                 'sortino_ratio': 0.9,
                 'max_drawdown': 0.15,

@@ -281,7 +281,8 @@ class Account:
         self.sell_fee = 0   
         # 净值序列
         self.net_raw = []
-        self.net = []
+        self.net_raw_bm = []# 基准，一直持有
+        self.bm_next_open = True
         
     def step(self, bid_price, ask_price, action, need_close):
         """
@@ -304,6 +305,13 @@ class Account:
             self.sell_fee = bid_price * self.fee_rate
             sell_price = bid_price - self.sell_fee
             unrealized_profit = np.log(sell_price / self.cost)
+
+        # 基准净值, 一直持有
+        if self.bm_next_open:
+            self.bm_next_open = False
+            self.net_raw_bm.append(ask_price)
+        else:
+            self.net_raw_bm.append(bid_price)
 
         # 无操作任何时间都允许
         legal = True
@@ -338,18 +346,30 @@ class Account:
             # 数据足够 > 1
             # 需要平仓 或 卖出， 需要计算评价指标， 储存在info中
             if (len(self.net_raw) > 1) and (need_close or action==1):
+                # 计算策略净值的评价指标
                 # 平均税费(买入卖出)到每一步
                 # 第一步买入，等价较好，不平均税费
                 step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                self.net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
+                net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
                 # 计算对数收益率序列
-                log_returns = np.diff(np.log(self.net))
-
+                log_returns = np.diff(np.log(net))
                 # 计算指标
                 res['sortino_ratio'] = calc_sortino_ratio(log_returns)
                 res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
                 res['max_drawdown'] = calc_max_drawdown(log_returns)
                 res['total_return'] = calc_total_return(log_returns)
+
+                # 计算基准净值的评价指标
+                buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
+                sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
+                step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
+                net_bm = [i - step_fee_bm*(idx>0) for idx, i in enumerate(self.net_raw_bm)]
+                # 计算对数收益率序列
+                log_returns_bm = np.diff(np.log(net_bm))
+                res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
+                res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
+                res['max_drawdown_bm'] = calc_max_drawdown(log_returns_bm)
+                res['total_return_bm'] = calc_total_return(log_returns_bm)
 
         else:
             # 不合法的操作，交易全部清空
@@ -364,7 +384,7 @@ class Account:
         self.pos = 0
         self.cost = 0 
         self.profit = 0
-
+        self.net_raw = []
         return self.pos, 0
 
 class LOB_trade_env(gym.Env):

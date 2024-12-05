@@ -106,140 +106,6 @@ class dqn_network(torch.nn.Module):
 
         return x
 
-def report_learning_process(watch_data, root):
-    """
-    强化学习性能指标:
-        return_list: 回合累计奖励
-        avg_return_list: 回合平均长度奖励
-        episode_lens: 回合长度
-        max_q_value_list: 最大Q值
-    
-    交易评价指标:
-        sharpe_ratio: 夏普比率
-        sortino_ratio: 索提诺比率
-        max_drawdown: 最大回撤
-        total_return: 总回报
-    """
-    # 获取数据键,将交易评价指标单独处理
-    rl_keys = ['return_list', 'avg_return_list', 'episode_lens', 'max_q_value_list']
-    trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
-    
-    # 固定颜色
-    colors = {
-        'return': '#1f77b4',      # 蓝色
-        'avg_return': '#2ca02c',  # 绿色
-        'episode_lens': '#ff7f0e', # 橙色
-        'max_q_value': '#9467bd', # 紫色
-        'sharpe_ratio': '#8c564b', # 棕色
-        'sortino_ratio': '#e377c2', # 粉色
-        'max_drawdown': '#7f7f7f', # 灰色
-        'total_return': '#bcbd22'  # 黄绿色
-    }
-    test_color = '#d62728'  # 红色
-    
-    # 计算总图数
-    n_rl = 3  # return合并为1个,其他2个
-    n_trade = 2  # ratio合并为1个,其他1个
-    n_total = n_rl + n_trade
-    
-    # 创建图表,每行一个子图
-    fig, axes = plt.subplots(n_total, 1, figsize=(12, 4*n_total), sharex=True)
-    if n_total == 1:
-        axes = np.array([axes])
-    
-    # 绘制强化学习指标
-    # 1. return_list和avg_return_list
-    ax = axes[0]
-    ax.plot(watch_data['return_list'], color=colors['return'], alpha=0.3, label='train_return')
-    ax.plot(watch_data['avg_return_list'], color=colors['avg_return'], alpha=0.3, label='train_avg_return')
-    if 'return_list_val' in watch_data:
-        ax.plot(watch_data['return_list_val'], color=colors['return'], label='val_return')
-        ax.plot(watch_data['avg_return_list_val'], color=colors['avg_return'], label='val_avg_return')
-    if 'return_list_test' in watch_data:
-        ax.plot(watch_data['return_list_test'], color=test_color, label='test_return')
-        ax.plot(watch_data['avg_return_list_test'], color=test_color, linestyle='--', label='test_avg_return')
-    ax.set_ylabel('Return')
-    ax.grid(True)
-    ax.legend()
-    
-    # 2. episode_lens
-    ax = axes[1]
-    ax.plot(watch_data['episode_lens'], color=colors['episode_lens'], alpha=0.3, label='train_episode_lens')
-    if 'episode_lens_val' in watch_data:
-        ax.plot(watch_data['episode_lens_val'], color=colors['episode_lens'], label='val_episode_lens')
-    if 'episode_lens_test' in watch_data:
-        ax.plot(watch_data['episode_lens_test'], color=test_color, label='test_episode_lens')
-    ax.set_ylabel('Episode Length')
-    ax.grid(True)
-    ax.legend()
-    
-    # 3. max_q_value_list
-    ax = axes[2]
-    ax.plot(watch_data['max_q_value_list'], color=colors['max_q_value'], alpha=0.3, label='train_max_q_value')
-    if 'max_q_value_list_val' in watch_data:
-        ax.plot(watch_data['max_q_value_list_val'], color=colors['max_q_value'], label='val_max_q_value')
-    if 'max_q_value_list_test' in watch_data:
-        ax.plot(watch_data['max_q_value_list_test'], color=test_color, label='test_max_q_value')
-    ax.set_ylabel('Max Q Value')
-    ax.grid(True)
-    ax.legend()
-    
-    # 绘制交易评价指标
-    # 1. sharpe_ratio和sortino_ratio
-    ax = axes[3]
-    ax.plot(watch_data['sharpe_ratio'], color=colors['sharpe_ratio'], alpha=0.3, label='train_sharpe_ratio')
-    ax.plot(watch_data['sortino_ratio'], color=colors['sortino_ratio'], alpha=0.3, label='train_sortino_ratio')
-    if 'sharpe_ratio_val' in watch_data:
-        ax.plot(watch_data['sharpe_ratio_val'], color=colors['sharpe_ratio'], label='val_sharpe_ratio')
-        ax.plot(watch_data['sortino_ratio_val'], color=colors['sortino_ratio'], label='val_sortino_ratio')
-    if 'sharpe_ratio_test' in watch_data:
-        ax.plot(watch_data['sharpe_ratio_test'], color=test_color, label='test_sharpe_ratio')
-        ax.plot(watch_data['sortino_ratio_test'], color=test_color, linestyle='--', label='test_sortino_ratio')
-    ax.set_ylabel('Ratio')
-    ax.grid(True)
-    ax.legend()
-    
-    # 2. max_drawdown和total_return (双y轴)
-    ax = axes[4]
-    ax2 = ax.twinx()  # 创建共享x轴的第二个y轴
-    
-    lines = []
-    # 在左轴绘制max_drawdown
-    l1 = ax.plot(watch_data['max_drawdown'], color=colors['max_drawdown'], alpha=0.3, label='train_max_drawdown')[0]
-    lines.append(l1)
-    if 'max_drawdown_val' in watch_data:
-        l2 = ax.plot(watch_data['max_drawdown_val'], color=colors['max_drawdown'], label='val_max_drawdown')[0]
-        lines.append(l2)
-    if 'max_drawdown_test' in watch_data:
-        l3 = ax.plot(watch_data['max_drawdown_test'], color=test_color, label='test_max_drawdown')[0]
-        lines.append(l3)
-    ax.set_ylabel('Max Drawdown')
-    
-    # 在右轴绘制total_return
-    l4 = ax2.plot(watch_data['total_return'], color=colors['total_return'], alpha=0.3, label='train_total_return')[0]
-    lines.append(l4)
-    if 'total_return_val' in watch_data:
-        l5 = ax2.plot(watch_data['total_return_val'], color=colors['total_return'], label='val_total_return')[0]
-        lines.append(l5)
-    if 'total_return_test' in watch_data:
-        l6 = ax2.plot(watch_data['total_return_test'], color=test_color, label='test_total_return')[0]
-        lines.append(l6)
-    ax2.set_ylabel('Total Return')
-    
-    # 合并两个轴的图例
-    ax.legend(handles=lines, loc='upper left')
-    ax.grid(True)
-    
-    # 设置共享的x轴标签
-    fig.text(0.5, 0.04, 'Episode', ha='center')
-    
-    # 调整子图之间的间距
-    plt.tight_layout()
-    
-    # 保存图像
-    plt.savefig(os.path.join(root, 'learning_process.png'))
-    plt.close()
-
 class DQN(BaseAgent):
     def __init__(self,
             obs_shape,
@@ -356,10 +222,10 @@ class DQN(BaseAgent):
         self.count += 1
 
     rl_training_ind = [
-        'return_list',       # 验证集回合累计奖励
-        'avg_return_list',  # 验证集回合平均长度奖励
+        'return',           # 验证集回合累计奖励
+        'avg_return',       # 验证集回合平均长度奖励
         'episode_lens',     # 验证集回合长度
-        'max_q_value_list' # 验证集最大Q值
+        'max_q_value'       # 验证集最大Q值
     ]
 
     def val_test(self, env, data_type='val'):
@@ -368,13 +234,14 @@ class DQN(BaseAgent):
 
         # 训练监控指标 / 每回合
         watch_data = {f'{i}': [] for i in self.rl_training_ind}
-        max_q_value = 0
-        episode_return = 0
-        episode_len = 0
+
 
         env.set_data_type(data_type)
-        # 10 次求平均
-        for i in range(10):
+        for i in range(1):
+            max_q_value = 0
+            episode_return = 0
+            episode_len = 0
+
             log(f'{data_type} loop {i}')
             state, info = env.reset()
             done = False
@@ -384,7 +251,7 @@ class DQN(BaseAgent):
                     state) * 0.005 + max_q_value * 0.995  # 平滑处理
                 next_state, reward, done1, done2, info = env.step(action)
                 done = done1 or done2
-                if info.get('close', False) and self.wait_trade_close:
+                if info.get('close', False):
                     # 更新评价指标
                     for k, v in info.items():
                         if k != 'close':
@@ -395,15 +262,31 @@ class DQN(BaseAgent):
                 episode_return += reward
                 episode_len += 1
 
-        # 更新监控指标
-        watch_data[f'return_list'].append(episode_return)
-        watch_data[f'avg_return_list'].append(episode_return / episode_len)
-        watch_data[f'episode_lens'].append(episode_len)
-        watch_data[f'max_q_value_list'].append(max_q_value)
+            # 更新监控指标
+            watch_data[f'return'].append(episode_return)
+            watch_data[f'avg_return'].append(episode_return / episode_len)
+            watch_data[f'episode_lens'].append(episode_len)
+            watch_data[f'max_q_value'].append(max_q_value)
 
-        # 返回均值
+        # 返回箱型图统计量(除异常值)和均值
         for k in watch_data:
-            watch_data[k] = np.mean(watch_data[k])
+            data = np.array(watch_data[k])
+            q1 = np.percentile(data, 25)
+            q3 = np.percentile(data, 75)
+            iqr = q3 - q1
+            lower = q1 - 1.5 * iqr
+            upper = q3 + 1.5 * iqr
+            # 过滤异常值
+            filtered = data[(data >= lower) & (data <= upper)]
+            # 使用后缀形式保存统计量
+            watch_data[f'{k}_min'] = np.min(filtered)
+            watch_data[f'{k}_q1'] = q1
+            watch_data[f'{k}_median'] = np.median(filtered)
+            watch_data[f'{k}_q3'] = q3
+            watch_data[f'{k}_max'] = np.max(filtered)
+            # 原始数据使用均值替换
+            watch_data[k] = np.mean(filtered)
+            
         return watch_data
 
     def package_root(self, watch_data):
@@ -477,8 +360,9 @@ class DQN(BaseAgent):
                 self.replay_buffer.add(state, action, reward, next_state, done)
 
                 # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
-                if info.get('close', False) and self.wait_trade_close:
-                    self.replay_buffer.update_reward(reward if reward>-1000 else None)
+                if info.get('close', False):
+                    if self.wait_trade_close:
+                        self.replay_buffer.update_reward(reward if reward>-1000 else None)
                     # 更新评价指标
                     for k, v in info.items():
                         if k != 'close':
