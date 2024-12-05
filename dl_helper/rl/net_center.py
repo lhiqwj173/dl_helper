@@ -190,6 +190,16 @@ def plot_learning_process(root, watch_data):
         max_drawdown: 最大回撤
         total_return: 总回报
     """
+    # 检查数据是否存在
+    if 'dt' not in watch_data or not watch_data['dt']:
+        log('No dt data found')
+        return
+        
+    for dtype in ['val', 'test']:
+        if dtype not in watch_data:
+            log(f'No {dtype} data found')
+            return
+            
     # 获取数据键,将交易评价指标单独处理
     rl_keys = ['return', 'avg_return', 'episode_lens', 'max_q_value']
     trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
@@ -230,26 +240,31 @@ def plot_learning_process(root, watch_data):
     # 绘制强化学习指标
     # 1. return和avg_return
     ax = axes[0]
-    ax.plot(watch_data['val']['return'], color=colors['return'], alpha=0.3, label='val_return')
-    ax.plot(watch_data['val']['avg_return'], color=colors['avg_return'], alpha=0.3, label='val_avg_return')
-    ax.plot(watch_data['test']['return'], color=colors['return'], label='test_return')
-    ax.plot(watch_data['test']['avg_return'], color=colors['avg_return'], label='test_avg_return')
+    for dtype in ['val', 'test']:
+        for key in ['return', 'avg_return']:
+            if key in watch_data[dtype]:
+                alpha = 0.3 if dtype == 'val' else 1.0
+                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
     ax.set_ylabel('Return')
     ax.grid(True)
     ax.legend()
     
     # 2. episode_lens
     ax = axes[1]
-    ax.plot(watch_data['val']['episode_lens'], color=colors['episode_lens'], alpha=0.3, label='val_episode_lens')
-    ax.plot(watch_data['test']['episode_lens'], color=colors['episode_lens'], label='test_episode_lens')
+    for dtype in ['val', 'test']:
+        if 'episode_lens' in watch_data[dtype]:
+            alpha = 0.3 if dtype == 'val' else 1.0
+            ax.plot(watch_data[dtype]['episode_lens'], color=colors['episode_lens'], alpha=alpha, label=f'{dtype}_episode_lens')
     ax.set_ylabel('Episode Length')
     ax.grid(True)
     ax.legend()
     
     # 3. max_q_value
     ax = axes[2]
-    ax.plot(watch_data['val']['max_q_value'], color=colors['max_q_value'], alpha=0.3, label='val_max_q_value')
-    ax.plot(watch_data['test']['max_q_value'], color=colors['max_q_value'], label='test_max_q_value')
+    for dtype in ['val', 'test']:
+        if 'max_q_value' in watch_data[dtype]:
+            alpha = 0.3 if dtype == 'val' else 1.0
+            ax.plot(watch_data[dtype]['max_q_value'], color=colors['max_q_value'], alpha=alpha, label=f'{dtype}_max_q_value')
     ax.set_ylabel('Max Q Value')
     ax.grid(True)
     ax.legend()
@@ -257,10 +272,11 @@ def plot_learning_process(root, watch_data):
     # 绘制交易评价指标
     # 1. sharpe_ratio和sortino_ratio
     ax = axes[3]
-    ax.plot(watch_data['val']['sharpe_ratio'], color=colors['sharpe_ratio'], alpha=0.3, label='val_sharpe_ratio')
-    ax.plot(watch_data['val']['sortino_ratio'], color=colors['sortino_ratio'], alpha=0.3, label='val_sortino_ratio')
-    ax.plot(watch_data['test']['sharpe_ratio'], color=colors['sharpe_ratio'], label='test_sharpe_ratio')
-    ax.plot(watch_data['test']['sortino_ratio'], color=colors['sortino_ratio'], label='test_sortino_ratio')
+    for dtype in ['val', 'test']:
+        for key in ['sharpe_ratio', 'sortino_ratio']:
+            if key in watch_data[dtype]:
+                alpha = 0.3 if dtype == 'val' else 1.0
+                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
     ax.set_ylabel('Ratio')
     ax.grid(True)
     ax.legend()
@@ -271,15 +287,19 @@ def plot_learning_process(root, watch_data):
     
     lines = []
     # 在左轴绘制max_drawdown
-    l1 = ax.plot(watch_data['val']['max_drawdown'], color=colors['max_drawdown'], alpha=0.3, label='val_max_drawdown')[0]
-    l2 = ax.plot(watch_data['test']['max_drawdown'], color=colors['max_drawdown'], label='test_max_drawdown')[0]
-    lines.extend([l1, l2])
+    for dtype in ['val', 'test']:
+        if 'max_drawdown' in watch_data[dtype]:
+            alpha = 0.3 if dtype == 'val' else 1.0
+            l = ax.plot(watch_data[dtype]['max_drawdown'], color=colors['max_drawdown'], alpha=alpha, label=f'{dtype}_max_drawdown')[0]
+            lines.append(l)
     ax.set_ylabel('Max Drawdown')
     
     # 在右轴绘制total_return
-    l3 = ax2.plot(watch_data['val']['total_return'], color=colors['total_return'], alpha=0.3, label='val_total_return')[0]
-    l4 = ax2.plot(watch_data['test']['total_return'], color=colors['total_return'], label='test_total_return')[0]
-    lines.extend([l3, l4])
+    for dtype in ['val', 'test']:
+        if 'total_return' in watch_data[dtype]:
+            alpha = 0.3 if dtype == 'val' else 1.0
+            l = ax2.plot(watch_data[dtype]['total_return'], color=colors['total_return'], alpha=alpha, label=f'{dtype}_total_return')[0]
+            lines.append(l)
     ax2.set_ylabel('Total Return')
     
     # 合并两个轴的图例
@@ -503,8 +523,8 @@ def run_param_center(agent, tau= 0.005):
 
         except ConnectionResetError:
             pass
-        except Exception as e:
-            log(f"Error processing request: {e}")
+        # except Exception as e:
+        #     log(f"Error processing request: {e}")
 
         if need_block:
             block_ips.append(client_ip)
