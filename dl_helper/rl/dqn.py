@@ -280,13 +280,13 @@ class DQN(BaseAgent):
             # 过滤异常值
             filtered = data[(data >= lower) & (data <= upper)]
             # 使用后缀形式保存统计量
-            watch_data[f'{k}_min'] = np.min(filtered)
+            watch_data[f'{k}_min'] = np.min(filtered) if len(filtered) > 0 else 0
             watch_data[f'{k}_q1'] = q1
-            watch_data[f'{k}_median'] = np.median(filtered)
+            watch_data[f'{k}_median'] = np.median(filtered) if len(filtered) > 0 else 0
             watch_data[f'{k}_q3'] = q3
-            watch_data[f'{k}_max'] = np.max(filtered)
+            watch_data[f'{k}_max'] = np.max(filtered) if len(filtered) > 0 else 0
             # 原始数据使用均值替换
-            watch_data[k] = np.mean(filtered)
+            watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
             
         return watch_data
 
