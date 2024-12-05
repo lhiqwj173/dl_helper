@@ -21,7 +21,7 @@ target_update = 50
 buffer_size = 5000
 minimal_size = 1000
 batch_size = 64
-sync_interval_learn_step=10
+sync_interval_learn_step=300
 learn_interval_step=4
 
 # 快速测试
