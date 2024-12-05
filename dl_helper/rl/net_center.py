@@ -404,7 +404,7 @@ def run_param_center(agent, tau= 0.005):
             client_socket.close()
             continue
 
-        msg_header = f'[{client_ip} {client_port}]'
+        msg_header = f'[{client_ip} {client_port}][{update_count}]'
         need_block = False
         try:
             # 接收请求消息
@@ -452,11 +452,11 @@ def run_param_center(agent, tau= 0.005):
                                 model = update_model_params(model, new_params)
                                 # 也更新 target 模型
                                 agent.target_q_net = update_model_params(agent.target_q_net, new_params)
-                                log(f'{msg_header}[{update_count}] Parameters updated')
+                                log(f'{msg_header} Parameters updated')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                log(f'{msg_header}[{update_count}] agent saved to {alist_folder}')
+                                log(f'{msg_header} agent saved to {alist_folder}')
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
