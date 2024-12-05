@@ -369,7 +369,7 @@ def run_param_center(agent, tau= 0.005):
 
     while True:
         client_socket, client_address = server_socket.accept()
-        client_ip = client_address[0]
+        client_ip, client_port = client_address
 
         # 检查是否是block ip
         if client_ip in block_ips:
@@ -377,7 +377,7 @@ def run_param_center(agent, tau= 0.005):
             client_socket.close()
             continue
 
-        msg_header = f'[{client_address[0], client_address[1]}]'
+        msg_header = f'[{client_ip} {client_port}]'
         need_block = False
         try:
             # 接收请求消息

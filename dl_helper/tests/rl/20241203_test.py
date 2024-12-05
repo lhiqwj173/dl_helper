@@ -12,7 +12,7 @@ from dl_helper.train_param import in_kaggle
 
 # 训练参数
 train_title = 'rl_test'
-lr = 1e-2
+lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
 gamma = 0.98
