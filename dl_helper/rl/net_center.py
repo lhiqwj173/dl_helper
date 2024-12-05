@@ -9,6 +9,7 @@ import socket, time, sys, os, re
 import pickle
 import struct
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 CODE = '0QYg9Ky17dWnN4eK'
@@ -478,13 +479,12 @@ def run_param_center(agent, tau= 0.005):
                             else:
                                 # 更新训练数据
                                 watch_data = pickle.loads(train_data_new)
-                                log(f'{msg_header} train_data: {watch_data}')
+                                log(f'{msg_header} {cmd}_data: {watch_data}')
                                 for k in watch_data:
                                     if k not in train_data[data_type]:
                                         train_data[data_type][k] = []
                                     train_data[data_type][k].append(watch_data[k])
                                                                 
-                                log(f'{msg_header} Train data updated')
                                 send_msg(client_socket, b'ok')
 
                                 # 增加北京时间(每4小时)
