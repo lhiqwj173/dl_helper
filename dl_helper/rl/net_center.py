@@ -511,6 +511,7 @@ def run_param_center(agent, tau= 0.005):
                                 dt = datetime.now(timezone(timedelta(hours=8)))  # 使用timezone确保是北京时间
                                 train_data['dt'].append(dt)
                                 train_data = handle_val_test_data(train_data)
+                                log(f'{msg_header} handle {cmd}_data done')
 
                         else:
                             need_block = True
