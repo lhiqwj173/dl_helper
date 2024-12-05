@@ -10,6 +10,8 @@ from dl_helper.rl.run import run_client_learning
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 
+# 训练参数
+train_title = 'rl_test'
 lr = 1e-2
 num_episodes = 5000
 hidden_dim = 128
@@ -22,6 +24,9 @@ batch_size = 64
 sync_interval_learn_step=10
 learn_interval_step=4
 
+# 快速测试
+simple_test = False
+
 t1, t2, t3, t4 = [100, 30, 10, 1]
 d1, d2, d3, d4 = [130, 60, 30, 7]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
@@ -29,16 +34,39 @@ features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, '
 if __name__ == '__main__':
 
     # 检查是否有命令行参数
-    train_title = 'rl_test'
     is_server = False
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith('train_title=') or arg.startswith('title='):
                 train_title = arg.split('=')[1]
+            elif arg.startswith('lr='):
+                lr = float(arg.split('=')[1])
+            elif arg.startswith('num_episodes='):
+                num_episodes = int(arg.split('=')[1])
+            elif arg.startswith('hidden_dim='):
+                hidden_dim = int(arg.split('=')[1])
+            elif arg.startswith('gamma='):
+                gamma = float(arg.split('=')[1])
+            elif arg.startswith('epsilon='):
+                epsilon = float(arg.split('=')[1])
+            elif arg.startswith('target_update='):
+                target_update = int(arg.split('=')[1])
+            elif arg.startswith('buffer_size='):
+                buffer_size = int(arg.split('=')[1])
+            elif arg.startswith('minimal_size='):
+                minimal_size = int(arg.split('=')[1])
+            elif arg.startswith('batch_size='):
+                batch_size = int(arg.split('=')[1])
+            elif arg.startswith('sync_interval_learn_step='):
+                sync_interval_learn_step = int(arg.split('=')[1])
+            elif arg.startswith('learn_interval_step='):
+                learn_interval_step = int(arg.split('=')[1])
             elif arg == 'server':
                 is_server = True
             elif arg == 'client':
                 is_server = False
+            elif arg == 'simple_test':
+                simple_test = True
 
     dqn = DQN(
         obs_shape=(100, 130),
@@ -67,7 +95,7 @@ if __name__ == '__main__':
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
         args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
-        kwargs = {'simple_test': True}
+        kwargs = {'simple_test': simple_test}
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端

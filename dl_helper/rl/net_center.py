@@ -377,8 +377,7 @@ def run_param_center(agent, tau= 0.005):
             client_socket.close()
             continue
 
-        log(f"Accepted connection from: {client_address}")
-
+        msg_header = f'[{client_address[0], client_address[1]}]'
         need_block = False
         try:
             # 接收请求消息
@@ -398,12 +397,12 @@ def run_param_center(agent, tau= 0.005):
                             # 发送模型参数
                             params_data = pickle.dumps(model.state_dict())
                             send_msg(client_socket, params_data)
-                            log(f'Parameters sent to {client_ip}')
+                            log(f'{msg_header} Parameters sent')
 
                         elif cmd == 'check':
                             # 检查是否需要验证测试
                             send_msg(client_socket, pickle.dumps({'val': need_val, 'test': need_test}))
-                            log(f'Check response sent to {client_ip}')
+                            log(f'{msg_header} Check response sent')
                             # 重置
                             if need_val:
                                 need_val = False
@@ -421,11 +420,11 @@ def run_param_center(agent, tau= 0.005):
                                 model = update_model_params(model, new_params)
                                 # 也更新 target 模型
                                 agent.target_q_net = update_model_params(agent.target_q_net, new_params)
-                                log(f'Parameters updated from {client_ip}')
+                                log(f'{msg_header} Parameters updated')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                log(f'agent saved to {alist_folder}')
+                                log(f'{msg_header} agent saved to {alist_folder}')
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
@@ -438,7 +437,7 @@ def run_param_center(agent, tau= 0.005):
                             # 接收训练数据
                             data_type = cmd
                             train_data_new = recv_msg(client_socket)
-                            log(f'train_data: {train_data_new}')
+                            log(f'{msg_header} train_data: {train_data_new}')
                             if train_data_new is None:
                                 need_block = True
                             else:
@@ -448,7 +447,7 @@ def run_param_center(agent, tau= 0.005):
                                     if k in watch_data:
                                         train_data[data_type][k].append(watch_data[k])
                                                                 
-                                log(f'Train data updated from {client_ip}')
+                                log(f'{msg_header} Train data updated')
                                 send_msg(client_socket, b'ok')
 
                                 # 增加北京时间(每4小时)
