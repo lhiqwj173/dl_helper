@@ -1,4 +1,4 @@
-import os
+import os, time
 import matplotlib.pyplot as plt
 from py_ext.tool import log
 
@@ -340,6 +340,8 @@ class DQN(BaseAgent):
 
         # 学习是否开始
         for i in range(num_episodes):
+            msg_head = f'[{i}]'
+
             episode_return = 0
             episode_len = 0 
             # 回合的评价指标
@@ -396,7 +398,7 @@ class DQN(BaseAgent):
                     learn_step += 1
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
-                        log(f'episodes {i} {learn_step} sync params')
+                        log(f'{msg_head} {learn_step} sync params')
 
                         # 同步最新参数
                         # 推送参数更新
@@ -409,9 +411,10 @@ class DQN(BaseAgent):
                         for test_type in ['val', 'test']:
                             if need_val_test_res[test_type]:
                                 need_train_back = True  
-                                log(f'wait watch_data for {test_type}')
+                                log(f'{msg_head} wait watch_data for {test_type}')
+                                t = time.time()
                                 watch_data_new = self.val_test(env, data_type=test_type)
-                                log(f'watch_data: {watch_data_new}')
+                                log(f'{msg_head} watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
                                 # 发送验证数据
                                 send_val_test_data(test_type, watch_data_new)
                     #################################
@@ -425,7 +428,7 @@ class DQN(BaseAgent):
                         state, info = env.reset()
                         done = False
 
-            log(f'episodes {i} done')
+            log(f'{msg_head} done')
 
 def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False):
     # 根据环境获取对应设备
