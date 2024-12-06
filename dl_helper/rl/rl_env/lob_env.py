@@ -345,32 +345,41 @@ class Account:
         if legal:
             # 数据足够 > 1
             # 需要平仓 或 卖出， 需要计算评价指标， 储存在info中
-            if (len(self.net_raw) > 1) and (need_close or action==1):
-                # 计算策略净值的评价指标
-                # 平均税费(买入卖出)到每一步
-                # 第一步买入，等价较好，不平均税费
-                step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
-                # 计算对数收益率序列
-                log_returns = np.diff(np.log(net))
-                # 计算指标
-                res['sortino_ratio'] = calc_sortino_ratio(log_returns)
-                res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
-                res['max_drawdown'] = calc_max_drawdown(log_returns)
-                res['total_return'] = calc_total_return(log_returns)
+            if need_close or action==1:
+                if (len(self.net_raw) > 1):
+                    # 计算策略净值的评价指标
+                    # 平均税费(买入卖出)到每一步
+                    # 第一步买入，等价较好，不平均税费
+                    step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
+                    net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
+                    # 计算对数收益率序列
+                    log_returns = np.diff(np.log(net))
+                    # 计算指标
+                    res['sortino_ratio'] = calc_sortino_ratio(log_returns)
+                    res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
+                    res['max_drawdown'] = calc_max_drawdown(log_returns)
+                    res['total_return'] = calc_total_return(log_returns)
 
-                # 计算基准净值的评价指标
-                buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
-                sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
-                step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
-                net_bm = [i - step_fee_bm*(idx>0) for idx, i in enumerate(self.net_raw_bm)]
-                # 计算对数收益率序列
-                log_returns_bm = np.diff(np.log(net_bm))
-                res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
-                res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
-                res['max_drawdown_bm'] = calc_max_drawdown(log_returns_bm)
-                res['total_return_bm'] = calc_total_return(log_returns_bm)
-
+                    # 计算基准净值的评价指标
+                    buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
+                    sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
+                    step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
+                    net_bm = [i - step_fee_bm*(idx>0) for idx, i in enumerate(self.net_raw_bm)]
+                    # 计算对数收益率序列
+                    log_returns_bm = np.diff(np.log(net_bm))
+                    res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
+                    res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
+                    res['max_drawdown_bm'] = calc_max_drawdown(log_returns_bm)
+                    res['total_return_bm'] = calc_total_return(log_returns_bm)
+                else:
+                    res['sortino_ratio'] = 0
+                    res['sharpe_ratio'] = 0
+                    res['max_drawdown'] = 0
+                    res['total_return'] = 0
+                    res['sortino_ratio_bm'] = 0
+                    res['sharpe_ratio_bm'] = 0
+                    res['max_drawdown_bm'] = 0
+                    res['total_return_bm'] = 0
         else:
             # 不合法的操作，交易全部清空
             self.reset()
