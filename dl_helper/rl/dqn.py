@@ -270,7 +270,10 @@ class DQN(BaseAgent):
             watch_data[f'{k}_max'] = np.max(filtered) if len(filtered) > 0 else 0
             # 原始数据使用均值替换
             watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
-            
+
+        # 交易次数
+        watch_data['trades'] = len(watch_data['return'])
+
         # 若是 test，上传预测数据文件到alist
         if data_type == 'test':
             # 上传更新到alist
