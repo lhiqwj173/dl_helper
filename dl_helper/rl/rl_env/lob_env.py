@@ -491,7 +491,7 @@ class LOB_trade_env(gym.Env):
             with open(self.predict_file, 'w') as f:
                 f.write('id,predict\n')
         with open(self.predict_file, 'a') as f:
-            f.write(f'{self.id},{int(action)}\n')
+            f.write(f'{self.data_producer.id},{int(action)}\n')
     
     def step(self, action):
         # 如果是test数据集，需要输出预测数据文件
