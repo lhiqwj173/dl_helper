@@ -477,7 +477,7 @@ def run_param_center(agent, tau= 0.005):
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                log(f'{msg_header} agent saved to {alist_folder}')
+                                # log(f'{msg_header} agent saved to {alist_folder}')
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
