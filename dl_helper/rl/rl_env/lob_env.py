@@ -73,6 +73,8 @@ class data_producer:
         # 买卖1档价格
         self.ask_price = 0
         self.bid_price = 0
+        # id
+        self.id = ''
         # 当前日期数据停止标志
         self.date_file_done = False
 
@@ -235,6 +237,9 @@ class data_producer:
 
         # 标的id
         symbol_id = self.idxs[0][2]
+
+        # 记录数据id
+        self.id = self.ids[self.idxs[0][0]]
 
         # 检查下一个数据是否是最后一个数据
         all_done = False
@@ -430,7 +435,13 @@ class LOB_trade_env(gym.Env):
         # 13001 数组
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 1,), dtype=np.float32)
 
+        # 测试数据集 预测输出文件
+        self.predict_file = ''
+
     def set_data_type(self, _type):
+        if _type == 'test':
+            # 切换到测试数据集，创建预测输出文件
+            self.predict_file = f'predict_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
         self.data_producer.set_data_type(_type)
 
     def _get_data(self):
@@ -469,7 +480,23 @@ class LOB_trade_env(gym.Env):
 
         return reward, False, pos, profit
 
+    def out_test_predict(self, action):
+        """
+        输出测试预测数据 -> predict.csv
+        id,predict
+        """
+        # 输出列名
+        if not os.path.exists(self.predict_file):
+            with open(self.predict_file, 'w') as f:
+                f.write('id,predict\n')
+        with open(self.predict_file, 'a') as f:
+            f.write(f'{self.id},{int(action)}\n')
+    
     def step(self, action):
+        # 如果是test数据集，需要输出预测数据文件
+        if self.data_producer.data_type == 'test':
+            self.out_test_predict(action)
+
         info = {
             'close': False
         }

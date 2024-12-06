@@ -99,4 +99,4 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        run_param_center(dqn)
+        run_param_center(dqn, simple_test=simple_test)

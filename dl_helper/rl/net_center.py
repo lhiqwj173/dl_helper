@@ -179,16 +179,13 @@ def update_block_ips(ips):
 def plot_learning_process(root, watch_data):
     """
     强化学习性能指标:
-        return: 回合累计奖励
-        avg_return: 回合平均长度奖励
-        episode_lens: 回合长度
-        max_q_value: 最大Q值
+        return:         交易对奖励
     
     交易评价指标:
-        sharpe_ratio: 夏普比率
-        sortino_ratio: 索提诺比率
-        max_drawdown: 最大回撤
-        total_return: 总回报
+        sharpe_ratio:   夏普比率
+        sortino_ratio:  索提诺比率
+        max_drawdown:   最大回撤
+        total_return:   总回报
     """
     # 检查数据是否存在
     if 'dt' not in watch_data or not watch_data['dt']:
@@ -201,15 +198,12 @@ def plot_learning_process(root, watch_data):
             return
             
     # 获取数据键,将交易评价指标单独处理
-    rl_keys = ['return', 'avg_return', 'episode_lens', 'max_q_value']
+    rl_keys = ['return']
     trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
     
     # 固定颜色
     colors = {
         'return': '#1f77b4',      # 蓝色
-        'avg_return': '#2ca02c',  # 绿色
-        'episode_lens': '#ff7f0e', # 橙色
-        'max_q_value': '#9467bd', # 紫色
         'sharpe_ratio': '#8c564b', # 棕色
         'sortino_ratio': '#e377c2', # 粉色
         'max_drawdown': '#7f7f7f', # 灰色
@@ -217,7 +211,7 @@ def plot_learning_process(root, watch_data):
     }
     
     # 计算总图数
-    n_rl = 3  # return合并为1个,其他2个
+    n_rl = 1  # return
     n_trade = 2  # ratio合并为1个,其他1个
     n_total = n_rl + n_trade
     
@@ -238,40 +232,19 @@ def plot_learning_process(root, watch_data):
             last_dt = processed_dt
             
     # 绘制强化学习指标
-    # 1. return和avg_return
+    # 1. return 
     ax = axes[0]
     for dtype in ['val', 'test']:
-        for key in ['return', 'avg_return']:
-            if key in watch_data[dtype]:
-                alpha = 0.3 if dtype == 'val' else 1.0
-                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
+        if 'return' in watch_data[dtype]:
+            alpha = 0.3 if dtype == 'val' else 1.0
+            ax.plot(watch_data[dtype]['return'], color=colors['return'], alpha=alpha, label=f'{dtype}_return')
     ax.set_ylabel('Return')
-    ax.grid(True)
-    ax.legend()
-    
-    # 2. episode_lens
-    ax = axes[1]
-    for dtype in ['val', 'test']:
-        if 'episode_lens' in watch_data[dtype]:
-            alpha = 0.3 if dtype == 'val' else 1.0
-            ax.plot(watch_data[dtype]['episode_lens'], color=colors['episode_lens'], alpha=alpha, label=f'{dtype}_episode_lens')
-    ax.set_ylabel('Episode Length')
-    ax.grid(True)
-    ax.legend()
-    
-    # 3. max_q_value
-    ax = axes[2]
-    for dtype in ['val', 'test']:
-        if 'max_q_value' in watch_data[dtype]:
-            alpha = 0.3 if dtype == 'val' else 1.0
-            ax.plot(watch_data[dtype]['max_q_value'], color=colors['max_q_value'], alpha=alpha, label=f'{dtype}_max_q_value')
-    ax.set_ylabel('Max Q Value')
     ax.grid(True)
     ax.legend()
     
     # 绘制交易评价指标
     # 1. sharpe_ratio和sortino_ratio
-    ax = axes[3]
+    ax = axes[1]
     for dtype in ['val', 'test']:
         for key in ['sharpe_ratio', 'sortino_ratio']:
             if key in watch_data[dtype]:
@@ -282,7 +255,7 @@ def plot_learning_process(root, watch_data):
     ax.legend()
     
     # 2. max_drawdown和total_return (双y轴)
-    ax = axes[4]
+    ax = axes[2]
     ax2 = ax.twinx()  # 创建共享x轴的第二个y轴
     
     lines = []
@@ -386,7 +359,7 @@ def handle_val_test_data(train_data):
 
     return train_data
 
-def run_param_center(agent, tau= 0.005):
+def run_param_center(agent, tau= 0.005, simple_test=False):
     """参数中心服务器"""
     # 载入模型数据，若有
     agent.load(alist_folder)
@@ -481,10 +454,13 @@ def run_param_center(agent, tau= 0.005):
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
-                                _val_count = 3000
-                                _test_count = _val_count * 50
-                                # _test_count = 20
-                                # _val_count = 10
+                                if simple_test:
+                                    _test_count = 20
+                                    _val_count = 10
+                                else:
+                                    _val_count = 3000
+                                    _test_count = _val_count * 50
+
                                 if update_count % _test_count == 0:
                                     need_test = True
                                 elif update_count % _val_count == 0:
@@ -579,9 +555,6 @@ if "__main__" == __name__:
             # 发送训练数据
             watch_data = {
                 'return': 1.0,
-                'avg_return': 0.5,
-                'episode_lens': 10,
-                'max_q_value': 0.8,
                 'sharpe_ratio': 1.2,
                 'sortino_ratio': 0.9,
                 'max_drawdown': 0.15,

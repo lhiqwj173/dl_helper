@@ -13,6 +13,7 @@ from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher 
 from py_ext.lzma import compress_folder
+from py_ext.alist import alist
 
 VANILLA_DQN = 'VanillaDQN'
 DOUBLE_DQN = 'DoubleDQN'
@@ -148,7 +149,6 @@ class DQN(BaseAgent):
         self.target_update = target_update
         self.count = 0
         self.dqn_type = dqn_type
-        # TODO
         self.device = None
         self.wait_trade_close = wait_trade_close    
         self.replay_buffer = ReplayBuffer(buffer_size) if not wait_trade_close else ReplayBufferWaitClose(buffer_size)
@@ -222,10 +222,7 @@ class DQN(BaseAgent):
         self.count += 1
 
     rl_training_ind = [
-        'return',           # 验证集回合累计奖励
-        'avg_return',       # 验证集回合平均长度奖励
-        'episode_lens',     # 验证集回合长度
-        'max_q_value'       # 验证集最大Q值
+        'return',           # 交易对奖励
     ]
 
     def val_test(self, env, data_type='val'):
@@ -235,38 +232,24 @@ class DQN(BaseAgent):
         # 训练监控指标 / 每回合
         watch_data = {f'{i}': [] for i in self.rl_training_ind}
 
-
         env.set_data_type(data_type)
-        for i in range(1):
-            max_q_value = 0
-            episode_return = 0
-            episode_len = 0
 
-            log(f'{data_type} loop {i}')
-            state, info = env.reset()
-            done = False
-            while not done:
-                action = self.take_action(state)
-                max_q_value = self.max_q_value(
-                    state) * 0.005 + max_q_value * 0.995  # 平滑处理
-                next_state, reward, done1, done2, info = env.step(action)
-                done = done1 or done2
-                if info.get('close', False):
-                    # 更新评价指标
-                    for k, v in info.items():
-                        if k != 'close':
-                            if k not in watch_data:
-                                watch_data[f'{k}'] = []
-                            watch_data[f'{k}'].append(v)
-                state = next_state
-                episode_return += reward
-                episode_len += 1
-
-            # 更新监控指标
-            watch_data[f'return'].append(episode_return)
-            watch_data[f'avg_return'].append(episode_return / episode_len)
-            watch_data[f'episode_lens'].append(episode_len)
-            watch_data[f'max_q_value'].append(max_q_value)
+        log(f'{data_type} begin')
+        state, info = env.reset()
+        done = False
+        while not done:
+            action = self.take_action(state)
+            next_state, reward, done1, done2, info = env.step(action)
+            done = done1 or done2
+            if info.get('close', False):
+                watch_data[f'return'].append(reward)
+                # 更新评价指标
+                for k, v in info.items():
+                    if k != 'close':
+                        if k not in watch_data:
+                            watch_data[f'{k}'] = []
+                        watch_data[f'{k}'].append(v)
+            state = next_state
 
         # 返回箱型图统计量(除异常值)和均值
         keys = list(watch_data.keys())
@@ -288,6 +271,15 @@ class DQN(BaseAgent):
             # 原始数据使用均值替换
             watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
             
+        # 若是 test，上传预测数据文件到alist
+        if data_type == 'test':
+            # 上传更新到alist
+            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+            # 上传文件夹
+            upload_folder = f'/rl_learning_process/predict_test/'
+            client.mkdir(upload_folder)
+            client.upload(env.predict_file, upload_folder)
+
         return watch_data
 
     def package_root(self, watch_data):
@@ -342,8 +334,6 @@ class DQN(BaseAgent):
         for i in range(num_episodes):
             msg_head = f'[{i}]'
 
-            episode_return = 0
-            episode_len = 0 
             # 回合的评价指标
             episode_metrics = {}
             state, info = env.reset()
@@ -375,8 +365,6 @@ class DQN(BaseAgent):
                     
                 # 更新状态
                 state = next_state
-                episode_return += reward
-                episode_len += 1
 
                 # 更新网络
                 if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
