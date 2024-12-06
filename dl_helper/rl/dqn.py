@@ -251,8 +251,11 @@ class DQN(BaseAgent):
                         watch_data[f'{k}'].append(v)
             state = next_state
 
+        # 交易次数
+        watch_data['trades'] = len(watch_data['return'])
+
         # 返回箱型图统计量(除异常值)和均值
-        keys = list(watch_data.keys())
+        keys = [i for i in watch_data.keys() if i != 'trades']
         for k in keys:
             data = np.array(watch_data[k])
             q1 = np.percentile(data, 25)
@@ -270,9 +273,6 @@ class DQN(BaseAgent):
             watch_data[f'{k}_max'] = np.max(filtered) if len(filtered) > 0 else 0
             # 原始数据使用均值替换
             watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
-
-        # 交易次数
-        watch_data['trades'] = len(watch_data['return'])
 
         # 若是 test，上传预测数据文件到alist
         if data_type == 'test':
