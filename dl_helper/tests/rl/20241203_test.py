@@ -103,8 +103,8 @@ if __name__ == '__main__':
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
         args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
-        kwargs = {'simple_test': simple_test}
+        kwargs = {'simple_test': simple_test, 'val_test': val_test}
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        run_param_center(dqn, simple_test=simple_test, val_test=val_test)
+        run_param_center(dqn, simple_test=simple_test)
