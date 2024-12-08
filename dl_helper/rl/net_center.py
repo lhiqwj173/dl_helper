@@ -186,6 +186,9 @@ def plot_learning_process(root, watch_data):
         sortino_ratio:  索提诺比率
         max_drawdown:   最大回撤
         total_return:   总回报
+        win:           胜率
+        loss:          负率
+        illegal:       非法率
     """
     # 检查数据是否存在
     if 'dt' not in watch_data or not watch_data['dt']:
@@ -200,6 +203,7 @@ def plot_learning_process(root, watch_data):
     # 获取数据键,将交易评价指标单独处理
     rl_keys = ['return']
     trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
+    rate_keys = ['win', 'loss', 'illegal']
     
     # 固定颜色
     colors = {
@@ -207,13 +211,17 @@ def plot_learning_process(root, watch_data):
         'sharpe_ratio': '#8c564b', # 棕色
         'sortino_ratio': '#e377c2', # 粉色
         'max_drawdown': '#7f7f7f', # 灰色
-        'total_return': '#bcbd22'  # 黄绿色
+        'total_return': '#bcbd22', # 黄绿色
+        'win': '#2ca02c',         # 绿色
+        'loss': '#d62728',        # 红色
+        'illegal': '#ff7f0e'      # 橙色
     }
     
     # 计算总图数
     n_rl = 1  # return
     n_trade = 2  # ratio合并为1个,其他1个
-    n_total = n_rl + n_trade
+    n_rate = 1   # win/loss/illegal合并为1个
+    n_total = n_rl + n_trade + n_rate
     
     # 创建图表,每行一个子图
     fig, axes = plt.subplots(n_total, 1, figsize=(12, 4*n_total), sharex=True)
@@ -278,6 +286,17 @@ def plot_learning_process(root, watch_data):
     # 合并两个轴的图例
     ax.legend(handles=lines, loc='upper left')
     ax.grid(True)
+
+    # 3. win/loss/illegal rates
+    ax = axes[3]
+    for dtype in ['val', 'test']:
+        for key in rate_keys:
+            if key in watch_data[dtype]:
+                alpha = 0.3 if dtype == 'val' else 1.0
+                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
+    ax.set_ylabel('Rate (%)')
+    ax.grid(True)
+    ax.legend()
     
     # 设置x轴刻度和标签
     for ax in axes:

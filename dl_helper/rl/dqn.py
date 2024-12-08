@@ -255,12 +255,13 @@ class DQN(BaseAgent):
         # 交易次数
         watch_data['trades'] = len(watch_data['return'])
         # 交易统计
-        watch_data['win'] = sum(1 for r in watch_data['return'] if r > 0)
-        watch_data['loss'] = sum(1 for r in watch_data['return'] if r < 0 and r != -1000)
-        watch_data['illegal'] = sum(1 for r in watch_data['return'] if r == -1000)
+        total = len(watch_data['return'])
+        watch_data['win'] = sum(1 for r in watch_data['return'] if r > 0) / total * 100
+        watch_data['loss'] = sum(1 for r in watch_data['return'] if r < 0 and r != -1000) / total * 100 
+        watch_data['illegal'] = sum(1 for r in watch_data['return'] if r == -1000) / total * 100
 
         # 返回箱型图统计量(除异常值)和均值
-        keys = [i for i in watch_data.keys() if i != 'trades']
+        keys = [i for i in watch_data.keys() if i not in ['trades', 'win', 'loss', 'illegal']]
         for k in keys:
             data = np.array(watch_data[k])
             q1 = np.percentile(data, 25)
