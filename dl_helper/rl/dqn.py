@@ -450,9 +450,11 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
 
     # 开始训练
     if val_test:
-        val_test_type = 'val' if rank == 0 else 'test'
-        dqn.val_test(env, data_type=val_test_type)
+        if rank == 0:
+            log(f'{rank} {val_test} test...')
+            dqn.val_test(env, data_type=val_test)
     else:
+        log(f'{rank} learn...')
         dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':

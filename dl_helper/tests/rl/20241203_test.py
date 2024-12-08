@@ -31,7 +31,7 @@ learn_interval_step=4
 simple_test = False
 
 # val_test
-val_test = False
+val_test = ''
 
 t1, t2, t3, t4 = [100, 30, 10, 1]
 d1, d2, d3, d4 = [130, 60, 30, 7]
@@ -73,8 +73,8 @@ if __name__ == '__main__':
                 is_server = False
             elif arg == 'simple_test':
                 simple_test = True
-            elif arg == 'val_test':
-                val_test = True
+            elif arg.startswith('test_val='):
+                val_test = arg.split('=')[1]
 
     dqn = DQN(
         obs_shape=(100, 130),
