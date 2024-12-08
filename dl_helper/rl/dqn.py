@@ -254,6 +254,10 @@ class DQN(BaseAgent):
 
         # 交易次数
         watch_data['trades'] = len(watch_data['return'])
+        # 交易统计
+        watch_data['win'] = sum(1 for r in watch_data['return'] if r > 0)
+        watch_data['loss'] = sum(1 for r in watch_data['return'] if r < 0 and r != -1000)
+        watch_data['illegal'] = sum(1 for r in watch_data['return'] if r == -1000)
 
         # 返回箱型图统计量(除异常值)和均值
         keys = [i for i in watch_data.keys() if i != 'trades']
@@ -300,8 +304,8 @@ class DQN(BaseAgent):
     def update_params_from_server(self, env):
         new_params = get_net_params()
         if new_params:
-            self.q_net = update_model_params(self.q_net, new_params)
-            self.target_q_net = update_model_params(self.target_q_net, new_params)
+            self.q_net = update_model_params(self.q_net, new_params, tau=1)
+            self.target_q_net = update_model_params(self.target_q_net, new_params, tau=1)
             # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
             self.replay_buffer.reset()
             # 重置环境中的账户
@@ -454,7 +458,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
             log(f'{rank} {val_test} test...')
             t = time.time()
             watch_data_new = dqn.val_test(env, data_type=val_test)
-            log(f'{msg_head} watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
+            log(f'watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
     else:
         log(f'{rank} learn...')
         dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)

@@ -444,8 +444,8 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 # 软更新参数
                                 new_params = pickle.loads(params_data)
                                 model = update_model_params(model, new_params)
-                                # 也更新 target 模型
-                                agent.target_q_net = update_model_params(agent.target_q_net, new_params)
+                                # target模型 与 q_net 模型参数同步
+                                agent.target_q_net = update_model_params(agent.target_q_net, model.state_dict(), tau=1)
                                 log(f'{msg_header} Parameters updated')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
