@@ -452,7 +452,9 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     if val_test:
         if rank == 0:
             log(f'{rank} {val_test} test...')
-            dqn.val_test(env, data_type=val_test)
+            t = time.time()
+            watch_data_new = dqn.val_test(env, data_type=val_test)
+            log(f'{msg_head} watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
     else:
         log(f'{rank} learn...')
         dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
