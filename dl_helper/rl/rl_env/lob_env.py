@@ -440,9 +440,9 @@ class LOB_trade_env(gym.Env):
         self.predict_file = ''
 
     def set_data_type(self, _type):
-        if _type == 'test':
+        if _type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
-            self.predict_file = f'predict_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
+            self.predict_file = f'{_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
         self.data_producer.set_data_type(_type)
 
     def _get_data(self):
@@ -495,7 +495,7 @@ class LOB_trade_env(gym.Env):
     
     def step(self, action):
         # 如果是test数据集，需要输出预测数据文件
-        if self.data_producer.data_type == 'test':
+        if self.data_producer.data_type in ['val', 'test']:
             self.out_test_predict(action)
 
         info = {

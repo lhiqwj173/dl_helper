@@ -2,7 +2,10 @@ import os, sys
 import torch
 
 from py_ext.tool import log, init_logger
-init_logger('rl', level='INFO')
+import socket
+hostname = socket.gethostname()
+ip = socket.gethostbyname(hostname)
+init_logger(f'{ip}', level='INFO')
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
 from dl_helper.rl.net_center import run_param_center
@@ -26,6 +29,9 @@ learn_interval_step=4
 
 # 快速测试
 simple_test = False
+
+# val_test
+val_test = False
 
 t1, t2, t3, t4 = [100, 30, 10, 1]
 d1, d2, d3, d4 = [130, 60, 30, 7]
@@ -67,6 +73,8 @@ if __name__ == '__main__':
                 is_server = False
             elif arg == 'simple_test':
                 simple_test = True
+            elif arg == 'val_test':
+                val_test = True
 
     dqn = DQN(
         obs_shape=(100, 130),
@@ -99,4 +107,4 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        run_param_center(dqn, simple_test=simple_test)
+        run_param_center(dqn, simple_test=simple_test, val_test=val_test)

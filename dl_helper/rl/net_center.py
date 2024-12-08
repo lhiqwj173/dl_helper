@@ -398,7 +398,7 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
             client_socket.close()
             continue
 
-        msg_header = f'[{client_ip} {client_port}][{update_count}]'
+        msg_header = f'[{client_ip:<15} {client_port:<5}][{update_count}]'
         need_block = False
         try:
             # 接收请求消息

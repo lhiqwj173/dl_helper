@@ -12,7 +12,7 @@ import base64
 import imgkit
 
 from py_ext.wechat import wx
-from py_ext.tool import debug, log
+from py_ext.tool import debug, log, get_log_file
 from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
@@ -22,6 +22,21 @@ from torchstat import stat
 from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
 import df2img
+from py_ext.alist import alist
+
+def upload_log_file():
+    """上传日志文件到alist"""
+    # 获取日志文件
+    log_file = get_log_file()
+    if log_file and os.path.exists(log_file):
+        # 上传到alist
+        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+        # 上传文件夹
+        upload_folder = '/rl_learning_process/logs/'
+        client.mkdir(upload_folder)
+        client.upload(log_file, upload_folder)
+        log(f'Upload log file to alist: {log_file}')
+
 
 def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     """计算夏普比率
@@ -86,7 +101,6 @@ def calc_volatility(returns):
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
     return returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
-
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2

@@ -1,6 +1,6 @@
 import os, time
 import matplotlib.pyplot as plt
-from py_ext.tool import log
+from py_ext.tool import log, get_log_file
 
 import torch
 import torch.nn.functional as F
@@ -11,7 +11,8 @@ from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
-from dl_helper.trainer import notebook_launcher 
+from dl_helper.trainer import notebook_launcher
+from dl_helper.tool import upload_log_file
 from py_ext.lzma import compress_folder
 from py_ext.alist import alist
 
@@ -275,11 +276,11 @@ class DQN(BaseAgent):
             watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
 
         # 若是 test，上传预测数据文件到alist
-        if data_type == 'test':
+        if data_type in ['val', 'test']:
             # 上传更新到alist
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             # 上传文件夹
-            upload_folder = f'/rl_learning_process/predict_test/'
+            upload_folder = f'/rl_learning_process/predict_{data_type}/'
             client.mkdir(upload_folder)
             client.upload(env.predict_file, upload_folder)
 
@@ -344,6 +345,8 @@ class DQN(BaseAgent):
             step = 0
             while not done:
                 step += 1
+                if step % 1000 == 0:
+                    upload_log_file()
 
                 # 动作
                 action = self.take_action(state)
@@ -408,6 +411,10 @@ class DQN(BaseAgent):
                                 log(f'{msg_head} watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
                                 # 发送验证数据
                                 send_val_test_data(test_type, watch_data_new)
+
+                        # 如果进行了验证/测试,上传日志
+                        if any(need_val_test_res.values()):
+                            upload_log_file()
                     #################################
                     # 服务器通讯
                     #################################
@@ -420,8 +427,9 @@ class DQN(BaseAgent):
                         done = False
 
             log(f'{msg_head} done')
+            upload_log_file()
 
-def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False):
+def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -441,7 +449,11 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
-    dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+    if val_test:
+        val_test_type = 'val' if rank == 0 else 'test'
+        dqn.val_test(env, data_type=val_test_type)
+    else:
+        dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(
