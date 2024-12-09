@@ -418,7 +418,7 @@ def handle_val_test_data(train_data):
     train_data['dt'] = train_data['dt'][:500]
 
     # 增量保存最新的验证测试数据到csv
-    save_train_data_to_csv(train_data)
+    save_train_data_to_csv(train_data, csv_path)
     
     # 绘制数据
     plot_learning_process(root_folder, train_data)
