@@ -200,7 +200,12 @@ class DQNTracker:
                 total_actions[action] += count
         
         total_count = sum(total_actions.values())
-        return {action: count/total_count for action, count in total_actions.items()} if total_count else {}
+        if not total_count:
+            return {}
+            
+        # 按照键的顺序排序
+        return {k: total_actions[k]/total_count 
+               for k in sorted(total_actions.keys())}
 
 
 if __name__ == '__main__':
