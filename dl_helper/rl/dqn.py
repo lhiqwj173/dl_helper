@@ -166,7 +166,7 @@ class DQN(BaseAgent):
                                           lr=learning_rate)
 
         # 跟踪器
-        self.tracker = DQNTracker(10, action_dim)
+        self.tracker = DQNTracker('learn', 10, action_dim)
         self.tracker_val_test = None
 
     def upload_log_file(self):
@@ -267,7 +267,7 @@ class DQN(BaseAgent):
         self.eval()
 
         # 初始化跟踪器
-        self.tracker_val_test = DQNTracker(10000, self.action_dim)
+        self.tracker_val_test = DQNTracker(10000, self.action_dim, title=data_type, rank=self.tracker.rank)
 
         env.set_data_type(data_type)
 

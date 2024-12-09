@@ -647,6 +647,9 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                     need_test = True
                                 elif update_count % _val_count == 0:
                                     need_val = True
+                                if simple_test and update_count > _test_count:
+                                    # 退出
+                                    break
 
                         elif cmd in ['val', 'test']:
                             # 接收训练数据

@@ -3,12 +3,15 @@ import os
 import pickle
 from collections import defaultdict, deque
 
+from py_ext.tool import log, get_log_file
+
 class DQNTracker:
-    def __init__(self, n_days, num_actions, rank=0):
+    def __init__(self, title, n_days, num_actions, rank=0):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
 
         Args:
+            title: 标题,用于标识跟踪器
             n_days: 统计周期（天数）,用于设定保留多少天的历史数据进行统计分析
                    比如设置为7,则只保留最近7天的数据用于计算移动平均等指标
             num_actions: 动作空间大小,即智能体可以采取的动作数量
@@ -18,6 +21,8 @@ class DQNTracker:
                         - 2表示持有
                         则num_actions=3
         
+            rank: 排名,用于标识跟踪器
+
         统计指标包含:
             1. 奖励相关:
                - 每天的奖励总和
@@ -34,6 +39,7 @@ class DQNTracker:
                - 胜率
                - 败率
         """
+        self.title = title 
         self.rank = rank
         self.n_days = n_days
         self.num_actions = num_actions
@@ -160,15 +166,16 @@ class DQNTracker:
             'total_counts': self.total_counts,
             'extra_metrics': self.extra_metrics
         }
-        
+        log(f'save to tracker_{self.title}_{self.rank}.pkl')
         # 保存到文件
-        with open(f'tracker_data_{self.rank}.pkl', 'wb') as f:
+        with open(f'tracker_{self.title}_{self.rank}.pkl', 'wb') as f:
             pickle.dump(data, f)
 
     def load(self):
         """加载统计数据"""
-        if os.path.exists(f'tracker_data_{self.rank}.pkl'):
-            with open(f'tracker_data_{self.rank}.pkl', 'rb') as f:
+        if os.path.exists(f'tracker_{self.title}_{self.rank}.pkl'):
+            log(f'load from tracker_{self.title}_{self.rank}.pkl')  
+            with open(f'tracker_{self.title}_{self.rank}.pkl', 'rb') as f:
                 data = pickle.load(f)
             self.daily_rewards = data['daily_rewards']
             self.daily_action_counts = data['daily_action_counts']
@@ -185,6 +192,8 @@ class DQNTracker:
             self.loss_counts = data['loss_counts']
             self.total_counts = data['total_counts']
             self.extra_metrics = data['extra_metrics']
+        else:
+            log(f'tracker_{self.title}_{self.rank}.pkl not found')
 
     def get_metrics(self):
         """
