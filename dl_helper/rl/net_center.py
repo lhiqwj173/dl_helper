@@ -572,13 +572,8 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                         if k not in train_data['learn']:
                                             train_data['learn'][k] = []
                                         length = len(learn_metrics[k])
-                                        try:
-                                            if length > 0:
-                                                train_data['learn'][k].append(sum(learn_metrics[k]) / length)
-                                        except Exception as e:
-                                            print(learn_metrics[k])
-                                            print(length)
-                                            raise e 
+                                        if length > 0:
+                                            train_data['learn'][k].append(sum(learn_metrics[k]) / length)
 
                                         log(f'{msg_header} length learn_metrics[{k}]: {length}')
                                     # 清空learn_metrics

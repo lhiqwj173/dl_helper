@@ -302,7 +302,7 @@ class DQN(BaseAgent):
                     self.tracker_val_test.update_loss_count()
                 # 更新评价指标
                 for k, v in info.items():
-                    if k != 'close':
+                    if k not in ['close', 'date_done']:
                         self.tracker_val_test.update_extra_metrics(k, v)
             state = next_state
 
@@ -428,7 +428,7 @@ class DQN(BaseAgent):
 
                     # 更新评价指标
                     for k, v in info.items():
-                        if k != 'close':
+                        if k not in ['close', 'date_done']:
                             self.tracker.update_extra_metrics(k, v)
                 
                 # 更新跟踪器 日期文件完成, 需要更新
