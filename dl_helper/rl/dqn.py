@@ -6,15 +6,21 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+from dl_helper.rl.dqn_tracker import DQNTracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.base import BaseAgent
-from dl_helper.rl.net_center import get_net_params, send_net_params, update_model_params, send_val_test_data, check_need_val_test
+from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher
 from dl_helper.tool import upload_log_file
 from py_ext.lzma import compress_folder
 from py_ext.alist import alist
+
+from threading import Lock
+upload_lock = Lock()
+last_upload_time = 0
+UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 
 VANILLA_DQN = 'VanillaDQN'
 DOUBLE_DQN = 'DoubleDQN'
@@ -151,16 +157,38 @@ class DQN(BaseAgent):
         self.count = 0
         self.dqn_type = dqn_type
         self.device = None
+        self.msg_head = f''
+        self.buffer_size = buffer_size
         self.wait_trade_close = wait_trade_close    
         self.replay_buffer = ReplayBuffer(buffer_size) if not wait_trade_close else ReplayBufferWaitClose(buffer_size)
         self.q_net, self.target_q_net = self.build_model()
         self.optimizer = torch.optim.Adam(self.q_net.parameters(),
                                           lr=learning_rate)
 
+        # 跟踪器
+        self.tracker = DQNTracker(10, action_dim)
+        self.tracker_val_test = None
+
+    def upload_log_file(self):
+        global last_upload_time
+        
+        current_time = time.time()
+        with upload_lock:
+            # 检查是否距离上次上传已经超过5分钟
+            if current_time - last_upload_time >= UPLOAD_INTERVAL:
+                upload_log_file()
+                last_upload_time = current_time
+                log(f'{self.msg_head} Log file uploaded')
+            else:
+                remaining = UPLOAD_INTERVAL - (current_time - last_upload_time)
+                log(f'{self.msg_head} Skip log upload, {remaining:.1f}s remaining')
+
+
     def to(self, device):
         self.device = device
         self.q_net = self.q_net.to(device)
         self.target_q_net = self.target_q_net.to(device)
+        self.msg_head = f'[{device}]'
 
     def eval(self):
         self.need_epsilon = False
@@ -197,7 +225,7 @@ class DQN(BaseAgent):
     def _update_target_q_net_params(self):
         self.target_q_net.load_state_dict(self.q_net.state_dict())
 
-    def update(self, transition_dict):
+    def update(self, transition_dict, data_type='train'):
         states = torch.from_numpy(transition_dict['states']).to(self.device)
         actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
         rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
@@ -213,72 +241,93 @@ class DQN(BaseAgent):
             max_next_q_values = self.target_q_net(next_states).max(1)[0].view(
                 -1, 1)
         q_targets = (rewards + self.gamma * max_next_q_values * (1 - dones))
+        
+        # tracker 记录
+        tracker = self.tracker if data_type == 'train' else self.tracker_val_test
+
+        # 计算TD误差
+        td_error = torch.abs(q_targets - q_values).mean().item()
+        tracker.update_td_error(td_error)
+        
+        # 计算损失
         dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
-        self.optimizer.zero_grad()
-        dqn_loss.backward()
-        self.optimizer.step()
+        tracker.update_loss_value(dqn_loss.item())
+        
+        if data_type == 'train':
+            self.optimizer.zero_grad()
+            dqn_loss.backward()
+            self.optimizer.step()
 
-        if self.count > 0 and self.count % self.target_update == 0:
-            self._update_target_q_net_params()
-        self.count += 1
-
-    rl_training_ind = [
-        'return',           # 交易对奖励
-    ]
+            if self.count > 0 and self.count % self.target_update == 0:
+                self._update_target_q_net_params()
+            self.count += 1
 
     def val_test(self, env, data_type='val'):
         # 验证模式
         self.eval()
 
-        # 训练监控指标 / 每回合
-        watch_data = {f'{i}': [] for i in self.rl_training_ind}
+        # 初始化跟踪器
+        self.tracker_val_test = DQNTracker(10000, self.action_dim)
 
         env.set_data_type(data_type)
 
-        log(f'{data_type} begin')
+        # 回放池
+        replay_buffer = ReplayBuffer(self.buffer_size) if not self.wait_trade_close else ReplayBufferWaitClose(self.buffer_size)
+
+        log(f'{self.msg_head} {data_type} begin')
         state, info = env.reset()
         done = False
         while not done:
             action = self.take_action(state)
+            # 更新跟踪器 动作
+            self.tracker_val_test.update_action(action)
             next_state, reward, done1, done2, info = env.step(action)
             done = done1 or done2
+
+            # 添加到回放池
+            replay_buffer.add(state, action, reward, next_state, done)
+
+            # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
             if info.get('close', False):
-                watch_data[f'return'].append(reward)
+                if self.wait_trade_close:
+                    replay_buffer.update_reward(reward if reward>-1000 else None)
+                # 更新跟踪器 奖励
+                self.tracker_val_test.update_reward(reward)
+                # 更新跟踪器 非法/win/loss
+                if reward == -1000:
+                    self.tracker_val_test.update_illegal()
+                elif reward > 0:
+                    self.tracker_val_test.update_win()
+                else:
+                    self.tracker_val_test.update_loss_count()
                 # 更新评价指标
                 for k, v in info.items():
                     if k != 'close':
-                        if k not in watch_data:
-                            watch_data[f'{k}'] = []
-                        watch_data[f'{k}'].append(v)
+                        self.tracker_val_test.update_extra_metrics(k, v)
             state = next_state
 
-        # 交易次数
-        watch_data['trades'] = len(watch_data['return'])
-        # 交易统计
-        total = len(watch_data['return'])
-        watch_data['win'] = sum(1 for r in watch_data['return'] if r > 0) / total * 100
-        watch_data['loss'] = sum(1 for r in watch_data['return'] if r < 0 and r != -1000) / total * 100 
-        watch_data['illegal'] = sum(1 for r in watch_data['return'] if r == -1000) / total * 100
+        # 超大batchsize计算error
+        while replay_buffer.size() > 0:
+            b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(1024 * 1024)
+            transition_dict = {
+                'states': b_s,
+                'actions': b_a,
+                'next_states': b_ns,
+                'rewards': b_r,
+                'dones': b_d
+            }
+            self.update(transition_dict, data_type=data_type)
 
-        # 返回箱型图统计量(除异常值)和均值
-        keys = [i for i in watch_data.keys() if i not in ['trades', 'win', 'loss', 'illegal']]
-        for k in keys:
-            data = np.array(watch_data[k])
-            q1 = np.percentile(data, 25)
-            q3 = np.percentile(data, 75)
-            iqr = q3 - q1
-            lower = q1 - 1.5 * iqr
-            upper = q3 + 1.5 * iqr
-            # 过滤异常值
-            filtered = data[(data >= lower) & (data <= upper)]
-            # 使用后缀形式保存统计量
-            watch_data[f'{k}_min'] = np.min(filtered) if len(filtered) > 0 else 0
-            watch_data[f'{k}_q1'] = q1
-            watch_data[f'{k}_median'] = np.median(filtered) if len(filtered) > 0 else 0
-            watch_data[f'{k}_q3'] = q3
-            watch_data[f'{k}_max'] = np.max(filtered) if len(filtered) > 0 else 0
-            # 原始数据使用均值替换
-            watch_data[k] = np.mean(filtered) if len(filtered) > 0 else 0
+        # 没有日期的限制，统计区间为全部数据
+        # 只需要做一次的 day_end
+        self.tracker_val_test.day_end()
+
+        # 获取统计指标
+        metrics = self.tracker_val_test.get_metrics()
+
+        # 显式删除跟踪器对象及其内存
+        del self.tracker_val_test
+        self.tracker_val_test = None
 
         # 若是 test，上传预测数据文件到alist
         if data_type in ['val', 'test']:
@@ -289,13 +338,13 @@ class DQN(BaseAgent):
             client.mkdir(upload_folder)
             client.upload(env.predict_file, upload_folder)
 
-        return watch_data
+        return metrics
 
-    def package_root(self, watch_data):
+    def package_root(self, metrics):
         # 保存模型
         self.save(self.root)
         # 生成报告
-        report_learning_process(watch_data, self.root)
+        report_learning_process(metrics, self.root)
         # 打包压缩
         zip_file = f'{self.root}.7z'
         if os.path.exists(zip_file):
@@ -309,14 +358,15 @@ class DQN(BaseAgent):
             self.target_q_net = update_model_params(self.target_q_net, new_params, tau=1)
             # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
             self.replay_buffer.reset()
+            log(f'{self.msg_head} replay_buffer reset > {self.replay_buffer.size()}')
             # 重置环境中的账户
             env.acc.reset()
 
     def push_params_to_server(self):
         # 更新目标网络参数
         self._update_target_q_net_params()
-        # 上传参数
-        send_net_params(self.q_net.state_dict())
+        # 上传参数 /上传学习监控指标
+        send_net_updates(self.q_net.state_dict(), self.tracker.get_metrics())
 
     def learn(self, train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
         """
@@ -328,7 +378,7 @@ class DQN(BaseAgent):
             minimal_size: 最小训练次数
             batch_size: 批次大小
             sync_interval_learn_step:   同步参数间隔，会询问是否需要验证/测试
-            learn_interval_step:        学习更新间隔
+            learn_interval_step:        学习更新间隔                     
         """
         # 准备
         super().learn(train_title)
@@ -341,20 +391,21 @@ class DQN(BaseAgent):
 
         # 学习是否开始
         for i in range(num_episodes):
-            msg_head = f'[{i}]'
+            self.msg_head = f'[{self.device}][e{i}]'
 
             # 回合的评价指标
-            episode_metrics = {}
             state, info = env.reset()
             done = False
             step = 0
             while not done:
                 step += 1
                 if step % 1000 == 0:
-                    upload_log_file()
+                    self.upload_log_file()
 
                 # 动作
                 action = self.take_action(state)
+                # 更新跟踪器 动作
+                self.tracker.update_action(action)
 
                 # 环境交互
                 next_state, reward, done1, done2, info = env.step(action)
@@ -367,13 +418,25 @@ class DQN(BaseAgent):
                 if info.get('close', False):
                     if self.wait_trade_close:
                         self.replay_buffer.update_reward(reward if reward>-1000 else None)
+                    # 更新跟踪器 奖励
+                    self.tracker.update_reward(reward)
+                    # 更新跟踪器 非法/win/loss
+                    if reward == -1000:
+                        self.tracker.update_illegal()
+                    elif reward > 0:
+                        self.tracker.update_win()
+                    else:
+                        self.tracker.update_loss_count()
+
                     # 更新评价指标
                     for k, v in info.items():
                         if k != 'close':
-                            if k not in episode_metrics:
-                                episode_metrics[k] = []
-                            episode_metrics[k].append(v)
-                    
+                            self.tracker.update_extra_metrics(k, v)
+                
+                # 更新跟踪器 日期文件完成, 需要更新
+                if info.get('date_done', False):
+                    self.tracker.day_end()
+
                 # 更新状态
                 state = next_state
 
@@ -397,7 +460,7 @@ class DQN(BaseAgent):
                     learn_step += 1
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
-                        log(f'{msg_head} {learn_step} sync params')
+                        log(f'{self.msg_head} {learn_step} sync params')
 
                         # 同步最新参数
                         # 推送参数更新
@@ -410,16 +473,16 @@ class DQN(BaseAgent):
                         for test_type in ['val', 'test']:
                             if need_val_test_res[test_type]:
                                 need_train_back = True  
-                                log(f'{msg_head} wait watch_data for {test_type}')
+                                log(f'{self.msg_head} wait metrics for {test_type}')
                                 t = time.time()
-                                watch_data_new = self.val_test(env, data_type=test_type)
-                                log(f'{msg_head} watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
+                                metrics = self.val_test(env, data_type=test_type)
+                                log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
                                 # 发送验证数据
-                                send_val_test_data(test_type, watch_data_new)
+                                send_val_test_data(test_type, metrics)
 
                         # 如果进行了验证/测试,上传日志
                         if any(need_val_test_res.values()):
-                            upload_log_file()
+                            self.upload_log_file()
                     #################################
                     # 服务器通讯
                     #################################
@@ -431,8 +494,8 @@ class DQN(BaseAgent):
                         state, info = env.reset()
                         done = False
 
-            log(f'{msg_head} done')
-            upload_log_file()
+            log(f'{self.msg_head} done')
+            self.upload_log_file()
 
 def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test=''):
     # 根据环境获取对应设备
@@ -458,8 +521,8 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
         if rank == 0:
             log(f'{rank} {val_test} test...')
             t = time.time()
-            watch_data_new = dqn.val_test(env, data_type=val_test)
-            log(f'watch_data: {watch_data_new}, cost: {time.time() - t:.2f}s')
+            metrics = dqn.val_test(env, data_type=val_test)
+            log(f'metrics: \n{metrics}\n, cost: {time.time() - t:.2f}s')
     else:
         log(f'{rank} learn...')
         dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)

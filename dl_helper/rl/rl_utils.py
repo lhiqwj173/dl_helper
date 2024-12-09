@@ -11,10 +11,24 @@ class ReplayBuffer:
     def add(self, state, action, reward, next_state, done): 
         self.buffer.append((state, action, reward, next_state, done)) 
 
-    def sample(self, batch_size): 
+    def sample(self, batch_size):
+        # 一次性采样,避免多次调用random.sample
         transitions = random.sample(self.buffer, batch_size)
-        state, action, reward, next_state, done = zip(*transitions)
-        return np.array(state, dtype=np.float32), np.array(action, dtype=np.int64), np.array(reward, dtype=np.float32), np.array(next_state, dtype=np.float32), np.array(done, dtype=np.float32)
+        # 使用zip和numpy的一次性转换,避免多次转换
+        return tuple(np.array(x, dtype=dtype) for x, dtype in 
+                    zip(zip(*transitions), 
+                        [np.float32, np.int64, np.float32, np.float32, np.float32]))
+
+    def get(self, batch_size):
+        # 获取实际可获取的数量
+        n = min(batch_size, len(self.buffer))
+        # 一次性获取所有数据并转换为numpy数组
+        transitions = [self.buffer.popleft() for _ in range(n)]
+        
+        # 使用zip和numpy的一次性转换，避免多次转换
+        return tuple(np.array(x, dtype=dtype) for x, dtype in 
+                    zip(zip(*transitions), 
+                        [np.float32, np.int64, np.float32, np.float32, np.float32]))
 
     def size(self): 
         return len(self.buffer)

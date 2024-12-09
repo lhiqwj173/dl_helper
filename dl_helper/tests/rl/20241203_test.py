@@ -2,9 +2,13 @@ import os, sys
 import torch
 
 from py_ext.tool import log, init_logger
-import socket
-hostname = socket.gethostname()
-ip = socket.gethostbyname(hostname)
+import requests, socket
+try:
+    ip = requests.get('https://api.ipify.org').text
+except:
+    # 如果获取外网IP失败,使用内网IP作为备选
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
 init_logger(f'{ip}', level='INFO')
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
@@ -22,7 +26,7 @@ gamma = 0.98
 epsilon = 0.5
 target_update = 50
 buffer_size = 5000
-minimal_size = 1000
+minimal_size = 3000
 batch_size = 64
 sync_interval_learn_step=150
 learn_interval_step=4

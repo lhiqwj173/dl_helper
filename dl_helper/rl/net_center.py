@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 CODE = '0QYg9Ky17dWnN4eK'
 PORT = 12346
 alist_folder = r'/root/alist_data/rl_learning_process'
+root_folder = '' if not os.path.exists(alist_folder) else alist_folder
+csv_path = os.path.join(root_folder, 'val_test.csv')
 
 def recv_msg(sock):
     """接收带长度前缀的消息"""
@@ -98,8 +100,11 @@ def check_need_val_test():
     
     return {'val': False, 'test': False}
 
-def send_net_params(params):
-    """推送更新net参数"""
+def send_net_updates(params, metrics):
+    """
+    推送更新net
+    包含 (模型参数, 学习监控指标)
+    """
     # 将GPU上的参数转移到CPU
     cpu_params = {
         k: v.cpu() if hasattr(v, 'cpu') else v 
@@ -115,7 +120,7 @@ def send_net_params(params):
         send_msg(client_socket, message.encode())
         
         # 发送参数数据
-        params_data = pickle.dumps(cpu_params)
+        params_data = pickle.dumps((cpu_params, metrics))
         send_msg(client_socket, params_data)
         
         # 等待确认
@@ -126,7 +131,7 @@ def send_net_params(params):
         client_socket.close()
     return False
 
-def send_val_test_data(data_type, watch_data):
+def send_val_test_data(data_type, metrics):
     """发送训练数据"""
     HOST = '146.235.33.108'
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -137,7 +142,7 @@ def send_val_test_data(data_type, watch_data):
         send_msg(client_socket, message.encode())
         
         # 发送训练数据
-        data = pickle.dumps(watch_data)
+        data = pickle.dumps(metrics)
         send_msg(client_socket, data)
         
         # 等待确认
@@ -245,7 +250,9 @@ def plot_learning_process(root, watch_data):
     for dtype in ['val', 'test']:
         if 'return' in watch_data[dtype]:
             alpha = 0.3 if dtype == 'val' else 1.0
-            ax.plot(watch_data[dtype]['return'], color=colors['return'], alpha=alpha, label=f'{dtype}_return')
+            data = watch_data[dtype]['return']
+            last_value = data[-1] if len(data) > 0 else 0
+            ax.plot(data, color=colors['return'], alpha=alpha, label=f'{dtype}_return: {last_value:.4f}')
     ax.set_ylabel('Return')
     ax.grid(True)
     ax.legend()
@@ -257,7 +264,9 @@ def plot_learning_process(root, watch_data):
         for key in ['sharpe_ratio', 'sortino_ratio']:
             if key in watch_data[dtype]:
                 alpha = 0.3 if dtype == 'val' else 1.0
-                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
+                data = watch_data[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                ax.plot(data, color=colors[key], alpha=alpha, label=f'{dtype}_{key}: {last_value:.4f}')
     ax.set_ylabel('Ratio')
     ax.grid(True)
     ax.legend()
@@ -271,7 +280,9 @@ def plot_learning_process(root, watch_data):
     for dtype in ['val', 'test']:
         if 'max_drawdown' in watch_data[dtype]:
             alpha = 0.3 if dtype == 'val' else 1.0
-            l = ax.plot(watch_data[dtype]['max_drawdown'], color=colors['max_drawdown'], alpha=alpha, label=f'{dtype}_max_drawdown')[0]
+            data = watch_data[dtype]['max_drawdown']
+            last_value = data[-1] if len(data) > 0 else 0
+            l = ax.plot(data, color=colors['max_drawdown'], alpha=alpha, label=f'{dtype}_max_drawdown: {last_value:.4f}')[0]
             lines.append(l)
     ax.set_ylabel('Max Drawdown')
     
@@ -279,7 +290,9 @@ def plot_learning_process(root, watch_data):
     for dtype in ['val', 'test']:
         if 'total_return' in watch_data[dtype]:
             alpha = 0.3 if dtype == 'val' else 1.0
-            l = ax2.plot(watch_data[dtype]['total_return'], color=colors['total_return'], alpha=alpha, label=f'{dtype}_total_return')[0]
+            data = watch_data[dtype]['total_return']
+            last_value = data[-1] if len(data) > 0 else 0
+            l = ax2.plot(data, color=colors['total_return'], alpha=alpha, label=f'{dtype}_total_return: {last_value:.4f}')[0]
             lines.append(l)
     ax2.set_ylabel('Total Return')
     
@@ -293,7 +306,9 @@ def plot_learning_process(root, watch_data):
         for key in rate_keys:
             if key in watch_data[dtype]:
                 alpha = 0.3 if dtype == 'val' else 1.0
-                ax.plot(watch_data[dtype][key], color=colors[key], alpha=alpha, label=f'{dtype}_{key}')
+                data = watch_data[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                ax.plot(data, color=colors[key], alpha=alpha, label=f'{dtype}_{key}: {last_value:.4f}')
     ax.set_ylabel('Rate (%)')
     ax.grid(True)
     ax.legend()
@@ -313,37 +328,11 @@ def plot_learning_process(root, watch_data):
     plt.savefig(os.path.join(root, 'learning_process.png'))
     plt.close()
 
-def handle_val_test_data(train_data):
-    """处理验证测试数据"""
-    # 数据补齐
-    # 找出所有类型中最长的列表长度
-    max_len = 0
-    for dtype in ['val', 'test']:
-        for k in train_data[dtype]:
-            max_len = max(max_len, len(train_data[dtype][k]))
-    # 对齐所有类型的所有列表到最大长度
-    for dtype in ['val', 'test']:
-        for k in train_data[dtype]:
-            curr_len = len(train_data[dtype][k])
-            if curr_len < max_len:
-                # 获取前一个值,若无则用nan
-                pad_value = train_data[dtype][k][-1] if curr_len > 0 else float('nan')
-                train_data[dtype][k].extend([pad_value] * (max_len - curr_len))
-
-    # 数据截断， 最多允许 500 个数据
-    for dtype in ['val', 'test']:
-        for k in train_data[dtype]:
-            train_data[dtype][k] = train_data[dtype][k][:500]
-    train_data['dt'] = train_data['dt'][:500]
-
-    root_folder = '' if not os.path.exists(alist_folder) else alist_folder
-    
-    # 增量保存最新的验证测试数据到csv
-    csv_path = os.path.join(root_folder, 'val_test.csv')
-    
+def save_train_data_to_csv(train_data, csv_path):
+    """将训练数据保存到CSV文件"""
     # 准备最新数据
     latest_data = {}
-    for dtype in ['val', 'test']:
+    for dtype in ['val', 'test', 'learn']:
         for k in train_data[dtype]:
             if len(train_data[dtype][k]) > 0:
                 latest_data[f'{dtype}_{k}'] = train_data[dtype][k][-1]
@@ -366,12 +355,70 @@ def handle_val_test_data(train_data):
         new_df = pd.DataFrame([values], columns=headers)
         # 合并数据
         df = pd.concat([old_df, new_df], ignore_index=True)
+        # 保存到CSV
+        df.to_csv(csv_path, index=False)
     else:
-        # 创建新DataFrame
+        # 创建新文件
         df = pd.DataFrame([values], columns=headers)
+        df.to_csv(csv_path, index=False)
+
+def init_train_data_from_csv(csv_path):
+    """从CSV文件初始化训练数据"""
+    train_data = {
+        'learn': {},
+        'val': {},
+        'test': {},
+        'dt': []
+    }
+    
+    if not os.path.exists(csv_path):
+        return train_data
         
-    # 写入文件
-    df.to_csv(csv_path, index=False)
+    df = pd.read_csv(csv_path)
+    
+    # 读取时间列并转换为datetime格式
+    if 'dt' in df.columns:
+        train_data['dt'] = pd.to_datetime(df['dt']).tolist()
+    
+    # 读取val和test数据
+    for col in df.columns:
+        if col == 'dt':
+            continue
+            
+        dtype, key = col.split('_', 1)  # 例如: 'val_win_rate' -> ('val', 'win_rate')
+        if dtype in ['val', 'test', 'learn']:
+            if key not in train_data[dtype]:
+                train_data[dtype][key] = []
+            train_data[dtype][key] = [float(x) if not pd.isna(x) else float('nan') for x in df[col].tolist()]
+            
+    return train_data
+
+
+def handle_val_test_data(train_data):
+    """处理验证测试数据"""
+    # 数据补齐
+    # 找出所有类型中最长的列表长度
+    max_len = 0
+    for dtype in ['val', 'test', 'learn']:
+        for k in train_data[dtype]:
+            max_len = max(max_len, len(train_data[dtype][k]))
+    # 对齐所有类型的所有列表到最大长度
+    for dtype in ['val', 'test', 'learn']:
+        for k in train_data[dtype]:
+            curr_len = len(train_data[dtype][k])
+            if curr_len < max_len:
+                # 获取前一个值,若无则用nan
+                pad_value = train_data[dtype][k][-1] if curr_len > 0 else float('nan')
+                train_data[dtype][k].extend([pad_value] * (max_len - curr_len))
+
+    # 数据截断， 最多允许 500 个数据
+    for dtype in ['val', 'test', 'learn']:
+        for k in train_data[dtype]:
+            train_data[dtype][k] = train_data[dtype][k][:500]
+    train_data['dt'] = train_data['dt'][:500]
+
+    # 增量保存最新的验证测试数据到csv
+    save_train_data_to_csv(train_data)
     
     # 绘制数据
     plot_learning_process(root_folder, train_data)
@@ -393,12 +440,11 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
     # 软更新系数
     block_ips = read_block_ips()
     
-    # 训练数据
-    train_data = {
-        'val': {},
-        'test': {},
-        'dt': [],
-    }
+    # 学习进度数据
+    learn_metrics = {}
+
+    # 验证测试数据
+    train_data = init_train_data_from_csv(csv_path)
     
     # 参数更新计数
     update_count = 0
@@ -456,12 +502,26 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
 
                         elif cmd == 'update':
                             # 接收新参数
-                            params_data = recv_msg(client_socket)
-                            if params_data is None:
+                            update_data = recv_msg(client_socket)
+                            if update_data is None:
                                 need_block = True
                             else:
                                 # 软更新参数
-                                new_params = pickle.loads(params_data)
+                                # metrics 学习监控指标:
+                                #     {
+                                #         'total_reward': 2.5, 
+                                #         'average_reward': 0.5, 
+                                #         'moving_average_reward': 0.5, 
+                                #         'action_distribution': {2: 0.6, 1: 0.2, 0: 0.2}, 
+                                #         'total_td_error': 0.5, 
+                                #         'total_loss': 0.25, 
+                                #         'average_illegal_ratio': 0.0, 
+                                #         'average_win_ratio': 0.2, 
+                                #         'average_loss_ratio': 0.8,
+                                #     }
+                                new_params, metrics = pickle.loads(update_data)
+
+                                # 处理新参数
                                 model = update_model_params(model, new_params)
                                 # target模型 与 q_net 模型参数同步
                                 agent.target_q_net = update_model_params(agent.target_q_net, model.state_dict(), tau=1)
@@ -469,7 +529,13 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数
                                 agent.save(alist_folder)
-                                # log(f'{msg_header} agent saved to {alist_folder}')
+                                
+                                # 处理学习评价指标
+                                for k, v in metrics.items():
+                                    if k not in learn_metrics:
+                                        learn_metrics[k] = []
+                                    learn_metrics[k].append(v)
+
                                 # 更新计数
                                 update_count += 1
                                 # 更新是否需要验证测试
@@ -477,7 +543,7 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                     _test_count = 20
                                     _val_count = 10
                                 else:
-                                    _val_count = 3000
+                                    _val_count = 5000
                                     _test_count = _val_count * 50
 
                                 if update_count % _test_count == 0:
@@ -493,13 +559,25 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 need_block = True
                             else:
                                 # 更新训练数据
-                                watch_data = pickle.loads(train_data_new)
-                                log(f'{msg_header} {cmd}_data: {watch_data}')
-                                for k in watch_data:
+                                metrics = pickle.loads(train_data_new)
+                                log(f'{msg_header} {cmd}_metrics: {metrics}')
+                                for k in metrics:
                                     if k not in train_data[data_type]:
                                         train_data[data_type][k] = []
-                                    train_data[data_type][k].append(watch_data[k])
-                                                                
+                                    train_data[data_type][k].append(metrics[k])
+                                
+                                if cmd == 'val':
+                                    # learn_metrics取均值新增到 train_data 中
+                                    for k in learn_metrics:
+                                        if k not in train_data['learn']:
+                                            train_data['learn'][k] = []
+                                        length = len(learn_metrics[k])
+                                        if length > 0:
+                                            train_data['learn'][k].append(sum(learn_metrics[k]) / length)
+                                        log(f'{msg_header} length learn_metrics[{k}]: {length}')
+                                    # 清空learn_metrics
+                                    learn_metrics = {}
+
                                 send_msg(client_socket, b'ok')
 
                                 # 增加北京时间(每4小时)
@@ -568,7 +646,7 @@ if "__main__" == __name__:
             with torch.no_grad():
                 model.fc.weight.data *= 1.1
             # 推送更新
-            send_net_params(model.state_dict())
+            send_net_updates(model.state_dict())
             print('Parameters pushed successfully')
             
             # 发送训练数据

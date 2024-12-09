@@ -52,7 +52,7 @@ class data_producer:
         # 快速测试
         self.simple_test = simple_test
         if self.simple_test:
-            file_num = 1
+            file_num = 5
 
         self.his_len = his_len
         self.file_num = file_num
@@ -102,9 +102,9 @@ class data_producer:
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
         if self.simple_test:
-            self.ids = self.ids[:1000]
-            self.mean_std = self.mean_std[:1000]
-            self.x = self.x[:1000]
+            self.ids = self.ids[:5000]
+            self.mean_std = self.mean_std[:5000]
+            self.x = self.x[:5000]
 
         # 解析标的 随机挑选一个标的数据
         symbols = np.array([i.split('_')[0] for i in self.ids])
@@ -217,7 +217,7 @@ class data_producer:
     def get(self):
         """
         输出观察值
-        返回 symbol_id,x, done, need_close
+        返回 symbol_id,x, done, need_close, date_done
         """
         # 检查日期文件结束
         if self.date_file_done:
@@ -264,7 +264,7 @@ class data_producer:
         else:
             self.idxs[0][0] += 1
 
-        return symbol_id, x, all_done, need_close
+        return symbol_id, x, all_done, need_close, self.date_file_done
 
     def reset(self):
         self._pre_files()
@@ -418,6 +418,7 @@ class LOB_trade_env(gym.Env):
         
         # 数据生产器
         self.data_producer = data_producer
+        self.date_done = False
 
         # 账户数据
         self.need_close = False
@@ -447,9 +448,9 @@ class LOB_trade_env(gym.Env):
 
     def _get_data(self):
         # 获取数据
-        symbol_id, x, all_data_done, need_close = self.data_producer.get()
+        symbol_id, x, all_data_done, need_close, date_done = self.data_producer.get()
         x = x.values.reshape(-1)
-        return symbol_id, x, all_data_done, need_close
+        return symbol_id, x, all_data_done, need_close, date_done
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -499,14 +500,15 @@ class LOB_trade_env(gym.Env):
             self.out_test_predict(action)
 
         info = {
-            'close': False
+            'close': False,
+            'date_done': self.date_done,
         }
 
         # 计算奖励
         reward, acc_done, pos, profit = self._cal_reward(action, self.need_close, info)
 
         # 获取下一个状态的数据
-        symbol_id, observation, data_done, self.need_close = self._get_data()
+        symbol_id, observation, data_done, self.need_close, self.date_done = self._get_data()
         # 添加标的持仓数据
         observation = np.concatenate([observation, [symbol_id, pos,profit]])
         if self.need_close:
