@@ -267,7 +267,7 @@ class DQN(BaseAgent):
         self.eval()
 
         # 初始化跟踪器
-        self.tracker_val_test = DQNTracker(10000, self.action_dim, title=data_type, rank=self.tracker.rank)
+        self.tracker_val_test = DQNTracker(data_type, 10000, self.action_dim, rank=self.tracker.rank)
 
         env.set_data_type(data_type)
 
