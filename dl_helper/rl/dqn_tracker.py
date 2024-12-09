@@ -146,9 +146,6 @@ class DQNTracker:
             'average_reward': np.mean(self.daily_rewards),
             'moving_average_reward': self._calculate_moving_average(self.daily_rewards),
             
-            # 动作分布
-            'action_distribution': self._get_action_distribution(),
-            
             # 损失相关
             'total_td_error': sum(self.daily_td_errors),
             'total_loss': sum(self.daily_losses),
@@ -158,6 +155,10 @@ class DQNTracker:
             'average_win_ratio': np.mean([r['win_ratio'] for r in self.daily_ratios]),
             'average_loss_ratio': np.mean([r['loss_ratio'] for r in self.daily_ratios])
         }
+        # 动作分布
+        action_distribution = self._get_action_distribution()
+        for k, v in action_distribution.items():
+            metrics[f'action_{k}_ratio'] = v
         
         # 额外的评价指标
         for k, v in self.daily_extra_metrics.items():

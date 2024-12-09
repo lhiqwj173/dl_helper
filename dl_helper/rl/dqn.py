@@ -343,8 +343,6 @@ class DQN(BaseAgent):
     def package_root(self, metrics):
         # 保存模型
         self.save(self.root)
-        # 生成报告
-        report_learning_process(metrics, self.root)
         # 打包压缩
         zip_file = f'{self.root}.7z'
         if os.path.exists(zip_file):
