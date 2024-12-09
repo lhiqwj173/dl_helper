@@ -216,7 +216,7 @@ def plot_learning_process(root, metrics):
         - total_return_bm
     """
     # 检查数据是否存在
-    if 'dt' not in watch_data or not watch_data['dt']:
+    if 'dt' not in metrics or not metrics['dt']:
         log('No dt data found')
         return
         
@@ -245,7 +245,7 @@ def plot_learning_process(root, metrics):
     # 获取时间变化点的索引
     dt_changes = []
     last_dt = None
-    for i, dt in enumerate(watch_data['dt']):
+    for i, dt in enumerate(metrics['dt']):
         processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
         if processed_dt != last_dt:
             dt_changes.append((i, processed_dt))
@@ -254,8 +254,8 @@ def plot_learning_process(root, metrics):
     # 图1: total_reward
     ax = axes[0]
     for dtype in ['learn', 'val', 'test']:
-        if 'total_reward' in watch_data[dtype]:
-            data = watch_data[dtype]['total_reward']
+        if 'total_reward' in metrics[dtype]:
+            data = metrics[dtype]['total_reward']
             last_value = data[-1] if len(data) > 0 else 0
             if dtype == 'learn':
                 ax.plot(data, color=colors['total_reward'], alpha=0.3,
@@ -274,8 +274,8 @@ def plot_learning_process(root, metrics):
     ax = axes[1]
     for dtype in ['learn', 'val', 'test']:
         for key in ['average_reward', 'moving_average_reward']:
-            if key in watch_data[dtype]:
-                data = watch_data[dtype][key]
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
                 if dtype == 'learn':
                     ax.plot(data, color=colors[key], alpha=0.3,
@@ -294,8 +294,8 @@ def plot_learning_process(root, metrics):
     ax = axes[2]
     for dtype in ['learn', 'val', 'test']:
         for key in ['total_td_error', 'total_loss']:
-            if key in watch_data[dtype]:
-                data = watch_data[dtype][key]
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
                 if dtype == 'learn':
                     ax.plot(data, color=colors[key], alpha=0.3,
@@ -314,8 +314,8 @@ def plot_learning_process(root, metrics):
     ax = axes[3]
     for dtype in ['learn', 'val', 'test']:
         for key in ['average_illegal_ratio', 'average_win_ratio', 'average_loss_ratio']:
-            if key in watch_data[dtype]:
-                data = watch_data[dtype][key]
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
                 if dtype == 'learn':
                     ax.plot(data, color=colors[key], alpha=0.3,
@@ -335,8 +335,8 @@ def plot_learning_process(root, metrics):
     for dtype in ['learn', 'val', 'test']:
         for i in range(3):
             key = f'action_{i}_ratio'
-            if key in watch_data[dtype]:
-                data = watch_data[dtype][key]
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
                 if dtype == 'learn':
                     ax.plot(data, color=colors[f'action_{i}'], alpha=0.3,
@@ -357,8 +357,8 @@ def plot_learning_process(root, metrics):
         for key in ['sortino_ratio', 'sharpe_ratio']:
             for suffix in ['', '_bm']:
                 full_key = key + suffix
-                if full_key in watch_data[dtype]:
-                    data = watch_data[dtype][full_key]
+                if full_key in metrics[dtype]:
+                    data = metrics[dtype][full_key]
                     last_value = data[-1] if len(data) > 0 else 0
                     if dtype == 'learn':
                         ax.plot(data, color=colors[key], alpha=0.3,
@@ -381,8 +381,8 @@ def plot_learning_process(root, metrics):
         for key in ['max_drawdown', 'total_return']:
             for suffix in ['', '_bm']:
                 full_key = key + suffix
-                if full_key in watch_data[dtype]:
-                    data = watch_data[dtype][full_key]
+                if full_key in metrics[dtype]:
+                    data = metrics[dtype][full_key]
                     last_value = data[-1] if len(data) > 0 else 0
                     
                     # 选择绘图的轴
@@ -637,8 +637,8 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 update_count += 1
                                 # 更新是否需要验证测试
                                 if simple_test:
-                                    _test_count = 20
-                                    _val_count = 10
+                                    _test_count = 5
+                                    _val_count = 3
                                 else:
                                     _val_count = 5000
                                     _test_count = _val_count * 50
@@ -664,6 +664,11 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                     train_data[data_type][k].append(metrics[k])
                                 
                                 if cmd == 'val':
+                                    # 备份learn_metrics数据到文件
+                                    backup_path = os.path.join(root_folder, 'learn_metrics_backup.pkl')
+                                    with open(backup_path, 'wb') as f:
+                                        pickle.dump(learn_metrics, f)
+
                                     # learn_metrics取均值新增到 train_data 中
                                     for k in learn_metrics:
                                         if k not in train_data['learn']:
@@ -704,58 +709,3 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
             log(f'Added block IP: {client_ip}')
 
         client_socket.close()
-
-if "__main__" == __name__:
-    # 测试客户端服务器通信
-    import torch
-    import torch.nn as nn
-    import sys
-    
-    # 创建一个简单的测试模型
-    class TestModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.fc = nn.Linear(10, 5)
-            
-        def forward(self, x):
-            return self.fc(x)
-            
-    # 初始化模型和参数
-    model = TestModel()
-    tau = 0.1
-    
-    # 根据命令行参数运行服务端或客户端
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'server':
-            # 运行服务端
-            print('Starting server...')
-            run_param_center(model, tau)
-        elif sys.argv[1] == 'client':
-            # 运行客户端
-            print('Starting client...')
-            
-            # 获取参数
-            params = get_net_params()
-            print('Parameters retrieved successfully')
-            
-            # 修改模型参数并推送更新
-            print('Modifying and pushing parameters...')
-            # 随机修改一个参数
-            with torch.no_grad():
-                model.fc.weight.data *= 1.1
-            # 推送更新
-            send_net_updates(model.state_dict())
-            print('Parameters pushed successfully')
-            
-            # 发送训练数据
-            watch_data = {
-                'return': 1.0,
-                'sharpe_ratio': 1.2,
-                'sortino_ratio': 0.9,
-                'max_drawdown': 0.15,
-                'total_return': 2.5
-            }
-            send_train_data('val', watch_data)
-            print('Train data sent successfully')
-    else:
-        print('Please specify mode: python net_center.py [server|client]')

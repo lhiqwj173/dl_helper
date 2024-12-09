@@ -102,9 +102,9 @@ class data_producer:
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
         if self.simple_test:
-            self.ids = self.ids[:5000]
-            self.mean_std = self.mean_std[:5000]
-            self.x = self.x[:5000]
+            self.ids = self.ids[:8000]
+            self.mean_std = self.mean_std[:8000]
+            self.x = self.x[:8000]
 
         # 解析标的 随机挑选一个标的数据
         symbols = np.array([i.split('_')[0] for i in self.ids])

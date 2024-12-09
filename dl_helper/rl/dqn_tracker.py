@@ -1,4 +1,6 @@
 import numpy as np
+import os
+import pickle
 from collections import defaultdict, deque
 
 class DQNTracker:
@@ -135,6 +137,52 @@ class DQNTracker:
         # 保持N天的数据
         self._maintain_n_days_data()
     
+    def save(self):
+        """保存统计数据到文件"""
+        """保存所有统计数据到文件"""
+        data = {
+            'daily_rewards': self.daily_rewards,
+            'daily_action_counts': self.daily_action_counts,
+            'daily_td_errors': self.daily_td_errors,
+            'daily_losses': self.daily_losses,
+            'daily_ratios': self.daily_ratios,
+            'daily_extra_metrics': self.daily_extra_metrics,
+            'episode_rewards': self.episode_rewards,
+            'action_counts': self.action_counts,
+            'td_errors': self.td_errors,
+            'losses': self.losses,
+            'illegal_counts': self.illegal_counts,
+            'win_counts': self.win_counts,
+            'loss_counts': self.loss_counts,
+            'total_counts': self.total_counts,
+            'extra_metrics': self.extra_metrics
+        }
+        
+        # 保存到文件
+        with open('tracker_data.pkl', 'wb') as f:
+            pickle.dump(data, f)
+
+    def load(self):
+        """加载统计数据"""
+        if os.path.exists('tracker_data.pkl'):
+            with open('tracker_data.pkl', 'rb') as f:
+                data = pickle.load(f)
+            self.daily_rewards = data['daily_rewards']
+            self.daily_action_counts = data['daily_action_counts']
+            self.daily_td_errors = data['daily_td_errors']
+            self.daily_losses = data['daily_losses']
+            self.daily_ratios = data['daily_ratios']
+            self.daily_extra_metrics = data['daily_extra_metrics']
+            self.episode_rewards = data['episode_rewards']
+            self.action_counts = data['action_counts']
+            self.td_errors = data['td_errors']
+            self.losses = data['losses']
+            self.illegal_counts = data['illegal_counts']
+            self.win_counts = data['win_counts']
+            self.loss_counts = data['loss_counts']
+            self.total_counts = data['total_counts']
+            self.extra_metrics = data['extra_metrics']
+
     def get_metrics(self):
         """
         获取统计指标
@@ -162,6 +210,11 @@ class DQNTracker:
         """
         if not self.daily_rewards or len(self.daily_rewards) < self.n_days:
             return {}
+        
+        # 备份过程数据到文件
+        backup_path = os.path.join('learn_metrics_backup.pkl')
+        with open(backup_path, 'wb') as f:
+            pickle.dump(learn_metrics, f)
         
         metrics = {
             # 奖励相关
