@@ -509,6 +509,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     
     # 移动到设备
     dqn.to(device)
+    dqn.tracker.set_rank(rank)
     
     # 初始化环境
     dp = data_producer(data_folder=data_folder, simple_test=simple_test)

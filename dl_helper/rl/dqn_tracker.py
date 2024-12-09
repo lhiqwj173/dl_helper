@@ -4,7 +4,7 @@ import pickle
 from collections import defaultdict, deque
 
 class DQNTracker:
-    def __init__(self, n_days, num_actions):
+    def __init__(self, n_days, num_actions, rank=0):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
 
@@ -34,6 +34,7 @@ class DQNTracker:
                - 胜率
                - 败率
         """
+        self.rank = rank
         self.n_days = n_days
         self.num_actions = num_actions
         
@@ -69,6 +70,9 @@ class DQNTracker:
         # total_return_bm
         self.extra_metrics = {}
         self.daily_extra_metrics = {}
+
+    def set_rank(self, rank):
+        self.rank = rank
 
     def update_extra_metrics(self, k, v):
         """更新额外的评价指标"""
@@ -159,13 +163,13 @@ class DQNTracker:
         }
         
         # 保存到文件
-        with open('tracker_data.pkl', 'wb') as f:
+        with open(f'tracker_data_{self.rank}.pkl', 'wb') as f:
             pickle.dump(data, f)
 
     def load(self):
         """加载统计数据"""
-        if os.path.exists('tracker_data.pkl'):
-            with open('tracker_data.pkl', 'rb') as f:
+        if os.path.exists(f'tracker_data_{self.rank}.pkl'):
+            with open(f'tracker_data_{self.rank}.pkl', 'rb') as f:
                 data = pickle.load(f)
             self.daily_rewards = data['daily_rewards']
             self.daily_action_counts = data['daily_action_counts']
@@ -211,10 +215,7 @@ class DQNTracker:
         if not self.daily_rewards or len(self.daily_rewards) < self.n_days:
             return {}
         
-        # 备份过程数据到文件
-        backup_path = os.path.join('learn_metrics_backup.pkl')
-        with open(backup_path, 'wb') as f:
-            pickle.dump(learn_metrics, f)
+        self.save()
         
         metrics = {
             # 奖励相关
