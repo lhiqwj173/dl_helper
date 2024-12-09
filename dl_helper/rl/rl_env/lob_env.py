@@ -523,7 +523,7 @@ class LOB_trade_env(gym.Env):
         super().reset(seed=seed)
         # 数据
         self.data_producer.reset()
-        symbol_id, x, _, self.need_close = self._get_data()
+        symbol_id, x, _, self.need_close, self.date_done = self._get_data()
         # 账户
         pos, profit = self.acc.reset()
         # 添加标的持仓数据
