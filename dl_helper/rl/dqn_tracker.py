@@ -136,7 +136,30 @@ class DQNTracker:
         self._maintain_n_days_data()
     
     def get_metrics(self):
-        """获取统计指标"""
+        """
+        获取统计指标
+        
+        强化学习评价指标
+        - total_reward: 总奖励
+        - average_reward: 平均奖励
+        - moving_average_reward: 移动平均奖励
+        - total_td_error: 总TD误差
+        - total_loss: 总损失值
+        - average_illegal_ratio: 平均非法动作率
+        - average_win_ratio: 平均胜率
+        - average_loss_ratio: 平均败率
+        - action_{k}_ratio k: 0-2
+        
+        交易评价指标
+        - sortino_ratio
+        - sharpe_ratio
+        - max_drawdown
+        - total_return
+        - sortino_ratio_bm
+        - sharpe_ratio_bm
+        - max_drawdown_bm
+        - total_return_bm
+        """
         if not self.daily_rewards or len(self.daily_rewards) < self.n_days:
             return {}
         
@@ -155,12 +178,22 @@ class DQNTracker:
             'average_win_ratio': np.mean([r['win_ratio'] for r in self.daily_ratios]),
             'average_loss_ratio': np.mean([r['loss_ratio'] for r in self.daily_ratios])
         }
+
         # 动作分布
+        # action_{k}_ratio k: 0-2
         action_distribution = self._get_action_distribution()
         for k, v in action_distribution.items():
             metrics[f'action_{k}_ratio'] = v
         
         # 额外的评价指标
+        # sortino_ratio
+        # sharpe_ratio
+        # max_drawdown
+        # total_return
+        # sortino_ratio_bm
+        # sharpe_ratio_bm
+        # max_drawdown_bm
+        # total_return_bm
         for k, v in self.daily_extra_metrics.items():
             metrics[k] = np.mean(v)
 

@@ -181,138 +181,235 @@ def update_block_ips(ips):
     with open(record_file, 'w') as f:
         f.write('\n'.join(ips))
 
-def plot_learning_process(root, watch_data):
+def plot_learning_process(root, metrics):
     """
-    强化学习性能指标:
-        return:         交易对奖励
+    强化学习评价指标
+        图1
+        - total_reward: 总奖励
+
+        图2
+        - average_reward: 平均奖励
+        - moving_average_reward: 移动平均奖励
+
+        图3
+        - total_td_error: 总TD误差
+        - total_loss: 总损失值
+
+        图4
+        - average_illegal_ratio: 平均非法动作率
+        - average_win_ratio: 平均胜率
+        - average_loss_ratio: 平均败率
+
+        图5
+        - action_{k}_ratio k: 0-2
     
-    交易评价指标:
-        sharpe_ratio:   夏普比率
-        sortino_ratio:  索提诺比率
-        max_drawdown:   最大回撤
-        total_return:   总回报
-        win:           胜率
-        loss:          负率
-        illegal:       非法率
+    交易评价指标
+        图6
+        - sortino_ratio
+        - sharpe_ratio
+        - sortino_ratio_bm
+        - sharpe_ratio_bm
+        图7
+        - max_drawdown
+        - max_drawdown_bm
+        - total_return
+        - total_return_bm
     """
     # 检查数据是否存在
     if 'dt' not in watch_data or not watch_data['dt']:
         log('No dt data found')
         return
         
-    for dtype in ['val', 'test']:
-        if dtype not in watch_data:
-            log(f'No {dtype} data found')
-            return
-            
-    # 获取数据键,将交易评价指标单独处理
-    rl_keys = ['return']
-    trade_keys = ['sharpe_ratio', 'sortino_ratio', 'max_drawdown', 'total_return']
-    rate_keys = ['win', 'loss', 'illegal']
-    
     # 固定颜色
     colors = {
-        'return': '#1f77b4',      # 蓝色
-        'sharpe_ratio': '#8c564b', # 棕色
-        'sortino_ratio': '#e377c2', # 粉色
-        'max_drawdown': '#7f7f7f', # 灰色
-        'total_return': '#bcbd22', # 黄绿色
-        'win': '#2ca02c',         # 绿色
-        'loss': '#d62728',        # 红色
-        'illegal': '#ff7f0e'      # 橙色
+        'total_reward': '#1f77b4',      # 蓝色
+        'average_reward': '#2ca02c',     # 绿色
+        'moving_average_reward': '#ff7f0e', # 橙色
+        'total_td_error': '#d62728',     # 红色
+        'total_loss': '#9467bd',         # 紫色
+        'average_illegal_ratio': '#8c564b', # 棕色
+        'average_win_ratio': '#e377c2',   # 粉色
+        'average_loss_ratio': '#7f7f7f',  # 灰色
+        'action_0': '#bcbd22',           # 黄绿色
+        'action_1': '#17becf',           # 青色
+        'action_2': '#1f77b4',           # 蓝色
+        'sortino_ratio': '#d62728',      # 红色
+        'sharpe_ratio': '#2ca02c',       # 绿色
+        'max_drawdown': '#ff7f0e',       # 橙色
+        'total_return': '#9467bd'        # 紫色
     }
     
-    # 计算总图数
-    n_rl = 1  # return
-    n_trade = 2  # ratio合并为1个,其他1个
-    n_rate = 1   # win/loss/illegal合并为1个
-    n_total = n_rl + n_trade + n_rate
-    
-    # 创建图表,每行一个子图
-    fig, axes = plt.subplots(n_total, 1, figsize=(12, 4*n_total), sharex=True)
-    if n_total == 1:
-        axes = np.array([axes])
+    # 创建图表,7个子图
+    fig, axes = plt.subplots(7, 1, figsize=(12, 28), sharex=True)
     
     # 获取时间变化点的索引
     dt_changes = []
     last_dt = None
-    # 先处理dt列表,但不修改原数据
     for i, dt in enumerate(watch_data['dt']):
-        # 按4小时对齐
         processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
         if processed_dt != last_dt:
             dt_changes.append((i, processed_dt))
             last_dt = processed_dt
             
-    # 绘制强化学习指标
-    # 1. return 
+    # 图1: total_reward
     ax = axes[0]
-    for dtype in ['val', 'test']:
-        if 'return' in watch_data[dtype]:
-            alpha = 0.3 if dtype == 'val' else 1.0
-            data = watch_data[dtype]['return']
+    for dtype in ['learn', 'val', 'test']:
+        if 'total_reward' in watch_data[dtype]:
+            data = watch_data[dtype]['total_reward']
             last_value = data[-1] if len(data) > 0 else 0
-            ax.plot(data, color=colors['return'], alpha=alpha, label=f'{dtype}_return: {last_value:.4f}')
-    ax.set_ylabel('Return')
+            if dtype == 'learn':
+                ax.plot(data, color=colors['total_reward'], alpha=0.3,
+                       label=f'{dtype}_total_reward: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['total_reward'],
+                       label=f'{dtype}_total_reward: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['total_reward'], linestyle='--',
+                       label=f'{dtype}_total_reward: {last_value:.4f}')
+    ax.set_ylabel('Total Reward')
     ax.grid(True)
     ax.legend()
-    
-    # 绘制交易评价指标
-    # 1. sharpe_ratio和sortino_ratio
+
+    # 图2: average_reward & moving_average_reward
     ax = axes[1]
-    for dtype in ['val', 'test']:
-        for key in ['sharpe_ratio', 'sortino_ratio']:
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['average_reward', 'moving_average_reward']:
             if key in watch_data[dtype]:
-                alpha = 0.3 if dtype == 'val' else 1.0
                 data = watch_data[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
-                ax.plot(data, color=colors[key], alpha=alpha, label=f'{dtype}_{key}: {last_value:.4f}')
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[key], alpha=0.3,
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[key],
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[key], linestyle='--',
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+    ax.set_ylabel('Reward')
+    ax.grid(True)
+    ax.legend()
+
+    # 图3: total_td_error & total_loss
+    ax = axes[2]
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['total_td_error', 'total_loss']:
+            if key in watch_data[dtype]:
+                data = watch_data[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[key], alpha=0.3,
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[key],
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[key], linestyle='--',
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+    ax.set_ylabel('Error/Loss')
+    ax.grid(True)
+    ax.legend()
+
+    # 图4: ratios
+    ax = axes[3]
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['average_illegal_ratio', 'average_win_ratio', 'average_loss_ratio']:
+            if key in watch_data[dtype]:
+                data = watch_data[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[key], alpha=0.3,
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[key],
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[key], linestyle='--',
+                           label=f'{dtype}_{key}: {last_value:.4f}')
     ax.set_ylabel('Ratio')
     ax.grid(True)
     ax.legend()
+
+    # 图5: action ratios
+    ax = axes[4]
+    for dtype in ['learn', 'val', 'test']:
+        for i in range(3):
+            key = f'action_{i}_ratio'
+            if key in watch_data[dtype]:
+                data = watch_data[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[f'action_{i}'], alpha=0.3,
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[f'action_{i}'],
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[f'action_{i}'], linestyle='--',
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+    ax.set_ylabel('Action Ratio')
+    ax.grid(True)
+    ax.legend()
+
+    # 图6: sortino_ratio & sharpe_ratio
+    ax = axes[5]
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['sortino_ratio', 'sharpe_ratio']:
+            for suffix in ['', '_bm']:
+                full_key = key + suffix
+                if full_key in watch_data[dtype]:
+                    data = watch_data[dtype][full_key]
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors[key], alpha=0.3,
+                               label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors[key],
+                               label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors[key], linestyle='--',
+                               label=f'{dtype}_{full_key}: {last_value:.4f}')
+    ax.set_ylabel('Ratio')
+    ax.grid(True)
+    ax.legend()
+
+    # 图7: max_drawdown & total_return
+    ax = axes[6]
+    ax2 = ax.twinx()  # 创建右侧y轴
     
-    # 2. max_drawdown和total_return (双y轴)
-    ax = axes[2]
-    ax2 = ax.twinx()  # 创建共享x轴的第二个y轴
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['max_drawdown', 'total_return']:
+            for suffix in ['', '_bm']:
+                full_key = key + suffix
+                if full_key in watch_data[dtype]:
+                    data = watch_data[dtype][full_key]
+                    last_value = data[-1] if len(data) > 0 else 0
+                    
+                    # 选择绘图的轴
+                    plot_ax = ax if 'max_drawdown' in full_key else ax2
+                    
+                    if dtype == 'learn':
+                        plot_ax.plot(data, color=colors[key], alpha=0.3,
+                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    elif dtype == 'val':
+                        plot_ax.plot(data, color=colors[key],
+                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    else:  # test
+                        plot_ax.plot(data, color=colors[key], linestyle='--',
+                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
     
-    lines = []
-    # 在左轴绘制max_drawdown
-    for dtype in ['val', 'test']:
-        if 'max_drawdown' in watch_data[dtype]:
-            alpha = 0.3 if dtype == 'val' else 1.0
-            data = watch_data[dtype]['max_drawdown']
-            last_value = data[-1] if len(data) > 0 else 0
-            l = ax.plot(data, color=colors['max_drawdown'], alpha=alpha, label=f'{dtype}_max_drawdown: {last_value:.4f}')[0]
-            lines.append(l)
+    # 设置左右y轴标签
     ax.set_ylabel('Max Drawdown')
-    
-    # 在右轴绘制total_return
-    for dtype in ['val', 'test']:
-        if 'total_return' in watch_data[dtype]:
-            alpha = 0.3 if dtype == 'val' else 1.0
-            data = watch_data[dtype]['total_return']
-            last_value = data[-1] if len(data) > 0 else 0
-            l = ax2.plot(data, color=colors['total_return'], alpha=alpha, label=f'{dtype}_total_return: {last_value:.4f}')[0]
-            lines.append(l)
     ax2.set_ylabel('Total Return')
     
     # 合并两个轴的图例
-    ax.legend(handles=lines, loc='upper left')
-    ax.grid(True)
-
-    # 3. win/loss/illegal rates
-    ax = axes[3]
-    for dtype in ['val', 'test']:
-        for key in rate_keys:
-            if key in watch_data[dtype]:
-                alpha = 0.3 if dtype == 'val' else 1.0
-                data = watch_data[dtype][key]
-                last_value = data[-1] if len(data) > 0 else 0
-                ax.plot(data, color=colors[key], alpha=alpha, label=f'{dtype}_{key}: {last_value:.4f}')
-    ax.set_ylabel('Rate (%)')
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2)
+    ax.set_ylabel('Value')
     ax.grid(True)
     ax.legend()
-    
+
     # 设置x轴刻度和标签
     for ax in axes:
         ax.set_xticks([i for i, _ in dt_changes])
