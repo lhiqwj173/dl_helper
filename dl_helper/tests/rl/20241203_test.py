@@ -77,6 +77,7 @@ if __name__ == '__main__':
                 is_server = False
             elif arg == 'simple_test':
                 simple_test = True
+                print('simple_test')
             elif arg.startswith('test_val='):
                 val_test = arg.split('=')[1]
 
