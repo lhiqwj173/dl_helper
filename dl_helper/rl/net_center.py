@@ -678,7 +678,7 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                             train_data['learn'][k] = []
                                         length = len(learn_metrics[k])
                                         if length > 0:
-                                            train_data['learn'][k].append(sum(learn_metrics[k]) / length)
+                                            train_data['learn'][k].append(np.nanmean(learn_metrics[k]))
 
                                         log(f'{msg_header} length learn_metrics[{k}]: {length}')
                                     # 清空learn_metrics

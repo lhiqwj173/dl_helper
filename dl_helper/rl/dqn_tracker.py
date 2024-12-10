@@ -219,8 +219,8 @@ class DQNTracker:
         - max_drawdown_bm
         - total_return_bm
         """
-        # if not self.daily_rewards or len(self.daily_rewards) < self.n_days:
-        #     return {}
+        if not self.daily_rewards:# or len(self.daily_rewards) < self.n_days:
+            return {}
         
         self.save()
         metrics = {
