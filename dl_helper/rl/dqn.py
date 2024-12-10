@@ -319,13 +319,8 @@ class DQN(BaseAgent):
                     replay_buffer.update_reward(reward if reward>-1000 else None)
                 # 更新跟踪器 奖励
                 self.tracker_val_test.update_reward(reward)
-                # 更新跟踪器 非法/win/loss
-                if reward == -1000:
-                    self.tracker_val_test.update_illegal()
-                elif reward > 0:
-                    self.tracker_val_test.update_win()
-                else:
-                    self.tracker_val_test.update_loss_count()
+                assert not np.isnan(reward), f'reward is nan: {reward}'
+
                 # 更新评价指标
                 for k, v in info.items():
                     if k not in ['close', 'date_done']:
@@ -446,13 +441,7 @@ class DQN(BaseAgent):
                         self.replay_buffer.update_reward(reward if reward>-1000 else None)
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
-                    # 更新跟踪器 非法/win/loss
-                    if reward == -1000:
-                        self.tracker.update_illegal()
-                    elif reward > 0:
-                        self.tracker.update_win()
-                    else:
-                        self.tracker.update_loss_count()
+                    assert not np.isnan(reward), f'reward is nan: {reward}'
 
                     # 更新评价指标
                     for k, v in info.items():

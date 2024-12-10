@@ -87,6 +87,14 @@ class DQNTracker:
     def update_reward(self, episode_reward):
         """更新奖励"""
         self.episode_rewards.append(episode_reward)
+
+        # 更新跟踪器 非法/win/loss
+        if episode_reward == -1000:
+            self.update_illegal()
+        elif episode_reward > 0:
+            self.update_win()
+        else:
+            self.update_loss_count()
     
     def update_action(self, action):
         """更新动作统计"""
