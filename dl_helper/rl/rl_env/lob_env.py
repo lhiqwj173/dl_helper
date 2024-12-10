@@ -468,6 +468,7 @@ class LOB_trade_env(gym.Env):
         需要在平仓后回溯属于本次交易的所有时间步, 修改 reward=收益率
         """
         legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action, need_close)
+        assert not np.isnan(res['sortino_ratio']), f"sortino_ratio is nan: {res['sortino_ratio']}"
         
         # 合法性检查
         if not legal:

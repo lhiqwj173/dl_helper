@@ -431,6 +431,7 @@ class DQN(BaseAgent):
                 # 环境交互
                 next_state, reward, done1, done2, info = env.step(action)
                 done = done1 or done2
+                assert not np.isnan(reward), f'reward is nan: {reward}'
 
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
