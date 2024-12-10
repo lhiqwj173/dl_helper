@@ -647,8 +647,8 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                     need_test = True
                                 elif update_count % _val_count == 0:
                                     need_val = True
-                                if simple_test and update_count > _test_count:
-                                    # 退出
+                                if simple_test and update_count > _test_count * 3:
+                                    # 3 轮后退出
                                     break
 
                         elif cmd in ['val', 'test']:
