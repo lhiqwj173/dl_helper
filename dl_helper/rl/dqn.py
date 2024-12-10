@@ -304,11 +304,17 @@ class DQN(BaseAgent):
                 for k, v in info.items():
                     if k not in ['close', 'date_done']:
                         self.tracker_val_test.update_extra_metrics(k, v)
+
+            # 更新跟踪器 日期文件完成, 需要更新
+            if info.get('date_done', False):
+                self.tracker_val_test.day_end()
+
             state = next_state
 
         # 超大batchsize计算error
+        batch_size = 1024 * 1024
         while replay_buffer.size() > 0:
-            b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(1024 * 1024)
+            b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(batch_size)
             transition_dict = {
                 'states': b_s,
                 'actions': b_a,
@@ -317,10 +323,6 @@ class DQN(BaseAgent):
                 'dones': b_d
             }
             self.update(transition_dict, data_type=data_type)
-
-        # 没有日期的限制，统计区间为全部数据
-        # 只需要做一次的 day_end
-        self.tracker_val_test.day_end()
 
         # 获取统计指标
         metrics = self.tracker_val_test.get_metrics()

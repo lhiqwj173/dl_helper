@@ -55,8 +55,6 @@ class DQNTracker:
         # 损失相关
         self.td_errors = []  # 当天的TD误差
         self.losses = []     # 当天的损失值
-        self.daily_td_errors = []    # 每天的TD误差和
-        self.daily_losses = []       # 每天的损失值和
         
         # 比率相关
         self.illegal_counts = 0      # 当天的非法动作次数
@@ -124,10 +122,6 @@ class DQNTracker:
         # 动作分布统计
         self.daily_action_counts.append(dict(self.action_counts))
         
-        # 损失相关统计
-        self.daily_td_errors.append(sum(self.td_errors))
-        self.daily_losses.append(sum(self.losses))
-        
         # 比率统计
         self.daily_ratios.append({
             'illegal_ratio': self.illegal_counts / max(1, self.total_counts),
@@ -152,8 +146,6 @@ class DQNTracker:
         data = {
             'daily_rewards': self.daily_rewards,
             'daily_action_counts': self.daily_action_counts,
-            'daily_td_errors': self.daily_td_errors,
-            'daily_losses': self.daily_losses,
             'daily_ratios': self.daily_ratios,
             'daily_extra_metrics': self.daily_extra_metrics,
             'episode_rewards': self.episode_rewards,
@@ -179,8 +171,6 @@ class DQNTracker:
                 data = pickle.load(f)
             self.daily_rewards = data['daily_rewards']
             self.daily_action_counts = data['daily_action_counts']
-            self.daily_td_errors = data['daily_td_errors']
-            self.daily_losses = data['daily_losses']
             self.daily_ratios = data['daily_ratios']
             self.daily_extra_metrics = data['daily_extra_metrics']
             self.episode_rewards = data['episode_rewards']
@@ -231,8 +221,8 @@ class DQNTracker:
             'moving_average_reward': self._calculate_moving_average(self.daily_rewards),
             
             # 损失相关
-            'total_td_error': sum(self.daily_td_errors),
-            'total_loss': sum(self.daily_losses),
+            'total_td_error': sum(self.td_errors),
+            'total_loss': sum(self.losses),
             
             # 比率相关
             'average_illegal_ratio': np.mean([r['illegal_ratio'] for r in self.daily_ratios]),
