@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from dl_helper.rl.dqn_tracker import DQNTracker
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
+from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
 from dl_helper.rl.base import BaseAgent
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
@@ -316,9 +316,17 @@ class DQN(BaseAgent):
             # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
             if info.get('close', False):
                 if self.wait_trade_close:
-                    replay_buffer.update_reward(reward if reward>-1000 else None)
+                    replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
                 # 更新跟踪器 奖励
                 self.tracker_val_test.update_reward(reward)
+
+                # 更新跟踪器 非法/win/loss
+                if reward == ILLEGAL_REWARD:
+                    self.tracker_val_test.update_illegal()
+                elif info['total_return'] > 0:
+                    self.tracker_val_test.update_win()
+                else:
+                    self.tracker_val_test.update_loss_count()
 
                 # 更新评价指标
                 for k, v in info.items():
@@ -437,9 +445,17 @@ class DQN(BaseAgent):
                 # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
                 if info.get('close', False):
                     if self.wait_trade_close:
-                        self.replay_buffer.update_reward(reward if reward>-1000 else None)
+                        self.replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
+
+                    # 更新跟踪器 非法/win/loss
+                    if reward == ILLEGAL_REWARD:
+                        self.tracker.update_illegal()
+                    elif info['total_return'] > 0:
+                        self.tracker.update_win()
+                    else:
+                        self.tracker.update_loss_count()
 
                     # 更新评价指标
                     for k, v in info.items():

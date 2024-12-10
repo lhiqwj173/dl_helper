@@ -43,6 +43,8 @@ USE_CODES = [
     '159659',
 ]
 
+ILLEGAL_REWARD = -1000
+
 class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
@@ -455,7 +457,7 @@ class LOB_trade_env(gym.Env):
     def _cal_reward(self, action, need_close, info):
         """
         计算奖励
-        非法动作 reward=-1000
+        非法动作 reward=ILLEGAL_REWARD
         只有平仓 reward=收益率
         其他 reward=0
 
@@ -468,7 +470,7 @@ class LOB_trade_env(gym.Env):
         if not legal:
             # 非法动作
             info['close'] = True
-            return -1000, False, pos, profit
+            return ILLEGAL_REWARD, False, pos, profit
 
         # 只有平仓才给与reward
         # 同时记录评价指标

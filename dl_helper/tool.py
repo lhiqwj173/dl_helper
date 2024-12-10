@@ -47,9 +47,27 @@ def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
     excess_returns = returns - risk_free_rate
-    if excess_returns.std() == 0:
+    std = excess_returns.std()
+    if std == 0:
         return 0
-    return excess_returns.mean() / excess_returns.std() * np.sqrt(len(returns))  # 根据序列长度标准化
+    return excess_returns.mean() / std * np.sqrt(len(returns))  # 根据序列长度标准化
+
+# def calc_sortino_ratio(returns, risk_free_rate=0.0):
+#     """计算索提诺比率
+#     Args:
+#         returns: 收益率序列
+#         risk_free_rate: 无风险利率,默认0
+#     """
+#     if isinstance(returns, (pd.Series, pd.DataFrame)):
+#         returns = returns.values
+#     excess_returns = returns - risk_free_rate
+#     # 只考虑负收益的标准差
+#     downside_returns = excess_returns[excess_returns < 0]
+        
+#     # 正常情况下的计算
+#     down_std = downside_returns.std()
+#     down_std = 0 if np.isnan(down_std) else down_std
+#     return excess_returns.mean() / (down_std + 1e-4) * np.sqrt(len(returns))
 
 def calc_sortino_ratio(returns, risk_free_rate=0.0):
     """计算索提诺比率
@@ -62,14 +80,11 @@ def calc_sortino_ratio(returns, risk_free_rate=0.0):
     excess_returns = returns - risk_free_rate
     # 只考虑负收益的标准差
     downside_returns = excess_returns[excess_returns < 0]
-    
-    # 如果没有下行收益率，说明所有收益都是正的
-    # 这种情况下可以返回一个较大的正值，因为这是理想情况
-    if len(downside_returns) == 0:
-        return excess_returns.mean() * np.sqrt(len(returns))  # 使用平均超额收益乘以时间调整因子
         
     # 正常情况下的计算
-    return excess_returns.mean() / np.sqrt(downside_returns.var() + 1e-8) * np.sqrt(len(returns))
+    down_std = downside_returns.std()
+    down_std = 0 if np.isnan(down_std) else down_std
+    return excess_returns.mean() / (max(down_std, 0.01)) * np.sqrt(len(returns))
 
 def calc_max_drawdown(returns):
     """计算最大回撤

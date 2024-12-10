@@ -355,20 +355,28 @@ def plot_learning_process(root, metrics):
     ax = axes[5]
     for dtype in ['learn', 'val', 'test']:
         for key in ['sortino_ratio', 'sharpe_ratio']:
-            for suffix in ['', '_bm']:
-                full_key = key + suffix
-                if full_key in metrics[dtype]:
-                    data = metrics[dtype][full_key]
+            # 先绘制非_bm数据
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[key], alpha=0.3,
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[key],
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[key], linestyle='--',
+                           label=f'{dtype}_{key}: {last_value:.4f}')
+            
+            # 只为test数据绘制_bm部分
+            if dtype == 'test':
+                bm_key = key + '_bm'
+                if bm_key in metrics[dtype]:
+                    data = metrics[dtype][bm_key]
                     last_value = data[-1] if len(data) > 0 else 0
-                    if dtype == 'learn':
-                        ax.plot(data, color=colors[key], alpha=0.3,
-                               label=f'{dtype}_{full_key}: {last_value:.4f}')
-                    elif dtype == 'val':
-                        ax.plot(data, color=colors[key],
-                               label=f'{dtype}_{full_key}: {last_value:.4f}')
-                    else:  # test
-                        ax.plot(data, color=colors[key], linestyle='--',
-                               label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    ax.fill_between(range(len(data)), data, alpha=0.1, color=colors[key],
+                                  label=f'{dtype}_{bm_key}: {last_value:.4f}')
     ax.set_ylabel('Ratio')
     ax.grid(True)
     ax.legend()
@@ -379,24 +387,33 @@ def plot_learning_process(root, metrics):
     
     for dtype in ['learn', 'val', 'test']:
         for key in ['max_drawdown', 'total_return']:
-            for suffix in ['', '_bm']:
-                full_key = key + suffix
-                if full_key in metrics[dtype]:
-                    data = metrics[dtype][full_key]
+            # 先绘制非_bm数据
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                
+                # 选择绘图的轴
+                plot_ax = ax if 'max_drawdown' in key else ax2
+                
+                if dtype == 'learn':
+                    plot_ax.plot(data, color=colors[key], alpha=0.3,
+                               label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    plot_ax.plot(data, color=colors[key],
+                               label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    plot_ax.plot(data, color=colors[key], linestyle='--',
+                               label=f'{dtype}_{key}: {last_value:.4f}')
+            
+            # 只为test数据绘制_bm部分
+            if dtype == 'test':
+                bm_key = key + '_bm'
+                if bm_key in metrics[dtype]:
+                    data = metrics[dtype][bm_key]
                     last_value = data[-1] if len(data) > 0 else 0
-                    
-                    # 选择绘图的轴
-                    plot_ax = ax if 'max_drawdown' in full_key else ax2
-                    
-                    if dtype == 'learn':
-                        plot_ax.plot(data, color=colors[key], alpha=0.3,
-                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
-                    elif dtype == 'val':
-                        plot_ax.plot(data, color=colors[key],
-                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
-                    else:  # test
-                        plot_ax.plot(data, color=colors[key], linestyle='--',
-                                   label=f'{dtype}_{full_key}: {last_value:.4f}')
+                    plot_ax = ax if 'max_drawdown' in bm_key else ax2
+                    plot_ax.fill_between(range(len(data)), data, alpha=0.1, color=colors[key],
+                                       label=f'{dtype}_{bm_key}: {last_value:.4f}')
     
     # 设置左右y轴标签
     ax.set_ylabel('Max Drawdown')
