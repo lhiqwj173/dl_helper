@@ -2,6 +2,8 @@ import os, time
 import matplotlib.pyplot as plt
 from py_ext.tool import log, get_log_file
 
+import pickle   
+
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -16,6 +18,7 @@ from dl_helper.trainer import notebook_launcher
 from dl_helper.tool import upload_log_file
 from py_ext.lzma import compress_folder
 from py_ext.alist import alist
+from py_ext.wechat import send_msg
 
 from threading import Lock
 upload_lock = Lock()
@@ -252,6 +255,30 @@ class DQN(BaseAgent):
         # 计算损失
         dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
         tracker.update_loss_value(dqn_loss.item())
+
+        # 检查是否有nan/inf值
+        if (torch.isnan(dqn_loss) or torch.isinf(dqn_loss) or 
+            np.isnan(td_error) or np.isinf(td_error)):
+            # 保存batch数据到pickle文件
+            batch_data = {
+                'states': states.cpu().numpy(),
+                'actions': actions.cpu().numpy(),
+                'rewards': rewards.cpu().numpy(), 
+                'next_states': next_states.cpu().numpy(),
+                'dones': dones.cpu().numpy(),
+                'q_values': q_values.detach().cpu().numpy(),
+                'q_targets': q_targets.detach().cpu().numpy(),
+                'dqn_loss': dqn_loss.item(),
+                'td_error': td_error
+            }
+            
+            # 保存到文件
+            with open(f'nan_batch_{data_type}.pkl', 'wb') as f:
+                pickle.dump(batch_data, f)
+                
+            error_msg = f'检测到NaN/Inf值,dqn_loss:{dqn_loss.item()},td_error:{td_error},batch数据已保存到nan_batch_{data_type}.pkl'
+            send_msg(error_msg)
+            raise ValueError(error_msg)
         
         if data_type == 'train':
             self.optimizer.zero_grad()
