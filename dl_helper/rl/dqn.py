@@ -462,7 +462,7 @@ class DQN(BaseAgent):
                         else:
                             self.tracker.update_loss_count()
                     except Exception as e:
-                        log(f'{info}')
+                        log(f'{info}, {reward}')
                         raise e
 
                     # 更新评价指标
