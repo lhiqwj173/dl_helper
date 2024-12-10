@@ -275,8 +275,6 @@ class DQNTracker:
         """维护N天的数据"""
         self.daily_rewards = self.daily_rewards[-self.n_days:]
         self.daily_action_counts = self.daily_action_counts[-self.n_days:]
-        self.daily_td_errors = self.daily_td_errors[-self.n_days:]
-        self.daily_losses = self.daily_losses[-self.n_days:]
         self.daily_ratios = self.daily_ratios[-self.n_days:]
 
         for k in list(self.daily_extra_metrics.keys()):
