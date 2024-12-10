@@ -454,12 +454,16 @@ class DQN(BaseAgent):
                     self.tracker.update_reward(reward)
 
                     # 更新跟踪器 非法/win/loss
-                    if reward == ILLEGAL_REWARD:
-                        self.tracker.update_illegal()
-                    elif info['total_return'] > 0:
-                        self.tracker.update_win()
-                    else:
-                        self.tracker.update_loss_count()
+                    try:
+                        if reward == ILLEGAL_REWARD:
+                            self.tracker.update_illegal()
+                        elif info['total_return'] > 0:
+                            self.tracker.update_win()
+                        else:
+                            self.tracker.update_loss_count()
+                    except Exception as e:
+                        log(f'{info}')
+                        raise e
 
                     # 更新评价指标
                     for k, v in info.items():
