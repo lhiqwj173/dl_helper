@@ -18,7 +18,6 @@ from dl_helper.trainer import notebook_launcher
 from dl_helper.tool import upload_log_file
 from py_ext.lzma import compress_folder
 from py_ext.alist import alist
-from py_ext.wechat import send_wx
 
 from threading import Lock
 upload_lock = Lock()
@@ -268,6 +267,7 @@ class DQN(BaseAgent):
                 'dones': dones.cpu().numpy(),
                 'q_values': q_values.detach().cpu().numpy(),
                 'q_targets': q_targets.detach().cpu().numpy(),
+                'max_next_q_values': max_next_q_values.detach().cpu().numpy(),
                 'dqn_loss': dqn_loss.item(),
                 'td_error': td_error
             }
@@ -277,7 +277,6 @@ class DQN(BaseAgent):
                 pickle.dump(batch_data, f)
                 
             error_msg = f'检测到NaN/Inf值,dqn_loss:{dqn_loss.item()},td_error:{td_error},batch数据已保存到nan_batch_{data_type}.pkl'
-            send_wx(error_msg)
             raise ValueError(error_msg)
         
         if data_type == 'train':

@@ -366,6 +366,11 @@ class Account:
                     res['max_drawdown'] = calc_max_drawdown(log_returns)
                     res['total_return'] = calc_total_return(log_returns)
 
+                    if np.isnan(res['sortino_ratio']):
+                        print(f'net_raw: {self.net_raw}')
+                        print(f'net: {net}')
+                        print(f'log_returns: {log_returns}')
+
                     # 计算基准净值的评价指标
                     buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
                     sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
