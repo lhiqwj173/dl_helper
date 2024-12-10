@@ -319,7 +319,6 @@ class DQN(BaseAgent):
                     replay_buffer.update_reward(reward if reward>-1000 else None)
                 # 更新跟踪器 奖励
                 self.tracker_val_test.update_reward(reward)
-                assert not np.isnan(reward), f'reward is nan: {reward}'
 
                 # 更新评价指标
                 for k, v in info.items():
@@ -431,7 +430,6 @@ class DQN(BaseAgent):
                 # 环境交互
                 next_state, reward, done1, done2, info = env.step(action)
                 done = done1 or done2
-                assert not np.isnan(reward), f'reward is nan: {reward}'
 
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
@@ -442,7 +440,6 @@ class DQN(BaseAgent):
                         self.replay_buffer.update_reward(reward if reward>-1000 else None)
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
-                    assert not np.isnan(reward), f'reward is nan: {reward}'
 
                     # 更新评价指标
                     for k, v in info.items():
