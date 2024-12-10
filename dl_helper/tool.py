@@ -69,7 +69,7 @@ def calc_sortino_ratio(returns, risk_free_rate=0.0):
         return excess_returns.mean() * np.sqrt(len(returns))  # 使用平均超额收益乘以时间调整因子
         
     # 正常情况下的计算
-    return excess_returns.mean() / np.sqrt(downside_returns.var()) * np.sqrt(len(returns))
+    return excess_returns.mean() / np.sqrt(downside_returns.var() + 1e-8) * np.sqrt(len(returns))
 
 def calc_max_drawdown(returns):
     """计算最大回撤
