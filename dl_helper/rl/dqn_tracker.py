@@ -202,11 +202,11 @@ class DQNTracker:
         - total_reward: 总奖励
         - average_reward: 平均奖励
         - moving_average_reward: 移动平均奖励
-        - total_td_error: 总TD误差
-        - total_loss: 总损失值
-        - average_illegal_ratio: 平均非法动作率
-        - average_win_ratio: 平均胜率
-        - average_loss_ratio: 平均败率
+        - average_td_error: 平均TD误差
+        - average_loss: 平均损失值
+        - illegal_ratio: 平均非法动作率
+        - win_ratio: 平均胜率
+        - loss_ratio: 平均败率
         - action_{k}_ratio k: 0-2
         
         交易评价指标
@@ -225,18 +225,18 @@ class DQNTracker:
         self.save()
         metrics = {
             # 奖励相关
-            'total_reward': sum(self.daily_rewards),
-            'average_reward': np.mean(self.daily_rewards),
+            'total_reward': np.nansum(self.daily_rewards),
+            'average_reward': np.nanmean(self.daily_rewards),
             'moving_average_reward': self._calculate_moving_average(self.daily_rewards),
             
             # 损失相关
-            'total_td_error': sum(self.td_errors),
-            'total_loss': sum(self.losses),
+            'average_td_error': np.nanmean(self.td_errors),
+            'average_loss': np.nanmean(self.losses),
             
             # 比率相关
-            'average_illegal_ratio': np.mean([r['illegal_ratio'] for r in self.daily_ratios]),
-            'average_win_ratio': np.mean([r['win_ratio'] for r in self.daily_ratios]),
-            'average_loss_ratio': np.mean([r['loss_ratio'] for r in self.daily_ratios])
+            'illegal_ratio': np.nanmean([r['illegal_ratio'] for r in self.daily_ratios]),
+            'win_ratio': np.nanmean([r['win_ratio'] for r in self.daily_ratios]), 
+            'loss_ratio': np.nanmean([r['loss_ratio'] for r in self.daily_ratios])
         }
 
         # 动作分布
@@ -255,7 +255,7 @@ class DQNTracker:
         # max_drawdown_bm
         # total_return_bm
         for k, v in self.daily_extra_metrics.items():
-            metrics[k] = np.mean(v)
+            metrics[k] = np.nanmean(v)
 
         return metrics
     
@@ -282,6 +282,9 @@ class DQNTracker:
 
     def _calculate_moving_average(self, data, window=3):
         """计算移动平均"""
+        data = np.array(data)[~np.isnan(data)]  # 剔除nan值
+        if len(data) == 0:
+            return np.nan
         return np.convolve(data, np.ones(window)/window, mode='valid')[-1]
     
     def _get_action_distribution(self):

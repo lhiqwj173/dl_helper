@@ -192,13 +192,13 @@ def plot_learning_process(root, metrics):
         - moving_average_reward: 移动平均奖励
 
         图3
-        - total_td_error: 总TD误差
-        - total_loss: 总损失值
+        - average_td_error: 平均TD误差
+        - average_loss: 平均损失值
 
         图4
-        - average_illegal_ratio: 平均非法动作率
-        - average_win_ratio: 平均胜率
-        - average_loss_ratio: 平均败率
+        - illegal_ratio: 平均非法动作率
+        - win_ratio: 平均胜率
+        - loss_ratio: 平均败率
 
         图5
         - action_{k}_ratio k: 0-2
@@ -225,11 +225,11 @@ def plot_learning_process(root, metrics):
         'total_reward': '#1f77b4',      # 蓝色
         'average_reward': '#2ca02c',     # 绿色
         'moving_average_reward': '#ff7f0e', # 橙色
-        'total_td_error': '#d62728',     # 红色
-        'total_loss': '#9467bd',         # 紫色
-        'average_illegal_ratio': '#8c564b', # 棕色
-        'average_win_ratio': '#e377c2',   # 粉色
-        'average_loss_ratio': '#7f7f7f',  # 灰色
+        'average_td_error': '#d62728',     # 红色
+        'average_loss': '#9467bd',         # 紫色
+        'illegal_ratio': '#8c564b', # 棕色
+        'win_ratio': '#e377c2',   # 粉色
+        'loss_ratio': '#7f7f7f',  # 灰色
         'action_0': '#bcbd22',           # 黄绿色
         'action_1': '#17becf',           # 青色
         'action_2': '#1f77b4',           # 蓝色
@@ -290,10 +290,10 @@ def plot_learning_process(root, metrics):
     ax.grid(True)
     ax.legend()
 
-    # 图3: total_td_error & total_loss
+    # 图3: average_td_error & average_loss
     ax = axes[2]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['total_td_error', 'total_loss']:
+        for key in ['average_td_error', 'average_loss']:
             if key in metrics[dtype]:
                 data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
@@ -313,7 +313,7 @@ def plot_learning_process(root, metrics):
     # 图4: ratios
     ax = axes[3]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['average_illegal_ratio', 'average_win_ratio', 'average_loss_ratio']:
+        for key in ['illegal_ratio', 'win_ratio', 'loss_ratio']:
             if key in metrics[dtype]:
                 data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
@@ -610,11 +610,11 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 #         'average_reward': 0.5, 
                                 #         'moving_average_reward': 0.5, 
                                 #         'action_distribution': {2: 0.6, 1: 0.2, 0: 0.2}, 
-                                #         'total_td_error': 0.5, 
-                                #         'total_loss': 0.25, 
-                                #         'average_illegal_ratio': 0.0, 
-                                #         'average_win_ratio': 0.2, 
-                                #         'average_loss_ratio': 0.8,
+                                #         'average_td_error': 0.5, 
+                                #         'average_loss': 0.25, 
+                                #         'illegal_ratio': 0.0, 
+                                #         'win_ratio': 0.2, 
+                                #         'loss_ratio': 0.8,
                                 #     }
                                 new_params, metrics = pickle.loads(update_data)
 
