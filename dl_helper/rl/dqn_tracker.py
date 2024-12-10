@@ -118,9 +118,13 @@ class DQNTracker:
         # 奖励统计
         daily_total_reward = sum(self.episode_rewards)
         self.daily_rewards.append(daily_total_reward)
+        log(f'day_end self.episode_rewards: {self.episode_rewards}')
+        log(f'day_end daily_total_reward: {daily_total_reward}')
         
         # 动作分布统计
         self.daily_action_counts.append(dict(self.action_counts))
+        log(f'day_end self.action_counts: {self.action_counts}')
+        log(f'day_end self.daily_action_counts: {self.daily_action_counts}')
         
         # 比率统计
         self.daily_ratios.append({
@@ -128,6 +132,11 @@ class DQNTracker:
             'win_ratio': self.win_counts / max(1, self.win_counts + self.loss_counts),
             'loss_ratio': self.loss_counts / max(1, self.win_counts + self.loss_counts)
         })
+        log(f'day_end self.total_counts: {self.total_counts}')
+        log(f'day_end self.illegal_counts: {self.illegal_counts}')
+        log(f'day_end self.win_counts: {self.win_counts}')
+        log(f'day_end self.loss_counts: {self.loss_counts}')
+        log(f'day_end self.daily_ratios: {self.daily_ratios}')  
 
         # 更新额外的评价指标
         for k, v in self.extra_metrics.items():
