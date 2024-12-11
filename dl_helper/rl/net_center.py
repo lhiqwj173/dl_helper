@@ -189,29 +189,38 @@ def plot_learning_process(root, metrics):
 
         图2
         - average_reward: 平均奖励
-        - moving_average_reward: 移动平均奖励
 
         图3
+        - moving_average_reward: 移动平均奖励
+
+        图4
         - average_td_error: 平均TD误差
         - average_loss: 平均损失值
 
-        图4
+        图5
         - illegal_ratio: 平均非法动作率
+
+        图6
         - win_ratio: 平均胜率
         - loss_ratio: 平均败率
 
-        图5
-        - action_{k}_ratio k: 0-2
-    
-    交易评价指标
-        图6
-        - sortino_ratio
-        - sharpe_ratio
-        - sortino_ratio_bm
-        - sharpe_ratio_bm
         图7
+        - action_{k}_ratio k: 0-2
+
+    交易评价指标
+        图8
+        - sortino_ratio
+        - sortino_ratio_bm
+
+        图9
+        - sharpe_ratio
+        - sharpe_ratio_bm
+
+        图10
         - max_drawdown
         - max_drawdown_bm
+
+        图11
         - total_return
         - total_return_bm
     """
@@ -239,8 +248,8 @@ def plot_learning_process(root, metrics):
         'total_return': '#9467bd'        # 紫色
     }
     
-    # 创建图表,7个子图
-    fig, axes = plt.subplots(7, 1, figsize=(12, 28), sharex=True)
+    # 创建图表,11个子图
+    fig, axes = plt.subplots(11, 1, figsize=(12, 44), sharex=True)
     
     # 获取时间变化点的索引
     dt_changes = []
@@ -250,7 +259,8 @@ def plot_learning_process(root, metrics):
         if processed_dt != last_dt:
             dt_changes.append((i, processed_dt))
             last_dt = processed_dt
-            
+
+    # 强化学习评价指标
     # 图1: total_reward
     ax = axes[0]
     for dtype in ['learn', 'val', 'test']:
@@ -270,28 +280,46 @@ def plot_learning_process(root, metrics):
     ax.grid(True)
     ax.legend()
 
-    # 图2: average_reward & moving_average_reward
+    # 图2: average_reward
     ax = axes[1]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['average_reward', 'moving_average_reward']:
-            if key in metrics[dtype]:
-                data = metrics[dtype][key]
-                last_value = data[-1] if len(data) > 0 else 0
-                if dtype == 'learn':
-                    ax.plot(data, color=colors[key], alpha=0.3,
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-                elif dtype == 'val':
-                    ax.plot(data, color=colors[key],
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-                else:  # test
-                    ax.plot(data, color=colors[key], linestyle='--',
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-    ax.set_ylabel('Reward')
+        if 'average_reward' in metrics[dtype]:
+            data = metrics[dtype]['average_reward']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['average_reward'], alpha=0.3,
+                       label=f'{dtype}_average_reward: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['average_reward'],
+                       label=f'{dtype}_average_reward: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['average_reward'], linestyle='--',
+                       label=f'{dtype}_average_reward: {last_value:.4f}')
+    ax.set_ylabel('Average Reward')
     ax.grid(True)
     ax.legend()
 
-    # 图3: average_td_error & average_loss
+    # 图3: moving_average_reward
     ax = axes[2]
+    for dtype in ['learn', 'val', 'test']:
+        if 'moving_average_reward' in metrics[dtype]:
+            data = metrics[dtype]['moving_average_reward']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['moving_average_reward'], alpha=0.3,
+                       label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['moving_average_reward'],
+                       label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['moving_average_reward'], linestyle='--',
+                       label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+    ax.set_ylabel('Moving Average Reward')
+    ax.grid(True)
+    ax.legend()
+
+    # 图4: average_td_error & average_loss
+    ax = axes[3]
     for dtype in ['learn', 'val', 'test']:
         for key in ['average_td_error', 'average_loss']:
             if key in metrics[dtype]:
@@ -310,10 +338,29 @@ def plot_learning_process(root, metrics):
     ax.grid(True)
     ax.legend()
 
-    # 图4: ratios
-    ax = axes[3]
+    # 图5: illegal_ratio
+    ax = axes[4]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['illegal_ratio', 'win_ratio', 'loss_ratio']:
+        if 'illegal_ratio' in metrics[dtype]:
+            data = metrics[dtype]['illegal_ratio']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['illegal_ratio'], alpha=0.3,
+                       label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['illegal_ratio'],
+                       label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['illegal_ratio'], linestyle='--',
+                       label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+    ax.set_ylabel('Illegal Ratio')
+    ax.grid(True)
+    ax.legend()
+
+    # 图6: win_ratio & loss_ratio
+    ax = axes[5]
+    for dtype in ['learn', 'val', 'test']:
+        for key in ['win_ratio', 'loss_ratio']:
             if key in metrics[dtype]:
                 data = metrics[dtype][key]
                 last_value = data[-1] if len(data) > 0 else 0
@@ -326,12 +373,12 @@ def plot_learning_process(root, metrics):
                 else:  # test
                     ax.plot(data, color=colors[key], linestyle='--',
                            label=f'{dtype}_{key}: {last_value:.4f}')
-    ax.set_ylabel('Ratio')
+    ax.set_ylabel('Win/Loss Ratio')
     ax.grid(True)
     ax.legend()
 
-    # 图5: action ratios
-    ax = axes[4]
+    # 图7: action ratios
+    ax = axes[6]
     for dtype in ['learn', 'val', 'test']:
         for i in range(3):
             key = f'action_{i}_ratio'
@@ -351,79 +398,104 @@ def plot_learning_process(root, metrics):
     ax.grid(True)
     ax.legend()
 
-    # 图6: sortino_ratio & sharpe_ratio
-    ax = axes[5]
+    # 交易评价指标
+    # 图8: sortino_ratio
+    ax = axes[7]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['sortino_ratio', 'sharpe_ratio']:
-            # 先绘制非_bm数据
-            if key in metrics[dtype]:
-                data = metrics[dtype][key]
-                last_value = data[-1] if len(data) > 0 else 0
-                if dtype == 'learn':
-                    ax.plot(data, color=colors[key], alpha=0.3,
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-                elif dtype == 'val':
-                    ax.plot(data, color=colors[key],
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-                else:  # test
-                    ax.plot(data, color=colors[key], linestyle='--',
-                           label=f'{dtype}_{key}: {last_value:.4f}')
-            
-            # 只为test数据绘制_bm部分
-            if dtype == 'test':
-                bm_key = key + '_bm'
-                if bm_key in metrics[dtype]:
-                    data = metrics[dtype][bm_key]
-                    last_value = data[-1] if len(data) > 0 else 0
-                    ax.fill_between(range(len(data)), data, alpha=0.1, color=colors[key],
-                                  label=f'{dtype}_{bm_key}: {last_value:.4f}')
-    ax.set_ylabel('Ratio')
+        if 'sortino_ratio' in metrics[dtype]:
+            data = metrics[dtype]['sortino_ratio']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['sortino_ratio'], alpha=0.3,
+                       label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['sortino_ratio'],
+                       label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['sortino_ratio'], linestyle='--',
+                       label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+                if 'sortino_ratio_bm' in metrics[dtype]:
+                    bm_data = metrics[dtype]['sortino_ratio_bm']
+                    last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                    ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                  color=colors['sortino_ratio'],
+                                  label=f'{dtype}_sortino_ratio_bm: {last_value:.4f}')
+    ax.set_ylabel('Sortino Ratio')
     ax.grid(True)
     ax.legend()
 
-    # 图7: max_drawdown & total_return
-    ax = axes[6]
-    ax2 = ax.twinx()  # 创建右侧y轴
-    
+    # 图9: sharpe_ratio
+    ax = axes[8]
     for dtype in ['learn', 'val', 'test']:
-        for key in ['max_drawdown', 'total_return']:
-            # 先绘制非_bm数据
-            if key in metrics[dtype]:
-                data = metrics[dtype][key]
-                last_value = data[-1] if len(data) > 0 else 0
-                
-                # 选择绘图的轴
-                plot_ax = ax if 'max_drawdown' in key else ax2
-                
-                if dtype == 'learn':
-                    plot_ax.plot(data, color=colors[key], alpha=0.3,
-                               label=f'{dtype}_{key}: {last_value:.4f}')
-                elif dtype == 'val':
-                    plot_ax.plot(data, color=colors[key],
-                               label=f'{dtype}_{key}: {last_value:.4f}')
-                else:  # test
-                    plot_ax.plot(data, color=colors[key], linestyle='--',
-                               label=f'{dtype}_{key}: {last_value:.4f}')
-            
-            # 只为test数据绘制_bm部分
-            if dtype == 'test':
-                bm_key = key + '_bm'
-                if bm_key in metrics[dtype]:
-                    data = metrics[dtype][bm_key]
-                    last_value = data[-1] if len(data) > 0 else 0
-                    plot_ax = ax if 'max_drawdown' in bm_key else ax2
-                    plot_ax.fill_between(range(len(data)), data, alpha=0.1, color=colors[key],
-                                       label=f'{dtype}_{bm_key}: {last_value:.4f}')
-    
-    # 设置左右y轴标签
+        if 'sharpe_ratio' in metrics[dtype]:
+            data = metrics[dtype]['sharpe_ratio']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['sharpe_ratio'], alpha=0.3,
+                       label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['sharpe_ratio'],
+                       label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['sharpe_ratio'], linestyle='--',
+                       label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
+                if 'sharpe_ratio_bm' in metrics[dtype]:
+                    bm_data = metrics[dtype]['sharpe_ratio_bm']
+                    last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                    ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                  color=colors['sharpe_ratio'],
+                                  label=f'{dtype}_sharpe_ratio_bm: {last_value:.4f}')
+    ax.set_ylabel('Sharpe Ratio')
+    ax.grid(True)
+    ax.legend()
+
+    # 图10: max_drawdown
+    ax = axes[9]
+    for dtype in ['learn', 'val', 'test']:
+        if 'max_drawdown' in metrics[dtype]:
+            data = metrics[dtype]['max_drawdown']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['max_drawdown'], alpha=0.3,
+                       label=f'{dtype}_max_drawdown: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['max_drawdown'],
+                       label=f'{dtype}_max_drawdown: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['max_drawdown'], linestyle='--',
+                       label=f'{dtype}_max_drawdown: {last_value:.4f}')
+                if 'max_drawdown_bm' in metrics[dtype]:
+                    bm_data = metrics[dtype]['max_drawdown_bm']
+                    last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                    ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                  color=colors['max_drawdown'],
+                                  label=f'{dtype}_max_drawdown_bm: {last_value:.4f}')
     ax.set_ylabel('Max Drawdown')
-    ax2.set_ylabel('Total Return')
-    
-    # 合并两个轴的图例
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2)
-    ax.set_ylabel('Value')
+    ax.grid(True)
+    ax.legend()
+
+    # 图11: total_return
+    ax = axes[10]
+    for dtype in ['learn', 'val', 'test']:
+        if 'total_return' in metrics[dtype]:
+            data = metrics[dtype]['total_return']
+            last_value = data[-1] if len(data) > 0 else 0
+            if dtype == 'learn':
+                ax.plot(data, color=colors['total_return'], alpha=0.3,
+                       label=f'{dtype}_total_return: {last_value:.4f}')
+            elif dtype == 'val':
+                ax.plot(data, color=colors['total_return'],
+                       label=f'{dtype}_total_return: {last_value:.4f}')
+            else:  # test
+                ax.plot(data, color=colors['total_return'], linestyle='--',
+                       label=f'{dtype}_total_return: {last_value:.4f}')
+                if 'total_return_bm' in metrics[dtype]:
+                    bm_data = metrics[dtype]['total_return_bm']
+                    last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                    ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                  color=colors['total_return'],
+                                  label=f'{dtype}_total_return_bm: {last_value:.4f}')
+    ax.set_ylabel('Total Return')
     ax.grid(True)
     ax.legend()
 
@@ -506,7 +578,6 @@ def init_train_data_from_csv(csv_path):
             train_data[dtype][key] = [float(x) if not pd.isna(x) else float('nan') for x in df[col].tolist()]
             
     return train_data
-
 
 def handle_val_test_data(train_data):
     """处理验证测试数据"""
