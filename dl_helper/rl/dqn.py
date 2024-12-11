@@ -555,7 +555,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
             log(f'metrics: \n{metrics}\n, cost: {time.time() - t:.2f}s')
     else:
         log(f'{rank} learn...')
-        dqn.learn(train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        dqn.learn(train_title, env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(
