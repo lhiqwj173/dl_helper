@@ -82,8 +82,10 @@ def calc_sortino_ratio(returns, risk_free_rate=0.0):
     downside_returns = excess_returns[excess_returns < 0]
         
     # 正常情况下的计算
-    down_std = downside_returns.std()
-    down_std = 0 if np.isnan(down_std) else down_std
+    if len(downside_returns) == 0:
+        down_std = 0
+    else:
+        down_std = downside_returns.std()
     return excess_returns.mean() / (max(down_std, 0.01)) * np.sqrt(len(returns))
 
 def calc_max_drawdown(returns):

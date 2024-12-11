@@ -43,7 +43,7 @@ USE_CODES = [
     '159659',
 ]
 
-ILLEGAL_REWARD = -1000
+ILLEGAL_REWARD = -100
 
 class data_producer:
     """
@@ -423,7 +423,7 @@ class LOB_trade_env(gym.Env):
         self.date_done = False
 
         # 账户数据
-        self.need_close = False
+        self.need_close = False # 下一个动作无论是什么，都要对做平仓操作(因为没有更多的连续数据)
         self.acc = Account()
 
         # 动作空间 
@@ -458,7 +458,7 @@ class LOB_trade_env(gym.Env):
         """
         计算奖励
         非法动作 reward=ILLEGAL_REWARD
-        只有平仓 reward=收益率
+        只有平仓 reward=收益率 + 最大回撤
         其他 reward=0
 
         平仓标志: info['close'] = True
@@ -476,7 +476,7 @@ class LOB_trade_env(gym.Env):
         # 同时记录评价指标
         if need_close or action==1:
             info['close'] = True
-            reward = res['sortino_ratio']
+            reward = res['total_return'] + res['max_drawdown']
             for k, v in res.items():
                 info[k] = v
         else:
@@ -502,7 +502,7 @@ class LOB_trade_env(gym.Env):
             self.out_test_predict(action)
 
         info = {
-            'close': False,
+            'close': False,# 若为True, 需要回溯属于本次交易的所有时间步, 修改 reward=收益率
             'date_done': self.date_done,
         }
 
@@ -513,8 +513,6 @@ class LOB_trade_env(gym.Env):
         symbol_id, observation, data_done, self.need_close, self.date_done = self._get_data()
         # 添加标的持仓数据
         observation = np.concatenate([observation, [symbol_id, pos,profit]])
-        if self.need_close:
-            info['close'] = True
 
         # 检查是否结束
         terminated = data_done or acc_done
