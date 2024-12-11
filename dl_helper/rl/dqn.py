@@ -526,7 +526,7 @@ class DQN(BaseAgent):
             log(f'{self.msg_head} done')
             self.upload_log_file()
 
-def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test=''):
+def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -543,7 +543,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
     dqn.tracker.set_rank(rank)
     
     # 初始化环境
-    dp = data_producer(data_folder=data_folder, simple_test=simple_test)
+    dp = data_producer(data_folder=data_folder, simple_test=simple_test, file_num=15 if enable_profiling else 0)
     env = LOB_trade_env(data_producer=dp)
 
     # 开始训练
