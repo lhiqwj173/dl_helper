@@ -430,6 +430,11 @@ class DQN(BaseAgent):
                 if step % 1000 == 0:
                     self.upload_log_file()
 
+                # 测试用
+                # 检查是否有nan/inf值
+                if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
+                    raise ValueError(f'检测到NaN/Inf值,state: {state}')
+
                 # 动作
                 action = self.take_action(state)
                 # 更新跟踪器 动作
