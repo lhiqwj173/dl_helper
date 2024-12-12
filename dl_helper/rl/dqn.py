@@ -456,6 +456,11 @@ class DQN(BaseAgent):
                 next_state, reward, done1, done2, info = env.step(action)
                 done = done1 or done2
 
+                # 测试用
+                # 检查是否有nan/inf值
+                if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
+                    raise ValueError(f'检测到NaN/Inf值,state: {state}')
+                    
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
 
