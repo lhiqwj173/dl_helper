@@ -465,7 +465,7 @@ class DQN(BaseAgent):
                 self.replay_buffer.add(state, action, reward, next_state, done)
                 # 测试用
                 # 检查是否有nan/inf值
-                for d self.replay_buffer.buffer_temp:
+                for d in self.replay_buffer.buffer_temp:
                     state = d[0]
                     if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
                         raise ValueError(f'检测到NaN/Inf值,state: {state}')
