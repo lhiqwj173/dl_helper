@@ -228,11 +228,23 @@ class DQN(BaseAgent):
         self.target_q_net.load_state_dict(self.q_net.state_dict())
 
     def update(self, transition_dict, data_type='train'):
+
+        # 测试用
+        # 检查是否有nan/inf值
+        state = transition_dict['states']
+        if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
+            raise ValueError(f'检测到NaN/Inf值,state: {state}')
+
         states = torch.from_numpy(transition_dict['states']).to(self.device)
         actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
         rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
         next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
         dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
+
+        # 测试用
+        # 检查是否有nan/inf值
+        if torch.isnan(states) or torch.isinf(states):
+            raise ValueError(f'检测到NaN/Inf值,state: {states}')
 
         q_values = self.q_net(states).gather(1, actions)
         if self.dqn_type in [DOUBLE_DQN, DD_DQN] :
