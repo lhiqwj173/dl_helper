@@ -73,6 +73,7 @@ class data_producer:
 
         # 数据索引
         self.idxs = []
+        self.col_idx = {}
         # 买卖1档价格
         self.ask_price = 0
         self.bid_price = 0
@@ -191,6 +192,14 @@ class data_producer:
             vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
             self.all_raw_data[vol_cols] = self.all_raw_data[vol_cols].fillna(0)
 
+        # 记录需要的索引，供后续转为numpy时使用
+        # BASE买1价 / BASE卖1价
+        for col in ['BASE买1价', 'BASE卖1价']:
+            self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
+
+        # self.all_raw_data 转为 numpy
+        self.all_raw_data = self.all_raw_data.values
+
         # 载入了新的日期文件数据
         # 重置日期文件停止标志
         self.date_file_done = False
@@ -205,16 +214,19 @@ class data_producer:
         """
         使用数据分割
         raw 是完整的 pickle 切片
+        ms 是标准化数据
+        都是 numpy 数组
         """
-        return raw.iloc[:, :130], ms.iloc[:130, :]
+        return raw[:, :130], ms[:130, :]
 
     def store_bid_ask_1st_data(self, raw):
         """
         存储买卖1档数据 用于撮合交易
         raw 是完整的 pickle 切片
         """
-        self.bid_price = raw.iloc[-1]['BASE买1价']
-        self.ask_price = raw.iloc[-1]['BASE卖1价']
+        last_row = raw[-1]  # 最后一个数据
+        self.bid_price = last_row[self.col_idx['BASE买1价']]
+        self.ask_price = last_row[self.col_idx['BASE卖1价']]
 
     def get(self):
         """
@@ -230,13 +242,14 @@ class data_producer:
         a, b = self.x[self.idxs[0][0]]
         if b-a > self.his_len:# 修正历史数据长度
             a = b - self.his_len
-        raw = self.all_raw_data.iloc[a: b, :]
+        raw = self.all_raw_data[a: b, :]
         # 记录 买卖1档 的价格
         self.store_bid_ask_1st_data(raw)
         # 数据标准化
-        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
-        raw, ms = self.use_data_split(raw, ms)
-        x = (raw - ms.iloc[:, 0].values) / ms.iloc[:, 1].values
+        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]]).values
+        x, ms = self.use_data_split(raw, ms)
+        x -= ms[:, 0]
+        x /= ms[:, 1]
 
         # 标的id
         symbol_id = self.idxs[0][2]
@@ -359,7 +372,8 @@ class Account:
                     # 平均税费(买入卖出)到每一步
                     # 第一步买入，等价较好，不平均税费
                     step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                    net = [i - step_fee*(idx>0) for idx, i in enumerate(self.net_raw)]
+                    net = np.array(self.net_raw)
+                    net[1:] -= step_fee
                     # 计算对数收益率序列
                     log_returns = np.diff(np.log(net))
                     # 计算指标
@@ -372,7 +386,8 @@ class Account:
                     buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
                     sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
                     step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
-                    net_bm = [i - step_fee_bm*(idx>0) for idx, i in enumerate(self.net_raw_bm)]
+                    net_bm = np.array(self.net_raw_bm)
+                    net_bm[1:] -= step_fee_bm
                     # 计算对数收益率序列
                     log_returns_bm = np.diff(np.log(net_bm))
                     res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
@@ -451,7 +466,7 @@ class LOB_trade_env(gym.Env):
     def _get_data(self):
         # 获取数据
         symbol_id, x, all_data_done, need_close, date_done = self.data_producer.get()
-        x = x.values.reshape(-1)
+        x = x.reshape(-1)
         return symbol_id, x, all_data_done, need_close, date_done
 
     def _cal_reward(self, action, need_close, info):
