@@ -460,14 +460,26 @@ class DQN(BaseAgent):
                 # 检查是否有nan/inf值
                 if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
                     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-                    
+
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
+                # 测试用
+                # 检查是否有nan/inf值
+                for d self.replay_buffer.buffer_temp:
+                    state = d[0]
+                    if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
+                        raise ValueError(f'检测到NaN/Inf值,state: {state}')
 
                 # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
                 if info.get('close', False):
                     if self.wait_trade_close:
                         self.replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
+                        # 测试用
+                        # 检查是否有nan/inf值
+                        for d in self.replay_buffer.buffer:
+                            if np.argwhere(np.isnan(d[0])).any() or np.argwhere(np.isinf(d[0])).any():
+                                raise ValueError(f'检测到NaN/Inf值,state: {d[0]}')
+
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
 
