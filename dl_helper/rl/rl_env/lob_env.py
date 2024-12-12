@@ -200,6 +200,9 @@ class data_producer:
         # self.all_raw_data 转为 numpy
         self.all_raw_data = self.all_raw_data.values
 
+        # 测试用
+        pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
+
         # 载入了新的日期文件数据
         # 重置日期文件停止标志
         self.date_file_done = False
@@ -233,6 +236,9 @@ class data_producer:
         输出观察值
         返回 symbol_id,x, done, need_close, date_done
         """
+        # 测试用
+        print(self.idxs[0])
+
         # 检查日期文件结束
         if self.date_file_done:
             # load 下一个日期文件的数据
