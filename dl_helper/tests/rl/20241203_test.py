@@ -6,24 +6,14 @@ import pstats
 from datetime import datetime
 import threading
 
-from py_ext.tool import log, init_logger, get_log_file
-import requests, socket
-try:
-    ip = requests.get('https://api.ipify.org').text
-except:
-    # 如果获取外网IP失败,使用内网IP作为备选
-    hostname = socket.gethostname()
-    ip = socket.gethostbyname(hostname)
-init_logger(f'{ip}', level='INFO')
-
-log(f'init_logger: {get_log_file()}')
+from py_ext.tool import log
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
 from dl_helper.rl.net_center import run_param_center
 from dl_helper.rl.run import run_client_learning
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
-from dl_helper.tool import keep_upload_log_file
+from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 
 # 保持上传日志文件
 upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
@@ -58,6 +48,8 @@ d1, d2, d3, d4 = [130, 60, 30, 7]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
 if __name__ == '__main__':
+    print('main')
+
     # 检查是否有命令行参数
     is_server = False
     if len(sys.argv) > 1:

@@ -12,7 +12,7 @@ import base64
 import imgkit
 
 from py_ext.wechat import wx
-from py_ext.tool import debug, log, get_log_file
+from py_ext.tool import debug, log, get_log_file, init_logger
 from dl_helper.train_param import logger, match_num_processes
 if match_num_processes() ==8:
     import torch_xla.core.xla_model as xm
@@ -22,9 +22,20 @@ from torchstat import stat
 from torchinfo import summary
 from torch.nn.utils import parameters_to_vector
 import df2img
+import requests, socket
 from py_ext.alist import alist
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
+
+def init_logger_by_ip():
+    try:
+        ip = requests.get('https://api.ipify.org').text
+    except:
+        # 如果获取外网IP失败,使用内网IP作为备选
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+    init_logger(f'{ip}', level='INFO')
+    log(f'init_logger: {get_log_file()}')
 
 def upload_log_file():
     """上传日志文件到alist"""
