@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from py_ext.tool import log, get_log_file
 
 class DQNTracker:
-    def __init__(self, title, n_days, num_actions, rank=0):
+    def __init__(self, title, n_days, rank=0):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
 
@@ -14,13 +14,6 @@ class DQNTracker:
             title: 标题,用于标识跟踪器
             n_days: 统计周期（天数）,用于设定保留多少天的历史数据进行统计分析
                    比如设置为7,则只保留最近7天的数据用于计算移动平均等指标
-            num_actions: 动作空间大小,即智能体可以采取的动作数量
-                        比如对于买卖股票:
-                        - 0表示买入
-                        - 1表示卖出
-                        - 2表示持有
-                        则num_actions=3
-        
             rank: 排名,用于标识跟踪器
 
         统计指标包含:
@@ -42,7 +35,6 @@ class DQNTracker:
         self.title = title 
         self.rank = rank
         self.n_days = n_days
-        self.num_actions = num_actions
         
         # 奖励相关
         self.daily_rewards = []  # 每天的奖励列表
@@ -290,7 +282,7 @@ class DQNTracker:
     def _get_action_distribution(self):
         """获取动作分布"""
         total_actions = defaultdict(int)
-        for daily_counts in self.daily_action_counts[-self.n_days:]:
+        for daily_counts in self.daily_action_counts:
             for action, count in daily_counts.items():
                 total_actions[action] += count
         
@@ -305,7 +297,7 @@ class DQNTracker:
 
 if __name__ == '__main__':
     # 测试代码
-    tracker = DQNTracker(n_days=5, num_actions=3)
+    tracker = DQNTracker(n_days=5)
     
     # 测试添加每日数据
     for i in range(10):

@@ -10,7 +10,7 @@ import numpy as np
 
 from dl_helper.rl.dqn_tracker import DQNTracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
-from dl_helper.rl.base import BaseAgent
+from dl_helper.rl.base import BaseAgent, OffPolicyAgent
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
@@ -18,11 +18,6 @@ from dl_helper.trainer import notebook_launcher
 from dl_helper.tool import upload_log_file
 from py_ext.lzma import compress_folder
 from py_ext.alist import alist
-
-from threading import Lock
-upload_lock = Lock()
-last_upload_time = 0
-UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 
 VANILLA_DQN = 'VanillaDQN'
 DOUBLE_DQN = 'DoubleDQN'
@@ -116,7 +111,7 @@ class dqn_network(torch.nn.Module):
 
         return x
 
-class DQN(BaseAgent):
+class DQN_backup(BaseAgent):
     def __init__(self,
             obs_shape,
             action_dim,
@@ -168,7 +163,7 @@ class DQN(BaseAgent):
                                           lr=learning_rate)
 
         # 跟踪器
-        self.tracker = DQNTracker('learn', 10, action_dim)
+        self.tracker = DQNTracker('learn', 10)
         self.tracker_val_test = None
 
     def upload_log_file(self):
@@ -184,7 +179,6 @@ class DQN(BaseAgent):
             else:
                 remaining = UPLOAD_INTERVAL - (current_time - last_upload_time)
                 log(f'{self.msg_head} Skip log upload, {remaining:.1f}s remaining')
-
 
     def to(self, device):
         self.device = device
@@ -300,12 +294,29 @@ class DQN(BaseAgent):
                 self._update_target_q_net_params()
             self.count += 1
 
+    def update_params_from_server(self, env):
+        new_params = get_net_params()
+        if new_params:
+            self.q_net = update_model_params(self.q_net, new_params, tau=1)
+            self.target_q_net = update_model_params(self.target_q_net, new_params, tau=1)
+            # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
+            self.replay_buffer.reset()
+            log(f'{self.msg_head} replay_buffer reset > {self.replay_buffer.size()}')
+            # 重置环境中的账户
+            env.acc.reset()
+
+    def push_params_to_server(self):
+        # 更新目标网络参数
+        self._update_target_q_net_params()
+        # 上传参数 /上传学习监控指标
+        send_net_updates(self.q_net.state_dict(), self.tracker.get_metrics())
+
     def val_test(self, env, data_type='val'):
         # 验证模式
         self.eval()
 
         # 初始化跟踪器
-        self.tracker_val_test = DQNTracker(data_type, 10000, self.action_dim, rank=self.tracker.rank)
+        self.tracker_val_test = DQNTracker(data_type, 10000, rank=self.tracker.rank)
 
         env.set_data_type(data_type)
 
@@ -382,33 +393,7 @@ class DQN(BaseAgent):
 
         return metrics
 
-    def package_root(self, metrics):
-        # 保存模型
-        self.save(self.root)
-        # 打包压缩
-        zip_file = f'{self.root}.7z'
-        if os.path.exists(zip_file):
-            os.remove(zip_file)
-        compress_folder(self.root, zip_file, 9, inplace=False)
-
-    def update_params_from_server(self, env):
-        new_params = get_net_params()
-        if new_params:
-            self.q_net = update_model_params(self.q_net, new_params, tau=1)
-            self.target_q_net = update_model_params(self.target_q_net, new_params, tau=1)
-            # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
-            self.replay_buffer.reset()
-            log(f'{self.msg_head} replay_buffer reset > {self.replay_buffer.size()}')
-            # 重置环境中的账户
-            env.acc.reset()
-
-    def push_params_to_server(self):
-        # 更新目标网络参数
-        self._update_target_q_net_params()
-        # 上传参数 /上传学习监控指标
-        send_net_updates(self.q_net.state_dict(), self.tracker.get_metrics())
-
-    def learn(self, train_title, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
+    def learn(self, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
         """
         训练
 
@@ -420,9 +405,6 @@ class DQN(BaseAgent):
             sync_interval_learn_step:   同步参数间隔，会询问是否需要验证/测试
             learn_interval_step:        学习更新间隔                     
         """
-        # 准备
-        super().learn(train_title)
-
         # 学习步数
         learn_step = 0
 
@@ -560,7 +542,143 @@ class DQN(BaseAgent):
             log(f'{self.msg_head} done')
             self.upload_log_file()
 
-def run_client_learning_device(rank, num_processes, train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+class DQN(OffPolicyAgent):
+
+    def __init__(
+        self,
+        obs_shape,
+        learning_rate,
+        gamma,
+        epsilon,
+        target_update,
+
+        # 基类参数
+        buffer_size,
+        action_dim,
+        features_dim,
+        features_extractor_class,
+        features_extractor_kwargs=None,
+        net_arch=None,
+
+        dqn_type=VANILLA_DQN,
+    ):
+        """
+        DQN
+        
+        Args:
+            obs_shape: 观测空间维度
+            learning_rate: 学习率
+            gamma: TD误差折扣因子
+            epsilon: epsilon-greedy策略参数
+            target_update: 目标网络更新间隔
+            dqn_type=VANILLA_DQN: DQN类型
+
+            基类参数
+                buffer_size: 经验回放池大小
+                action_dim: 动作空间维度 
+                features_dim: 特征维度
+                features_extractor_class: 特征提取器类,必须提供
+                features_extractor_kwargs=None: 特征提取器参数,可选
+                net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
+                    [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
+        """
+        super().__init__(buffer_size, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
+
+        self.obs_shape = obs_shape
+        self.action_dim = action_dim
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.need_epsilon = True,
+        self.target_update = target_update
+        self.count = 0
+        self.dqn_type = dqn_type
+
+        # 初始化网络
+        self.build_model()
+        self.optimizer = torch.optim.Adam(self.models['q_net'].parameters(),lr=learning_rate)
+    ############################################################
+    # 需要重写的函数
+    #     build_model: 构建模型
+    #     take_action(self, state): 根据状态选择动作
+    #     _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
+    #     sync_update_net_params_in_agent: 同步更新模型参数
+    #     get_params_to_send: 获取需要上传的参数
+    ############################################################
+
+    def build_model(self):
+        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
+        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
+        self.models = {'q_net': q_net, 'target_q_net': target_q_net}
+
+    def take_action(self, state):
+        if self.need_epsilon and np.random.random() < self.epsilon:
+            action = np.random.randint(self.action_dim)
+        else:
+            state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
+            action = self.models['q_net'](state).argmax().item()
+        return action
+
+    def _update(self, states, actions, rewards, next_states, dones, data_type):
+        q_values = self.models['q_net'](states).gather(1, actions)
+        if self.dqn_type in [DOUBLE_DQN, DD_DQN] :
+            max_action = self.models['q_net'](next_states).max(1)[1].view(-1, 1)
+            max_next_q_values = self.models['target_q_net'](next_states).gather(
+                1, max_action)
+        else:
+            max_next_q_values = self.models['target_q_net'](next_states).max(1)[0].view(
+                -1, 1)
+        q_targets = (rewards + self.gamma * max_next_q_values * (1 - dones))
+        
+        # 计算TD误差
+        td_error = torch.abs(q_targets - q_values).mean().item()
+        
+        # 计算损失
+        dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
+
+        # tracker 记录
+        self.track_error(td_error, dqn_loss.item(), data_type)
+
+        # 检查是否有nan/inf值
+        if (torch.isnan(dqn_loss) or torch.isinf(dqn_loss) or 
+            np.isnan(td_error) or np.isinf(td_error)):
+            # 保存batch数据到pickle文件
+            batch_data = {
+                'states': states.cpu().numpy(),
+                'actions': actions.cpu().numpy(),
+                'rewards': rewards.cpu().numpy(), 
+                'next_states': next_states.cpu().numpy(),
+                'dones': dones.cpu().numpy(),
+                'q_values': q_values.detach().cpu().numpy(),
+                'q_targets': q_targets.detach().cpu().numpy(),
+                'max_next_q_values': max_next_q_values.detach().cpu().numpy(),
+                'dqn_loss': dqn_loss.item(),
+                'td_error': td_error
+            }
+            
+            # 保存到文件
+            with open(f'nan_batch_{data_type}.pkl', 'wb') as f:
+                pickle.dump(batch_data, f)
+                
+            error_msg = f'检测到NaN/Inf值,dqn_loss:{dqn_loss.item()},td_error:{td_error},batch数据已保存到nan_batch_{data_type}.pkl'
+            raise ValueError(error_msg)
+        
+        if data_type == 'train':
+            self.optimizer.zero_grad()
+            dqn_loss.backward()
+            self.optimizer.step()
+
+            if self.count > 0 and self.count % self.target_update == 0:
+                self.sync_update_net_params_in_agent()
+            self.count += 1
+
+    def sync_update_net_params_in_agent(self):
+        self.models['target_q_net'].load_state_dict(self.models['q_net'].state_dict())
+
+    def get_params_to_send(self):
+        return self.models['q_net'].state_dict()
+
+def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -589,7 +707,7 @@ def run_client_learning_device(rank, num_processes, train_title, data_folder, dq
             log(f'metrics: \n{metrics}\n, cost: {time.time() - t:.2f}s')
     else:
         log(f'{rank} learn...')
-        dqn.learn(train_title, env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        dqn.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(

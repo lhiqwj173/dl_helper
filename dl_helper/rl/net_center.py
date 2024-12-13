@@ -614,7 +614,6 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
     """参数中心服务器"""
     # 载入模型数据，若有
     agent.load(alist_folder)
-    model = agent.q_net
 
     HOST = '0.0.0.0'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -666,7 +665,7 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                     if _code == CODE:
                         if cmd == 'get':
                             # 发送模型参数
-                            params_data = pickle.dumps(model.state_dict())
+                            params_data = pickle.dumps(agent.get_params_to_send())
                             send_msg(client_socket, params_data)
                             log(f'{msg_header} Parameters sent')
 
@@ -707,9 +706,7 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                 new_params, metrics = pickle.loads(update_data)
 
                                 # 处理新参数
-                                model = update_model_params(model, new_params)
-                                # target模型 与 q_net 模型参数同步
-                                agent.target_q_net = update_model_params(agent.target_q_net, model.state_dict(), tau=1)
+                                agent.apply_new_params(new_params, tau=0.005)
                                 log(f'{msg_header} Parameters updated')
                                 send_msg(client_socket, b'ok')
                                 # 保存最新参数

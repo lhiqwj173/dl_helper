@@ -22,7 +22,6 @@ from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 
 # 训练参数
-train_title = 'rl_test'
 lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
@@ -55,9 +54,7 @@ if __name__ == '__main__':
     is_server = False
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
-            if arg.startswith('train_title=') or arg.startswith('title='):
-                train_title = arg.split('=')[1]
-            elif arg.startswith('lr='):
+            if arg.startswith('lr='):
                 lr = float(arg.split('=')[1])
             elif arg.startswith('num_episodes='):
                 num_episodes = int(arg.split('=')[1])
@@ -108,17 +105,19 @@ if __name__ == '__main__':
 
     dqn = DQN(
         obs_shape=(100, 130),
-        action_dim=3,
-        features_dim=d4+3,
-        features_extractor_class=m_bin_ctabl_fix_shape,
         learning_rate=lr,
         gamma=gamma,
         epsilon=epsilon,
         target_update=target_update,
+
+        # 基类参数
         buffer_size=buffer_size,
-        wait_trade_close = True,
+        action_dim=3,
+        features_dim=d4+3,
+        features_extractor_class=m_bin_ctabl_fix_shape,
         features_extractor_kwargs=features_extractor_kwargs,
         net_arch=[6, 3],
+
         dqn_type=DD_DQN,
     )
 
@@ -132,7 +131,7 @@ if __name__ == '__main__':
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-        args = (train_title, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        args = (data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
         kwargs = {'simple_test': simple_test, 'val_test': val_test, 'enable_profiling': enable_profiling}
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
