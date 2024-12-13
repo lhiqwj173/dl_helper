@@ -35,7 +35,7 @@ def init_logger_by_ip():
         # 如果获取外网IP失败,使用内网IP作为备选
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-    init_logger(f'{ip}', level='INFO', timestamp=False)
+    init_logger(f'{ip}', level='INFO', timestamp=False, enqueue=True)
 
 def upload_log_file():
     """上传日志文件到alist"""
