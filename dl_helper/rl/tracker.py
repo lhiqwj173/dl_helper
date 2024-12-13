@@ -5,7 +5,7 @@ from collections import defaultdict, deque
 
 from py_ext.tool import log, get_log_file
 
-class DQNTracker:
+class Tracker:
     def __init__(self, title, n_days, rank=0):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
@@ -297,7 +297,7 @@ class DQNTracker:
 
 if __name__ == '__main__':
     # 测试代码
-    tracker = DQNTracker(n_days=5)
+    tracker = Tracker(n_days=5)
     
     # 测试添加每日数据
     for i in range(10):

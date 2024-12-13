@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
-from dl_helper.rl.dqn_tracker import DQNTracker
+from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test

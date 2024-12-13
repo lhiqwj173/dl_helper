@@ -9,6 +9,7 @@ from py_ext.wechat import wx
 
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
+from dl_helper.rl.tracker import Tracker
 
 from threading import Lock
 upload_lock = Lock()
