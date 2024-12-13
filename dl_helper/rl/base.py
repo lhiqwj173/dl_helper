@@ -434,7 +434,6 @@ class OffPolicyAgent(BaseAgent):
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
                         log(f'{self.msg_head} {learn_step} sync params')
-                        return
 
                         # 同步最新参数
                         # 推送参数更新
