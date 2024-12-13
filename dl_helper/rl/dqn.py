@@ -701,8 +701,10 @@ def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episod
     # 开始训练
     if val_test:
         if rank == 0:
-            for i in range(1000):
+            i = 0
+            while True:
                 log(f'{rank} {i} test val data...')
+                i += 1
 
                 # 同步最新参数
                 # 拉取服务器的最新参数并更新
