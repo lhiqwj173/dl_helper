@@ -42,6 +42,7 @@ def upload_log_file():
 
 def keep_upload_log_file():
     """保持上传日志文件"""
+    log(f'keep_upload_log_file start: {get_log_file()}')
     while True:
         upload_log_file()
         time.sleep(UPLOAD_INTERVAL)
