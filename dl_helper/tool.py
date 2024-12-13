@@ -26,6 +26,7 @@ import requests, socket
 from py_ext.alist import alist
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
+UPLOAD_INTERVAL = 60
 
 def init_logger_by_ip():
     try:
@@ -34,8 +35,7 @@ def init_logger_by_ip():
         # 如果获取外网IP失败,使用内网IP作为备选
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-    init_logger(f'{ip}', level='INFO')
-    log(f'init_logger: {get_log_file()}')
+    init_logger(f'{ip}', level='INFO', timestamp=False)
 
 def upload_log_file():
     """上传日志文件到alist"""

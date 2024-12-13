@@ -15,6 +15,9 @@ from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 
+# 初始化日志
+init_logger_by_ip()
+
 # 训练参数
 lr = 1e-4
 num_episodes = 5000
@@ -44,9 +47,6 @@ d1, d2, d3, d4 = [130, 60, 30, 7]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
 if __name__ == '__main__':
-    # 初始化日志
-    init_logger_by_ip()
-
     # 保持上传日志文件
     upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
     upload_thread.start()
