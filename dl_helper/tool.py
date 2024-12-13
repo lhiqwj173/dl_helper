@@ -26,7 +26,6 @@ import requests, socket
 from py_ext.alist import alist
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
-UPLOAD_INTERVAL = 60
 
 def init_logger_by_ip():
     try:
@@ -50,13 +49,12 @@ def upload_log_file():
         client.upload(log_file, upload_folder)
         log(f'Upload log file to alist: {log_file}')
 
-
 def keep_upload_log_file():
     """保持上传日志文件"""
     log(f'keep_upload_log_file start: {get_log_file()}')
     while True:
-        upload_log_file()
         time.sleep(UPLOAD_INTERVAL)
+        upload_log_file()
 
 def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     """计算夏普比率

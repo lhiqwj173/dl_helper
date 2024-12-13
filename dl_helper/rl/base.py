@@ -269,6 +269,8 @@ class OffPolicyAgent(BaseAgent):
 
             state = next_state
 
+        log(f'{self.msg_head} {data_type} done, begin update...')
+
         # 超大batchsize计算error
         batch_size = 1024 * 1024
         while replay_buffer.size() > 0:
@@ -281,6 +283,7 @@ class OffPolicyAgent(BaseAgent):
                 'dones': b_d
             }
             self.update(transition_dict, data_type=data_type)
+        log(f'{self.msg_head} {data_type} update done')
 
         # 获取统计指标
         metrics = self.tracker_val_test.get_metrics()
@@ -298,6 +301,7 @@ class OffPolicyAgent(BaseAgent):
             client.mkdir(upload_folder)
             client.upload(env.predict_file, upload_folder)
 
+        log(f'{self.msg_head} {data_type} all done')
         return metrics
 
     def learn(self, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
@@ -412,11 +416,13 @@ class OffPolicyAgent(BaseAgent):
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
                         log(f'{self.msg_head} {learn_step} sync params')
-                        import time
-                        for i in range(60*5):
-                            log(f'{self.msg_head} sync params {i}s')
-                            time.sleep(1)
-                        return
+
+                        # 测试用
+                        # import time
+                        # for i in range(60*5):
+                        #     log(f'{self.msg_head} sync params {i}s')
+                        #     time.sleep(1)
+                        # return
 
                         # 同步最新参数
                         # 推送参数更新

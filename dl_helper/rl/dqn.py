@@ -701,10 +701,21 @@ def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episod
     # 开始训练
     if val_test:
         if rank == 0:
-            log(f'{rank} {val_test} test...')
-            t = time.time()
-            metrics = dqn.val_test(env, data_type=val_test)
-            log(f'metrics: \n{metrics}\n, cost: {time.time() - t:.2f}s')
+            for i in range(1000):
+                log(f'{rank} {i} test val data...')
+
+                # 同步最新参数
+                # 拉取服务器的最新参数并更新
+                dqn.update_params_from_server(env)
+
+                # 验证
+                test_type = 'val'
+                log(f'{rank} {i} wait metrics for {test_type}')
+                t = time.time()
+                metrics = dqn.val_test(env, data_type=test_type)
+                log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
+                # 发送验证结果给服务器
+                send_val_test_data(test_type, metrics)
     else:
         log(f'{rank} learn...')
         dqn.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
