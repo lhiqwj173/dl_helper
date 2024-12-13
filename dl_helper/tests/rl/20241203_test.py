@@ -16,6 +16,8 @@ except:
     ip = socket.gethostbyname(hostname)
 init_logger(f'{ip}', level='INFO')
 
+log(f'init_logger: {get_log_file()}')
+
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
 from dl_helper.rl.net_center import run_param_center
 from dl_helper.rl.run import run_client_learning
