@@ -6,7 +6,7 @@ import pstats
 from datetime import datetime
 import threading
 
-from py_ext.tool import log, init_logger
+from py_ext.tool import log, init_logger, get_log_file
 import requests, socket
 try:
     ip = requests.get('https://api.ipify.org').text
