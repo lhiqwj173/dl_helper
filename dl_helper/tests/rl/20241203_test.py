@@ -4,6 +4,7 @@ import time
 import cProfile
 import pstats
 from datetime import datetime
+import threading
 
 from py_ext.tool import log, init_logger
 import requests, socket
@@ -20,6 +21,11 @@ from dl_helper.rl.net_center import run_param_center
 from dl_helper.rl.run import run_client_learning
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
+from dl_helper.tool import keep_upload_log_file
+
+# 保持上传日志文件
+upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
+upload_thread.start()
 
 # 训练参数
 lr = 1e-4

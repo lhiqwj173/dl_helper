@@ -24,6 +24,8 @@ from torch.nn.utils import parameters_to_vector
 import df2img
 from py_ext.alist import alist
 
+UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
+
 def upload_log_file():
     """上传日志文件到alist"""
     # 获取日志文件
@@ -37,6 +39,12 @@ def upload_log_file():
         client.upload(log_file, upload_folder)
         log(f'Upload log file to alist: {log_file}')
 
+
+def keep_upload_log_file():
+    """保持上传日志文件"""
+    while True:
+        upload_log_file()
+        time.sleep(UPLOAD_INTERVAL)
 
 def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     """计算夏普比率

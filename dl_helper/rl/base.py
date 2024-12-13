@@ -6,17 +6,11 @@ import shutil
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
-from dl_helper.tool import upload_log_file
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.rl.tracker import Tracker
-
-from threading import Lock
-upload_lock = Lock()
-last_upload_time = 0
-UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 
 class BaseAgent:
     def __init__(self,
@@ -116,20 +110,6 @@ class BaseAgent:
             # 全局新参数
             for name in self.models:
                 self.models[name] = update_model_params(self.models[name], new_params, tau=tau)
-
-    def upload_log_file(self):
-        global last_upload_time
-        
-        current_time = time.time()
-        with upload_lock:
-            # 检查是否距离上次上传已经超过5分钟
-            if current_time - last_upload_time >= UPLOAD_INTERVAL:
-                upload_log_file()
-                last_upload_time = current_time
-                log(f'{self.msg_head} Log file uploaded')
-            # else:
-            #     remaining = UPLOAD_INTERVAL - (current_time - last_upload_time)
-            #     log(f'{self.msg_head} Skip log upload, {remaining:.1f}s remaining')
 
     def state_dict(self):
         """只保存模型参数"""
@@ -348,8 +328,6 @@ class OffPolicyAgent(BaseAgent):
             step = 0
             while not done:
                 step += 1
-                if step % 1000 == 0:
-                    self.upload_log_file()
 
                 # # 测试用
                 # # 检查是否有nan/inf值
@@ -434,6 +412,11 @@ class OffPolicyAgent(BaseAgent):
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
                         log(f'{self.msg_head} {learn_step} sync params')
+                        import time
+                        for i in range(60*5):
+                            log(f'{self.msg_head} sync params {i}s')
+                            time.sleep(1)
+                        return
 
                         # 同步最新参数
                         # 推送参数更新
@@ -454,9 +437,6 @@ class OffPolicyAgent(BaseAgent):
                                 # 发送验证结果给服务器
                                 send_val_test_data(test_type, metrics)
 
-                        # 如果进行了验证/测试,上传日志
-                        if any(need_val_test_res.values()):
-                            self.upload_log_file()
                     #################################
                     # 服务器通讯
                     #################################
@@ -467,8 +447,5 @@ class OffPolicyAgent(BaseAgent):
                         env.set_data_type('train')
                         state, info = env.reset()
                         done = False
-
-            log(f'{self.msg_head} done')
-            self.upload_log_file()
 
 
