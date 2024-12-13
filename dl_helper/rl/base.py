@@ -204,7 +204,7 @@ class OffPolicyAgent(BaseAgent):
         self.replay_buffer = ReplayBufferWaitClose(buffer_size)
 
         # 跟踪器
-        self.tracker = DQNTracker('learn', 10)
+        self.tracker = Tracker('learn', 10)
         self.tracker_val_test = None
 
     def sync_update_net_params_in_agent(self):
@@ -242,7 +242,7 @@ class OffPolicyAgent(BaseAgent):
         self.eval()
 
         # 初始化跟踪器
-        self.tracker_val_test = DQNTracker(data_type, 10000, rank=self.tracker.rank)
+        self.tracker_val_test = Tracker(data_type, 10000, rank=self.tracker.rank)
 
         env.set_data_type(data_type)
 
