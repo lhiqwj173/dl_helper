@@ -51,9 +51,46 @@ if __name__ == '__main__':
     upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
     upload_thread.start()
 
+    # 命令行参数文档
+    help_doc = """
+    命令行参数说明:
+    
+    训练相关参数:
+        lr=<float>                   学习率, 默认1e-4
+        num_episodes=<int>           训练回合数, 默认5000
+        hidden_dim=<int>            隐藏层维度, 默认128
+        gamma=<float>               折扣因子, 默认0.98
+        epsilon=<float>             探索率, 默认0.5
+        target_update=<int>         目标网络更新频率, 默认50
+        buffer_size=<int>           经验回放池大小, 默认5000
+        minimal_size=<int>          最小训练样本数, 默认3000
+        batch_size=<int>            批次大小, 默认64
+        sync_interval_learn_step=<int>  同步参数间隔, 默认150
+        learn_interval_step=<int>   学习更新间隔, 默认4
+    
+    运行模式:
+        server                      以服务端模式运行
+        client                      以客户端模式运行(默认)
+        simple_test                 启用简单测试模式
+        test_val=<val/test/all>     验证/测试模式
+    
+    性能分析:
+        profile                     启用性能分析
+        profile_stats_n=<int>       显示前N个耗时函数, 默认30
+        profile_output_dir=<str>    性能分析结果保存目录, 默认'profile_results'
+    
+    使用示例:
+        python script.py lr=0.001 num_episodes=1000 server
+    """
+
     # 检查是否有命令行参数
     is_server = False
     if len(sys.argv) > 1:
+        # 如果输入help,打印帮助文档并退出
+        if 'help' in sys.argv[1:]:
+            print(help_doc)
+            sys.exit(0)
+            
         for arg in sys.argv[1:]:
             if arg.startswith('lr='):
                 lr = float(arg.split('=')[1])
@@ -85,6 +122,7 @@ if __name__ == '__main__':
                 simple_test = True
                 print('simple_test')
             elif arg.startswith('test_val='):
+                # val/test/all
                 val_test = arg.split('=')[1]
             elif arg == 'profile':
                 enable_profiling = True

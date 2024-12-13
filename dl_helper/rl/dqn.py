@@ -678,6 +678,49 @@ class DQN(OffPolicyAgent):
     def get_params_to_send(self):
         return self.models['q_net'].state_dict()
 
+def run_val_test(val_test, rank, dqn, env):
+    """根据val_test类型和rank决定是否执行及执行类型
+    
+    Args:
+        val_test: 验证/测试类型 'val'/'test'/'all'
+        rank: 进程rank
+        dqn: DQN模型
+        env: 环境
+    """
+    should_run = False
+    test_type = None
+    
+    if val_test in ['val', 'test']:
+        # val或test模式只在rank0执行
+        if rank == 0:
+            should_run = True
+            test_type = val_test
+    elif val_test == 'all':
+        # all模式下rank0执行val,rank1执行test
+        if rank == 0:
+            should_run = True
+            test_type = 'val'
+        elif rank == 1:
+            should_run = True
+            test_type = 'test'
+            
+    if should_run:
+        i = 0
+        while True:
+            log(f'{rank} {i} test {test_type} dataset...')
+            i += 1
+
+            # 同步最新参数
+            # 拉取服务器的最新参数并更新
+            dqn.update_params_from_server(env)
+
+            log(f'{rank} {i} wait metrics for {test_type}')
+            t = time.time()
+            metrics = dqn.val_test(env, data_type=test_type)
+            log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
+            # 发送验证结果给服务器
+            send_val_test_data(test_type, metrics)
+
 def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
@@ -700,23 +743,8 @@ def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episod
 
     # 开始训练
     if val_test:
-        # 验证 / 测试
-        test_type = 'val' if rank == 0 else 'test'
-        i = 0
-        while True:
-            log(f'{rank} {i} test {test_type} dataset...')
-            i += 1
-
-            # 同步最新参数
-            # 拉取服务器的最新参数并更新
-            dqn.update_params_from_server(env)
-
-            log(f'{rank} {i} wait metrics for {test_type}')
-            t = time.time()
-            metrics = dqn.val_test(env, data_type=test_type)
-            log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
-            # 发送验证结果给服务器
-            send_val_test_data(test_type, metrics)
+        # 验证/测试
+        run_val_test(val_test, rank, dqn, env)
     else:
         log(f'{rank} learn...')
         dqn.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
