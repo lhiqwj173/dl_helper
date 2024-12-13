@@ -6,6 +6,7 @@ import shutil
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
+from dl_helper.tool import upload_log_file
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
