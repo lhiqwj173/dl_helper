@@ -725,8 +725,8 @@ def run_param_center(agent, tau= 0.005, simple_test=False):
                                     _test_count = 5
                                     _val_count = 3
                                 else:
-                                    _val_count = 5000
-                                    _test_count = _val_count * 50
+                                    _val_count = 3000
+                                    _test_count = _val_count * 5
 
                                 if update_count % _test_count == 0:
                                     need_test = True
