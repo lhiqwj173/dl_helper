@@ -150,27 +150,27 @@ if __name__ == '__main__':
         profiler.enable()
         start_time = time.time()
 
-    # 初始化DQN
-    dqn = DQN(
-        obs_shape=(100, 130),
-        learning_rate=lr,
-        gamma=gamma,
-        epsilon=epsilon,
-        target_update=target_update,
-
-        # 基类参数
-        buffer_size=buffer_size,
-        train_title=train_title,
-        action_dim=3,
-        features_dim=d4+3,
-        features_extractor_class=m_bin_ctabl_fix_shape,
-        features_extractor_kwargs=features_extractor_kwargs,
-        net_arch=[6, 3],
-
-        dqn_type=DD_DQN,
-    )
+    agent_class = DQN
+    agent_kwargs = {
+        'obs_shape': (100, 130),
+        'learning_rate': lr,
+        'gamma': gamma,
+        'epsilon': epsilon,
+        'target_update': target_update,
+        'buffer_size': buffer_size,
+        'train_title': train_title,
+        'action_dim': 3,
+        'features_dim': d4+3,
+        'features_extractor_class': m_bin_ctabl_fix_shape,
+        'features_extractor_kwargs': features_extractor_kwargs,
+        'net_arch': [6, 3],
+        'dqn_type': DD_DQN,
+    }
 
     if not is_server:
+        # 初始化DQN
+        dqn = agent_class(**agent_kwargs)
+
         # 训练数据
         if in_kaggle:
             input_folder = r'/kaggle/input'
@@ -185,7 +185,7 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        add_train_title_item(train_title, dqn, server_tau, simple_test)
+        add_train_title_item(train_title, agent_class, (), agent_kwargs, server_tau, simple_test)
 
     # 如果启用了性能分析，输出并保存结果
     if enable_profiling:

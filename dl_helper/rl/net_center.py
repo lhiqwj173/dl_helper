@@ -44,9 +44,9 @@ root_folder = '' if not os.path.exists(alist_folder) else alist_folder
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, agent, tau=0.005, simple_test=False):
+    def __init__(self, train_title, agent_class_name, agent_args, agent_kwargs, tau=0.005, simple_test=False):
         self.train_title = train_title
-        self.agent = agent
+        self.agent = globals()[agent_class_name](*agent_args, **agent_kwargs)
         self.tau = tau
         self.simple_test = simple_test
         
@@ -242,16 +242,16 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
-def add_train_title_item(train_title, agent, tau, simple_test):
+def add_train_title_item(train_title, agent_class, agent_args, agent_kwargs, tau, simple_test):
     with open(os.path.join(root_folder, f'{train_title}.data'), 'wb') as f:
-        dill.dump((train_title, agent, tau, simple_test), f)
+        dill.dump((agent_class.__name__, agent_args, agent_kwargs, tau, simple_test), f)
 
 def read_train_title_item(train_title):
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
-            title, agent, tau, simple_test = dill.load(open(os.path.join(root_folder, file), 'rb'))
-            res[title] = (agent, tau, simple_test)
+            title, agent_class_name, agent_args, agent_kwargs, tau, simple_test = dill.load(open(os.path.join(root_folder, file), 'rb'))
+            res[title] = (agent_class_name, agent_args, agent_kwargs, tau, simple_test)
     return res
 
 def run_param_center():
@@ -267,9 +267,9 @@ def run_param_center():
     # 初始化实验处理器
     handlers = {}
     train_dict = read_train_title_item()
-    for title, (agent, tau, simple_test) in train_dict.items():
-        log(f'{title} init')    
-        handlers[title] = ExperimentHandler(title, agent, tau, simple_test)
+    for title, (agent_class_name, agent_args, agent_kwargs, tau, simple_test) in train_dict.items():
+        log(f'{title} init')
+        handlers[title] = ExperimentHandler(title, agent_class_name, agent_args, agent_kwargs, tau, simple_test)
 
     while True:
         client_socket, client_address = server_socket.accept()
@@ -315,8 +315,8 @@ def run_param_center():
                 # 重新读取 
                 train_dict = read_train_title_item()
                 if train_title in train_dict:
-                    agent, tau, simple_test = train_dict[train_title]
-                    handlers[train_title] = ExperimentHandler(train_title, agent, tau, simple_test)
+                    agent_class_name, agent_args, agent_kwargs, tau, simple_test = train_dict[train_title]
+                    handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_args, agent_kwargs, tau, simple_test)
                 else:
                     msg = f'{train_title} not found'
                     send_wx(msg)
