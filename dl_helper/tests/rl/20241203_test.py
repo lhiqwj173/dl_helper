@@ -185,7 +185,7 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        add_train_title_item(train_title, agent_class, (), agent_kwargs, server_tau, simple_test)
+        add_train_title_item(train_title, agent_class.__name__, agent_kwargs, server_tau, simple_test)
 
     # 如果启用了性能分析，输出并保存结果
     if enable_profiling:
