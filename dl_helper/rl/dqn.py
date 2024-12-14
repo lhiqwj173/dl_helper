@@ -223,7 +223,7 @@ class DQN(OffPolicyAgent):
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
-        self.need_epsilon = True,
+        self.need_epsilon = True
         self.target_update = target_update
         self.count = 0
         self.dqn_type = dqn_type
@@ -239,6 +239,12 @@ class DQN(OffPolicyAgent):
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
+
+    def eval(self):
+        self.need_epsilon = False
+
+    def train(self):
+        self.need_epsilon = True
 
     def build_model(self):
         q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
