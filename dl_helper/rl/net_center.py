@@ -246,7 +246,7 @@ def add_train_title_item(train_title, agent_class, agent_args, agent_kwargs, tau
     with open(os.path.join(root_folder, f'{train_title}.data'), 'wb') as f:
         dill.dump((agent_class.__name__, agent_args, agent_kwargs, tau, simple_test), f)
 
-def read_train_title_item(train_title):
+def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
