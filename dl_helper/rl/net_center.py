@@ -65,10 +65,11 @@ class ExperimentHandler:
         
         # 参数更新计数
         self.update_count = 0
-        
+
         # 是否需要验证测试
-        self.need_val = False
-        self.need_test = False
+        t = time.time()
+        self.last_val_time = t
+        self.last_test_time = t
 
     def init_train_data_from_csv(self):
         """从CSV文件初始化训练数据"""
@@ -158,13 +159,15 @@ class ExperimentHandler:
                 log(f'{msg_header} Parameters sent')
 
             elif cmd == 'check':
+                # 30min一次val, 2小时一次test
                 response = 'no'
-                if self.need_test:
+
+                if time.time() - self.last_val_time > 1800:
+                    response = 'val'
+                    self.last_val_time = time.time()
+                elif time.time() - self.last_test_time > 7200:
                     response = 'test'
-                    self.need_test = False
-                elif self.need_val:
-                    response = 'val' 
-                    self.need_val = False
+                    self.last_test_time = time.time()
                 
                 send_msg(client_socket, response.encode())
                 msg = f'{msg_header} Check response sent: {response}'
@@ -188,20 +191,6 @@ class ExperimentHandler:
                     self.learn_metrics[k].append(v)
 
                 self.update_count += 1
-                
-                if self.simple_test:
-                    _test_count = 5
-                    _val_count = 3
-                else:
-                    _val_count = 3000
-                    _test_count = _val_count * 5
-
-                if self.update_count % _test_count == 0:
-                    self.need_test = True
-                elif self.update_count % _val_count == 0:
-                    self.need_val = True
-                if self.simple_test and self.update_count > _test_count * 3:
-                    return True
 
             elif cmd in ['val', 'test']:
                 data_type = cmd
