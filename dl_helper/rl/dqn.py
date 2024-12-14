@@ -122,7 +122,6 @@ class dqn_network(torch.nn.Module):
         
         # 添加Batch Normalization
         self.bn = torch.nn.BatchNorm1d(features_dim)
-        log(self.bn)
         self.dropout = torch.nn.Dropout(p=0.5)
         
         net_arch = net_arch['pi']
@@ -160,9 +159,7 @@ class dqn_network(torch.nn.Module):
         feature = torch.cat([feature, acc_data], dim=1)
         
         # 应用Batch Normalization
-        log(feature.shape)
         x = self.bn(feature)
-        log(x.shape)
         if self.fc_a_length > 1:
             for i in range(self.fc_a_length - 1):
                 x = F.leaky_relu(self.fc_a[i](x))
@@ -248,24 +245,36 @@ class DQN(OffPolicyAgent):
         target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
         self.models = {'q_net': q_net, 'target_q_net': target_q_net}
 
+        # 设置为eval模式
+        self.models['target_q_net'].eval()
+
     def take_action(self, state):
         if self.need_epsilon and np.random.random() < self.epsilon:
             action = np.random.randint(self.action_dim)
         else:
             state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
-            action = self.models['q_net'](state).argmax().item()
+            
+            self.models['q_net'].eval()
+            with torch.no_grad():
+                action = self.models['q_net'](state).argmax().item()
+            self.models['q_net'].train()
         return action
 
     def _update(self, states, actions, rewards, next_states, dones, data_type):
+        # 计算当前Q值
         q_values = self.models['q_net'](states).gather(1, actions)
-        if self.dqn_type in [DOUBLE_DQN, DD_DQN] :
-            max_action = self.models['q_net'](next_states).max(1)[1].view(-1, 1)
-            max_next_q_values = self.models['target_q_net'](next_states).gather(
-                1, max_action)
-        else:
-            max_next_q_values = self.models['target_q_net'](next_states).max(1)[0].view(
-                -1, 1)
-        q_targets = (rewards + self.gamma * max_next_q_values * (1 - dones))
+        
+        # 计算目标Q值,不需要梯度
+        with torch.no_grad():
+            if self.dqn_type in [DOUBLE_DQN, DD_DQN]:
+                # Double DQN: 用当前网络选择动作,目标网络评估动作价值
+                max_action = self.models['q_net'](next_states).max(1)[1].view(-1, 1)
+                max_next_q_values = self.models['target_q_net'](next_states).gather(1, max_action)
+            else:
+                # 普通DQN: 直接用目标网络计算最大Q值
+                max_next_q_values = self.models['target_q_net'](next_states).max(1)[0].view(-1, 1)
+            # 计算目标Q值
+            q_targets = rewards + self.gamma * max_next_q_values * (1 - dones)
         
         # 计算TD误差
         td_error = torch.abs(q_targets - q_values).mean().item()
