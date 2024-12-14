@@ -280,6 +280,7 @@ def run_param_center():
     handlers = {}
     train_dict = read_train_title_item()
     for title, (agent, tau, simple_test) in train_dict.items():
+        log(f'{title} init')    
         handlers[title] = ExperimentHandler(title, agent, tau, simple_test)
 
     while True:
