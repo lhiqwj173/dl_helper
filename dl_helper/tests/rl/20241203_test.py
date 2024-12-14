@@ -20,7 +20,7 @@ init_logger_by_ip()
 
 # 训练参数
 train_title = 'DQN+'
-lr = 1e-5
+lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
 gamma = 0.98
