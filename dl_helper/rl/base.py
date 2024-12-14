@@ -422,7 +422,7 @@ class OffPolicyAgent(BaseAgent):
                             metrics = self.val_test(env, data_type=test_type)
                             log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
                             # 发送验证结果给服务器
-                            send_val_test_data(test_type, metrics)
+                            send_val_test_data(self.train_title, test_type, metrics)
 
                     #################################
                     # 服务器通讯

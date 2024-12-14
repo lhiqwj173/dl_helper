@@ -11,7 +11,7 @@ import numpy as np
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
-from dl_helper.rl.net_center import get_net_params, send_net_updates, send_val_test_data, check_need_val_test
+from dl_helper.rl.socket_base import send_val_test_data
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher
@@ -353,7 +353,7 @@ def run_val_test(val_test, rank, dqn, env):
             metrics = dqn.val_test(env, data_type=test_type)
             log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
             # 发送验证结果给服务器
-            send_val_test_data(test_type, metrics)
+            send_val_test_data(dqn.train_title, test_type, metrics)
 
 def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
     # 根据环境获取对应设备
