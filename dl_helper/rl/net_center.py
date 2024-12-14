@@ -8,7 +8,6 @@ from py_ext.wechat import send_wx
 from datetime import datetime, timezone, timedelta
 import socket, time, sys, os, re
 import pickle
-import dill
 import struct
 import numpy as np
 import pandas as pd
@@ -244,13 +243,13 @@ class ExperimentHandler:
 
 def add_train_title_item(train_title, agent_class, agent_kwargs, tau, simple_test):
     with open(os.path.join(root_folder, f'{train_title}.data'), 'wb') as f:
-        dill.dump((agent_class.__name__, agent_kwargs, tau, simple_test), f)
+        pickle.dump((agent_class.__name__, agent_kwargs, tau, simple_test), f)
 
 def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
-            title, agent_class_name, agent_kwargs, tau, simple_test = dill.load(open(os.path.join(root_folder, file), 'rb'))
+            title, agent_class_name, agent_kwargs, tau, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
             res[title] = (agent_class_name, agent_kwargs, tau, simple_test)
     return res
 
