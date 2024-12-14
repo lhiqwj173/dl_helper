@@ -249,7 +249,8 @@ def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
-            title, agent_class_name, agent_kwargs, tau, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
+            title = file.replace('.data', '')
+            agent_class_name, agent_kwargs, tau, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
             res[title] = (agent_class_name, agent_kwargs, tau, simple_test)
     return res
 
