@@ -251,6 +251,7 @@ class DQN(OffPolicyAgent):
         target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
         self.models = {'q_net': q_net, 'target_q_net': target_q_net}
 
+        self.models['q_net'].train()
         # 设置为eval模式
         self.models['target_q_net'].eval()
 
