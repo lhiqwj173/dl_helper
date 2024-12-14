@@ -49,10 +49,6 @@ d1, d2, d3, d4 = [130, 60, 30, 7]
 features_extractor_kwargs = {'d2': d2, 'd1': d1, 't1': t1, 't2': t2, 'd3': d3, 't3': t3, 'd4': d4, 't4': t4}
 
 if __name__ == '__main__':
-    # 保持上传日志文件
-    upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
-    upload_thread.start()
-
     # 命令行参数文档
     help_doc = """
     命令行参数说明:
@@ -168,6 +164,10 @@ if __name__ == '__main__':
     }
 
     if not is_server:
+        # 保持上传日志文件
+        upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
+        upload_thread.start()
+
         # 初始化DQN
         dqn = agent_class(**agent_kwargs)
 
