@@ -9,7 +9,7 @@ import threading
 from py_ext.tool import log
 
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, run_client_learning_device
-from dl_helper.rl.net_center import run_param_center
+from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
@@ -19,6 +19,7 @@ from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 init_logger_by_ip()
 
 # 训练参数
+train_title = 'DQN+'
 lr = 1e-5
 num_episodes = 5000
 hidden_dim = 128
@@ -56,7 +57,8 @@ if __name__ == '__main__':
     命令行参数说明:
     
     训练相关参数:
-        lr=<float>                   学习率, 默认1e-4
+        train_title=<str>           训练标题
+        lr=<float>                   学习率, 默认1e-4开始
         num_episodes=<int>           训练回合数, 默认5000
         hidden_dim=<int>            隐藏层维度, 默认128
         gamma=<float>               折扣因子, 默认0.98
@@ -92,7 +94,9 @@ if __name__ == '__main__':
             sys.exit(0)
             
         for arg in sys.argv[1:]:
-            if arg.startswith('lr='):
+            if arg.startswith('train_title='):
+                train_title = arg.split('=')[1]
+            elif arg.startswith('lr='):
                 lr = float(arg.split('=')[1])
             elif arg.startswith('num_episodes='):
                 num_episodes = int(arg.split('=')[1])
@@ -142,6 +146,7 @@ if __name__ == '__main__':
         profiler.enable()
         start_time = time.time()
 
+    # 初始化DQN
     dqn = DQN(
         obs_shape=(100, 130),
         learning_rate=lr,
@@ -151,6 +156,7 @@ if __name__ == '__main__':
 
         # 基类参数
         buffer_size=buffer_size,
+        train_title=train_title,
         action_dim=3,
         features_dim=d4+3,
         features_extractor_class=m_bin_ctabl_fix_shape,
@@ -175,7 +181,7 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        run_param_center(dqn, simple_test=simple_test)
+        add_train_title_item(train_title, dqn, tau, simple_test)
 
     # 如果启用了性能分析，输出并保存结果
     if enable_profiling:

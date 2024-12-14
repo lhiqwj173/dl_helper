@@ -9,21 +9,24 @@ from py_ext.wechat import wx
 from py_ext.alist import alist
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
-from dl_helper.rl.net_center import get_net_params, send_net_updates, update_model_params, send_val_test_data, check_need_val_test
+from dl_helper.rl.socker_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test
+from dl_helper.rl.net_center import update_model_params
 from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.rl.tracker import Tracker
 
 class BaseAgent:
     def __init__(self,
-                 action_dim,
-                 features_dim,
-                 features_extractor_class,
-                 features_extractor_kwargs=None,
-                 net_arch=None,
+        train_title,
+        action_dim,
+        features_dim,
+        features_extractor_class,
+        features_extractor_kwargs=None,
+        net_arch=None,
     ):
         """Agent 基类
         
         Args:
+            train_title: 训练标题
             action_dim: 动作空间维度 
             features_dim: 特征维度
             features_extractor_class: 特征提取器类,必须提供
@@ -36,6 +39,8 @@ class BaseAgent:
             take_action: 根据状态选择动作
             _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
         """
+        self.train_title = train_title
+
         if features_extractor_class is None:
             raise ValueError("必须提供特征提取器类 features_extractor_class")
         self.features_extractor_class = features_extractor_class
@@ -165,6 +170,7 @@ class OffPolicyAgent(BaseAgent):
             buffer_size: 经验回放池大小
 
             BaseAgent 参数
+                train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
                 features_extractor_class: 特征提取器类,必须提供
@@ -197,7 +203,7 @@ class OffPolicyAgent(BaseAgent):
         raise NotImplementedError
 
     def update_params_from_server(self, env):
-        new_params = get_net_params()
+        new_params = get_net_params(self.train_title)
         if new_params:
             self.apply_new_params(new_params)
             # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
@@ -210,7 +216,7 @@ class OffPolicyAgent(BaseAgent):
         # 同步agent内部参数
         self.sync_update_net_params_in_agent()
         # 上传参数 /上传学习监控指标
-        send_net_updates(self.get_params_to_send(), self.tracker.get_metrics())
+        send_net_updates(self.train_title, self.get_params_to_send(), self.tracker.get_metrics())
 
     def track_error(self, td_error, loss_value, data_type='train'):
         # tracker 记录
@@ -298,7 +304,7 @@ class OffPolicyAgent(BaseAgent):
             # 上传更新到alist
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             # 上传文件夹
-            upload_folder = f'/rl_learning_process/predict_{data_type}/'
+            upload_folder = f'/rl_learning_process/{self.train_title}/predict_{data_type}/'
             client.mkdir(upload_folder)
             client.upload(env.predict_file, upload_folder)
 
@@ -348,30 +354,12 @@ class OffPolicyAgent(BaseAgent):
                 next_state, reward, done1, done2, info = env.step(action)
                 done = done1 or done2
 
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
-
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # for d in self.replay_buffer.buffer_temp:
-                #     state = d[0]
-                #     if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #         raise ValueError(f'检测到NaN/Inf值,state: {state}')
 
                 # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
                 if info.get('close', False):
                     self.replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
-
-                    # # 测试用
-                    # # 检查是否有nan/inf值
-                    # for d in self.replay_buffer.buffer:
-                    #     if np.argwhere(np.isnan(d[0])).any() or np.argwhere(np.isinf(d[0])).any():
-                    #         raise ValueError(f'检测到NaN/Inf值,state: {d[0]}')
 
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
@@ -417,14 +405,6 @@ class OffPolicyAgent(BaseAgent):
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
                         log(f'{self.msg_head} {learn_step} sync params')
-
-                        # 测试用
-                        # import time
-                        # for i in range(60*5):
-                        #     log(f'{self.msg_head} sync params {i}s')
-                        #     time.sleep(1)
-                        # return
-
                         # 同步最新参数
                         # 推送参数更新
                         self.push_params_to_server()
@@ -433,21 +413,21 @@ class OffPolicyAgent(BaseAgent):
 
                         # 验证/测试
                         # 询问 服务器 是否需要 验证/测试
-                        need_val_test_res = check_need_val_test()
-                        for test_type in ['val', 'test']:
-                            if need_val_test_res[test_type]:
-                                need_train_back = True  
-                                log(f'{self.msg_head} wait metrics for {test_type}')
-                                t = time.time()
-                                metrics = self.val_test(env, data_type=test_type)
-                                log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
-                                # 发送验证结果给服务器
-                                send_val_test_data(test_type, metrics)
+                        # 返回: 'val' / 'test' / 'no'
+                        need_val_test_res = check_need_val_test(self.train_title)
+                        if need_val_test_res != 'no':
+                            test_type = need_val_test_res
+                            need_train_back = True  
+                            log(f'{self.msg_head} wait metrics for {test_type}')
+                            t = time.time()
+                            metrics = self.val_test(env, data_type=test_type)
+                            log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
+                            # 发送验证结果给服务器
+                            send_val_test_data(test_type, metrics)
 
                     #################################
                     # 服务器通讯
                     #################################
-
                     # 切换回训练模式
                     if need_train_back:
                         self.train()

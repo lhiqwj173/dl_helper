@@ -57,7 +57,7 @@ class test_features_extractor_class(torch.nn.Module):
     def forward(self, x):
         return F.relu(self.fc1(x))
 
-class dqn_network(torch.nn.Module):
+class dqn_network_0(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
         """
         features_dim: features_extractor_class输出维度  + 2(持仓 + 为实现收益率)
@@ -111,436 +111,68 @@ class dqn_network(torch.nn.Module):
 
         return x
 
-class DQN_backup(BaseAgent):
-    def __init__(self,
-            obs_shape,
-            action_dim,
-            features_dim,
-            features_extractor_class,
-            learning_rate,
-            gamma,
-            epsilon,
-            target_update,
-            buffer_size,
-            wait_trade_close = True,
-            features_extractor_kwargs=None,
-            net_arch=None,
-            dqn_type=VANILLA_DQN,
-    ):
+class dqn_network(torch.nn.Module):
+    def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
         """
-        DQN算法
-
-        Args:
-            action_dim: 动作空间维度
-            features_dim: 特征维度
-            features_extractor_class: 特征提取器类,必须提供
-            learning_rate: 学习率
-            gamma: 折扣因子
-            epsilon: epsilon-贪婪策略中的epsilon
-            target_update: 目标网络更新频率
-            features_extractor_kwargs: 特征提取器参数,可选
-            net_arch: 网络架构参数,可选
-            dqn_type: DQN类型,可选 VANILLA_DQN/DOUBLE_DQN/DUELING_DQN/DD_DQN
+        features_dim: features_extractor_class输出维度  + 2(持仓 + 为实现收益率)
         """
-        super().__init__(action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)   
-        assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
-
+        super().__init__()
         self.obs_shape = obs_shape
-        self.action_dim = action_dim
-        self.gamma = gamma
-        self.epsilon = epsilon
-        self.need_epsilon = True,
-        self.target_update = target_update
-        self.count = 0
-        self.dqn_type = dqn_type
-        self.device = None
-        self.msg_head = f''
-        self.buffer_size = buffer_size
-        self.wait_trade_close = wait_trade_close    
-        self.replay_buffer = ReplayBuffer(buffer_size) if not wait_trade_close else ReplayBufferWaitClose(buffer_size)
-        self.q_net, self.target_q_net = self.build_model()
-        self.optimizer = torch.optim.Adam(self.q_net.parameters(),
-                                          lr=learning_rate)
-
-        # 跟踪器
-        self.tracker = Tracker('learn', 10)
-        self.tracker_val_test = None
-
-    def upload_log_file(self):
-        global last_upload_time
+        self.features_extractor = features_extractor_class(**features_extractor_kwargs)
         
-        current_time = time.time()
-        with upload_lock:
-            # 检查是否距离上次上传已经超过5分钟
-            if current_time - last_upload_time >= UPLOAD_INTERVAL:
-                upload_log_file()
-                last_upload_time = current_time
-                log(f'{self.msg_head} Log file uploaded')
-            else:
-                remaining = UPLOAD_INTERVAL - (current_time - last_upload_time)
-                log(f'{self.msg_head} Skip log upload, {remaining:.1f}s remaining')
-
-    def to(self, device):
-        self.device = device
-        self.q_net = self.q_net.to(device)
-        self.target_q_net = self.target_q_net.to(device)
-        self.msg_head = f'[{device}]'
-
-    def eval(self):
-        self.need_epsilon = False
-
-    def train(self):
-        self.need_epsilon = True
-
-    def state_dict(self):
-        state = {}
-
-        # 模型参数
-        self.state_dict_model(state, 'q_net', self.q_net)
-        self.state_dict_model(state, 'target_q_net', self.target_q_net) 
-        return state
-
-    def build_model(self):
-        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
-        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
-        # print(f'q_net: {id(q_net)}, target_q_net: {id(target_q_net)}')
-        return q_net, target_q_net
-
-    def take_action(self, state):
-        if np.random.random() < self.epsilon and self.need_epsilon:
-            action = np.random.randint(self.action_dim)
+        # 添加Batch Normalization
+        self.bn = torch.nn.BatchNorm1d(features_dim)
+        self.dropout = torch.nn.Dropout(p=0.5)
+        
+        net_arch = net_arch['pi']
+        self.fc_a_length = len(net_arch)
+        
+        if self.fc_a_length == 1:
+            self.fc_a = torch.nn.Linear(features_dim, net_arch[0])
         else:
-            state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
-            action = self.q_net(state).argmax().item()
-        return action
+            self.fc_a = torch.nn.ModuleList([torch.nn.Linear(features_dim, net_arch[0])])
+            for i in range(1, self.fc_a_length):
+                self.fc_a.append(torch.nn.Linear(net_arch[i - 1], net_arch[i]))
 
-    def max_q_value(self, state):
-        state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
-        return self.q_net(state).max().item()
-
-    def _update_target_q_net_params(self):
-        self.target_q_net.load_state_dict(self.q_net.state_dict())
-
-    def update(self, transition_dict, data_type='train'):
-
-        # # 测试用
-        # # 检查是否有nan/inf值
-        # state = transition_dict['states']
-        # if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-        #     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
-        states = torch.from_numpy(transition_dict['states']).to(self.device)
-        actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
-        rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
-        next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
-        dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
-
-        # # 测试用
-        # # 检查是否有nan/inf值
-        # if torch.isnan(states) or torch.isinf(states):
-        #     raise ValueError(f'检测到NaN/Inf值,state: {states}')
-
-        q_values = self.q_net(states).gather(1, actions)
-        if self.dqn_type in [DOUBLE_DQN, DD_DQN] :
-            max_action = self.q_net(next_states).max(1)[1].view(-1, 1)
-            max_next_q_values = self.target_q_net(next_states).gather(
-                1, max_action)
-        else:
-            max_next_q_values = self.target_q_net(next_states).max(1)[0].view(
-                -1, 1)
-        q_targets = (rewards + self.gamma * max_next_q_values * (1 - dones))
-        
-        # tracker 记录
-        tracker = self.tracker if data_type == 'train' else self.tracker_val_test
-
-        # 计算TD误差
-        td_error = torch.abs(q_targets - q_values).mean().item()
-        tracker.update_td_error(td_error)
-        
-        # 计算损失
-        dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
-        tracker.update_loss_value(dqn_loss.item())
-
-        # 检查是否有nan/inf值
-        if (torch.isnan(dqn_loss) or torch.isinf(dqn_loss) or 
-            np.isnan(td_error) or np.isinf(td_error)):
-            # 保存batch数据到pickle文件
-            batch_data = {
-                'states': states.cpu().numpy(),
-                'actions': actions.cpu().numpy(),
-                'rewards': rewards.cpu().numpy(), 
-                'next_states': next_states.cpu().numpy(),
-                'dones': dones.cpu().numpy(),
-                'q_values': q_values.detach().cpu().numpy(),
-                'q_targets': q_targets.detach().cpu().numpy(),
-                'max_next_q_values': max_next_q_values.detach().cpu().numpy(),
-                'dqn_loss': dqn_loss.item(),
-                'td_error': td_error
-            }
+        self.fc_v = None
+        if dqn_type in [DUELING_DQN, DD_DQN]:
+            self.fc_v = torch.nn.Linear(features_dim, 1)
             
-            # 保存到文件
-            with open(f'nan_batch_{data_type}.pkl', 'wb') as f:
-                pickle.dump(batch_data, f)
-                
-            error_msg = f'检测到NaN/Inf值,dqn_loss:{dqn_loss.item()},td_error:{td_error},batch数据已保存到nan_batch_{data_type}.pkl'
-            raise ValueError(error_msg)
+        self.init_weights()
+
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, torch.nn.Linear):
+                torch.nn.init.kaiming_normal_(m.weight)
+                torch.nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        """
+        先将x分成两个tensor
+        lob: x[:, :-3]
+        acc: x[:, -3:]
+        """
+        lob_data = x[:, :-3].view(-1, self.obs_shape[0], self.obs_shape[1])
+        acc_data = x[:, -3:]
+
+        feature = self.features_extractor(lob_data)
+        feature = torch.cat([feature, acc_data], dim=1)
         
-        if data_type == 'train':
-            self.optimizer.zero_grad()
-            dqn_loss.backward()
-            self.optimizer.step()
+        # 应用Batch Normalization
+        x = self.bn(feature)
+        if self.fc_a_length > 1:
+            for i in range(self.fc_a_length - 1):
+                x = F.leaky_relu(self.fc_a[i](x))
+                x = self.dropout(x)
+            x = self.fc_a[-1](x)
+        else:
+            x = self.fc_a(x)
 
-            if self.count > 0 and self.count % self.target_update == 0:
-                self._update_target_q_net_params()
-            self.count += 1
+        if self.fc_v is not None:
+            v = self.fc_v(feature)
+            x = v + x - x.mean(1).view(-1, 1)
 
-    def update_params_from_server(self, env):
-        new_params = get_net_params()
-        if new_params:
-            self.q_net = update_model_params(self.q_net, new_params, tau=1)
-            self.target_q_net = update_model_params(self.target_q_net, new_params, tau=1)
-            # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
-            self.replay_buffer.reset()
-            log(f'{self.msg_head} replay_buffer reset > {self.replay_buffer.size()}')
-            # 重置环境中的账户
-            env.acc.reset()
-
-    def push_params_to_server(self):
-        # 更新目标网络参数
-        self._update_target_q_net_params()
-        # 上传参数 /上传学习监控指标
-        send_net_updates(self.q_net.state_dict(), self.tracker.get_metrics())
-
-    def val_test(self, env, data_type='val'):
-        # 验证模式
-        self.eval()
-
-        # 初始化跟踪器
-        self.tracker_val_test = Tracker(data_type, 10000, rank=self.tracker.rank)
-
-        env.set_data_type(data_type)
-
-        # 回放池
-        replay_buffer = ReplayBuffer(self.buffer_size) if not self.wait_trade_close else ReplayBufferWaitClose(self.buffer_size)
-
-        log(f'{self.msg_head} {data_type} begin')
-        state, info = env.reset()
-        done = False
-        while not done:
-            action = self.take_action(state)
-            # 更新跟踪器 动作
-            self.tracker_val_test.update_action(action)
-            next_state, reward, done1, done2, info = env.step(action)
-            done = done1 or done2
-
-            # 添加到回放池
-            replay_buffer.add(state, action, reward, next_state, done)
-
-            # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
-            if info.get('close', False):
-                if self.wait_trade_close:
-                    replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
-                # 更新跟踪器 奖励
-                self.tracker_val_test.update_reward(reward)
-
-                # 更新跟踪器 非法/win/loss
-                if reward == ILLEGAL_REWARD:
-                    self.tracker_val_test.update_illegal()
-                elif info['total_return'] > 0:
-                    self.tracker_val_test.update_win()
-                else:
-                    self.tracker_val_test.update_loss_count()
-
-                # 更新评价指标
-                for k, v in info.items():
-                    if k not in ['close', 'date_done']:
-                        self.tracker_val_test.update_extra_metrics(k, v)
-
-            # 更新跟踪器 日期文件完成, 需要更新
-            if info.get('date_done', False):
-                self.tracker_val_test.day_end()
-
-            state = next_state
-
-        # 超大batchsize计算error
-        batch_size = 1024 * 1024
-        while replay_buffer.size() > 0:
-            b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(batch_size)
-            transition_dict = {
-                'states': b_s,
-                'actions': b_a,
-                'next_states': b_ns,
-                'rewards': b_r,
-                'dones': b_d
-            }
-            self.update(transition_dict, data_type=data_type)
-
-        # 获取统计指标
-        metrics = self.tracker_val_test.get_metrics()
-
-        # 显式删除跟踪器对象及其内存
-        del self.tracker_val_test
-        self.tracker_val_test = None
-
-        # 若是 test，上传预测数据文件到alist
-        if data_type in ['val', 'test']:
-            # 上传更新到alist
-            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-            # 上传文件夹
-            upload_folder = f'/rl_learning_process/predict_{data_type}/'
-            client.mkdir(upload_folder)
-            client.upload(env.predict_file, upload_folder)
-
-        return metrics
-
-    def learn(self, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
-        """
-        训练
-
-        Args:
-            env: 环境
-            num_episodes: 训练回合数
-            minimal_size: 最小训练次数
-            batch_size: 批次大小
-            sync_interval_learn_step:   同步参数间隔，会询问是否需要验证/测试
-            learn_interval_step:        学习更新间隔                     
-        """
-        # 学习步数
-        learn_step = 0
-
-        # 拉取服务器的最新参数并更新
-        self.update_params_from_server(env)
-
-        # 学习是否开始
-        for i in range(num_episodes):
-            self.msg_head = f'[{self.device}][e{i}]'
-
-            # 回合的评价指标
-            state, info = env.reset()
-            done = False
-            step = 0
-            while not done:
-                step += 1
-                if step % 1000 == 0:
-                    self.upload_log_file()
-
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
-                # 动作
-                action = self.take_action(state)
-                # 更新跟踪器 动作
-                self.tracker.update_action(action)
-
-                # 环境交互
-                next_state, reward, done1, done2, info = env.step(action)
-                done = done1 or done2
-
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
-                # 添加到回放池
-                self.replay_buffer.add(state, action, reward, next_state, done)
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # for d in self.replay_buffer.buffer_temp:
-                #     state = d[0]
-                #     if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #         raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
-                # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
-                if info.get('close', False):
-                    if self.wait_trade_close:
-                        self.replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
-                        # # 测试用
-                        # # 检查是否有nan/inf值
-                        # for d in self.replay_buffer.buffer:
-                        #     if np.argwhere(np.isnan(d[0])).any() or np.argwhere(np.isinf(d[0])).any():
-                        #         raise ValueError(f'检测到NaN/Inf值,state: {d[0]}')
-
-                    # 更新跟踪器 奖励
-                    self.tracker.update_reward(reward)
-
-                    # 更新跟踪器 非法/win/loss
-                    if reward == ILLEGAL_REWARD:
-                        self.tracker.update_illegal()
-                    elif info['total_return'] > 0:
-                        self.tracker.update_win()
-                    else:
-                        self.tracker.update_loss_count()
-
-                    # 更新评价指标
-                    for k, v in info.items():
-                        if k not in ['close', 'date_done']:
-                            self.tracker.update_extra_metrics(k, v)
-                
-                # 更新跟踪器 日期文件完成, 需要更新
-                if info.get('date_done', False):
-                    self.tracker.day_end()
-
-                # 更新状态
-                state = next_state
-
-                # 更新网络
-                if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
-                    # 学习经验
-                    b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(
-                        batch_size)
-                    transition_dict = {
-                        'states': b_s,
-                        'actions': b_a,
-                        'next_states': b_ns,
-                        'rewards': b_r,
-                        'dones': b_d
-                    }
-                    self.update(transition_dict)
-
-                    #################################
-                    # 服务器通讯
-                    #################################
-                    learn_step += 1
-                    need_train_back = False
-                    if learn_step % sync_interval_learn_step == 0:
-                        log(f'{self.msg_head} {learn_step} sync params')
-
-                        # 同步最新参数
-                        # 推送参数更新
-                        self.push_params_to_server()
-                        # 拉取服务器的最新参数并更新
-                        self.update_params_from_server(env)
-
-                        # 验证/测试
-                        need_val_test_res = check_need_val_test()
-                        for test_type in ['val', 'test']:
-                            if need_val_test_res[test_type]:
-                                need_train_back = True  
-                                log(f'{self.msg_head} wait metrics for {test_type}')
-                                t = time.time()
-                                metrics = self.val_test(env, data_type=test_type)
-                                log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
-                                # 发送验证数据
-                                send_val_test_data(test_type, metrics)
-
-                        # 如果进行了验证/测试,上传日志
-                        if any(need_val_test_res.values()):
-                            self.upload_log_file()
-                    #################################
-                    # 服务器通讯
-                    #################################
-
-                    # 切换回训练模式
-                    if need_train_back:
-                        self.train()
-                        env.set_data_type('train')
-                        state, info = env.reset()
-                        done = False
-
-            log(f'{self.msg_head} done')
-            self.upload_log_file()
+        return x
 
 class DQN(OffPolicyAgent):
 
@@ -554,6 +186,7 @@ class DQN(OffPolicyAgent):
 
         # 基类参数
         buffer_size,
+        train_title,
         action_dim,
         features_dim,
         features_extractor_class,
@@ -575,6 +208,7 @@ class DQN(OffPolicyAgent):
 
             基类参数
                 buffer_size: 经验回放池大小
+                train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
                 features_extractor_class: 特征提取器类,必须提供
@@ -582,7 +216,7 @@ class DQN(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
         self.obs_shape = obs_shape

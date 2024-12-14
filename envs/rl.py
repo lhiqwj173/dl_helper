@@ -12,6 +12,7 @@ cmd = 'cd /kaggle/working/3rd/dl_helper && pip install -e .'
 subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
 for cmd in [
+        'pip install dill',
         'pip install gymnasium',
         'pip install df2img',
         'pip install imgkit',
