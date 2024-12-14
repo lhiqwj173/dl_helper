@@ -165,7 +165,7 @@ if __name__ == '__main__':
 
     if not is_server:
         # 保持上传日志文件
-        upload_thread = threading.Thread(target=keep_upload_log_file, daemon=True)
+        upload_thread = threading.Thread(target=keep_upload_log_file, args=(train_title,), daemon=True)
         upload_thread.start()
 
         # 初始化DQN

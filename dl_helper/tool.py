@@ -36,7 +36,7 @@ def init_logger_by_ip():
         ip = socket.gethostbyname(hostname)
     init_logger(f'{ip}', level='INFO', timestamp=False, enqueue=True)
 
-def upload_log_file():
+def upload_log_file(train_title):
     """上传日志文件到alist"""
     # 获取日志文件
     log_file = get_log_file()
@@ -44,17 +44,17 @@ def upload_log_file():
         # 上传到alist
         client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
         # 上传文件夹
-        upload_folder = '/rl_learning_process/logs/'
+        upload_folder = f'/rl_learning_process/{train_title}/logs/'
         client.mkdir(upload_folder)
         client.upload(log_file, upload_folder)
         log(f'Upload log file to alist: {log_file}')
 
-def keep_upload_log_file():
+def keep_upload_log_file(train_title):
     """保持上传日志文件"""
     log(f'keep_upload_log_file start: {get_log_file()}')
     while True:
         time.sleep(UPLOAD_INTERVAL)
-        upload_log_file()
+        upload_log_file(train_title)
 
 def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     """计算夏普比率
