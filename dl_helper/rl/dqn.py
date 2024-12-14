@@ -60,7 +60,7 @@ class test_features_extractor_class(torch.nn.Module):
 class dqn_network_0(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
         """
-        features_dim: features_extractor_class输出维度  + 2(持仓 + 为实现收益率)
+        features_dim: features_extractor_class输出维度  + 3(symbol_id + 持仓 + 未实现收益率)
         """
         super().__init__()
         self.obs_shape = obs_shape
@@ -114,7 +114,7 @@ class dqn_network_0(torch.nn.Module):
 class dqn_network(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
         """
-        features_dim: features_extractor_class输出维度  + 2(持仓 + 为实现收益率)
+        features_dim: features_extractor_class输出维度  + 3(symbol_id + 持仓 + 未实现收益率)
         """
         super().__init__()
         self.obs_shape = obs_shape
@@ -122,6 +122,7 @@ class dqn_network(torch.nn.Module):
         
         # 添加Batch Normalization
         self.bn = torch.nn.BatchNorm1d(features_dim)
+        log(self.bn)
         self.dropout = torch.nn.Dropout(p=0.5)
         
         net_arch = net_arch['pi']
@@ -159,7 +160,9 @@ class dqn_network(torch.nn.Module):
         feature = torch.cat([feature, acc_data], dim=1)
         
         # 应用Batch Normalization
+        log(feature.shape)
         x = self.bn(feature)
+        log(x.shape)
         if self.fc_a_length > 1:
             for i in range(self.fc_a_length - 1):
                 x = F.leaky_relu(self.fc_a[i](x))
