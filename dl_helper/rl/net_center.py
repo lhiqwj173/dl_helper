@@ -162,12 +162,13 @@ class ExperimentHandler:
                 # 30min一次val, 2小时一次test
                 response = 'no'
 
-                if time.time() - self.last_val_time > 1800:
+                t = time.time()
+                if t - self.last_val_time > 1800:
                     response = 'val'
-                    self.last_val_time = time.time()
-                elif time.time() - self.last_test_time > 7200:
+                    self.last_val_time = t
+                elif t - self.last_test_time > 7200:
                     response = 'test'
-                    self.last_test_time = time.time()
+                    self.last_test_time = t
                 
                 send_msg(client_socket, response.encode())
                 msg = f'{msg_header} Check response sent: {response}'

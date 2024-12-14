@@ -19,7 +19,7 @@ from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 init_logger_by_ip()
 
 # 训练参数
-train_title = 'DQN+'
+train_title = 'DQN_20241214'
 lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
