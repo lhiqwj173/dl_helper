@@ -128,3 +128,14 @@ def compute_advantage(gamma, lmbda, td_delta):
     advantage_list.reverse()
     return torch.tensor(advantage_list, dtype=torch.float)
                 
+def update_model_params(model, new_params, tau=0.005):
+    """使用新参数软更新模型参数"""
+    params = model.state_dict()
+    for name, param in params.items():
+        if name in new_params:
+            # 确保新参数在同一设备上
+            new_param = new_params[name]
+            if new_param.device != param.device:
+                new_param = new_param.to(param.device)
+            param.copy_((1 - tau) * param + tau * new_param)
+    return model
