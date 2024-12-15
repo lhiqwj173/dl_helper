@@ -2,7 +2,7 @@
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from py_ext.tool import log
+from py_ext.tool import log, init_logger
 from py_ext.wechat import send_wx
 
 from datetime import datetime, timezone, timedelta
@@ -614,6 +614,8 @@ def run_param_center():
 
 
 if __name__ == '__main__':
+    init_logger('net_center')
+
     # 初始化实验处理器
     run_param_center()
 
