@@ -521,7 +521,10 @@ class ExperimentHandler:
             pass
 
 def add_train_title_item(train_title, agent_class, agent_kwargs, tau, simple_test):
-    with open(os.path.join(root_folder, f'{train_title}.data'), 'wb') as f:
+    file = os.path.join(root_folder, f'{train_title}.data')
+    if os.path.exists(file):
+        return
+    with open(file, 'wb') as f:
         pickle.dump((agent_class.__name__, agent_kwargs, tau, simple_test), f)
 
 def read_train_title_item():
