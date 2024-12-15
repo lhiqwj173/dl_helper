@@ -35,6 +35,7 @@ def init_logger_by_ip():
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
     init_logger(f'{ip}', level='INFO', timestamp=False, enqueue=True)
+    log(f'init_logger: {get_log_file()}')
 
 def upload_log_file(train_title):
     """上传日志文件到alist"""
