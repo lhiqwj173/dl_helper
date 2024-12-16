@@ -6,6 +6,7 @@ import pickle
 import torch
 import torch.nn.functional as F
 import numpy as np
+import torch.nn as nn
 
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
