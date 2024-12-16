@@ -3,6 +3,78 @@ import torch
 import torch.multiprocessing as mp
 from dl_helper.train_param import match_num_processes, get_gpu_info
 
+def run_val_test(val_test, rank, agent, env):
+    """根据val_test类型和rank决定是否执行及执行类型
+    
+    Args:
+        val_test: 验证/测试类型 'val'/'test'/'all'
+        rank: 进程rank
+        agent: 智能体
+        env: 环境
+    """
+    should_run = False
+    test_type = None
+    
+    if val_test in ['val', 'test']:
+        # val或test模式只在rank0执行
+        if rank == 0:
+            should_run = True
+            test_type = val_test
+    elif val_test == 'all':
+        # all模式下rank0执行val,rank1执行test
+        if rank == 0:
+            should_run = True
+            test_type = 'val'
+        elif rank == 1:
+            should_run = True
+            test_type = 'test'
+            
+    if should_run:
+        i = 0
+        while True:
+            log(f'{rank} {i} test {test_type} dataset...')
+            i += 1
+
+            # 同步最新参数
+            # 拉取服务器的最新参数并更新
+            agent.update_params_from_server(env)
+
+            log(f'{rank} {i} wait metrics for {test_type}')
+            t = time.time()
+            metrics = agent.val_test(env, data_type=test_type)
+            log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
+            # 发送验证结果给服务器
+            send_val_test_data(agent.train_title, test_type, metrics)
+
+def run_client_learning_device(rank, num_processes, data_folder, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+    # 根据环境获取对应设备
+    _run_device = get_gpu_info()
+    if _run_device == 'TPU':  # 如果是TPU环境
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+    elif _run_device in ['T4x2', 'P100']:
+        device = torch.device(f'cuda:{rank}' if num_processes > 1 else 'cuda')
+    else:
+        device = torch.device('cpu')
+    log(f'rank: {rank}, num_processes: {num_processes} device: {device}, run...')
+    
+    # 移动到设备
+    agent.to(device)
+    agent.tracker.set_rank(rank)
+    
+    # 初始化环境
+    dp = data_producer(data_folder=data_folder, simple_test=simple_test, file_num=15 if enable_profiling else 0)
+    env = LOB_trade_env(data_producer=dp)
+
+    # 开始训练
+    if val_test:
+        # 验证/测试
+        run_val_test(val_test, rank, agent, env)
+    else:
+        log(f'{rank} learn...')
+        agent.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+
+
 def train_func_device(rank, num_processes, a, b, c):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()

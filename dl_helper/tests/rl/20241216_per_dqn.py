@@ -8,7 +8,8 @@ import threading
 
 from py_ext.tool import log
 
-from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
+from dl_helper.rl.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
+from dl_helper.rl.per_dqn import PER_DQN
 from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning, run_client_learning_device
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
@@ -19,7 +20,7 @@ from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 init_logger_by_ip()
 
 # 训练参数
-train_title = 'DQN_20241214'
+train_title = 'PER_DQN_20241216'
 lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
@@ -28,7 +29,7 @@ epsilon = 0.5
 target_update = 50
 buffer_size = 5000
 minimal_size = 3000
-batch_size = 64
+batch_size = 256
 sync_interval_learn_step=150
 learn_interval_step=4
 server_tau = 0.005
@@ -146,7 +147,7 @@ if __name__ == '__main__':
         profiler.enable()
         start_time = time.time()
 
-    agent_class = DQN
+    agent_class = PER_DQN
     agent_kwargs = {
         'obs_shape': (100, 130),
         'learning_rate': lr,
@@ -168,8 +169,8 @@ if __name__ == '__main__':
         upload_thread = threading.Thread(target=keep_upload_log_file, args=(train_title,), daemon=True)
         upload_thread.start()
 
-        # 初始化DQN
-        dqn = agent_class(**agent_kwargs)
+        # 初始化agrnt
+        agent = agent_class(**agent_kwargs)
 
         # 训练数据
         if in_kaggle:
@@ -180,7 +181,7 @@ if __name__ == '__main__':
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
-        args = (data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        args = (data_folder, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
         kwargs = {'simple_test': simple_test, 'val_test': val_test, 'enable_profiling': enable_profiling}
         run_client_learning(run_client_learning_device, args, kwargs)
     else:

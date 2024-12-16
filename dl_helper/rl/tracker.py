@@ -59,11 +59,11 @@ class Tracker:
         # sortino_ratio
         # sharpe_ratio
         # max_drawdown
-        # total_return
+        # trade_return
         # sortino_ratio_bm
         # sharpe_ratio_bm
         # max_drawdown_bm
-        # total_return_bm
+        # trade_return_bm
         self.extra_metrics = {}
         self.daily_extra_metrics = {}
 
@@ -206,10 +206,12 @@ class Tracker:
         - sharpe_ratio
         - max_drawdown
         - total_return
+        - trade_return
         - sortino_ratio_bm
         - sharpe_ratio_bm
         - max_drawdown_bm
         - total_return_bm
+        - trade_return_bm
         """
         if not self.daily_rewards:# or len(self.daily_rewards) < self.n_days:
             return {}
@@ -242,12 +244,18 @@ class Tracker:
         # sharpe_ratio
         # max_drawdown
         # total_return
+        # trade_return
         # sortino_ratio_bm
         # sharpe_ratio_bm
         # max_drawdown_bm
         # total_return_bm
+        # trade_return_bm
         for k, v in self.daily_extra_metrics.items():
-            metrics[k] = np.nanmean(v)
+            if k.startswith('total_return'):
+                # 对数收益率累计
+                metrics[k] = np.nansum(v)
+            elif k.startswith('trade_return'):
+                metrics[k] = np.nanmean(v)
 
         return metrics
     

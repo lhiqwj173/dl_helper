@@ -119,20 +119,20 @@ def calc_max_drawdown(returns):
     drawdown = cumulative/running_max - 1
     return np.min(drawdown)
 
-def calc_total_return(returns):
-    """计算总收益率
+def calc_return(returns):
+    """计算总对数收益率
     Args:
-        returns: 收益率序列
+        returns: 对数收益率序列（不进行标准化）
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
-    total_return = (1 + returns).prod() - 1
-    return total_return / len(returns)  # 根据序列长度标准化
+    total_return = np.sum(returns)
+    return total_return
 
 def calc_volatility(returns):
     """计算波动率
     Args:
-        returns: 收益率序列
+        returns: 对数收益率序列
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values

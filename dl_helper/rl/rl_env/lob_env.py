@@ -8,7 +8,7 @@ import gymnasium.spaces as spaces
 import pickle
 from py_ext.tool import log
 
-from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_max_drawdown, calc_total_return
+from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_max_drawdown, calc_return
 
 USE_CODES = [
     '513050',
@@ -386,7 +386,8 @@ class Account:
                     res['sortino_ratio'] = calc_sortino_ratio(log_returns)
                     res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
                     res['max_drawdown'] = calc_max_drawdown(log_returns)
-                    res['total_return'] = calc_total_return(log_returns)
+                    res['total_return'] = calc_return(log_returns)
+                    res['trade_return'] = res['total_return'] / len(log_returns)
 
                     # 计算基准净值的评价指标
                     buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
@@ -399,20 +400,27 @@ class Account:
                     res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
                     res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
                     res['max_drawdown_bm'] = calc_max_drawdown(log_returns_bm)
-                    res['total_return_bm'] = calc_total_return(log_returns_bm)
+                    res['total_return_bm'] = calc_return(log_returns_bm)
+                    res['trade_return_bm'] = res['total_return_bm'] / len(log_returns_bm)
                 else:
                     res['sortino_ratio'] = 0
                     res['sharpe_ratio'] = 0
                     res['max_drawdown'] = 0
                     res['total_return'] = 0
+                    res['trade_return'] = 0
                     res['sortino_ratio_bm'] = 0
                     res['sharpe_ratio_bm'] = 0
                     res['max_drawdown_bm'] = 0
                     res['total_return_bm'] = 0
+                    res['trade_return_bm'] = 0
         else:
             # 不合法的操作，交易全部清空
             self.reset()
 
+        # 增加操作交易评价结果
+        # 体现 非法/win/loss
+        res['act_criteria'] = -1 if not legal else 0 if res['total_return'] > 0 else 1
+        
         return legal, self.pos, unrealized_profit, res
         
     def reset(self):
@@ -497,7 +505,7 @@ class LOB_trade_env(gym.Env):
         # 同时记录评价指标
         if need_close or action==1:
             info['close'] = True
-            reward = res['total_return'] + res['max_drawdown']
+            reward = res['trade_return'] + res['max_drawdown']
             for k, v in res.items():
                 info[k] = v
         else:

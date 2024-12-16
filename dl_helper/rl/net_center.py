@@ -97,14 +97,10 @@ class ExperimentHandler:
             - sortino_ratio_bm
 
             图7
-            - sharpe_ratio
-            - sharpe_ratio_bm
-
-            图8
             - max_drawdown
             - max_drawdown_bm
 
-            图9
+            图8
             - total_return
             - total_return_bm
         """
@@ -115,27 +111,25 @@ class ExperimentHandler:
             
         # 固定颜色
         colors = {
-            'moving_average_reward': '#ff7f0e', # 橙色
-            'average_td_error': '#d62728',     # 红色
-            'average_loss': '#9467bd',         # 紫色
-            'illegal_ratio': '#8c564b',        # 棕色
-            'win_ratio': '#e377c2',            # 粉色
-            'loss_ratio': '#7f7f7f',           # 灰色
-            'action_0': '#bcbd22',             # 黄绿色
-            'action_1': '#17becf',             # 青色
-            'action_2': '#1f77b4',             # 蓝色
-            'sortino_ratio': '#d62728',        # 红色
-            'sortino_ratio_bm': '#d62728',     # 红色
-            'sharpe_ratio': '#2ca02c',         # 绿色
-            'sharpe_ratio_bm': '#2ca02c',      # 绿色
-            'max_drawdown': '#ff7f0e',         # 橙色
-            'max_drawdown_bm': '#ff7f0e',      # 橙色
-            'total_return': '#9467bd',         # 紫色
-            'total_return_bm': '#9467bd'       # 紫色
+            'moving_average_reward': '#ff7f0e',
+            'average_td_error': '#d62728',
+            'average_loss': '#9467bd',
+            'illegal_ratio': '#8c564b',
+            'win_ratio': '#e377c2',
+            'loss_ratio': '#7f7f7f',
+            'action_0': '#bcbd22',
+            'action_1': '#17becf',
+            'action_2': '#1f77b4',
+            'sortino_ratio': '#d62728',
+            'sortino_ratio_bm': '#d62728',
+            'max_drawdown': '#ff7f0e',
+            'max_drawdown_bm': '#ff7f0e',
+            'total_return': '#9467bd',
+            'total_return_bm': '#9467bd'
         }
         
-        # 创建图表,9个子图
-        fig, axes = plt.subplots(9, 1, figsize=(12, 36), sharex=True)
+        # 创建图表,8个子图
+        fig, axes = plt.subplots(8, 1, figsize=(12, 32), sharex=True)
         
         # 获取时间变化点的索引
         dt_changes = []
@@ -270,33 +264,8 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图7: sharpe_ratio
+        # 图7: max_drawdown
         ax = axes[6]
-        for dtype in ['learn', 'val', 'test']:
-            if 'sharpe_ratio' in metrics[dtype]:
-                data = metrics[dtype]['sharpe_ratio']
-                last_value = data[-1] if len(data) > 0 else 0
-                if dtype == 'learn':
-                    ax.plot(data, color=colors['sharpe_ratio'], alpha=0.3,
-                        label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
-                elif dtype == 'val':
-                    ax.plot(data, color=colors['sharpe_ratio'],
-                        label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
-                else:  # test
-                    ax.plot(data, color=colors['sharpe_ratio'], linestyle='--',
-                        label=f'{dtype}_sharpe_ratio: {last_value:.4f}')
-                    if 'sharpe_ratio_bm' in metrics[dtype]:
-                        bm_data = metrics[dtype]['sharpe_ratio_bm']
-                        last_value = bm_data[-1] if len(bm_data) > 0 else 0
-                        ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
-                                    color=colors['sharpe_ratio_bm'],
-                                    label=f'{dtype}_sharpe_ratio_bm: {last_value:.4f}')
-        ax.set_ylabel('Sharpe Ratio')
-        ax.grid(True)
-        ax.legend()
-
-        # 图8: max_drawdown
-        ax = axes[7]
         for dtype in ['learn', 'val', 'test']:
             if 'max_drawdown' in metrics[dtype]:
                 data = metrics[dtype]['max_drawdown']
@@ -320,8 +289,8 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图9: total_return
-        ax = axes[8]
+        # 图8: total_return
+        ax = axes[7]
         for dtype in ['learn', 'val', 'test']:
             if 'total_return' in metrics[dtype]:
                 data = metrics[dtype]['total_return']

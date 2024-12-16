@@ -189,7 +189,7 @@ class OffPolicyAgent(BaseAgent):
 
         # 离线经验回放池
         self.buffer_size = buffer_size
-        self.replay_buffer = ReplayBufferWaitClose(buffer_size)
+        self.replay_buffer = self.init_replay_buffer()
 
         # 跟踪器
         self.tracker = Tracker('learn', 10)
@@ -200,6 +200,9 @@ class OffPolicyAgent(BaseAgent):
 
     def get_params_to_send(self):
         raise NotImplementedError
+
+    def init_replay_buffer(self):
+        return ReplayBufferWaitClose(self.buffer_size)
 
     def update_params_from_server(self, env):
         new_params = get_net_params(self.train_title)
@@ -257,16 +260,16 @@ class OffPolicyAgent(BaseAgent):
                 self.tracker_val_test.update_reward(reward)
 
                 # 更新跟踪器 非法/win/loss
-                if reward == ILLEGAL_REWARD:
+                if info['act_criteria'] == -1:
                     self.tracker_val_test.update_illegal()
-                elif info['total_return'] > 0:
+                elif info['act_criteria'] == 0:
                     self.tracker_val_test.update_win()
                 else:
                     self.tracker_val_test.update_loss_count()
 
                 # 更新评价指标
                 for k, v in info.items():
-                    if k not in ['close', 'date_done']:
+                    if k not in ['close', 'date_done', 'act_criteria']:
                         self.tracker_val_test.update_extra_metrics(k, v)
 
             # 更新跟踪器 日期文件完成, 需要更新
@@ -364,16 +367,16 @@ class OffPolicyAgent(BaseAgent):
                     self.tracker.update_reward(reward)
 
                     # 更新跟踪器 非法/win/loss
-                    if reward == ILLEGAL_REWARD:
+                    if info['act_criteria'] == -1:
                         self.tracker.update_illegal()
-                    elif info['total_return'] > 0:
+                    elif info['act_criteria'] == 0:
                         self.tracker.update_win()
                     else:
                         self.tracker.update_loss_count()
 
                     # 更新评价指标
                     for k, v in info.items():
-                        if k not in ['close', 'date_done']:
+                        if k not in ['close', 'date_done', 'act_criteria']:
                             self.tracker.update_extra_metrics(k, v)
                 
                 # 更新跟踪器 日期文件完成, 需要更新

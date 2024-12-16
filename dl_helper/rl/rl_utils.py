@@ -7,30 +7,31 @@ import random
 class ReplayBuffer:
     def __init__(self, capacity):
         self.buffer = collections.deque(maxlen=capacity)
+        # 预定义数据类型
+        self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]
 
-    def add(self, state, action, reward, next_state, done): 
-        self.buffer.append((state, action, reward, next_state, done)) 
+    def add(self, state, action, reward, next_state, done):
+        # 直接使用元组存储,减少列表转换开销
+        self.buffer.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        # 一次性采样,避免多次调用random.sample
-        transitions = random.sample(self.buffer, batch_size)
-        # 使用zip和numpy的一次性转换,避免多次转换
-        return tuple(np.array(x, dtype=dtype) for x, dtype in 
-                    zip(zip(*transitions), 
-                        [np.float32, np.int64, np.float32, np.float32, np.float32]))
+        # 使用numpy的random.choice替代random.sample,性能更好
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        transitions = [self.buffer[i] for i in indices]
+        # 预分配numpy数组
+        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i]) 
+                    for i in range(5))
 
     def get(self, batch_size):
-        # 获取实际可获取的数量
         n = min(batch_size, len(self.buffer))
-        # 一次性获取所有数据并转换为numpy数组
-        transitions = [self.buffer.popleft() for _ in range(n)]
-        
-        # 使用zip和numpy的一次性转换，避免多次转换
-        return tuple(np.array(x, dtype=dtype) for x, dtype in 
-                    zip(zip(*transitions), 
-                        [np.float32, np.int64, np.float32, np.float32, np.float32]))
+        # 预分配列表空间
+        transitions = []
+        transitions.extend(self.buffer.popleft() for _ in range(n))
+        # 预分配numpy数组
+        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i])
+                    for i in range(5))
 
-    def size(self): 
+    def size(self):
         return len(self.buffer)
 
     def reset(self):
@@ -39,25 +40,231 @@ class ReplayBuffer:
 class ReplayBufferWaitClose(ReplayBuffer):
     def __init__(self, capacity):
         super().__init__(capacity)
-        self.buffer_temp = []
+        # 使用deque替代list,提高append和extend性能
+        self.buffer_temp = collections.deque()
 
-    def add(self, state, action, reward, next_state, done): 
-        # 先加入temp
-        # 如果done 则将temp加入buffer
-        self.buffer_temp.append([state, action, reward, next_state, done])
+    def add(self, state, action, reward, next_state, done):
+        # 使用元组存储,减少内存使用
+        self.buffer_temp.append((state, action, reward, next_state, done))
 
     def update_reward(self, reward=None):
-        if not None is reward:
-            # 修改 buffer_temp 中的所有 reawrd 为 reward
-            for i in range(len(self.buffer_temp)):
-                self.buffer_temp[i][2] = reward
-        # 移动到buffer
+        if reward is not None:
+            # 使用列表推导式替代循环,性能更好
+            self.buffer_temp = collections.deque(
+                (t[0], t[1], reward, t[3], t[4]) for t in self.buffer_temp
+            )
+        # 批量添加到buffer
         self.buffer.extend(self.buffer_temp)
-        self.buffer_temp = []
+        self.buffer_temp.clear()
 
     def reset(self):
         super().reset()
-        self.buffer_temp = []
+        self.buffer_temp.clear()
+
+class SumTree:
+    """
+    SumTree数据结构，用于高效存储和采样
+    """
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
+        self.data_pointer = 0
+        self.is_full = False
+
+    def add(self, priority, data):
+        """
+        添加新的经验
+        """
+        tree_idx = self.data_pointer + self.capacity - 1
+        self.data[self.data_pointer] = data
+        self.update(tree_idx, priority)
+
+        self.data_pointer += 1
+        if self.data_pointer >= self.capacity:
+            self.is_full = True
+            self.data_pointer = 0
+
+    def update(self, tree_idx, priority):
+        """
+        更新优先级
+        """
+        change = priority - self.tree[tree_idx]
+        self.tree[tree_idx] = priority
+
+        while tree_idx != 0:
+            tree_idx = (tree_idx - 1) // 2
+            self.tree[tree_idx] += change
+
+    def get_leaf(self, v):
+        """
+        根据优先级值获取叶子节点
+        """
+        parent_idx = 0
+        while True:
+            left_child_idx = 2 * parent_idx + 1
+            right_child_idx = left_child_idx + 1
+
+            if left_child_idx >= len(self.tree):
+                leaf_idx = parent_idx
+                break
+
+            if v <= self.tree[left_child_idx]:
+                parent_idx = left_child_idx
+            else:
+                v -= self.tree[left_child_idx]
+                parent_idx = right_child_idx
+
+        data_idx = leaf_idx - self.capacity + 1
+        return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
+
+    def total_priority(self):
+        """
+        返回总优先级
+        """
+        return self.tree[0]
+
+class PrioritizedReplayBuffer:
+    """
+    优先级经验回放
+    """
+    def __init__(
+        self, 
+        capacity=10000, 
+        alpha=0.6,  # 决定优先级的指数
+        beta=0.4,   # 重要性采样权重的初始值
+        beta_increment_per_sampling=0.001,
+        max_priority=1.0
+    ):
+        self.tree = SumTree(capacity)
+        self.capacity = capacity
+        self.alpha = alpha
+        self._beta = beta
+        self.beta = beta
+        self.beta_increment_per_sampling = beta_increment_per_sampling
+        self.max_priority = max_priority
+        self.epsilon = 1e-6  # 避免零优先级
+
+        # 预定义数据类型
+        self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]    
+
+    def add(self, experience):
+        """
+        添加新的经验
+        默认给最大优先级
+        """
+        max_priority = self.max_priority if not self.tree.is_full else self.tree.tree[0]
+        self.tree.add(max_priority, experience)
+
+    def sample(self, batch_size):
+        """
+        采样
+        """
+        batch = []
+        batch_indices = []
+        batch_priorities = []
+        segment = self.tree.total_priority() / batch_size
+
+        # 更新beta
+        self.beta = min(1.0, self.beta + self.beta_increment_per_sampling)
+
+        for i in range(batch_size):
+            a = segment * i
+            b = segment * (i + 1)
+
+            value = random.uniform(a, b)
+            idx, priority, data = self.tree.get_leaf(value)
+
+            batch.append(data)
+            batch_indices.append(idx)
+            batch_priorities.append(priority)
+
+        # 计算重要性采样权重
+        probabilities = batch_priorities / self.tree.total_priority()
+        weights = np.power(self.tree.capacity * probabilities, -self.beta)
+        weights /= weights.max()
+
+        # batch 内转为numpy数组
+        batch = tuple(np.array([t[i] for t in batch], dtype=self.dtypes[i])
+                    for i in range(5))
+
+        return batch, batch_indices, weights
+
+    def update_priorities(self, batch_indices, batch_priorities):
+        """
+        更新优先级
+        """
+        for idx, priority in zip(batch_indices, batch_priorities):
+            # 确保优先级非零
+            priority = np.power(priority + self.epsilon, self.alpha)
+            self.tree.update(idx, priority)
+
+    def get(self, batch_size):
+        # get 返回按顺序的batch, 在优先级经验回放中, 性能较差
+        raise "should not use this function, use ReplayBufferWaitClose/ReplayBuffer get function instead"
+
+    def size(self):
+        """
+        返回当前缓冲区中的经验数量
+        """
+        if self.tree.is_full:
+            return self.capacity
+        return self.tree.data_pointer
+
+    def reset(self):
+        """
+        重置缓冲区
+        """
+        self.tree = SumTree(self.capacity)
+        self.beta = self._beta   # 重置 beta 到初始值
+
+class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
+    """
+    支持延迟更新 reward 的优先级经验回放
+    """
+    def __init__(self, capacity=10000, alpha=0.6, beta=0.4, 
+                 beta_increment_per_sampling=0.001, max_priority=1.0):
+        super().__init__(capacity, alpha, beta, beta_increment_per_sampling, max_priority)
+        self.temp_experiences = collections.deque()  # 临时存储经验
+        self.temp_indices = collections.deque()      # 临时存储对应的树索引
+
+    def add(self, state, action, reward, next_state, done):
+        """
+        临时存储经验
+        """
+        experience = (state, action, reward, next_state, done)
+        self.temp_experiences.append(experience)
+
+    def update_reward(self, reward=None):
+        """
+        更新 reward 并将临时经验转移到主缓冲区
+        """
+        if not self.temp_experiences:
+            return
+            
+        if reward is not None:
+            # 更新所有临时经验的 reward
+            updated_experiences = collections.deque()
+            for exp in self.temp_experiences:
+                state, action, _, next_state, done = exp
+                updated_experiences.append((state, action, reward, next_state, done))
+            self.temp_experiences = updated_experiences
+
+        # 将所有临时经验添加到主缓冲区
+        for experience in self.temp_experiences:
+            super().add(experience)
+
+        # 清空临时缓冲区
+        self.temp_experiences.clear()
+        self.temp_indices.clear()
+
+    def reset(self):
+        """
+        重置缓冲区
+        """
+        super().reset()
+        self.temp_experiences.clear()
+        self.temp_indices.clear()
 
 def moving_average(a, window_size):
     cumulative_sum = np.cumsum(np.insert(a, 0, 0)) 
