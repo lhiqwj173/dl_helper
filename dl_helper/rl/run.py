@@ -4,7 +4,7 @@ import torch.multiprocessing as mp
 
 from py_ext.tool import log    
 
-
+from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
 from dl_helper.train_param import match_num_processes, get_gpu_info
 
 def run_val_test(val_test, rank, agent, env):
@@ -77,7 +77,6 @@ def run_client_learning_device(rank, num_processes, data_folder, agent, num_epis
     else:
         log(f'{rank} learn...')
         agent.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
-
 
 def train_func_device(rank, num_processes, a, b, c):
     # 根据环境获取对应设备
