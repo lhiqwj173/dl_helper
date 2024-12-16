@@ -9,7 +9,7 @@ import numpy as np
 
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
-from dl_helper.rl.dqn import DQN, VANILLA_DQN
+from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DD_DQN
 from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBufferWaitClose
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher
