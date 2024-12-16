@@ -417,7 +417,7 @@ class Account:
             # 不合法的操作，交易全部清空
             self.reset()
 
-        print("acc::step",res)
+        print("acc::step",legal, res)
 
         return legal, self.pos, unrealized_profit, res
         
