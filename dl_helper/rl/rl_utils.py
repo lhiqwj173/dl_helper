@@ -68,7 +68,8 @@ class SumTree:
     def __init__(self, capacity):
         self.capacity = capacity
         self.tree = np.zeros(2 * capacity - 1)
-        self.data = np.zeros(capacity, dtype=object)
+        # 修改初始化方式，使用 None 而不是 0
+        self.data = np.array([None] * capacity, dtype=object)
         self.data_pointer = 0
         self.is_full = False
 
@@ -76,6 +77,10 @@ class SumTree:
         """
         添加新的经验
         """
+        if not isinstance(data, (tuple, list)) or len(data) != 5:
+            pickle.dump((priority, data), open("error_SumTree_add_data.pkl", "wb"))
+            raise ValueError(f"Invalid data format: expected tuple/list of length 5, got {data}({type(data)})")
+
         tree_idx = self.data_pointer + self.capacity - 1
         self.data[self.data_pointer] = data
         self.update(tree_idx, priority)
@@ -116,6 +121,13 @@ class SumTree:
                 parent_idx = right_child_idx
 
         data_idx = leaf_idx - self.capacity + 1
+
+        # 添加数据验证
+        data = self.data[data_idx]
+        if data is None or (not isinstance(data, (tuple, list)) or len(data) != 5):
+            pickle.dump((leaf_idx, self.tree[leaf_idx], self.data[data_idx]), open("error_SumTree_get_leaf.pkl", "wb"))
+            raise ValueError(f"Invalid data at index {data_idx}: {data}")
+
         return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
 
     def total_priority(self):
@@ -153,6 +165,11 @@ class PrioritizedReplayBuffer:
         添加新的经验
         默认给最大优先级
         """
+        # 验证经验数据格式
+        if not isinstance(experience, tuple) or len(experience) != 5:
+            pickle.dump(experience, open("error_PrioritizedReplayBuffer_add_experience.pkl", "wb"))
+            raise ValueError(f"Invalid experience format: {experience}")
+
         max_priority = self.max_priority if not self.tree.is_full else self.tree.tree[0]
         self.tree.add(max_priority, experience)
 
