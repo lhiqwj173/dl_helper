@@ -2,7 +2,7 @@ import os
 import torch
 import torch.multiprocessing as mp
 
-from py_ext.log import log    
+from py_ext.tool import log    
 
 
 from dl_helper.train_param import match_num_processes, get_gpu_info
