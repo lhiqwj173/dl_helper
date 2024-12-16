@@ -1,0 +1,25 @@
+算法优化：
+
+DQN:
+ - Categorical DQN (C51)
+ - Noisy DQN
+ - Distributional DQN
+ - Rainbow DQN (2017)
+ - Efficient Rainbow (2020年)
+ - Ape-X DQN (2018)
+ - QR-DQN (2018)
+ - Hierarchical Deep Q-Networks (2018)
+ - Impala (2018)
+ - IQN (Implicit Quantile Networks) (2019)
+ - Value Decomposition Networks (2019)
+ - UNREAL (2019年)
+ - NFSP (2019年)
+ - REM (Randomized Ensembled Double Q-Learning) (2020)
+ - Muzero (2020年)
+ - Agent57 (2020年)
+ - DrQ (Data-Regularized Q) (2021)
+ - SPR (Stochastic Prior Function Regularization) (2021)
+ - CQL (Conservative Q-Learning) (2021)
+ - EDAC (Ensemble-DAC) (2022)
+ - P2E-DQN (Planning to Explore with DQN) (2022)
+ - ReLU DQN Variants (2023)

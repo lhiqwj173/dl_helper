@@ -177,6 +177,9 @@ class PrioritizedReplayBuffer:
         """
         采样
         """
+        if self.size() < batch_size:
+            raise ValueError(f"Not enough samples in buffer. Current size: {self.size()}, requested: {batch_size}")
+
         batch = []
         batch_indices = []
         batch_priorities = []
@@ -288,6 +291,9 @@ class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
 
         # 将所有临时经验添加到主缓冲区
         for experience in self.temp_experiences:
+            if not isinstance(experience, (tuple, list)) or len(experience) != 5:
+                pickle.dump(experience, open("error_update_reward.pkl", "wb"))
+                raise ValueError(f"Invalid experience format before adding to buffer: {experience}")
             super().add(experience)
 
         # 清空临时缓冲区
