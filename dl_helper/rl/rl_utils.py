@@ -2,7 +2,7 @@ from tqdm import tqdm
 import numpy as np
 import torch
 import collections
-import random
+import random, pickle
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -185,8 +185,12 @@ class PrioritizedReplayBuffer:
         weights /= weights.max()
 
         # batch 内转为numpy数组
-        batch = tuple(np.array([t[i] for t in batch], dtype=self.dtypes[i])
+        try:
+            batch = tuple(np.array([t[i] for t in batch], dtype=self.dtypes[i])
                     for i in range(5))
+        except Exception as e:
+            pickle.dump(batch, open("error_batch.pkl", "wb"))
+            raise e
 
         return batch, batch_indices, weights
 
