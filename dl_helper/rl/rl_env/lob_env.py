@@ -413,11 +413,12 @@ class Account:
                     res['max_drawdown_bm'] = 0
                     res['total_return_bm'] = 0
                     res['trade_return_bm'] = 0
+
         else:
             # 不合法的操作，交易全部清空
             self.reset()
 
-        print("acc::step",legal, res)
+        # print("acc::step",legal, res)
 
         return legal, self.pos, unrealized_profit, res
         
@@ -493,20 +494,21 @@ class LOB_trade_env(gym.Env):
         """
         legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action, need_close)
 
-        # 增加操作交易评价结果
-        # 体现 非法/win/loss
-        res['act_criteria'] = -1 if not legal else 0 if res['total_return'] > 0 else 1
-
         # 合法性检查
         if not legal:
             # 非法动作
             info['close'] = True
+            info['act_criteria'] = -1
             return ILLEGAL_REWARD, False, pos, profit
 
         # 只有平仓才给与reward
         # 同时记录评价指标
         if need_close or action==1:
             info['close'] = True
+            # 增加操作交易评价结果
+            # 体现 非法/win/loss
+            info['act_criteria'] = 0 if res['total_return'] > 0 else 1
+            # 计算奖励
             reward = res['trade_return'] + res['max_drawdown']
             for k, v in res.items():
                 info[k] = v
