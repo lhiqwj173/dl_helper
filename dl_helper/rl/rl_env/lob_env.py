@@ -417,10 +417,6 @@ class Account:
             # 不合法的操作，交易全部清空
             self.reset()
 
-        # 增加操作交易评价结果
-        # 体现 非法/win/loss
-        res['act_criteria'] = -1 if not legal else 0 if res['total_return'] > 0 else 1
-        
         return legal, self.pos, unrealized_profit, res
         
     def reset(self):
@@ -494,7 +490,11 @@ class LOB_trade_env(gym.Env):
         需要在平仓后回溯属于本次交易的所有时间步, 修改 reward=收益率
         """
         legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action, need_close)
-        
+
+        # 增加操作交易评价结果
+        # 体现 非法/win/loss
+        res['act_criteria'] = -1 if not legal else 0 if res['total_return'] > 0 else 1
+
         # 合法性检查
         if not legal:
             # 非法动作
