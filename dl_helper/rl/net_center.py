@@ -21,6 +21,7 @@ class BlockIPs:
     """管理block ip的类"""
     def __init__(self):
         self.record_file = os.path.join(os.path.expanduser('~'), 'block_ips_net_center.txt')
+        self.ips = self.read()
 
     def read(self):
         """读取block ip列表"""
@@ -28,16 +29,22 @@ class BlockIPs:
             return []
         with open(self.record_file, 'r') as f:
             ips = f.read().splitlines()
-            return ips
+            return list(set(ips)) # 去重
 
-    def update(self, ips):
+    def _update(self, ips):
         """更新block ip列表"""
         with open(self.record_file, 'w') as f:
-            f.write('\n'.join(ips))
+            f.write('\n'.join(sorted(set(ips)))) # 排序并去重
+
+    def add(self, ip):
+        """添加ip到block ip列表"""
+        if ip not in self.ips: # 避免重复添加
+            self.ips.append(ip)
+            self._update(self.ips)
 
     def is_blocked(self, ip):
         """检查ip是否被block"""
-        return ip in self.read()
+        return ip in self.ips
 
 alist_folder = r'/root/alist_data/rl_learning_process'
 root_folder = '' if not os.path.exists(alist_folder) else alist_folder
