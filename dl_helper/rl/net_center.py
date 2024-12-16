@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.dqn import DQN
+from dl_helper.rl.per_dqn import PER_DQN
 
 class BlockIPs:
     """管理block ip的类"""
