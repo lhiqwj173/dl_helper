@@ -174,6 +174,19 @@ class PrioritizedReplayBuffer:
 
             value = random.uniform(a, b)
             idx, priority, data = self.tree.get_leaf(value)
+            
+            # 添加类型检查
+            if not isinstance(data, (tuple, list)) or len(data) != 5:
+                print(f"Invalid data format at index {i}: {data}")
+                # 保存错误现场
+                error_info = {
+                    'problematic_data': data,
+                    'batch': batch,
+                    'idx': idx,
+                    'priority': priority
+                }
+                pickle.dump(error_info, open("error_debug.pkl", "wb"))
+                raise ValueError(f"Expected tuple/list of length 5, got {type(data)} with value {data}")
 
             batch.append(data)
             batch_indices.append(idx)
@@ -189,6 +202,8 @@ class PrioritizedReplayBuffer:
             batch = tuple(np.array([t[i] for t in batch], dtype=self.dtypes[i])
                     for i in range(5))
         except Exception as e:
+            print(f"Error converting batch to numpy arrays: {str(e)}")
+            print(f"Batch content: {batch}")
             pickle.dump(batch, open("error_batch.pkl", "wb"))
             raise e
 
