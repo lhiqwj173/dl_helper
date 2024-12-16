@@ -88,6 +88,7 @@ class PER_DQN(DQN):
         
         # 如果提供了权重，使用重要性采样权重
         if weights is not None:
+            print("weights", type(weights))
             weights = torch.FloatTensor(weights)
             dqn_loss = (weights * (q_values - q_targets).pow(2)).mean()
         else:
