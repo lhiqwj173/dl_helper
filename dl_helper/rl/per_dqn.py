@@ -88,8 +88,6 @@ class PER_DQN(DQN):
         
         # 如果提供了权重，使用重要性采样权重
         if weights is not None:
-            print("weights", type(weights))
-            weights = torch.FloatTensor(weights)
             dqn_loss = (weights * (q_values - q_targets).pow(2)).mean()
         else:
             dqn_loss = nn.MSELoss()(q_values, q_targets)
@@ -138,6 +136,9 @@ class PER_DQN(DQN):
         rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
         next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
         dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
+
+        if weights is not None:
+            weights = torch.from_numpy(weights).to(self.device)
 
         return self._update(states, actions, rewards, next_states, dones, data_type, weights)
 
