@@ -248,6 +248,8 @@ class C51(OffPolicyAgent):
             )
         
         # 计算KL散度损失
+        # 将actions压缩为一维
+        actions = actions.squeeze(-1)  # 将shape从[256, 1]变为[256]
         current_dist = current_probs[range(batch_size), actions]
 
         # 计算KL散度 (对所有情况都使用相同的KL散度公式)
