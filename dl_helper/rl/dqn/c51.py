@@ -228,7 +228,7 @@ class C51(OffPolicyAgent):
             
             # 计算投影概率
             target_dist = torch.zeros_like(target_probs)
-            offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long()
+            offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(target_probs.device)
             offset = offset.unsqueeze(1).expand(batch_size, self.n_atoms)
             
             target_dist.view(-1).index_add_(
