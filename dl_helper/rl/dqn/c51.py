@@ -97,6 +97,7 @@ class C51(OffPolicyAgent):
 
         # 基类参数
         buffer_size,
+        train_buffer_class,
         train_title,
         action_dim,
         features_dim,
@@ -123,6 +124,7 @@ class C51(OffPolicyAgent):
 
             基类参数
                 buffer_size: 经验回放池大小
+                train_buffer_class: 经验回放池类,必须提供
                 train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
@@ -131,7 +133,7 @@ class C51(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_buffer_class, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
 
         self.obs_shape = obs_shape
         
