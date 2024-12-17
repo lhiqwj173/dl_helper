@@ -156,6 +156,7 @@ if __name__ == '__main__':
         'target_update': target_update,
         'buffer_size': buffer_size,
         'train_buffer_class': ReplayBufferWaitClose,
+        'use_noisy': True,
         'train_title': train_title,
         'action_dim': 3,
         'features_dim': d4+3,

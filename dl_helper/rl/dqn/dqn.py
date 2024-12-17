@@ -192,6 +192,7 @@ class DQN(OffPolicyAgent):
         features_dim,
         features_extractor_class,
         features_extractor_kwargs=None,
+        use_noisy=True,
         net_arch=None,
 
         dqn_type=VANILLA_DQN,
@@ -210,6 +211,7 @@ class DQN(OffPolicyAgent):
             基类参数
                 buffer_size: 经验回放池大小
                 train_buffer_class: 训练经验回放池类
+                use_noisy: 是否使用噪声网络
                 train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
@@ -218,7 +220,7 @@ class DQN(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, train_buffer_class, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_buffer_class, use_noisy, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
         self.obs_shape = obs_shape
@@ -238,7 +240,7 @@ class DQN(OffPolicyAgent):
     ############################################################
     # 需要重写的函数
     #     _build_model: 构建模型
-    #     take_action(self, state): 根据状态选择动作
+    #     _take_action(self, state): 根据状态选择动作
     #     _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
@@ -253,16 +255,11 @@ class DQN(OffPolicyAgent):
         # 设置为eval模式
         self.models['target_q_net'].eval()
 
-    def take_action(self, state):
-        if self.in_train and np.random.random() < self.epsilon:
-            action = np.random.randint(self.action_dim)
-        else:
-            state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
-            
-            self.models['q_net'].eval()
-            with torch.no_grad():
-                action = self.models['q_net'](state).argmax().item()
-            self.models['q_net'].train()
+    def _take_action(self, state):
+        self.models['q_net'].eval()
+        with torch.no_grad():
+            action = self.models['q_net'](state).argmax().item()
+        self.models['q_net'].train()
         return action
 
     def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):

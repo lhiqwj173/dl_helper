@@ -165,7 +165,7 @@ class BaseAgent:
             self.load_state_dict(torch.load(file))
 
 class OffPolicyAgent(BaseAgent):
-    def __init__(self, buffer_size, train_buffer_class, use_noisy=False, *args, **kwargs):
+    def __init__(self, buffer_size, train_buffer_class, use_noisy, *args, **kwargs):
         """
         OffPolicyAgent 基类
         
@@ -221,6 +221,27 @@ class OffPolicyAgent(BaseAgent):
 
     def _build_model(self):
         """子类需要实现此方法来构建具体的模型结构"""
+        raise NotImplementedError
+
+    def __call_subclass_take_action(self, state):
+        """调用子类的 take_action"""
+        state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
+        return self._take_action(state)   
+
+    def take_action(self, state):
+        if self.use_noisy:
+            # 调用子类的 take_action
+            return self.__call_subclass_take_action(state)
+        else:
+            if self.in_train and np.random.random() < self.epsilon:
+                action = np.random.randint(self.action_dim)
+            else:
+                # 调用子类的 take_action
+                action = self.__call_subclass_take_action(state)   
+        return action
+
+    def _take_action(self, state):
+        """子类需要实现此方法来实现具体的动作选择逻辑"""
         raise NotImplementedError
 
     def eval(self):
