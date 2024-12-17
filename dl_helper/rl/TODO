@@ -2,6 +2,8 @@
 
 DQN:
  - Categorical DQN (C51)
+
+ TODO:
  - Noisy DQN
  - Distributional DQN
  - Rainbow DQN (2017)
