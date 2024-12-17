@@ -73,17 +73,21 @@ class BaseAgent:
     def take_action(self, state):
         raise NotImplementedError
 
-    def _update(self, states, actions, rewards, next_states, dones, data_type):
+    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
         raise NotImplementedError
 
-    def update(self, transition_dict, data_type='train'):
+    def update(self, transition_dict, data_type='train', weights=None):
         states = torch.from_numpy(transition_dict['states']).to(self.device)
         actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
         rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
         next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
         dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
 
-        return self._update(states, actions, rewards, next_states, dones, data_type)
+        # 供 PER回放池 使用
+        if weights is not None:
+            weights = torch.from_numpy(weights).to(self.device)
+
+        return self._update(states, actions, rewards, next_states, dones, data_type, weights)
 
     def eval(self):
         for model in self.models.values():
@@ -161,12 +165,13 @@ class BaseAgent:
 
 
 class OffPolicyAgent(BaseAgent):
-    def __init__(self, buffer_size, *args, **kwargs):
+    def __init__(self, buffer_size, train_buffer_class, *args, **kwargs):
         """
         OffPolicyAgent 基类
         
         Args:
             buffer_size: 经验回放池大小
+            train_buffer_class: 训练经验回放池类
 
             BaseAgent 参数
                 train_title: 训练标题
@@ -189,20 +194,27 @@ class OffPolicyAgent(BaseAgent):
 
         # 离线经验回放池
         self.buffer_size = buffer_size
-        self.replay_buffer = self.init_replay_buffer()
+        self.train_buffer_class = train_buffer_class
+        self.replay_buffer = self.train_buffer_class(self.buffer_size)
 
         # 跟踪器
         self.tracker = Tracker('learn', 10)
         self.tracker_val_test = None
+
+        # 是否是训练状态
+        self.in_train = True
+
+    def eval(self):
+        self.in_train = False
+
+    def train(self):
+        self.in_train = True
 
     def sync_update_net_params_in_agent(self):
         raise NotImplementedError
 
     def get_params_to_send(self):
         raise NotImplementedError
-
-    def init_replay_buffer(self):
-        return ReplayBufferWaitClose(self.buffer_size)
 
     def update_params_from_server(self, env):
         new_params = get_net_params(self.train_title)
@@ -238,6 +250,7 @@ class OffPolicyAgent(BaseAgent):
         env.set_data_type(data_type)
 
         # 回放池
+        # 固定使用 ReplayBufferWaitClose, 因为需要回溯更新所有 reward 为最终close时的reward
         replay_buffer = ReplayBufferWaitClose(self.buffer_size)
 
         log(f'{self.msg_head} {data_type} begin')
@@ -342,11 +355,6 @@ class OffPolicyAgent(BaseAgent):
             while not done:
                 step += 1
 
-                # # 测试用
-                # # 检查是否有nan/inf值
-                # if np.argwhere(np.isnan(state)).any() or np.argwhere(np.isinf(state)).any():
-                #     raise ValueError(f'检测到NaN/Inf值,state: {state}')
-
                 # 动作
                 action = self.take_action(state)
                 # 更新跟踪器 动作
@@ -388,9 +396,20 @@ class OffPolicyAgent(BaseAgent):
 
                 # 更新网络
                 if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
-                    # 学习经验
-                    b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(
-                        batch_size)
+                    per_buffer = hasattr(self.replay_buffer, 'update_priorities')
+
+                    if per_buffer:
+                        # 添加调试信息
+                        log(f"{self.msg_head} Tree status - is_full: {self.replay_buffer.tree.is_full}, data_pointer: {self.replay_buffer.tree.data_pointer}")
+                        log(f"{self.msg_head} Total priority: {self.replay_buffer.tree.total_priority()}")
+                        # 采样batch数据
+                        (b_s, b_a, b_r, b_ns, b_d), indices, weights = self.replay_buffer.sample(batch_size)
+
+                    else:   
+                        # 学习经验
+                        b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(batch_size)
+                        weights = None
+
                     transition_dict = {
                         'states': b_s,
                         'actions': b_a,
@@ -398,7 +417,11 @@ class OffPolicyAgent(BaseAgent):
                         'rewards': b_r,
                         'dones': b_d
                     }
-                    self.update(transition_dict)
+                    td_error_for_update = self.update(transition_dict, weights=weights)
+
+                    if per_buffer:
+                        # 更新优先级
+                        self.replay_buffer.update_priorities(indices, td_error_for_update)  
 
                     #################################
                     # 服务器通讯

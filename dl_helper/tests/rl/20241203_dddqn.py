@@ -11,6 +11,7 @@ from py_ext.tool import log
 from dl_helper.rl.dqn import DQN, VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning, run_client_learning_device
+from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBufferWaitClose
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
@@ -19,7 +20,7 @@ from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 init_logger_by_ip()
 
 # 训练参数
-train_title = 'DQN_20241214'
+train_title = 'DDDQN_20241217'
 lr = 1e-4
 num_episodes = 5000
 hidden_dim = 128
@@ -28,7 +29,7 @@ epsilon = 0.5
 target_update = 50
 buffer_size = 5000
 minimal_size = 3000
-batch_size = 64
+batch_size = 256
 sync_interval_learn_step=150
 learn_interval_step=4
 server_tau = 0.005
@@ -154,6 +155,7 @@ if __name__ == '__main__':
         'epsilon': epsilon,
         'target_update': target_update,
         'buffer_size': buffer_size,
+        'train_buffer_class': ReplayBufferWaitClose,
         'train_title': train_title,
         'action_dim': 3,
         'features_dim': d4+3,

@@ -5,7 +5,6 @@ import pickle
 import collections
 
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
-from dl_helper.rl.rl_utils import PrioritizedReplayBufferWaitClose
 
 class c51_network(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max):
@@ -163,15 +162,6 @@ class C51(OffPolicyAgent):
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
-    def init_replay_buffer(self):
-        return PrioritizedReplayBufferWaitClose(self.buffer_size)
-
-    def eval(self):
-        self.need_epsilon = False
-
-    def train(self):
-        self.need_epsilon = True
-
     def build_model(self):
         q_net = c51_network(self.obs_shape, self.features_extractor_class,
                           self.features_extractor_kwargs, self.features_dim,

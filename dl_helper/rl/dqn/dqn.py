@@ -185,6 +185,7 @@ class DQN(OffPolicyAgent):
 
         # 基类参数
         buffer_size,
+        train_buffer_class,
         train_title,
         action_dim,
         features_dim,
@@ -207,6 +208,7 @@ class DQN(OffPolicyAgent):
 
             基类参数
                 buffer_size: 经验回放池大小
+                train_buffer_class: 训练经验回放池类
                 train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
@@ -215,14 +217,13 @@ class DQN(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_buffer_class, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
         self.obs_shape = obs_shape
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
-        self.need_epsilon = True
         self.target_update = target_update
         self.count = 0
         self.dqn_type = dqn_type
@@ -242,11 +243,7 @@ class DQN(OffPolicyAgent):
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
 
-    def eval(self):
-        self.need_epsilon = False
 
-    def train(self):
-        self.need_epsilon = True
 
     def build_model(self):
         q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
@@ -258,7 +255,7 @@ class DQN(OffPolicyAgent):
         self.models['target_q_net'].eval()
 
     def take_action(self, state):
-        if self.need_epsilon and np.random.random() < self.epsilon:
+        if self.in_train and np.random.random() < self.epsilon:
             action = np.random.randint(self.action_dim)
         else:
             state = torch.from_numpy(np.array(state, dtype=np.float32)).unsqueeze(0).to(self.device)
@@ -269,7 +266,7 @@ class DQN(OffPolicyAgent):
             self.models['q_net'].train()
         return action
 
-    def _update(self, states, actions, rewards, next_states, dones, data_type):
+    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
         # 计算当前Q值
         q_values = self.models['q_net'](states).gather(1, actions)
         
@@ -285,12 +282,21 @@ class DQN(OffPolicyAgent):
             # 计算目标Q值
             q_targets = rewards + self.gamma * max_next_q_values * (1 - dones)
         
-        # 计算TD误差
-        td_error = torch.abs(q_targets - q_values).mean().item()
+        # 如果提供了权重，使用重要性采样权重, 用于 PER buffer 更新优先级
+        td_error_for_update = None
+        if weights is not None:
+            # 计算损失
+            dqn_loss = (weights * (q_values - q_targets).pow(2)).mean()
+            # 用于更新优先级的TD误差
+            td_error_for_update = torch.abs(q_targets - q_values).detach().cpu().numpy()
+            # 用于记录的TD误差
+            td_error = td_error_for_update.mean()
+        else:
+            # 计算损失
+            dqn_loss = nn.MSELoss()(q_values, q_targets)
+            # 用于记录的TD误差
+            td_error = torch.abs(q_targets - q_values).mean().item()
         
-        # 计算损失
-        dqn_loss = torch.mean(F.mse_loss(q_values, q_targets))
-
         # tracker 记录
         self.track_error(td_error, dqn_loss.item(), data_type)
 
@@ -326,6 +332,8 @@ class DQN(OffPolicyAgent):
             if self.count > 0 and self.count % self.target_update == 0:
                 self.sync_update_net_params_in_agent()
             self.count += 1
+
+        return td_error_for_update
 
     def sync_update_net_params_in_agent(self):
         self.models['target_q_net'].load_state_dict(self.models['q_net'].state_dict())
