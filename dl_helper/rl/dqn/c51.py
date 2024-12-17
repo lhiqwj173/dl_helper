@@ -145,6 +145,10 @@ class C51(OffPolicyAgent):
         self.v_max = v_max
         self.support = torch.linspace(v_min, v_max, n_atoms)
         self.delta_z = (v_max - v_min) / (n_atoms - 1)
+
+        # 预计算offset并移动到设备
+        self.offset = None  # 初始化为None，第一次使用时再创建
+        self.last_batch_size = None  # 用于检查batch size是否改变
         
         self.action_dim = action_dim
         self.gamma = gamma
@@ -228,15 +232,18 @@ class C51(OffPolicyAgent):
             
             # 计算投影概率
             target_dist = torch.zeros_like(target_probs)
-            offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(target_probs.device)
-            offset = offset.unsqueeze(1).expand(batch_size, self.n_atoms)
-            
+            # 只在batch_size改变或首次使用时重新计算offset
+            if self.offset is None or batch_size != self.last_batch_size:
+                self.offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(states.device)
+                self.offset = self.offset.unsqueeze(1).expand(batch_size, self.n_atoms)
+                self.last_batch_size = batch_size
+
             target_dist.view(-1).index_add_(
-                0, (l + offset).view(-1),
+                0, (l + self.offset).view(-1),
                 (target_probs * (u.float() - b)).view(-1)
             )
             target_dist.view(-1).index_add_(
-                0, (u + offset).view(-1),
+                0, (u + self.offset).view(-1),
                 (target_probs * (b - l.float())).view(-1)
             )
         
