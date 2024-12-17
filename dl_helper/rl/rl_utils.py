@@ -114,6 +114,26 @@ class SumTree:
                 leaf_idx = parent_idx
                 break
 
+            # 添加边界检查，确保不会选择未初始化区域的节点
+            if not self.is_full:
+                left_valid = (left_child_idx - self.capacity + 1) < self.data_pointer
+                right_valid = (right_child_idx - self.capacity + 1) < self.data_pointer
+                
+                if not left_valid and not right_valid:
+                    # 如果两个子节点都无效，回退到上一层
+                    leaf_idx = parent_idx
+                    break
+                elif not right_valid:
+                    # 如果右节点无效，强制选择左节点
+                    parent_idx = left_child_idx
+                    continue
+                elif not left_valid:
+                    # 如果左节点无效，强制选择右节点
+                    v -= self.tree[left_child_idx]
+                    parent_idx = right_child_idx
+                    continue
+
+            # 正常的选择逻辑
             if v <= self.tree[left_child_idx]:
                 parent_idx = left_child_idx
             else:
@@ -122,24 +142,14 @@ class SumTree:
 
         data_idx = leaf_idx - self.capacity + 1
 
-
         # 添加边界检查
         if data_idx < 0 or data_idx >= self.capacity:
             raise ValueError(f"Invalid data_idx {data_idx}, capacity is {self.capacity}")
 
         # 添加数据存在性检查
         if not self.is_full and data_idx >= self.data_pointer:
-            raise ValueError(f"Trying to access uninitialized data at index {data_idx}")
-
-        # 添加数据验证
-        data = self.data[data_idx]
-        if data is None or (not isinstance(data, (tuple, list)) or len(data) != 5):
-            # 错误数据: (8190, 0.0, None)
-            # leaf_idx 8190, 
-            # self.tree[leaf_idx] 0.0
-            # self.data[data_idx] None
-            pickle.dump((leaf_idx, self.tree[leaf_idx], self.data[data_idx]), open("error_SumTree_get_leaf.pkl", "wb"))
-            raise ValueError(f"Invalid data at index {data_idx}: {data}")
+            # 如果访问到未初始化的数据，重新采样
+            return self.get_leaf(random.uniform(0, self.tree[0]))
 
         return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
 
