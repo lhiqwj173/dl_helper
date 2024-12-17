@@ -2,6 +2,7 @@ import torch
 import os
 import time
 import shutil
+import numpy as np
 
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress

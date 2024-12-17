@@ -2,9 +2,9 @@
 
 DQN:
  - Categorical DQN (C51)
+ - Noisy DQN
 
  TODO:
- - Noisy DQN
  - Distributional DQN
  - Rainbow DQN (2017)
  - Efficient Rainbow (2020年)
