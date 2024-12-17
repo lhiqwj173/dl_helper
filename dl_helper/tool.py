@@ -34,7 +34,9 @@ def init_logger_by_ip(train_title=''):
         # 如果获取外网IP失败,使用内网IP作为备选
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-    init_logger(f'{ip}' if train_title == '' else f'[{train_title}]{ip}', level='INFO', timestamp=False, enqueue=True)
+    init_logger(f'{ip}' if train_title == '' else f'[{train_title}]{ip}', level='INFO', timestamp=False, enqueue=True, 
+                home=f'' if not os.path.exists(r'/kaggle/working') else r'/kaggle/working',
+                )
     log(f'init_logger: {get_log_file()}')
 
 def upload_log_file(train_title):

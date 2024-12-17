@@ -163,7 +163,6 @@ class BaseAgent:
         if os.path.exists(file):
             self.load_state_dict(torch.load(file))
 
-
 class OffPolicyAgent(BaseAgent):
     def __init__(self, buffer_size, train_buffer_class, *args, **kwargs):
         """
