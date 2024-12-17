@@ -12,6 +12,7 @@ from dl_helper.rl.dqn.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.dqn.c51 import C51 
 from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning, run_client_learning_device
+from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBufferWaitClose
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
@@ -155,6 +156,7 @@ if __name__ == '__main__':
         'epsilon': epsilon,
         'target_update': target_update,
         'buffer_size': buffer_size,
+        'train_buffer_class': PrioritizedReplayBufferWaitClose,
         'train_title': train_title,
         'action_dim': 3,
         'features_dim': d4+3,
