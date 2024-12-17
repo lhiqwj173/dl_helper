@@ -165,13 +165,13 @@ class C51(OffPolicyAgent):
         )
     ############################################################
     # 需要重写的函数
-    #     build_model: 构建模型
+    #     _build_model: 构建模型
     #     take_action(self, state): 根据状态选择动作
     #     _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
-    def build_model(self):
+    def _build_model(self):
         q_net = c51_network(self.obs_shape, self.features_extractor_class,
                           self.features_extractor_kwargs, self.features_dim,
                           self.net_arch, self.n_atoms, self.v_min, self.v_max)
@@ -254,10 +254,6 @@ class C51(OffPolicyAgent):
 
         # 计算KL散度 (对所有情况都使用相同的KL散度公式)
         kl_div = -(target_dist * torch.log(current_dist + 1e-8)).sum(1)
-
-        print(f'actions: {actions.shape}')
-        print(f'kl_div: {kl_div.shape}, current_dist: {current_dist.shape}, target_dist: {target_dist.shape}')
-        print(f'weights: {weights.shape}')
 
         td_error_for_update = None
         if weights is not None:

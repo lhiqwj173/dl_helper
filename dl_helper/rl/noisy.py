@@ -34,15 +34,11 @@ class NoisyLinear(nn.Module):
 
 def replace_linear_with_noisy(model, std_init=0.1):
     """
-    将模型中的所有 nn.Linear 层替换为 NoisyLinear 层
-    
-    参数:
-    model (nn.Module): 原始模型
-    std_init (float): 噪声初始标准差
-    
-    返回:
-    nn.Module: 替换后的模型
+    将模型中的所有 nn.Linear 层替换为 NoisyLinear 层，并保持原始模型的训练/评估模式
     """
+    # 保存原始模型的训练模式
+    original_training = model.training
+    
     for name, module in model.named_children():
         if isinstance(module, nn.Linear):
             # 获取原线性层的输入和输出维度
@@ -56,11 +52,23 @@ def replace_linear_with_noisy(model, std_init=0.1):
             noisy_linear.weight_mu.data = module.weight.data
             noisy_linear.bias_mu.data = module.bias.data
             
+            # 设置与原层相同的训练模式
+            if original_training:
+                noisy_linear.train()
+            else:
+                noisy_linear.eval()
+            
             # 替换原层
             setattr(model, name, noisy_linear)
         elif len(list(module.children())) > 0:
             # 递归处理子模块
             replace_linear_with_noisy(module, std_init)
+    
+    # 确保整个模型保持原始的训练模式
+    if original_training:
+        model.train()
+    else:
+        model.eval()
     
     return model
 

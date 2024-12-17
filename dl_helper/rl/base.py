@@ -12,6 +12,7 @@ from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.socket_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test
 from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose
 from dl_helper.rl.tracker import Tracker
+from dl_helper.rl.noisy import replace_linear_with_noisy
 
 class BaseAgent:
     def __init__(self,
@@ -164,13 +165,14 @@ class BaseAgent:
             self.load_state_dict(torch.load(file))
 
 class OffPolicyAgent(BaseAgent):
-    def __init__(self, buffer_size, train_buffer_class, *args, **kwargs):
+    def __init__(self, buffer_size, train_buffer_class, use_noisy=False, *args, **kwargs):
         """
         OffPolicyAgent 基类
         
         Args:
             buffer_size: 经验回放池大小
             train_buffer_class: 训练经验回放池类
+            use_noisy: 是否使用噪声网络
 
             BaseAgent 参数
                 train_title: 训练标题
@@ -182,14 +184,16 @@ class OffPolicyAgent(BaseAgent):
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
 
         需要子类重写的函数
-            build_model: 构建模型
+            _build_model: 构建模型
             take_action(self, state): 根据状态选择动作
             _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
             sync_update_net_params_in_agent: 同步更新模型参数
             get_params_to_send: 获取需要上传的参数
         """
-
         super().__init__(*args, **kwargs)
+
+        # 是否使用噪声网络
+        self.use_noisy = use_noisy
 
         # 离线经验回放池
         self.buffer_size = buffer_size
@@ -202,6 +206,22 @@ class OffPolicyAgent(BaseAgent):
 
         # 是否是训练状态
         self.in_train = True
+
+    def build_model(self):
+        """构建模型并处理 noisy network 替换
+        子类应该实现 _build_model 而不是 build_model"""
+        # 调用子类的模型构建
+        self._build_model()
+        
+        # 如果启用了 noisy network，替换所有线性层
+        if self.use_noisy:
+            for name, model in self.models.items():
+                self.models[name] = replace_linear_with_noisy(model)
+                log(f"Replaced linear layers with noisy layers in {name}")
+
+    def _build_model(self):
+        """子类需要实现此方法来构建具体的模型结构"""
+        raise NotImplementedError
 
     def eval(self):
         self.in_train = False
