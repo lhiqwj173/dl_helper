@@ -253,6 +253,9 @@ class C51(OffPolicyAgent):
         # 计算KL散度 (对所有情况都使用相同的KL散度公式)
         kl_div = -(target_dist * torch.log(current_dist + 1e-8)).sum(1)
 
+        print(f'kl_div: {kl_div.shape}, current_dist: {current_dist.shape}, target_dist: {target_dist.shape}')
+        print(f'weights: {weights.shape}')
+
         td_error_for_update = None
         if weights is not None:
             # PER: 使用重要性采样权重加权KL散度
