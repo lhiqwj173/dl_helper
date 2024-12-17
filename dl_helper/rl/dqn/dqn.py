@@ -244,8 +244,6 @@ class DQN(OffPolicyAgent):
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
 
-
-
     def build_model(self):
         q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
         target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)

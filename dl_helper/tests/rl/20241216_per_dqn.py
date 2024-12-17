@@ -16,9 +16,6 @@ from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 
-# 初始化日志
-init_logger_by_ip()
-
 # 训练参数
 train_title = 'PER_DQN_20241216'
 lr = 1e-4
@@ -33,6 +30,9 @@ batch_size = 256
 sync_interval_learn_step=150
 learn_interval_step=4
 server_tau = 0.005
+
+# 初始化日志
+init_logger_by_ip(train_title)
 
 # 快速测试
 simple_test = False

@@ -9,15 +9,12 @@ import threading
 from py_ext.tool import log
 
 from dl_helper.rl.dqn.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
-from dl_helper.rl.dqn.per_dqn import PER_DQN
+from dl_helper.rl.dqn.c51 import C51 
 from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning, run_client_learning_device
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
-
-# 初始化日志
-init_logger_by_ip()
 
 # 训练参数
 train_title = 'C51_20241217'
@@ -27,12 +24,15 @@ hidden_dim = 128
 gamma = 0.98
 epsilon = 0.5
 target_update = 50
-buffer_size = 5000
+buffer_size = 3000
 minimal_size = 3000
 batch_size = 256
 sync_interval_learn_step=150
 learn_interval_step=4
 server_tau = 0.005
+
+# 初始化日志
+init_logger_by_ip(train_title)
 
 # 快速测试
 simple_test = False
@@ -147,7 +147,7 @@ if __name__ == '__main__':
         profiler.enable()
         start_time = time.time()
 
-    agent_class = PER_DQN
+    agent_class = C51
     agent_kwargs = {
         'obs_shape': (100, 130),
         'learning_rate': lr,
@@ -161,7 +161,6 @@ if __name__ == '__main__':
         'features_extractor_class': m_bin_ctabl_fix_shape,
         'features_extractor_kwargs': features_extractor_kwargs,
         'net_arch': [6, 3],
-        'dqn_type': DD_DQN,
     }
 
     if not is_server:
