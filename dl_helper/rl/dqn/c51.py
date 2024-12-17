@@ -82,6 +82,9 @@ class c51_network(torch.nn.Module):
         """
         将概率分布转换为Q值
         """
+        if self.support.device != probs.device:
+            self.support = self.support.to(probs.device)
+            
         q_values = torch.sum(probs * self.support.expand_as(probs), dim=2)
         return q_values
 
