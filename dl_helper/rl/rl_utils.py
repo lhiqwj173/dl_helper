@@ -106,32 +106,32 @@ class SumTree:
         根据优先级值获取叶子节点
         """
         parent_idx = 0
+        
+        # 添加输入验证
+        if v < 0 or v > self.total_priority():
+            raise ValueError(f"Invalid value v: {v}, total priority: {self.total_priority()}")
+        
         while True:
             left_child_idx = 2 * parent_idx + 1
             right_child_idx = left_child_idx + 1
 
+            # 如果已经到达叶子层
             if left_child_idx >= len(self.tree):
                 leaf_idx = parent_idx
                 break
 
-            # 添加边界检查，确保不会选择未初始化区域的节点
-            if not self.is_full:
-                left_valid = (left_child_idx - self.capacity + 1) < self.data_pointer
-                right_valid = (right_child_idx - self.capacity + 1) < self.data_pointer
-                
-                if not left_valid and not right_valid:
-                    # 如果两个子节点都无效，回退到上一层
-                    leaf_idx = parent_idx
+            # 计算有效的数据范围
+            valid_start_idx = self.capacity - 1
+            valid_end_idx = valid_start_idx + (self.data_pointer if not self.is_full else self.capacity)
+
+            # 确保选择的节点在有效范围内
+            if parent_idx >= valid_start_idx:
+                if not self.is_full and parent_idx >= valid_end_idx:
+                    # 如果超出有效范围，回退到上一个有效节点
+                    leaf_idx = valid_end_idx - 1
                     break
-                elif not right_valid:
-                    # 如果右节点无效，强制选择左节点
-                    parent_idx = left_child_idx
-                    continue
-                elif not left_valid:
-                    # 如果左节点无效，强制选择右节点
-                    v -= self.tree[left_child_idx]
-                    parent_idx = right_child_idx
-                    continue
+                leaf_idx = parent_idx
+                break
 
             # 正常的选择逻辑
             if v <= self.tree[left_child_idx]:
@@ -142,14 +142,11 @@ class SumTree:
 
         data_idx = leaf_idx - self.capacity + 1
 
-        # 添加边界检查
-        if data_idx < 0 or data_idx >= self.capacity:
-            raise ValueError(f"Invalid data_idx {data_idx}, capacity is {self.capacity}")
-
-        # 添加数据存在性检查
-        if not self.is_full and data_idx >= self.data_pointer:
-            # 如果访问到未初始化的数据，重新采样
-            return self.get_leaf(random.uniform(0, self.tree[0]))
+        # 添加边界检查和修正
+        if data_idx < 0:
+            data_idx = 0
+        elif data_idx >= self.capacity:
+            data_idx = self.capacity - 1
 
         return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
 
