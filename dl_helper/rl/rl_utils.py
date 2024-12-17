@@ -122,9 +122,22 @@ class SumTree:
 
         data_idx = leaf_idx - self.capacity + 1
 
+
+        # 添加边界检查
+        if data_idx < 0 or data_idx >= self.capacity:
+            raise ValueError(f"Invalid data_idx {data_idx}, capacity is {self.capacity}")
+
+        # 添加数据存在性检查
+        if not self.is_full and data_idx >= self.data_pointer:
+            raise ValueError(f"Trying to access uninitialized data at index {data_idx}")
+
         # 添加数据验证
         data = self.data[data_idx]
         if data is None or (not isinstance(data, (tuple, list)) or len(data) != 5):
+            # 错误数据: (8190, 0.0, None)
+            # leaf_idx 8190, 
+            # self.tree[leaf_idx] 0.0
+            # self.data[data_idx] None
             pickle.dump((leaf_idx, self.tree[leaf_idx], self.data[data_idx]), open("error_SumTree_get_leaf.pkl", "wb"))
             raise ValueError(f"Invalid data at index {data_idx}: {data}")
 
