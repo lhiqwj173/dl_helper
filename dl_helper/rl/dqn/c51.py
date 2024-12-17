@@ -5,65 +5,7 @@ import pickle
 import collections
 
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
-from dl_helper.rl.dqn.dqn import ReplayBuffer  
-
-class C51ReplayBuffer(ReplayBuffer):
-    """C51算法的经验回放池"""
-    def __init__(self, capacity, n_atoms=51):
-        super().__init__(capacity)
-        self.n_atoms = n_atoms
-        # 更新数据类型以支持分布式奖励
-        self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32, np.float32]
-
-    def add(self, state, action, reward, next_state, done, prob_dist=None):
-        """
-        添加经验到缓冲区
-        prob_dist: 当前状态的奖励分布 (shape: n_atoms)
-        """
-        if prob_dist is None:
-            # 如果没有提供分布，创建均匀分布
-            prob_dist = np.ones(self.n_atoms) / self.n_atoms
-        self.buffer.append((state, action, reward, next_state, done, prob_dist))
-
-    def sample(self, batch_size):
-        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
-        transitions = [self.buffer[i] for i in indices]
-        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i]) 
-                    for i in range(6))  # 注意这里改为6个元素
-
-    def get(self, batch_size):
-        n = min(batch_size, len(self.buffer))
-        # 预分配列表空间
-        transitions = []
-        transitions.extend(self.buffer.popleft() for _ in range(n))
-        # 预分配numpy数组
-        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i])
-                    for i in range(6))
-
-class C51ReplayBufferWaitClose(C51ReplayBuffer):
-    """支持延迟更新reward的C51回放池"""
-    def __init__(self, capacity, n_atoms=51):
-        super().__init__(capacity, n_atoms)
-        self.buffer_temp = collections.deque()
-
-    def add(self, state, action, reward, next_state, done, prob_dist=None):
-        if prob_dist is None:
-            prob_dist = np.ones(self.n_atoms) / self.n_atoms
-        self.buffer_temp.append((state, action, reward, next_state, done, prob_dist))
-
-    def update_reward(self, reward=None):
-        if reward is not None:
-            # 更新所有临时经验的reward，保持分布不变
-            self.buffer_temp = collections.deque(
-                (t[0], t[1], reward, t[3], t[4], t[5]) for t in self.buffer_temp
-            )
-        # 批量添加到buffer
-        self.buffer.extend(self.buffer_temp)
-        self.buffer_temp.clear()
-
-    def reset(self):
-        super().reset()
-        self.buffer_temp.clear()
+from dl_helper.rl.rl_utils import C51ReplayBufferWaitClose
 
 class c51_network(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max):

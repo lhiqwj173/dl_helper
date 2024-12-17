@@ -173,63 +173,6 @@ class dqn_network(torch.nn.Module):
 
         return x
 
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.buffer = collections.deque(maxlen=capacity)
-        # 预定义数据类型
-        self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]
-
-    def add(self, state, action, reward, next_state, done):
-        # 直接使用元组存储,减少列表转换开销
-        self.buffer.append((state, action, reward, next_state, done))
-
-    def sample(self, batch_size):
-        # 使用numpy的random.choice替代random.sample,性能更好
-        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
-        transitions = [self.buffer[i] for i in indices]
-        # 预分配numpy数组
-        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i]) 
-                    for i in range(5))
-
-    def get(self, batch_size):
-        n = min(batch_size, len(self.buffer))
-        # 预分配列表空间
-        transitions = []
-        transitions.extend(self.buffer.popleft() for _ in range(n))
-        # 预分配numpy数组
-        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i])
-                    for i in range(5))
-
-    def size(self):
-        return len(self.buffer)
-
-    def reset(self):
-        self.buffer.clear()
-
-class ReplayBufferWaitClose(ReplayBuffer):
-    def __init__(self, capacity):
-        super().__init__(capacity)
-        # 使用deque替代list,提高append和extend性能
-        self.buffer_temp = collections.deque()
-
-    def add(self, state, action, reward, next_state, done):
-        # 使用元组存储,减少内存使用
-        self.buffer_temp.append((state, action, reward, next_state, done))
-
-    def update_reward(self, reward=None):
-        if reward is not None:
-            # 使用列表推导式替代循环,性能更好
-            self.buffer_temp = collections.deque(
-                (t[0], t[1], reward, t[3], t[4]) for t in self.buffer_temp
-            )
-        # 批量添加到buffer
-        self.buffer.extend(self.buffer_temp)
-        self.buffer_temp.clear()
-
-    def reset(self):
-        super().reset()
-        self.buffer_temp.clear()
-
 class DQN(OffPolicyAgent):
 
     def __init__(
