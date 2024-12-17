@@ -106,54 +106,26 @@ class SumTree:
         根据优先级值获取叶子节点
         """
         parent_idx = 0
-        
-        # 添加输入验证
-        if v < 0 or v > self.total_priority():
-            raise ValueError(f"Invalid value v: {v}, total priority: {self.total_priority()}")
-        
-        # 计算有效的数据范围
-        valid_start_idx = self.capacity - 1
-        valid_end_idx = valid_start_idx + (self.data_pointer if not self.is_full else self.capacity)
-
         while True:
-            left_child_idx = 2 * parent_idx + 1
-            right_child_idx = left_child_idx + 1
+            left_child = 2 * parent_idx + 1
+            right_child = left_child + 1
 
-            # 如果已经到达叶子层
-            if left_child_idx >= len(self.tree):
+            # 如果到达叶子节点
+            if left_child >= len(self.tree):
                 leaf_idx = parent_idx
                 break
 
-            # 如果当前节点在有效范围内，直接返回
-            if parent_idx >= valid_start_idx:
-                if parent_idx < valid_end_idx:
-                    leaf_idx = parent_idx
-                    break
-                # 如果超出有效范围，选择最后一个有效节点
-                leaf_idx = valid_end_idx - 1
-                break
-
-            # 正常的选择逻辑
-            if v <= self.tree[left_child_idx]:
-                parent_idx = left_child_idx
+            # 否则继续向下搜索
+            if v <= self.tree[left_child]:
+                parent_idx = left_child
             else:
-                v -= self.tree[left_child_idx]
-                parent_idx = right_child_idx
+                v -= self.tree[left_child]
+                parent_idx = right_child
 
         data_idx = leaf_idx - self.capacity + 1
-
-        # 确保 data_idx 在有效范围内
-        if data_idx < 0:
-            data_idx = 0
-        elif data_idx >= self.data_pointer and not self.is_full:
-            data_idx = self.data_pointer - 1
-        elif data_idx >= self.capacity:
-            data_idx = self.capacity - 1
-
-        # 添加数据验证
         if self.data[data_idx] is None:
-            raise ValueError(f"Accessed uninitialized data at index {data_idx}")
-
+            raise ValueError("Trying to access empty data slot")
+            
         return leaf_idx, self.tree[leaf_idx], self.data[data_idx]
 
     def total_priority(self):
@@ -333,7 +305,6 @@ class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
         super().reset()
         self.temp_experiences.clear()
         self.temp_indices.clear()
-
 
 class C51ReplayBuffer(ReplayBuffer):
     """C51算法的经验回放池"""
