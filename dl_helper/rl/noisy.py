@@ -25,8 +25,8 @@ class NoisyLinear(nn.Module):
     
     def forward(self, x):
         # 重新采样噪声
-        self.weight_epsilon = torch.randn(self.out_features, self.in_features)
-        self.bias_epsilon = torch.randn(self.out_features)
+        self.weight_epsilon = torch.randn(self.out_features, self.in_features, device=x.device)
+        self.bias_epsilon = torch.randn(self.out_features, device=x.device)
         
         # 应用噪声
         weight = self.weight_mu + self.weight_sigma * self.weight_epsilon
