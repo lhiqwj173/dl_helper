@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
 
 class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, std_init=0.1):
