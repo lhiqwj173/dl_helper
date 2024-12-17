@@ -10,7 +10,8 @@ from py_ext.alist import alist
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.socket_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test
-from dl_helper.rl.rl_utils import ReplayBuffer, ReplayBufferWaitClose, update_model_params
+from dl_helper.rl.dqn.dqn import ReplayBuffer, ReplayBufferWaitClose
+from dl_helper.rl.rl_utils import update_model_params
 from dl_helper.rl.tracker import Tracker
 
 class BaseAgent:
