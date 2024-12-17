@@ -84,7 +84,7 @@ class c51_network(torch.nn.Module):
         """
         if self.support.device != probs.device:
             self.support = self.support.to(probs.device)
-            
+
         q_values = torch.sum(probs * self.support.expand_as(probs), dim=2)
         return q_values
 
@@ -214,6 +214,8 @@ class C51(OffPolicyAgent):
             target_probs = next_probs[range(batch_size), next_actions]
             
             # 计算投影的目标分布
+            if self.support.device != rewards.device:
+                self.support = self.support.to(rewards.device)
             tz = rewards.unsqueeze(1) + (1 - dones.unsqueeze(1)) * self.gamma * self.support
             tz = tz.clamp(self.v_min, self.v_max)
             b = (tz - self.v_min) / self.delta_z
