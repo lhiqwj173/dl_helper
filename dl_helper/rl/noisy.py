@@ -75,16 +75,16 @@ def replace_linear_with_noisy(model, std_init=0.1):
 if __name__ == '__main__':
     # 使用示例
     class OriginalModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(10, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, 5)
-    
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
+        def __init__(self):
+            super().__init__()
+            self.fc1 = nn.Linear(10, 64)
+            self.fc2 = nn.Linear(64, 32)
+            self.fc3 = nn.Linear(32, 5)
+
+        def forward(self, x):
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            return self.fc3(x)
 
     # 转换示例
     original_model = OriginalModel()
