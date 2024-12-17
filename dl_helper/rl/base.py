@@ -460,4 +460,6 @@ class OffPolicyAgent(BaseAgent):
                         state, info = env.reset()
                         done = False
 
-
+                else:
+                    if step % 100 == 0:
+                        log(f'replay buffer size: {self.replay_buffer.size()}')
