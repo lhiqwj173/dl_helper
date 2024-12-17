@@ -27,14 +27,14 @@ from py_ext.alist import alist
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 
-def init_logger_by_ip():
+def init_logger_by_ip(train_title=''):
     try:
         ip = requests.get('https://api.ipify.org').text
     except:
         # 如果获取外网IP失败,使用内网IP作为备选
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-    init_logger(f'{ip}', level='INFO', timestamp=False, enqueue=True)
+    init_logger(f'{ip}' if train_title == '' else f'[{train_title}]{ip}', level='INFO', timestamp=False, enqueue=True)
     log(f'init_logger: {get_log_file()}')
 
 def upload_log_file(train_title):

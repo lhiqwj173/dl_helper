@@ -395,7 +395,7 @@ class OffPolicyAgent(BaseAgent):
                 state = next_state
 
                 # 更新网络
-                if self.replay_buffer.size() > minimal_size and step % learn_interval_step == 0:
+                if self.replay_buffer.size() >= minimal_size and step % learn_interval_step == 0:
                     per_buffer = hasattr(self.replay_buffer, 'update_priorities')
 
                     if per_buffer:
@@ -462,4 +462,4 @@ class OffPolicyAgent(BaseAgent):
 
                 else:
                     if step % 100 == 0:
-                        log(f'replay buffer size: {self.replay_buffer.size()}')
+                        log(f'{self.msg_head} replay buffer size: {self.replay_buffer.size()}')
