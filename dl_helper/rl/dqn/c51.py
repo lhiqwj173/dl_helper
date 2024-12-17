@@ -266,6 +266,7 @@ class C51(OffPolicyAgent):
                 'dones': dones.cpu().numpy(),
                 'current_dist': current_dist.detach().cpu().numpy(),
                 'target_dist': target_dist.detach().cpu().numpy(),
+                'weights': weights.cpu().numpy() if weights is not None else None,
                 'loss': loss.item(),
                 'td_error': td_error
             }

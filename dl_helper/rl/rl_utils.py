@@ -193,9 +193,22 @@ class PrioritizedReplayBuffer:
             batch_priorities.append(priority)
 
         # 计算重要性采样权重
-        probabilities = batch_priorities / self.tree.total_priority()
-        weights = np.power(self.tree.capacity * probabilities, -self.beta)
-        weights /= weights.max()
+        total_priority = self.tree.total_priority()
+        # 确保总优先级不为零
+        if total_priority == 0:
+            probabilities = np.ones_like(batch_priorities) / len(batch_priorities)
+        else:
+            probabilities = batch_priorities / total_priority
+
+        # 添加数值稳定性检查
+        weights = np.zeros_like(probabilities)
+        valid_probs = probabilities > 0
+        if np.any(valid_probs):
+            weights[valid_probs] = np.power(self.tree.capacity * probabilities[valid_probs], -self.beta)
+            # 避免除以零，使用 np.maximum 确保分母不为零
+            weights /= np.maximum(weights.max(), 1e-8)
+        else:
+            weights = np.ones_like(probabilities)  # 如果所有概率都为零，返回均匀权重
 
         # batch 内转为numpy数组
         try:

@@ -309,6 +309,7 @@ class DQN(OffPolicyAgent):
                 'rewards': rewards.cpu().numpy(), 
                 'next_states': next_states.cpu().numpy(),
                 'dones': dones.cpu().numpy(),
+                'weights': weights.cpu().numpy() if weights is not None else None,
                 'q_values': q_values.detach().cpu().numpy(),
                 'q_targets': q_targets.detach().cpu().numpy(),
                 'max_next_q_values': max_next_q_values.detach().cpu().numpy(),
