@@ -6,7 +6,6 @@ import subprocess
 def run(need_clear):
     if need_clear:
         print('清理 /root/alist_data/rl_learning_process 目录下的所有文件')
-        # 清理 /root/alist_data/rl_learning_process 目录下的所有文件
         shutil.rmtree('/root/alist_data/rl_learning_process')
         os.makedirs('/root/alist_data/rl_learning_process')
 
