@@ -140,9 +140,9 @@ class SumTree:
         """
         添加新的经验
         """
-        if not isinstance(data, (tuple, list)) or len(data) != 5:
+        if not isinstance(data, (tuple, list)) or len(data) not in [5, 8]:
             pickle.dump((priority, data), open("error_SumTree_add_data.pkl", "wb"))
-            raise ValueError(f"Invalid data format: expected tuple/list of length 5, got {data}({type(data)})")
+            raise ValueError(f"Invalid data format: expected tuple/list of length 5 or 8, got {data}({type(data)})")
 
         tree_idx = self.data_pointer + self.capacity - 1
         self.data[self.data_pointer] = data
