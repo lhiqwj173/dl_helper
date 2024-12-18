@@ -65,7 +65,7 @@ class ReplayBuffer:
             n_rewards = np.array([t[5] for t in transitions], dtype=self.dtypes[2])
             n_next_states = np.array([t[6] for t in transitions], dtype=self.dtypes[3])
             n_dones = np.array([t[7] for t in transitions], dtype=self.dtypes[4])
-            
+
         return (states, actions, rewards, next_states, dones,
                 n_rewards, n_next_states, n_dones)
 
@@ -228,13 +228,11 @@ class PrioritizedReplayBuffer:
         # 预定义数据类型
         self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]    
 
-    def add(self, experience):
+    def add(self, transition):
         """
         添加新的经验
         默认给最大优先级
         """
-        transition = (state, action, reward, next_state, done)
-        
         if self.n_step > 1:
             self.n_step_buffer.append(transition)
 
