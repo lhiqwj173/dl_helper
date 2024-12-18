@@ -36,7 +36,7 @@ class ReplayBuffer:
             if len(self.n_step_buffer) == self.n_step:
                 # 计算n步return
                 n_reward, n_next_state, n_done = _get_n_step_info(self.n_step_buffer, self.gamma)
-                state, action, _, _, _ = self.n_step_buffer[0]
+                state, action, reward, next_state, done = self.n_step_buffer[0]
                 
                 # 存储原始transition和n步信息
                 self.buffer.append((
@@ -240,7 +240,7 @@ class PrioritizedReplayBuffer:
             if len(self.n_step_buffer) == self.n_step:
                 # 计算n步return
                 n_reward, n_next_state, n_done = _get_n_step_info(self.n_step_buffer, self.gamma)
-                state, action, _, _, _ = self.n_step_buffer[0]
+                state, action, reward, next_state, done = self.n_step_buffer[0]
                 
                 # 存储原始transition和n步信息
                 experience = (
