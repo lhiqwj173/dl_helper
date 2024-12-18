@@ -202,6 +202,12 @@ class C51(OffPolicyAgent):
         # 分布式Q学习更新
         batch_size = states.shape[0]
 
+        # 只在batch_size改变或首次使用时重新计算offset
+        if self.offset is None or batch_size != self.last_batch_size:
+            self.offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(states.device)
+            self.offset = self.offset.unsqueeze(1).expand(batch_size, self.n_atoms)
+            self.last_batch_size = batch_size
+
         # 获取当前网络的分布预测
         current_probs = self.models['q_net'](states)
 
@@ -249,14 +255,7 @@ class C51(OffPolicyAgent):
                 target_dist_1 = torch.zeros_like(target_probs_1)
                 target_dist_n = torch.zeros_like(target_probs_n)
 
-                # 只在batch_size改变或首次使用时重新计算offset
-                if self.offset is None or batch_size != self.last_batch_size:
-                    self.offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(states.device)
-                    self.offset = self.offset.unsqueeze(1).expand(batch_size, self.n_atoms)
-                    self.last_batch_size = batch_size
-
                 # 计算单步投影概率
-                print(f'target_probs_1: {type(target_probs_1)}, l1: {type(l1)}, u1: {type(u1)}, b1: {type(b1)}, self.offset: {type(self.offset)}')
                 target_dist_1.view(-1).index_add_(
                     0, (l1 + self.offset).view(-1),
                     (target_probs_1 * (u1.float() - b1)).view(-1)
