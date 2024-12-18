@@ -74,6 +74,11 @@ class data_producer:
         # 数据索引
         self.idxs = []
         self.col_idx = {}
+        # 用于绘图的索引
+        self.plot_begin = 0
+        self.plot_end = 0
+        self.plot_cur = 0
+        self.plot_data = None
         # 买卖1档价格
         self.ask_price = 0
         self.bid_price = 0
@@ -81,6 +86,15 @@ class data_producer:
         self.id = ''
         # 当前日期数据停止标志
         self.date_file_done = False
+
+    def pre_plot_data(self):
+        """
+        预先读取绘图数据
+        col_idx: BASE买1价, BASE卖1价, BASE中间价
+        """
+        self.plot_data = self.all_raw_data[self.plot_begin: self.plot_end, [self.col_idx['BASE买1价'], self.col_idx['BASE卖1价']]]
+        # 新增一列中间价格
+        self.plot_data = np.concatenate([self.plot_data, (self.plot_data[:, 0] + self.plot_data[:, 1]) / 2], axis=1)
 
     def _pre_files(self):
         """
@@ -125,6 +139,13 @@ class data_producer:
             self.idxs = [random.choice(self.idxs)]
 
         log(f'init idxs: {self.idxs}')
+        
+        # 初始化绘图索引
+        self.plot_begin = self.idxs[0][0]
+        self.plot_end = self.idxs[0][1]
+        self.plot_cur = self.idxs[0][0]
+        # 准备绘图数据
+        self.pre_plot_data()
 
         # 调整数据
         # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
@@ -282,10 +303,25 @@ class data_producer:
                     # 没有下一个可以读取的日期数据文件
                     log('all date files done')
                     all_done = True
+            else:
+                # 重置绘图索引
+                self.plot_begin = self.idxs[0][0]
+                self.plot_end = self.idxs[0][1]
+                self.plot_cur = self.idxs[0][0]
+                # 准备绘图数据
+                self.pre_plot_data()
         else:
             self.idxs[0][0] += 1
+            # 更新绘图索引
+            self.plot_cur += 1
 
         return symbol_id, x, all_done, need_close, self.date_file_done
+
+    def get_plot_data(self):
+        """
+        获取绘图数据, 当前状态(时间点)索引
+        """
+        return self.plot_data, self.plot_cur - self.plot_begin
 
     def reset(self):
         self._pre_files()
@@ -562,6 +598,26 @@ class LOB_trade_env(gym.Env):
         # 添加标的持仓数据
         x = np.concatenate([x, [symbol_id, pos,profit]])
         return x, {}
+
+    def plot_reset(self):
+        # 数据
+        self.data_producer.reset()
+        symbol_id, x, _, self.need_close, self.date_done = self._get_data()
+        # 账户
+        pos, profit = self.acc.reset()
+
+    def plot(self):
+        plot_data, plot_cur = self.data_producer.get_plot_data()
+        # 绘制中间价格
+        plt.figure(figsize=(15, 5))
+        plt.plot(plot_data['mid_price'][:plot_cur], color='blue', label='Historical Mid Price')
+        plt.plot(plot_data['mid_price'][plot_cur:], color='blue', alpha=0.3, label='Future Mid Price')
+        plt.axvline(x=plot_cur, color='red', linestyle='--', label='Current Position')
+        plt.legend()
+        plt.grid(True)
+        plt.title('Mid Price')
+        plt.show()
+        
 
     def render(self):
         pass
