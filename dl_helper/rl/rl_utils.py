@@ -4,25 +4,73 @@ import torch
 import collections
 import random, pickle
 
+def _get_n_step_info(n_step_buffer, gamma):
+    """计算n步return"""
+    reward, next_state, done = n_step_buffer[-1][-3:]
+
+    for transition in reversed(list(n_step_buffer)[:-1]):
+        r, n_s, d = transition[-3:]
+        reward = r + gamma * reward * (1 - d)
+        next_state = n_s if d else next_state
+        done = d
+
+    return reward, next_state, done
+
 class ReplayBuffer:
-    def __init__(self, capacity):
+    def __init__(self, capacity, n_step=1, gamma=0.99):
         self.buffer = collections.deque(maxlen=capacity)
+        self.n_step = n_step
+        self.gamma = gamma
+        # n步缓存
+        self.n_step_buffer = collections.deque(maxlen=n_step) if n_step > 1 else None
         # 预定义数据类型
         self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]
 
     def add(self, state, action, reward, next_state, done):
-        # 直接使用元组存储,减少列表转换开销
-        self.buffer.append((state, action, reward, next_state, done))
+        transition = (state, action, reward, next_state, done)
+
+        if self.n_step > 1:
+            self.n_step_buffer.append(transition)
+
+            # 只有当n步缓存满了才添加到主缓存
+            if len(self.n_step_buffer) == self.n_step:
+                # 计算n步return
+                n_reward, n_next_state, n_done = _get_n_step_info(self.n_step_buffer, self.gamma)
+                state, action, _, _, _ = self.n_step_buffer[0]
+                
+                # 存储原始transition和n步信息
+                self.buffer.append((
+                    state, action, reward, next_state, done,  # 原始数据
+                    n_reward, n_next_state, n_done  # n步数据
+                ))
+        else:
+            self.buffer.append(transition)
 
     def sample(self, batch_size):
-        # 使用numpy的random.choice替代random.sample,性能更好
         indices = np.random.choice(len(self.buffer), batch_size, replace=False)
         transitions = [self.buffer[i] for i in indices]
-        # 预分配numpy数组
-        return tuple(np.array([t[i] for t in transitions], dtype=self.dtypes[i]) 
-                    for i in range(5))
+
+        # 分离原始数据和n步数据
+        states = np.array([t[0] for t in transitions], dtype=self.dtypes[0])
+        actions = np.array([t[1] for t in transitions], dtype=self.dtypes[1])
+        rewards = np.array([t[2] for t in transitions], dtype=self.dtypes[2])
+        next_states = np.array([t[3] for t in transitions], dtype=self.dtypes[3])
+        dones = np.array([t[4] for t in transitions], dtype=self.dtypes[4])
+
+        n_rewards = None
+        n_next_states = None
+        n_dones = None
+        # 如果使用n步学习，添加n步数据
+        if self.n_step > 1:
+            n_rewards = np.array([t[5] for t in transitions], dtype=self.dtypes[2])
+            n_next_states = np.array([t[6] for t in transitions], dtype=self.dtypes[3])
+            n_dones = np.array([t[7] for t in transitions], dtype=self.dtypes[4])
+            
+        return (states, actions, rewards, next_states, dones,
+                n_rewards, n_next_states, n_dones)
 
     def get(self, batch_size):
+        # 只针对1步 进行验证
         n = min(batch_size, len(self.buffer))
         # 预分配列表空间
         transitions = []
@@ -34,12 +82,17 @@ class ReplayBuffer:
     def size(self):
         return len(self.buffer)
 
+    def clear_n_step_buffer(self):
+        if self.n_step > 1:
+            self.n_step_buffer.clear()
+
     def reset(self):
         self.buffer.clear()
+        self.clear_n_step_buffer()
 
 class ReplayBufferWaitClose(ReplayBuffer):
-    def __init__(self, capacity):
-        super().__init__(capacity)
+    def __init__(self, capacity, n_step=1, gamma=0.99):
+        super().__init__(capacity, n_step, gamma)
         # 使用deque替代list,提高append和extend性能
         self.buffer_temp = collections.deque()
 
@@ -53,8 +106,18 @@ class ReplayBufferWaitClose(ReplayBuffer):
             self.buffer_temp = collections.deque(
                 (t[0], t[1], reward, t[3], t[4]) for t in self.buffer_temp
             )
-        # 批量添加到buffer
-        self.buffer.extend(self.buffer_temp)
+
+        if self.n_step > 1:
+            # 使用父类add方法
+            for t in self.buffer_temp:
+                super().add(t[0], t[1], t[2], t[3], t[4])
+            # 清空n步缓冲区
+            self.clear_n_step_buffer()
+        else:
+            # 批量添加到buffer， 效率更高
+            self.buffer.extend(self.buffer_temp)
+
+        # 清空临时缓冲区
         self.buffer_temp.clear()
 
     def reset(self):
@@ -144,7 +207,9 @@ class PrioritizedReplayBuffer:
         alpha=0.6,  # 决定优先级的指数
         beta=0.4,   # 重要性采样权重的初始值
         beta_increment_per_sampling=0.001,
-        max_priority=1.0
+        max_priority=1.0,
+        n_step=1,
+        gamma=0.99
     ):
         self.tree = SumTree(capacity)
         self.capacity = capacity
@@ -155,6 +220,11 @@ class PrioritizedReplayBuffer:
         self.max_priority = max_priority
         self.epsilon = 1e-6  # 避免零优先级
 
+        self.n_step = n_step
+        self.gamma = gamma
+        # n步缓存
+        self.n_step_buffer = collections.deque(maxlen=n_step) if n_step > 1 else None
+
         # 预定义数据类型
         self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]    
 
@@ -163,8 +233,27 @@ class PrioritizedReplayBuffer:
         添加新的经验
         默认给最大优先级
         """
-        max_priority = self.max_priority if not self.tree.is_full else self.tree.tree[0]
-        self.tree.add(max_priority, experience)
+        transition = (state, action, reward, next_state, done)
+        
+        if self.n_step > 1:
+            self.n_step_buffer.append(transition)
+
+            # 只有当n步缓存满了才添加到主缓存
+            if len(self.n_step_buffer) == self.n_step:
+                # 计算n步return
+                n_reward, n_next_state, n_done = _get_n_step_info(self.n_step_buffer, self.gamma)
+                state, action, _, _, _ = self.n_step_buffer[0]
+                
+                # 存储原始transition和n步信息
+                experience = (
+                    state, action, reward, next_state, done,  # 原始数据
+                    n_reward, n_next_state, n_done  # n步数据
+                )
+                max_priority = self.max_priority if not self.tree.is_full else self.tree.tree[0]
+                self.tree.add(max_priority, experience)
+        else:
+            max_priority = self.max_priority if not self.tree.is_full else self.tree.tree[0]
+            self.tree.add(max_priority, transition)
 
     def sample(self, batch_size):
         """
@@ -212,8 +301,26 @@ class PrioritizedReplayBuffer:
 
         # batch 内转为numpy数组
         try:
-            batch = tuple(np.array([t[i] for t in batch], dtype=self.dtypes[i])
-                    for i in range(5))
+            # 原始数据
+            states = np.array([t[0] for t in batch], dtype=self.dtypes[0])
+            actions = np.array([t[1] for t in batch], dtype=self.dtypes[1])
+            rewards = np.array([t[2] for t in batch], dtype=self.dtypes[2])
+            next_states = np.array([t[3] for t in batch], dtype=self.dtypes[3])
+            dones = np.array([t[4] for t in batch], dtype=self.dtypes[4])
+
+            # n步数据
+            n_rewards = None
+            n_next_states = None
+            n_dones = None
+            if self.n_step > 1:
+                n_rewards = np.array([t[5] for t in batch], dtype=self.dtypes[2])
+                n_next_states = np.array([t[6] for t in batch], dtype=self.dtypes[3])
+                n_dones = np.array([t[7] for t in batch], dtype=self.dtypes[4])
+
+            # 合并数据  
+            batch = (states, actions, rewards, next_states, dones,
+                    n_rewards, n_next_states, n_dones)
+
         except Exception as e:
             print(f"Error converting batch to numpy arrays: {str(e)}")
             print(f"Batch content: {batch}")
@@ -245,20 +352,25 @@ class PrioritizedReplayBuffer:
             return self.capacity
         return self.tree.data_pointer
 
+    def clear_n_step_buffer(self):
+        if self.n_step > 1:
+            self.n_step_buffer.clear()
+
     def reset(self):
         """
         重置缓冲区
         """
         self.tree = SumTree(self.capacity)
         self.beta = self._beta   # 重置 beta 到初始值
+        self.clear_n_step_buffer()
 
 class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
     """
     支持延迟更新 reward 的优先级经验回放
     """
     def __init__(self, capacity=10000, alpha=0.6, beta=0.4, 
-                 beta_increment_per_sampling=0.001, max_priority=1.0):
-        super().__init__(capacity, alpha, beta, beta_increment_per_sampling, max_priority)
+                 beta_increment_per_sampling=0.001, max_priority=1.0, n_step=1, gamma=0.99):
+        super().__init__(capacity, alpha, beta, beta_increment_per_sampling, max_priority, n_step, gamma)
         self.temp_experiences = collections.deque()  # 临时存储经验
         self.temp_indices = collections.deque()      # 临时存储对应的树索引
 
@@ -291,7 +403,9 @@ class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
                 raise ValueError(f"Invalid experience format before adding to buffer: {experience}")
             super().add(experience)
 
-        # 清空临时缓冲区
+        # 清空n步缓冲区
+        self.clear_n_step_buffer()
+        # 清空临时缓冲区    
         self.temp_experiences.clear()
         self.temp_indices.clear()
 

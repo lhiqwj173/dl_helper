@@ -157,6 +157,7 @@ if __name__ == '__main__':
         'buffer_size': buffer_size,
         'train_buffer_class': PrioritizedReplayBufferWaitClose,
         'use_noisy': True,
+        'n_step': 1,
         'train_title': train_title,
         'action_dim': 3,
         'features_dim': d4+3,

@@ -254,7 +254,7 @@ class Tracker:
             if k.startswith('total_return'):
                 # 对数收益率累计
                 metrics[k] = np.nansum(v)
-            elif k.startswith('trade_return'):
+            else:
                 metrics[k] = np.nanmean(v)
 
         return metrics

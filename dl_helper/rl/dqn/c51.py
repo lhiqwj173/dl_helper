@@ -107,6 +107,7 @@ class C51(OffPolicyAgent):
         features_extractor_class,
         features_extractor_kwargs=None,
         use_noisy=True,
+        n_step=1,
         net_arch=None,
 
         n_atoms=51,
@@ -130,6 +131,7 @@ class C51(OffPolicyAgent):
                 buffer_size: 经验回放池大小
                 train_buffer_class: 经验回放池类,必须提供
                 use_noisy: 是否使用噪声网络
+                n_step: 多步学习的步数
                 train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
@@ -138,7 +140,7 @@ class C51(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, train_buffer_class, use_noisy, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_buffer_class, use_noisy, n_step, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
 
         self.obs_shape = obs_shape
         
@@ -169,7 +171,7 @@ class C51(OffPolicyAgent):
     # 需要重写的函数
     #     _build_model: 构建模型
     #     _take_action(self, state): 根据状态选择动作
-    #     _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
+    #     _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
@@ -196,7 +198,7 @@ class C51(OffPolicyAgent):
         self.models['q_net'].train()
         return action
 
-    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
+    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None):
         # 分布式Q学习更新
         batch_size = states.shape[0]
 
@@ -204,45 +206,101 @@ class C51(OffPolicyAgent):
         current_probs = self.models['q_net'](states)
 
         with torch.no_grad():
-            # 获取目标网络的分布预测
-            next_probs = self.models['target_q_net'](next_states)
-            
-            # 使用当前网络选择动作
-            next_q_values = self.models['q_net'].get_q_values(next_probs)
-            next_actions = next_q_values.argmax(1)
-            
-            # 获取目标分布
-            target_probs = next_probs[range(batch_size), next_actions]
-            
-            # 计算投影的目标分布
+            # 1. 计算单步目标分布
+            next_probs_1 = self.models['target_q_net'](next_states)
+            next_q_values_1 = self.models['q_net'].get_q_values(next_probs_1)
+            next_actions_1 = next_q_values_1.argmax(1)
+            target_probs_1 = next_probs_1[range(batch_size), next_actions_1]
+
+            # 确保support在正确的设备上
             if self.support.device != rewards.device:
                 self.support = self.support.to(rewards.device)
-            tz = rewards.unsqueeze(1) + (1 - dones.unsqueeze(1)) * self.gamma * self.support
-            tz = tz.clamp(self.v_min, self.v_max)
-            b = (tz - self.v_min) / self.delta_z
-            l = b.floor().long()
-            u = b.ceil().long()
+
+            # 计算单步目标分布
+            tz1 = rewards.unsqueeze(1) + (1 - dones.unsqueeze(1)) * self.gamma * self.support
+            tz1 = tz1.clamp(self.v_min, self.v_max)
+            b1 = (tz1 - self.v_min) / self.delta_z
+            l1 = b1.floor().long()
+            u1 = b1.ceil().long()
             
             # 处理上下界相等的情况
-            l[(u > 0) * (l == u)] -= 1
-            u[(l < (self.n_atoms - 1)) * (l == u)] += 1
-            
-            # 计算投影概率
-            target_dist = torch.zeros_like(target_probs)
-            # 只在batch_size改变或首次使用时重新计算offset
-            if self.offset is None or batch_size != self.last_batch_size:
-                self.offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(states.device)
-                self.offset = self.offset.unsqueeze(1).expand(batch_size, self.n_atoms)
-                self.last_batch_size = batch_size
+            l1[(u1 > 0) * (l1 == u1)] -= 1
+            u1[(l1 < (self.n_atoms - 1)) * (l1 == u1)] += 1
 
-            target_dist.view(-1).index_add_(
-                0, (l + self.offset).view(-1),
-                (target_probs * (u.float() - b)).view(-1)
-            )
-            target_dist.view(-1).index_add_(
-                0, (u + self.offset).view(-1),
-                (target_probs * (b - l.float())).view(-1)
-            )
+            # 2. 如果有n步数据，计算n步目标分布
+            if n_step_rewards is not None:
+                next_probs_n = self.models['target_q_net'](n_step_next_states)
+                next_q_values_n = self.models['q_net'].get_q_values(next_probs_n)
+                next_actions_n = next_q_values_n.argmax(1)
+                target_probs_n = next_probs_n[range(batch_size), next_actions_n]
+
+                # 计算n步目标分布
+                tzn = n_step_rewards.unsqueeze(1) + (1 - n_step_dones.unsqueeze(1)) * (self.gamma ** self.n_step) * self.support
+                tzn = tzn.clamp(self.v_min, self.v_max)
+                bn = (tzn - self.v_min) / self.delta_z
+                ln = bn.floor().long()
+                un = bn.ceil().long()
+                
+                # 处理上下界相等的情况
+                ln[(un > 0) * (ln == un)] -= 1
+                un[(ln < (self.n_atoms - 1)) * (ln == un)] += 1
+
+                # 3. 计算两个目标分布
+                target_dist_1 = torch.zeros_like(target_probs_1)
+                target_dist_n = torch.zeros_like(target_probs_n)
+
+                # 只在batch_size改变或首次使用时重新计算offset
+                if self.offset is None or batch_size != self.last_batch_size:
+                    self.offset = torch.linspace(0, (batch_size - 1) * self.n_atoms, batch_size).long().to(states.device)
+                    self.offset = self.offset.unsqueeze(1).expand(batch_size, self.n_atoms)
+                    self.last_batch_size = batch_size
+
+                # 计算单步投影概率
+                target_dist_1.view(-1).index_add_(
+                    0, (l1 + self.offset).view(-1),
+                    (target_probs_1 * (u1.float() - b1)).view(-1)
+                )
+                target_dist_1.view(-1).index_add_(
+                    0, (u1 + self.offset).view(-1),
+                    (target_probs_1 * (b1 - l1.float())).view(-1)
+                )
+
+                # 计算n步投影概率
+                target_dist_n.view(-1).index_add_(
+                    0, (ln + self.offset).view(-1),
+                    (target_probs_n * (un.float() - bn)).view(-1)
+                )
+                target_dist_n.view(-1).index_add_(
+                    0, (un + self.offset).view(-1),
+                    (target_probs_n * (bn - ln.float())).view(-1)
+                )
+
+                # 4. 动态计算权重
+                actions = actions.squeeze(-1)
+                current_dist = current_probs[range(batch_size), actions]
+                
+                # 计算单步和n步的KL散度
+                kl_div_1 = -(target_dist_1 * torch.log(current_dist + 1e-8)).sum(1)
+                kl_div_n = -(target_dist_n * torch.log(current_dist + 1e-8)).sum(1)
+                
+                # 使用softmax计算动态权重
+                kl_divs = torch.stack([kl_div_1, kl_div_n], dim=1)
+                weights_soft = F.softmax(-kl_divs, dim=1)  # 负号使得误差越小权重越大
+                
+                # 最终目标分布是加权平均
+                target_dist = (weights_soft[:, 0].unsqueeze(1) * target_dist_1 + 
+                            weights_soft[:, 1].unsqueeze(1) * target_dist_n)
+            else:
+                # 如果没有n步数据，只使用单步目标
+                target_dist = torch.zeros_like(target_probs_1)
+                target_dist.view(-1).index_add_(
+                    0, (l1 + self.offset).view(-1),
+                    (target_probs_1 * (u1.float() - b1)).view(-1)
+                )
+                target_dist.view(-1).index_add_(
+                    0, (u1 + self.offset).view(-1),
+                    (target_probs_1 * (b1 - l1.float())).view(-1)
+                )
         
         # 计算KL散度损失
         # 将actions压缩为一维

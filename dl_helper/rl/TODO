@@ -5,7 +5,7 @@ DQN:
  - Noisy DQN
 
  TODO:
- - Distributional DQN
+ - Multi-step Learning
  - Rainbow DQN (2017)
  - Efficient Rainbow (2020年)
  - Ape-X DQN (2018)

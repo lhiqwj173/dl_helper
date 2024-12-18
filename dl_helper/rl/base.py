@@ -166,7 +166,7 @@ class BaseAgent:
             self.load_state_dict(torch.load(file))
 
 class OffPolicyAgent(BaseAgent):
-    def __init__(self, buffer_size, train_buffer_class, use_noisy, *args, **kwargs):
+    def __init__(self, buffer_size, train_buffer_class, use_noisy, n_step, *args, **kwargs):
         """
         OffPolicyAgent 基类
         
@@ -174,6 +174,7 @@ class OffPolicyAgent(BaseAgent):
             buffer_size: 经验回放池大小
             train_buffer_class: 训练经验回放池类
             use_noisy: 是否使用噪声网络
+            n_step: 多步学习的步数
 
             BaseAgent 参数
                 train_title: 训练标题
@@ -187,7 +188,7 @@ class OffPolicyAgent(BaseAgent):
         需要子类重写的函数
             _build_model: 构建模型
             take_action(self, state): 根据状态选择动作
-            _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
+            _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
             sync_update_net_params_in_agent: 同步更新模型参数
             get_params_to_send: 获取需要上传的参数
         """
@@ -196,10 +197,13 @@ class OffPolicyAgent(BaseAgent):
         # 是否使用噪声网络
         self.use_noisy = use_noisy
 
+        # 多步学习的步数
+        self.n_step = n_step    
+
         # 离线经验回放池
         self.buffer_size = buffer_size
         self.train_buffer_class = train_buffer_class
-        self.replay_buffer = self.train_buffer_class(self.buffer_size)
+        self.replay_buffer = self.train_buffer_class(self.buffer_size, n_step=self.n_step)
 
         # 跟踪器
         self.tracker = Tracker('learn', 10)
@@ -280,6 +284,32 @@ class OffPolicyAgent(BaseAgent):
         tracker.update_td_error(td_error)
         # 计算损失
         tracker.update_loss_value(loss_value)
+
+    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None):
+        raise NotImplementedError
+
+    def update(self, transition_dict, data_type='train', weights=None):
+        states = torch.from_numpy(transition_dict['states']).to(self.device)
+        actions = torch.from_numpy(transition_dict['actions']).view(-1, 1).to(self.device)
+        rewards = torch.from_numpy(transition_dict['rewards']).view(-1, 1).to(self.device)
+        next_states = torch.from_numpy(transition_dict['next_states']).to(self.device)
+        dones = torch.from_numpy(transition_dict['dones']).view(-1, 1).to(self.device)
+
+        # 计算 n-step return
+        if 'n_step_rewards' in transition_dict:
+            n_step_rewards = torch.from_numpy(transition_dict['n_step_rewards']).view(-1, 1).to(self.device)
+            n_step_next_states = torch.from_numpy(transition_dict['n_step_next_states']).to(self.device)
+            n_step_dones = torch.from_numpy(transition_dict['n_step_dones']).view(-1, 1).to(self.device)
+        else:
+            n_step_rewards = None
+            n_step_next_states = None
+            n_step_dones = None
+
+        # 供 PER回放池 使用
+        if weights is not None:
+            weights = torch.from_numpy(weights).to(self.device)
+
+        return self._update(states, actions, rewards, next_states, dones, data_type, weights, n_step_rewards, n_step_next_states, n_step_dones)
 
     def val_test(self, env, data_type='val'):
         # 验证模式
@@ -444,11 +474,11 @@ class OffPolicyAgent(BaseAgent):
                         log(f"{self.msg_head} Tree status - is_full: {self.replay_buffer.tree.is_full}, data_pointer: {self.replay_buffer.tree.data_pointer}")
                         log(f"{self.msg_head} Total priority: {self.replay_buffer.tree.total_priority()}")
                         # 采样batch数据
-                        (b_s, b_a, b_r, b_ns, b_d), indices, weights = self.replay_buffer.sample(batch_size)
+                        (b_s, b_a, b_r, b_ns, b_d, step_r, step_ns, step_d), indices, weights = self.replay_buffer.sample(batch_size)
 
                     else:   
                         # 学习经验
-                        b_s, b_a, b_r, b_ns, b_d = self.replay_buffer.sample(batch_size)
+                        b_s, b_a, b_r, b_ns, b_d, step_r, step_ns, step_d = self.replay_buffer.sample(batch_size)
                         weights = None
 
                     transition_dict = {
@@ -458,6 +488,13 @@ class OffPolicyAgent(BaseAgent):
                         'rewards': b_r,
                         'dones': b_d
                     }
+
+                    # 添加n步数据
+                    if step_r is not None:
+                        transition_dict['n_step_rewards'] = step_r
+                        transition_dict['n_step_next_states'] = step_ns
+                        transition_dict['n_step_dones'] = step_d
+
                     td_error_for_update = self.update(transition_dict, weights=weights)
 
                     if per_buffer:

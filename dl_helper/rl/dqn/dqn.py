@@ -193,6 +193,7 @@ class DQN(OffPolicyAgent):
         features_extractor_class,
         features_extractor_kwargs=None,
         use_noisy=True,
+        n_step=1,
         net_arch=None,
 
         dqn_type=VANILLA_DQN,
@@ -212,6 +213,7 @@ class DQN(OffPolicyAgent):
                 buffer_size: 经验回放池大小
                 train_buffer_class: 训练经验回放池类
                 use_noisy: 是否使用噪声网络
+                n_step: 多步学习的步数
                 train_title: 训练标题
                 action_dim: 动作空间维度 
                 features_dim: 特征维度
@@ -220,7 +222,7 @@ class DQN(OffPolicyAgent):
                 net_arch=None: 网络架构参数,默认为一层mlp, 输入/输出维度为features_dim, action_dim
                     [action_dim] / dict(pi=[action_dim], vf=[action_dim]) 等价
         """
-        super().__init__(buffer_size, train_buffer_class, use_noisy, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
+        super().__init__(buffer_size, train_buffer_class, use_noisy, n_step, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
         self.obs_shape = obs_shape
@@ -241,7 +243,7 @@ class DQN(OffPolicyAgent):
     # 需要重写的函数
     #     _build_model: 构建模型
     #     _take_action(self, state): 根据状态选择动作
-    #     _update(self, states, actions, rewards, next_states, dones, data_type): 更新模型
+    #     _update(self, states, actions, rewards, next_states, dones, data_type, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
     ############################################################
@@ -262,7 +264,7 @@ class DQN(OffPolicyAgent):
         self.models['q_net'].train()
         return action
 
-    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
+    def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None):
         # 计算当前Q值
         q_values = self.models['q_net'](states).gather(1, actions)
         
@@ -276,8 +278,34 @@ class DQN(OffPolicyAgent):
                 # 普通DQN: 直接用目标网络计算最大Q值
                 max_next_q_values = self.models['target_q_net'](next_states).max(1)[0].view(-1, 1)
             # 计算目标Q值
-            q_targets = rewards + self.gamma * max_next_q_values * (1 - dones)
+            one_step_q_targets = rewards + self.gamma * max_next_q_values * (1 - dones)
         
+            # 如果提供了n步数据，计算n步目标Q值
+            if n_step_rewards is not None and n_step_next_states is not None and n_step_dones is not None:
+                if self.dqn_type in [DOUBLE_DQN, DD_DQN]:
+                    n_step_max_action = self.models['q_net'](n_step_next_states).max(1)[1].view(-1, 1)
+                    n_step_max_next_q_values = self.models['target_q_net'](n_step_next_states).gather(1, n_step_max_action)
+                else:
+                    n_step_max_next_q_values = self.models['target_q_net'](n_step_next_states).max(1)[0].view(-1, 1)
+                n_step_q_targets = n_step_rewards + (self.gamma ** self.n_step) * n_step_max_next_q_values * (1 - n_step_dones)
+
+                # 动态调整单步和n步的权重
+                # 使用TD误差的绝对值来调整权重：误差越大，越倾向于使用另一个估计
+                with torch.no_grad():
+                    one_step_td_error = torch.abs(q_values - one_step_q_targets)
+                    n_step_td_error = torch.abs(q_values - n_step_q_targets)
+                    
+                    # 使用softmax计算权重
+                    td_errors = torch.cat([one_step_td_error, n_step_td_error], dim=1)
+                    weights_soft = F.softmax(-td_errors, dim=1)  # 负号使得误差越小权重越大
+                    
+                    # 最终目标Q值是加权平均
+                    q_targets = (weights_soft[:, 0].view(-1, 1) * one_step_q_targets + 
+                            weights_soft[:, 1].view(-1, 1) * n_step_q_targets)
+            else:
+                # 如果没有n步数据，只使用单步目标
+                q_targets = one_step_q_targets
+
         # 如果提供了权重，使用重要性采样权重, 用于 PER buffer 更新优先级
         td_error_for_update = None
         if weights is not None:
@@ -337,77 +365,6 @@ class DQN(OffPolicyAgent):
 
     def get_params_to_send(self):
         return self.models['q_net'].state_dict()
-
-def run_val_test(val_test, rank, dqn, env):
-    """根据val_test类型和rank决定是否执行及执行类型
-    
-    Args:
-        val_test: 验证/测试类型 'val'/'test'/'all'
-        rank: 进程rank
-        dqn: DQN模型
-        env: 环境
-    """
-    should_run = False
-    test_type = None
-    
-    if val_test in ['val', 'test']:
-        # val或test模式只在rank0执行
-        if rank == 0:
-            should_run = True
-            test_type = val_test
-    elif val_test == 'all':
-        # all模式下rank0执行val,rank1执行test
-        if rank == 0:
-            should_run = True
-            test_type = 'val'
-        elif rank == 1:
-            should_run = True
-            test_type = 'test'
-            
-    if should_run:
-        i = 0
-        while True:
-            log(f'{rank} {i} test {test_type} dataset...')
-            i += 1
-
-            # 同步最新参数
-            # 拉取服务器的最新参数并更新
-            dqn.update_params_from_server(env)
-
-            log(f'{rank} {i} wait metrics for {test_type}')
-            t = time.time()
-            metrics = dqn.val_test(env, data_type=test_type)
-            log(f'{rank} {i} metrics: {metrics}, cost: {time.time() - t:.2f}s')
-            # 发送验证结果给服务器
-            send_val_test_data(dqn.train_title, test_type, metrics)
-
-def run_client_learning_device(rank, num_processes, data_folder, dqn, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
-    # 根据环境获取对应设备
-    _run_device = get_gpu_info()
-    if _run_device == 'TPU':  # 如果是TPU环境
-        import torch_xla.core.xla_model as xm
-        device = xm.xla_device()
-    elif _run_device in ['T4x2', 'P100']:
-        device = torch.device(f'cuda:{rank}' if num_processes > 1 else 'cuda')
-    else:
-        device = torch.device('cpu')
-    log(f'rank: {rank}, num_processes: {num_processes} device: {device}, run...')
-    
-    # 移动到设备
-    dqn.to(device)
-    dqn.tracker.set_rank(rank)
-    
-    # 初始化环境
-    dp = data_producer(data_folder=data_folder, simple_test=simple_test, file_num=15 if enable_profiling else 0)
-    env = LOB_trade_env(data_producer=dp)
-
-    # 开始训练
-    if val_test:
-        # 验证/测试
-        run_val_test(val_test, rank, dqn, env)
-    else:
-        log(f'{rank} learn...')
-        dqn.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
 
 if __name__ == '__main__':
     agent = DQN(
