@@ -161,7 +161,7 @@ if __name__ == '__main__':
         'n_step': 1,
         'train_title': train_title,
         'action_dim': 3,
-        'features_dim': d4+3,
+        'features_dim': d4+4,
         'features_extractor_class': m_bin_ctabl_fix_shape,
         'features_extractor_kwargs': features_extractor_kwargs,
         'net_arch': [6, 3],
