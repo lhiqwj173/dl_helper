@@ -5,11 +5,12 @@ import pickle
 import collections
 
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
+from dl_helper.rl.rl_env.lob_env import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE
 
 class c51_network(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max):
         """
-        features_dim: features_extractor_class输出维度  + 3(symbol_id + 持仓 + 未实现收益率)
+        features_dim: features_extractor_class输出维度  + 4(symbol_id + 持仓 + 未实现收益率 + 距离收盘秒数)
         """
         super().__init__()
         self.obs_shape = obs_shape
@@ -54,11 +55,15 @@ class c51_network(torch.nn.Module):
     def forward(self, x):
         """
         先将x分成两个tensor
-        lob: x[:, :-3]
-        acc: x[:, -3:]
+        lob: x[:, :-4]
+        acc: x[:, -4:]
         """
-        lob_data = x[:, :-3].view(-1, self.obs_shape[0], self.obs_shape[1])
-        acc_data = x[:, -3:]
+        lob_data = x[:, :-4].view(-1, self.obs_shape[0], self.obs_shape[1])
+        acc_data = x[:, -4:]
+
+        # 标准化 距离收盘秒数
+        acc_data[:, 0] -= MEAN_SEC_BEFORE_CLOSE
+        acc_data[:, 0] /= STD_SEC_BEFORE_CLOSE
 
         feature = self.features_extractor(lob_data)
         feature = torch.cat([feature, acc_data], dim=1)

@@ -107,19 +107,31 @@ def calc_sortino_ratio(returns, risk_free_rate=0.0):
         down_std = 0
     else:
         down_std = downside_returns.std()
-    return excess_returns.mean() / (max(down_std, 0.01)) * np.sqrt(len(returns))
+    return excess_returns.mean() / (max(down_std, 1e-5)) * np.sqrt(len(returns))
 
-def calc_max_drawdown(returns):
-    """计算最大回撤
+def calc_drawdown(net, tick_size=0.001):
+    """计算最大回撤和回撤对应的最小刻度数量
     Args:
-        returns: 收益率序列
+        net: 净值序列（直接输入净值，而不是收益率）
+        tick_size: 最小刻度大小，默认0.001
+    Returns:
+        float: 最大回撤
+        int: 回撤对应的最小刻度数量
     """
-    if isinstance(returns, (pd.Series, pd.DataFrame)):
-        returns = returns.values
-    cumulative = (1 + returns).cumprod()
-    running_max = np.maximum.accumulate(cumulative)
-    drawdown = cumulative/running_max - 1
-    return np.min(drawdown)
+    if isinstance(net, (pd.Series, pd.DataFrame)):
+        net = net.values
+    running_max = np.maximum.accumulate(net)
+    
+    # 计算最大回撤
+    drawdown_ratio = net/running_max - 1
+    max_drawdown = np.min(drawdown_ratio)
+    
+    # 计算回撤对应的最小刻度数量
+    drawdown_price = running_max - net  # 计算价差而不是变动率
+    max_drawdown = np.max(drawdown_price)
+    max_drawdown_ticks = round(abs(max_drawdown) / tick_size)
+    
+    return max_drawdown, max_drawdown_ticks
 
 def calc_return(returns):
     """计算总对数收益率

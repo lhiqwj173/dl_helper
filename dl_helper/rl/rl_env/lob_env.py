@@ -6,9 +6,18 @@ import pandas as pd
 import gymnasium as gym
 import gymnasium.spaces as spaces
 import pickle
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Slider
+from zoneinfo import ZoneInfo
+from matplotlib.widgets import Button
+
+from PyQt5.QtWidgets import QMessageBox, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
 from py_ext.tool import log
 
-from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_max_drawdown, calc_return
+from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return
 
 USE_CODES = [
     '513050',
@@ -44,6 +53,8 @@ USE_CODES = [
 ]
 
 ILLEGAL_REWARD = -100
+MEAN_SEC_BEFORE_CLOSE = 10024.17
+STD_SEC_BEFORE_CLOSE = 6582.91
 
 class data_producer:
     """
@@ -63,6 +74,10 @@ class data_producer:
         self.data_folder = data_folder
         self.data_type = _type
         self.files = []
+
+        # 当前数据日期/code
+        self.date = ''
+        self.code = ''
         
         # 数据内容
         # ids, mean_std, x, all_self.all_raw_data_data
@@ -70,6 +85,8 @@ class data_producer:
         self.mean_std = []
         self.x = []
         self.all_raw_data = None
+        # 距离市场关闭的秒数
+        self.before_market_close_sec = []
 
         # 数据索引
         self.idxs = []
@@ -78,6 +95,7 @@ class data_producer:
         self.plot_begin = 0
         self.plot_end = 0
         self.plot_cur = 0
+        self.plot_cur_pre = -1
         self.plot_data = None
         # 买卖1档价格
         self.ask_price = 0
@@ -92,9 +110,11 @@ class data_producer:
         预先读取绘图数据
         col_idx: BASE买1价, BASE卖1价, BASE中间价
         """
-        self.plot_data = self.all_raw_data[self.plot_begin: self.plot_end, [self.col_idx['BASE买1价'], self.col_idx['BASE卖1价']]]
-        # 新增一列中间价格
-        self.plot_data = np.concatenate([self.plot_data, (self.plot_data[:, 0] + self.plot_data[:, 1]) / 2], axis=1)
+        # 直接选择需要的列并创建DataFrame
+        cols = ['BASE买1价', 'BASE卖1价']
+        self.plot_data = pd.DataFrame(self.all_raw_data[self.plot_begin:self.plot_end, [self.col_idx[col] for col in cols]], columns=['bid', 'ask'])
+        # 高效计算中间价格
+        self.plot_data['mid_price'] = self.plot_data.mean(axis=1)
 
     def _pre_files(self):
         """
@@ -123,29 +143,30 @@ class data_producer:
             self.mean_std = self.mean_std[:8000]
             self.x = self.x[:8000]
 
+        # 距离市场关闭的秒数
+        self.date = file[:8]
+        dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
+        dt = dt.replace(tzinfo=ZoneInfo('Asia/Shanghai'))
+        close_ts = int(dt.timestamp())
+        self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
+        self.before_market_close_sec = close_ts - self.before_market_close_sec
+
         # 解析标的 随机挑选一个标的数据
         symbols = np.array([i.split('_')[0] for i in self.ids])
-        unique_symbols = np.unique(symbols)
+        unique_symbols = [i for i in np.unique(symbols) if i != '159941']
         # 获取所有标的的起止索引
         self.idxs = []
         for symbol in unique_symbols:
             symbol_mask = symbols == symbol
             symbol_indices = np.where(symbol_mask)[0]
             self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
-            
+    
         # 训练数据随机选择一个标的
         # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
         if self.data_type == 'train':
             self.idxs = [random.choice(self.idxs)]
 
         log(f'init idxs: {self.idxs}')
-        
-        # 初始化绘图索引
-        self.plot_begin = self.idxs[0][0]
-        self.plot_end = self.idxs[0][1]
-        self.plot_cur = self.idxs[0][0]
-        # 准备绘图数据
-        self.pre_plot_data()
 
         # 调整数据
         # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
@@ -209,7 +230,7 @@ class data_producer:
                 # 卖价
                 self.all_raw_data.loc[:, f'BASE卖{i}价'] = self.all_raw_data[f'BASE卖{i}价'].fillna(self.all_raw_data[f'BASE卖{i-1}价'] + 0.001)
 
-            # 量nan，用0填充
+            # 量nan用0填充
             vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
             self.all_raw_data[vol_cols] = self.all_raw_data[vol_cols].fillna(0)
 
@@ -217,9 +238,17 @@ class data_producer:
         # BASE买1价 / BASE卖1价
         for col in ['BASE买1价', 'BASE卖1价']:
             self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
-
+       
         # self.all_raw_data 转为 numpy
         self.all_raw_data = self.all_raw_data.values
+
+        # 初始化绘图索引
+        self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
+        self.plot_cur -= 1
+        self.plot_cur_pre = -1
+        _, self.plot_end = self.x[self.idxs[0][1]]
+        # 准备绘图数据
+        self.pre_plot_data()
 
         # # 测试用
         # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
@@ -255,10 +284,14 @@ class data_producer:
     def get(self):
         """
         输出观察值
-        返回 symbol_id,x, done, need_close, date_done
+        返回 symbol_id, before_market_close_sec, x, done, need_close, date_done
         """
         # # 测试用
         # print(self.idxs[0])
+
+        if self.plot_cur_pre != -1:
+            # 更新绘图数据
+            self.plot_cur = self.plot_cur_pre
 
         # 检查日期文件结束
         if self.date_file_done:
@@ -280,6 +313,12 @@ class data_producer:
 
         # 标的id
         symbol_id = self.idxs[0][2]
+
+        # 当前标的
+        self.code = USE_CODES[int(symbol_id)]
+
+        # 距离市场关闭的秒数
+        before_market_close_sec = self.before_market_close_sec[self.idxs[0][0]]
 
         # 记录数据id
         self.id = self.ids[self.idxs[0][0]]
@@ -305,23 +344,24 @@ class data_producer:
                     all_done = True
             else:
                 # 重置绘图索引
-                self.plot_begin = self.idxs[0][0]
-                self.plot_end = self.idxs[0][1]
-                self.plot_cur = self.idxs[0][0]
+                self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
+                self.plot_cur -= 1
+                self.plot_cur_pre = -1
+                _, self.plot_end = self.x[self.idxs[0][1]]
                 # 准备绘图数据
                 self.pre_plot_data()
         else:
             self.idxs[0][0] += 1
-            # 更新绘图索引
-            self.plot_cur += 1
+            _, self.plot_cur_pre = self.x[self.idxs[0][0]]
+            self.plot_cur_pre -= 1
 
-        return symbol_id, x, all_done, need_close, self.date_file_done
+        return symbol_id, before_market_close_sec, x, all_done, need_close, self.date_file_done
 
     def get_plot_data(self):
         """
-        获取绘图数据, 当前状态(时间点)索引
+        获取绘图数据, 当前状态(时间点)索引, 当前状态(时间点)id
         """
-        return self.plot_data, self.plot_cur - self.plot_begin
+        return self.plot_data, self.plot_cur - self.plot_begin, self.ids[self.plot_cur]
 
     def reset(self):
         self._pre_files()
@@ -331,7 +371,7 @@ class Account:
     """
     账户类，用于记录交易状态和计算收益
     """
-    def __init__(self, fee_rate=5e-5):
+    def __init__(self, fee_rate=5e-5, net_file=os.path.join(os.path.expanduser('~'), 'net.txt')):
         # 持仓量 
         self.pos = 0
         # 持仓成本
@@ -345,8 +385,23 @@ class Account:
         # 净值序列
         self.net_raw = []
         self.net_raw_bm = []# 基准，一直持有
+        self.net = []
+        self.net_bm = []
         self.bm_next_open = True
-        
+        # 净值文件
+        self.net_file = net_file
+        # 若已经存在 则删除
+        if os.path.exists(net_file):
+            os.remove(net_file)
+
+    def save_net(self, net):
+        """
+        保存净值序列到文件
+        每行保存一个净值序列，用逗号分隔
+        """
+        with open(self.net_file, 'a') as f:
+            f.write(','.join(map(str, net)) + '\n')
+
     def step(self, bid_price, ask_price, action, need_close):
         """
         执行交易
@@ -395,10 +450,24 @@ class Account:
             else:
                 legal = False
         elif action == 2:   # 不操作
-            if self.pos == 0 and len(self.net_raw):
-                self.net_raw.append(self.net_raw[-1])
+            if self.pos == 0:
+                # 无持仓
+                if len(self.net_raw):
+                    # 有前净值， 保持净值不变
+                    self.net_raw.append(self.net_raw[-1])
+                # 无前净值 不操作
             else:
+                # 有持仓
                 self.net_raw.append(bid_price)
+
+        # 起始无持仓的净值矫正
+        # 基准净值长度 > 策略净值长度
+        # 用策略净值填充至相同的长度
+        net_len = len(self.net_raw)
+        bm_len = len(self.net_raw_bm)
+        if net_len == 1 and bm_len > 1:
+            for i in range(bm_len - net_len):
+                self.net_raw.append(self.net_raw[-1])
 
         if not legal:
             self.net_raw.append(bid_price)
@@ -414,14 +483,16 @@ class Account:
                     # 平均税费(买入卖出)到每一步
                     # 第一步买入，等价较好，不平均税费
                     step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                    net = np.array(self.net_raw)
-                    net[1:] -= step_fee
+                    self.net = np.array(self.net_raw)
+                    self.net[1:] -= step_fee
+                    # 储存净值序列到文件
+                    self.save_net(self.net)
                     # 计算对数收益率序列
-                    log_returns = np.diff(np.log(net))
+                    log_returns = np.diff(np.log(self.net))
                     # 计算指标
                     res['sortino_ratio'] = calc_sortino_ratio(log_returns)
                     res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
-                    res['max_drawdown'] = calc_max_drawdown(log_returns)
+                    res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(self.net)
                     res['total_return'] = calc_return(log_returns)
                     res['trade_return'] = res['total_return'] / len(log_returns)
 
@@ -429,13 +500,13 @@ class Account:
                     buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
                     sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
                     step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
-                    net_bm = np.array(self.net_raw_bm)
-                    net_bm[1:] -= step_fee_bm
+                    self.net_bm = np.array(self.net_raw_bm)
+                    self.net_bm[1:] -= step_fee_bm
                     # 计算对数收益率序列
-                    log_returns_bm = np.diff(np.log(net_bm))
+                    log_returns_bm = np.diff(np.log(self.net_bm))
                     res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
                     res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
-                    res['max_drawdown_bm'] = calc_max_drawdown(log_returns_bm)
+                    res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(self.net_bm)
                     res['total_return_bm'] = calc_return(log_returns_bm)
                     res['trade_return_bm'] = res['total_return_bm'] / len(log_returns_bm)
                 else:
@@ -450,6 +521,8 @@ class Account:
                     res['total_return_bm'] = 0
                     res['trade_return_bm'] = 0
 
+                # 平仓后，重置净值
+                self.reset()
         else:
             # 不合法的操作，交易全部清空
             self.reset()
@@ -466,6 +539,7 @@ class Account:
         self.cost = 0 
         self.profit = 0
         self.net_raw = []
+        self.net_raw_bm = []
         return self.pos, 0
 
 class LOB_trade_env(gym.Env):
@@ -506,6 +580,12 @@ class LOB_trade_env(gym.Env):
         # 测试数据集 预测输出文件
         self.predict_file = ''
 
+        # 记录上一个买入的idx
+        self.last_buy_idx = -1
+        
+        # Add notification system
+        self.notification_window = None
+
     def set_data_type(self, _type):
         if _type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
@@ -514,9 +594,9 @@ class LOB_trade_env(gym.Env):
 
     def _get_data(self):
         # 获取数据
-        symbol_id, x, all_data_done, need_close, date_done = self.data_producer.get()
+        symbol_id, before_market_close_sec, x, all_data_done, need_close, date_done = self.data_producer.get()
         x = x.reshape(-1)
-        return symbol_id, x, all_data_done, need_close, date_done
+        return symbol_id, before_market_close_sec, x, all_data_done, need_close, date_done
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -544,8 +624,36 @@ class LOB_trade_env(gym.Env):
             # 增加操作交易评价结果
             # 体现 非法/win/loss
             info['act_criteria'] = 0 if res['total_return'] > 0 else 1
-            # 计算奖励
-            reward = res['trade_return'] + res['max_drawdown']
+
+            #########################################################
+            # 计算奖励 范围: [ILLEGAL_REWARD, -ILLEGAL_REWARD] 
+            
+            # 1.0 res['trade_return']平均了所有时间步,通常很小,导致虽有收益但奖励为负 -> 可能会倾向于不发生交易(reward=0)
+            # reward = res['trade_return'] + res['max_drawdown']
+
+            # # 2.0 res['total_return']交易对的绝对收益，强调收益加大权重
+            # reward = res['total_return']*1e4 + res['max_drawdown']
+
+            # 3.0 sortino_ratio
+            # reward = res['sortino_ratio']
+
+            # 4.0 sharpe_ratio 
+            # reward = res['sharpe_ratio']
+
+            # 5.0 平均收益 * 放大因子 - 做空可盈利的回撤惩罚
+            punish = res['max_drawdown_ticks'] >= 2
+            reward = res['trade_return'] * 1e6 + punish * res['max_drawdown']
+
+            # 限制范围
+            reward = max(min(reward, -ILLEGAL_REWARD), ILLEGAL_REWARD)
+            # reward 校正
+            if info['act_criteria'] == 1:
+                # loss: reward 一定为负数
+                reward = min(reward, -1e-5)
+            elif info['act_criteria'] == 0:
+                # win: reward 一定为正数
+                reward = max(reward, 1e-5)
+            #########################################################
             for k, v in res.items():
                 info[k] = v
         else:
@@ -570,18 +678,28 @@ class LOB_trade_env(gym.Env):
         if self.data_producer.data_type in ['val', 'test']:
             self.out_test_predict(action)
 
+        # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
+        # 备份 self.need_close
+        _need_close = self.need_close
+        symbol_id, before_market_close_sec, observation, data_done, self.need_close, self.date_done = self._get_data()
+
         info = {
             'close': False,# 若为True, 需要回溯属于本次交易的所有时间步, 修改 reward=收益率
             'date_done': self.date_done,
         }
 
         # 计算奖励
-        reward, acc_done, pos, profit = self._cal_reward(action, self.need_close, info)
+        reward, acc_done, pos, profit = self._cal_reward(action, _need_close, info)
 
-        # 获取下一个状态的数据
-        symbol_id, observation, data_done, self.need_close, self.date_done = self._get_data()
+        if action == 1 or _need_close or info.get('act_criteria', None) == -1:
+            # 平仓 / 强制平仓 / 非法平仓， 重置idx
+            self.last_buy_idx = -1
+        elif action == 0:
+            # 记录交易idx
+            self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
+
         # 添加标的持仓数据
-        observation = np.concatenate([observation, [symbol_id, pos,profit]])
+        observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
 
         # 检查是否结束
         terminated = data_done or acc_done
@@ -590,37 +708,308 @@ class LOB_trade_env(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        # 清理图形对象
+        if hasattr(self, 'fig'):
+            plt.close(self.fig)
+            del self.fig
         # 数据
         self.data_producer.reset()
-        symbol_id, x, _, self.need_close, self.date_done = self._get_data()
+        symbol_id, before_market_close_sec, x, _, self.need_close, self.date_done = self._get_data()
         # 账户
         pos, profit = self.acc.reset()
         # 添加标的持仓数据
-        x = np.concatenate([x, [symbol_id, pos,profit]])
+        x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
+        # 初始化skip计数器
+        self.skip_steps = 0
         return x, {}
 
-    def plot_reset(self):
-        # 数据
-        self.data_producer.reset()
-        symbol_id, x, _, self.need_close, self.date_done = self._get_data()
-        # 账户
-        pos, profit = self.acc.reset()
+    def show_notification(self, title, message, fig=None):
+        """
+        显示一个模态通知窗口，包含标题和消息内容。
+        会阻塞主绘图窗口直到用户关闭通知。
+        可选择性地显示一个图形。
 
-    def plot(self):
-        plot_data, plot_cur = self.data_producer.get_plot_data()
-        # 绘制中间价格
-        plt.figure(figsize=(15, 5))
-        plt.plot(plot_data['mid_price'][:plot_cur], color='blue', label='Historical Mid Price')
-        plt.plot(plot_data['mid_price'][plot_cur:], color='blue', alpha=0.3, label='Future Mid Price')
-        plt.axvline(x=plot_cur, color='red', linestyle='--', label='Current Position')
-        plt.legend()
-        plt.grid(True)
-        plt.title('Mid Price')
-        plt.show()
-        
+        参数:
+            title: 通知窗口标题
+            message: 通知消息内容
+            fig: 可选的matplotlib图形对象
+        """
+        try:
+            from PyQt5.QtWidgets import QDialog, QLabel, QVBoxLayout, QPushButton
+            from PyQt5.QtCore import Qt
+            from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+            
+            # 关闭已存在的通知窗口
+            if self.notification_window is not None:
+                self.notification_window.close()
+            
+            # 创建模态对话框
+            self.notification_window = QDialog()
+            self.notification_window.setWindowTitle(title)
+            self.notification_window.setModal(True)  # 设置为模态窗口，会阻塞其他窗口的交互
+            layout = QVBoxLayout()
+            
+            # 添加消息文本
+            msg_label = QLabel(message)
+            msg_label.setWordWrap(True)  # 允许文本自动换行
+            layout.addWidget(msg_label)
+            
+            # 如果提供了图形，添加到窗口中
+            if fig is not None:
+                canvas = FigureCanvasQTAgg(fig)
+                layout.addWidget(canvas)
+            
+            # 添加确定按钮
+            ok_button = QPushButton("确定")
+            ok_button.clicked.connect(self.notification_window.accept)
+            layout.addWidget(ok_button)
+            
+            self.notification_window.setLayout(layout)
+            
+            # 设置窗口属性
+            self.notification_window.setWindowFlags(Qt.Dialog)
+            self.notification_window.resize(1000, 700)
+            
+            # 显示对话框并等待用户响应
+            # exec_() 会阻塞程序执行直到用户关闭窗口
+            self.notification_window.exec_()
+            
+        except ImportError:
+            # 如果没有PyQt5，回退到命令行显示
+            print(f"\n{title}\n{message}")
+            input("按回车键继续...") # 阻塞执行直到用户输入
 
     def render(self):
         pass
 
     def close(self):
         pass
+
+    def plot(self, state):
+        # 如果在skip模式中，直接返回hold动作
+        if self.skip_steps > 0:
+            self.skip_steps -= 1
+            return 2
+
+        # 重置选择的动作
+        self.selected_action = None
+        
+        # 获取其他数据
+        before_market_close_sec, symbol_id, pos, profit = state[-4:].astype(float)
+        plot_data, plot_cur, id = self.data_producer.get_plot_data()
+        
+        # 创建图形和轴
+        if not hasattr(self, 'fig'):
+            # 创建一个新的窗口，并设置窗口标题
+            self.fig = plt.figure(figsize=(15, 8))
+            self.fig.canvas.manager.set_window_title('Trading Visualization')
+            plt.subplots_adjust(bottom=0.2)
+            self.ax = self.fig.add_subplot(111)
+            
+            # 创建右侧y轴用于显示收益率
+            self.ax_return = self.ax.twinx()
+            
+            # 创建初始线条
+            self.hist_bid_line, = self.ax.plot([], [], color='red', label='Historical Bid Price')
+            self.hist_ask_line, = self.ax.plot([], [], color='green', label='Historical Ask Price')
+            self.future_bid_line, = self.ax.plot([], [], color='red', alpha=0.3, label='Future Bid Price')
+            self.future_ask_line, = self.ax.plot([], [], color='green', alpha=0.3, label='Future Ask Price')
+            self.current_line = self.ax.axvline(x=0, color='blue', linestyle='--', label='Current Position')
+            self.buy_point = self.ax.plot([], [], marker='^', color='red', markersize=10, label='Buy Point')[0]
+            
+            # 创建文本显示
+            self.info_text = self.ax.text(0.02, 0.98, '', transform=self.ax.transAxes, 
+                                        verticalalignment='top')
+            
+            # 创建按钮
+            self.btn_sell = Button(plt.axes([0.1, 0.05, 0.15, 0.075]), 'SELL')
+            self.btn_hold = Button(plt.axes([0.3, 0.05, 0.15, 0.075]), 'HOLD')
+            self.btn_buy = Button(plt.axes([0.5, 0.05, 0.15, 0.075]), 'BUY')
+            self.btn_skip = Button(plt.axes([0.7, 0.05, 0.15, 0.05]), 'SKIP')
+            
+            # 创建skip步数滑块
+            self.skip_slider_ax = plt.axes([0.7, 0.10, 0.15, 0.03])
+            self.skip_slider = Slider(self.skip_slider_ax, 'Skip', 1, 100, valinit=10, valstep=1)
+            
+            # 修改回调函数
+            def make_callback(action):
+                def callback(event):
+                    self.selected_action = action
+                return callback
+            
+            def skip_callback(event):
+                self.skip_steps = int(self.skip_slider.val)
+                self.selected_action = 2  # Hold动作
+            
+            self.btn_buy.on_clicked(make_callback(0))
+            self.btn_sell.on_clicked(make_callback(1))
+            self.btn_hold.on_clicked(make_callback(2))
+            self.btn_skip.on_clicked(skip_callback)
+            
+            self.ax.grid(True)
+            self.ax.legend()
+            plt.ion()  # 打开交互模式
+
+            # 设置窗口属性
+            try:
+                from PyQt5.QtCore import Qt
+                window = self.fig.canvas.manager.window
+                # 设置窗口为普通窗口，不置顶
+                window.setWindowFlags(Qt.Window)
+                window.show()
+            except ImportError:
+                pass
+        
+        # 更新数据
+        bid_price = plot_data['bid'].values
+        ask_price = plot_data['ask'].values
+        
+        # 修改数据范围计算，固定显示450个点
+        display_points = 450
+        half_before = 150  # 当前位置前150条数据
+        half_after = 300   # 当前位置后300条数据
+        
+        # 计算实际可用的数据范围
+        total_points = len(bid_price)
+        
+        # 根据当前位置计算起始和结束索引
+        start_idx = max(0, min(plot_cur - half_before, total_points - display_points))
+        end_idx = min(total_points, start_idx + display_points)
+        
+        # 如果end_idx到达末尾，向前调整start_idx确保显示450个点
+        if end_idx == total_points:
+            start_idx = max(0, end_idx - display_points)
+        
+        # 计算x轴坐标，保持实际数据索引
+        x_coords = range(start_idx, end_idx)
+        current_x = plot_cur
+
+        # 计算价格显示范围
+        visible_bid = bid_price[start_idx:end_idx]
+        visible_ask = ask_price[start_idx:end_idx]
+        price_min = np.min(visible_bid)
+        price_max = np.max(visible_ask)
+        price_range = price_max - price_min
+        
+        # 为价格图留出70%的空间，上下各留5%边距
+        price_min = price_min - price_range * 0.05
+        price_max = price_max + price_range * 0.05
+        
+        # 将最小和最大价格调整为0.001的整数倍
+        price_min = np.floor(price_min * 1000) / 1000
+        price_max = np.ceil(price_max * 1000) / 1000
+        
+        # 设置y轴范围
+        self.ax.set_ylim(price_min, price_max)
+        
+        # 计算合适的刻度间隔（确保是0.001的整数倍）
+        # 根据显示范围自动计算合适的刻度数量（约8-12个刻度）
+        desired_ticks = 10
+        tick_range = price_max - price_min
+        tick_step = tick_range / desired_ticks
+        # 将步长调整为0.001的整数倍
+        tick_step = np.ceil(tick_step * 1000) / 1000
+        
+        # 生成刻度位置
+        ticks = np.arange(price_min, price_max + tick_step, tick_step)
+        self.ax.set_yticks(ticks)
+        # 设置刻度标签格式，保证显示3位小数
+        self.ax.set_yticklabels([f'{tick:.3f}' for tick in ticks])
+
+        # 更新线条数据，使用实际索引
+        self.hist_bid_line.set_data(x_coords[:current_x-start_idx], bid_price[start_idx:current_x])
+        self.hist_ask_line.set_data(x_coords[:current_x-start_idx], ask_price[start_idx:current_x])
+        self.future_bid_line.set_data(x_coords[current_x-start_idx:], bid_price[current_x:end_idx])
+        self.future_ask_line.set_data(x_coords[current_x-start_idx:], ask_price[current_x:end_idx])
+        self.current_line.set_xdata([current_x, current_x])
+        
+        # 设置x轴显示范围
+        self.ax.set_xlim(start_idx, end_idx)
+        
+        # 更新买入点和收益率图
+        self.ax_return.clear()  # 清除旧的收益率图
+        if self.last_buy_idx != -1:
+            # 修改买入点显示逻辑
+            buy_point_set_idx = max(start_idx, self.last_buy_idx)
+            # 限制买入点价格在可视范围内
+            buy_point_set_price = ask_price[self.last_buy_idx] - 0.0003
+            buy_point_set_price = min(max(buy_point_set_price, price_min), price_max)
+            self.buy_point.set_data([buy_point_set_idx], [buy_point_set_price])
+            
+            # 计算收益率序列
+            buy_price = ask_price[self.last_buy_idx] * (1 + 5e-5)  # 买入价加手续费
+            sell_prices = bid_price[self.last_buy_idx:] * (1 - 5e-5)  # 卖出价减手续费
+            returns = np.log(sell_prices / buy_price)
+            
+            # 为收益率图设置独立的显示范围
+            # 使用价格范围下方30%的空间显示收益率
+            returns_base = price_min  # 基准线位置
+            returns_height = price_range * 0.3  # 收益率图高度
+            
+            # 计算可视范围内的收益率
+            valid_start = max(0, start_idx - self.last_buy_idx)
+            valid_end = current_x - self.last_buy_idx
+            future_start = valid_end
+            future_end = end_idx - self.last_buy_idx
+
+            # 使用可视范围内的收益率计算缩放比例
+            visible_returns = returns[valid_start:future_end]  # 包含历史和未来部分
+            max_abs_return = max(abs(np.min(visible_returns)), abs(np.max(visible_returns)))
+            if max_abs_return > 0:
+                returns_scaled = returns * (returns_height / (2 * max_abs_return)) + returns_base
+            else:
+                returns_scaled = returns + returns_base
+
+            # 历史收益率
+            if len(returns_scaled) > 0 and valid_end > valid_start:
+                hist_returns = returns_scaled[valid_start:valid_end]
+                x_coords_returns = range(start_idx + (valid_start-(start_idx-self.last_buy_idx)), current_x)
+                
+                if len(x_coords_returns) == len(hist_returns):
+                    # 使用原始returns来判断颜色，而不是缩放后的值
+                    orig_returns = returns[valid_start:valid_end]
+                    colors = ['green' if r > 0 else 'red' for r in orig_returns]
+                    self.ax_return.bar(x_coords_returns, hist_returns-returns_base, bottom=returns_base,
+                                    color=colors, width=1.0, alpha=0.7)
+            
+                # 未来收益率（淡显）
+                if future_start < len(returns_scaled):
+                    future_returns = returns_scaled[future_start:future_end]
+                    if len(future_returns) > 0:
+                        x_coords_future = range(current_x, current_x + len(future_returns))
+                        # 使用原始returns来判断颜色，而不是缩放后的值
+                        orig_returns = returns[future_start:future_end]
+                        colors = ['green' if r > 0 else 'red' for r in orig_returns]
+                        self.ax_return.bar(x_coords_future, future_returns-returns_base, bottom=returns_base,
+                                        color=colors, alpha=0.3, width=1.0)
+                
+            # 添加基准线
+            self.ax_return.axhline(y=returns_base, color='black', linestyle='-', linewidth=0.5)
+            
+            # 设置右侧y轴的刻度标签为实际收益率值
+            self.ax_return.set_ylim(price_min, price_max)
+            # 只在收益率区域显示刻度
+            returns_ticks = np.linspace(returns_base, returns_base + returns_height, 5)
+            self.ax_return.set_yticks(returns_ticks)
+            self.ax_return.set_yticklabels([f'{((y-returns_base)/returns_height * max_abs_return):.2%}' for y in returns_ticks])
+        else:
+            self.buy_point.set_data([], [])
+        
+        # 更新信息文本
+        text = f'Position: {pos:.0f}\nProfit: {profit:.4f}\n'
+        text += f'Time to Close: {before_market_close_sec:.0f}s'
+        self.info_text.set_text(text)
+        log(text)
+        
+        # 更新标题
+        self.ax.set_title(f'Trading Data {self.data_producer.code} {self.data_producer.date} (ID: {id})')
+        
+        # 刷新图形
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+        
+        # 等待按钮被点击，使用更温和的循环
+        while self.selected_action is None:
+            plt.pause(0.1)  # 降低检查频率
+            
+        return self.selected_action

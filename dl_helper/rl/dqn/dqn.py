@@ -10,7 +10,7 @@ import torch.nn as nn
 import numpy as np
 
 from dl_helper.rl.tracker import Tracker
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
+from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD, MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
 from dl_helper.rl.socket_base import send_val_test_data
 from dl_helper.train_param import match_num_processes, get_gpu_info
@@ -114,7 +114,7 @@ class dqn_network_0(torch.nn.Module):
 class dqn_network(torch.nn.Module):
     def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
         """
-        features_dim: features_extractor_class输出维度  + 3(symbol_id + 持仓 + 未实现收益率)
+        features_dim: features_extractor_class输出维度  + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
         """
         super().__init__()
         self.obs_shape = obs_shape
@@ -149,14 +149,18 @@ class dqn_network(torch.nn.Module):
     def forward(self, x):
         """
         先将x分成两个tensor
-        lob: x[:, :-3]
-        acc: x[:, -3:]
+        lob: x[:, :-4]
+        acc: x[:, -4:]
         """
-        lob_data = x[:, :-3].view(-1, self.obs_shape[0], self.obs_shape[1])
-        acc_data = x[:, -3:]
+        lob_data = x[:, :-4].view(-1, self.obs_shape[0], self.obs_shape[1])
+        other_data = x[:, -4:]
+
+        # 标准化 距离收盘秒数
+        other_data[:, 0] -= MEAN_SEC_BEFORE_CLOSE
+        other_data[:, 0] /= STD_SEC_BEFORE_CLOSE
 
         feature = self.features_extractor(lob_data)
-        feature = torch.cat([feature, acc_data], dim=1)
+        feature = torch.cat([feature, other_data], dim=1)
         
         # 应用Batch Normalization
         x = self.bn(feature)
