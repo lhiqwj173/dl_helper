@@ -509,11 +509,13 @@ class Account:
                     res['sortino_ratio'] = 0
                     res['sharpe_ratio'] = 0
                     res['max_drawdown'] = 0
+                    res['max_drawdown_ticks'] = 0
                     res['total_return'] = 0
                     res['trade_return'] = 0
                     res['sortino_ratio_bm'] = 0
                     res['sharpe_ratio_bm'] = 0
                     res['max_drawdown_bm'] = 0
+                    res['max_drawdown_ticks_bm'] = 0
                     res['total_return_bm'] = 0
                     res['trade_return_bm'] = 0
 
