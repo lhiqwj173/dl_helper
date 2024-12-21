@@ -8,7 +8,7 @@ import gymnasium.spaces as spaces
 import pickle
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
-from zoneinfo import ZoneInfo
+import pytz
 from matplotlib.widgets import Button
 
 from PyQt5.QtWidgets import QMessageBox, QLabel, QVBoxLayout, QWidget
@@ -146,7 +146,7 @@ class data_producer:
         # 距离市场关闭的秒数
         self.date = file[:8]
         dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
-        dt = dt.replace(tzinfo=ZoneInfo('Asia/Shanghai'))
+        dt = pytz.timezone('Asia/Shanghai').localize(dt)
         close_ts = int(dt.timestamp())
         self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
         self.before_market_close_sec = close_ts - self.before_market_close_sec
