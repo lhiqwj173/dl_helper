@@ -471,8 +471,8 @@ class OffPolicyAgent(BaseAgent):
 
                     if per_buffer:
                         # 添加调试信息
-                        log(f"{self.msg_head} Tree status - is_full: {self.replay_buffer.tree.is_full}, data_pointer: {self.replay_buffer.tree.data_pointer}")
-                        log(f"{self.msg_head} Total priority: {self.replay_buffer.tree.total_priority()}")
+                        # log(f"{self.msg_head} Tree status - is_full: {self.replay_buffer.tree.is_full}, data_pointer: {self.replay_buffer.tree.data_pointer}")
+                        # log(f"{self.msg_head} Total priority: {self.replay_buffer.tree.total_priority()}")
                         # 采样batch数据
                         (b_s, b_a, b_r, b_ns, b_d, step_r, step_ns, step_d), indices, weights = self.replay_buffer.sample(batch_size)
 
