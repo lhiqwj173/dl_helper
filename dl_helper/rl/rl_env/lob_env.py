@@ -11,10 +11,6 @@ from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
 
-from PyQt5.QtWidgets import QMessageBox, QLabel, QVBoxLayout, QWidget
-from PyQt5.QtCore import Qt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-
 from py_ext.tool import log
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return
