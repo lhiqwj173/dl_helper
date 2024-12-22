@@ -151,11 +151,11 @@ class ExperimentHandler:
         for i, dt in enumerate(metrics['dt']):
             processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
             if processed_dt != last_dt:
-                dt_changes.append((i, processed_dt))
+                dt_changes.append((i, processed_dt, metrics['learn']['train_days'][i]))
                 last_dt = processed_dt
 
         # 设置图表标题
-        fig.suptitle(f'Learning Process (Training Days: {int(metrics["learn"]["train_days"])})', fontsize=16)
+        fig.suptitle(f'Learning Process (Training Days: {int(metrics["learn"]["train_days"][-1])})', fontsize=16)
 
         # 图1: moving_average_reward
         ax = axes[0]
@@ -352,8 +352,8 @@ class ExperimentHandler:
 
         # 设置x轴刻度和标签
         for ax in axes:
-            ax.set_xticks([i for i, _ in dt_changes])
-            ax.set_xticklabels([dt.strftime('%d %H') for _, dt in dt_changes], rotation=45)
+            ax.set_xticks([i for i, _, _ in dt_changes])
+            ax.set_xticklabels([f"{dt.strftime('%d %H')}({days:.1f})" for _, dt, days in dt_changes], rotation=45)
         
         # 设置共享的x轴标签
         fig.text(0.5, 0.02, 'Episode', ha='center')
@@ -517,15 +517,15 @@ class ExperimentHandler:
 
                     for k in self.learn_metrics:
                         if k not in self.train_data['learn']:
-                            if k == 'train_days':
-                                self.train_data['learn'][k] = 0
-                            else:
-                                self.train_data['learn'][k] = []
+                            self.train_data['learn'][k] = []
 
                         length = len(self.learn_metrics[k])
                         if length > 0:
                             if k == 'train_days':
-                                self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
+                                add_days = np.nansum(self.learn_metrics[k])
+                                if len(self.train_data['learn'][k]) > 0:
+                                    add_days += self.train_data['learn'][k][-1]
+                                self.train_data['learn'][k].append(add_days)
                             else:
                                 self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
