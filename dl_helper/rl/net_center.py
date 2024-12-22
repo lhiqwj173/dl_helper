@@ -463,14 +463,14 @@ class ExperimentHandler:
                 response = 'no'
 
                 t = time.time()
-                # if t - self.last_val_time > 1800:
-                # FOR TEST
-                if t - self.last_val_time > 60 * 5:
+                if t - self.last_val_time > 1800:
+                # # FOR TEST
+                # if t - self.last_val_time > 60 * 5:
                     response = 'val'
                     self.last_val_time = t
-                # elif t - self.last_test_time > 7200:
-                # FOR TEST
-                elif t - self.last_test_time > 60 * 5:
+                elif t - self.last_test_time > 7200:
+                # # FOR TEST
+                # elif t - self.last_test_time > 60 * 5:
                     response = 'test'
                     self.last_test_time = t
                 
