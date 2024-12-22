@@ -13,6 +13,9 @@ def plot_net(env):
     net = env.acc.net.copy()
     net_bm = env.acc.net_bm.copy()
 
+    if not len(net) or not len(net_bm):
+        return None
+
     # 统一起始净值 1
     net = net / net[0]
     net_bm = net_bm / net_bm[0]
@@ -42,6 +45,8 @@ def produce_msg(info, reward):
     # 更新跟踪器 非法/win/loss
     if info['act_criteria'] == -1:
         msg.append('illegal')
+    elif info['hold_length'] == 0:
+        msg.append('no trade')
     elif info['act_criteria'] == 0:
         msg.append('win') 
     else:

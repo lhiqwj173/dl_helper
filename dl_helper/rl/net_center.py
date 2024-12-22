@@ -99,16 +99,19 @@ class ExperimentHandler:
             图5
             - action_{k}_ratio k: 0-2
 
-        交易评价指标
             图6
+            - hold_length: 平均持仓时间
+
+        交易评价指标
+            图7 
             - sortino_ratio
             - sortino_ratio_bm
 
-            图7
+            图8
             - max_drawdown
             - max_drawdown_bm
 
-            图8
+            图9
             - total_return
             - total_return_bm
         """
@@ -128,6 +131,7 @@ class ExperimentHandler:
             'action_0': '#bcbd22',
             'action_1': '#17becf',
             'action_2': '#1f77b4',
+            'hold_length': '#2ca02c',
             'sortino_ratio': '#d62728',
             'sortino_ratio_bm': '#d62728',
             'max_drawdown': '#ff7f0e',
@@ -136,8 +140,8 @@ class ExperimentHandler:
             'total_return_bm': '#9467bd'
         }
         
-        # 创建图表,8个子图
-        fig, axes = plt.subplots(8, 1, figsize=(12, 32), sharex=True)
+        # 创建图表,9个子图
+        fig, axes = plt.subplots(9, 1, figsize=(12, 36), sharex=True)
         
         # 获取时间变化点的索引
         dt_changes = []
@@ -247,8 +251,27 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图6: sortino_ratio
+        # 图6: hold_length
         ax = axes[5]
+        for dtype in ['learn', 'val', 'test']:
+            if 'hold_length' in metrics[dtype]:
+                data = metrics[dtype]['hold_length']
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors['hold_length'], alpha=0.3,
+                        label=f'{dtype}_hold_length: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors['hold_length'],
+                        label=f'{dtype}_hold_length: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors['hold_length'], linestyle='--',
+                        label=f'{dtype}_hold_length: {last_value:.4f}')
+        ax.set_ylabel('Hold Length')
+        ax.grid(True)
+        ax.legend()
+
+        # 图7: sortino_ratio
+        ax = axes[6]
         for dtype in ['learn', 'val', 'test']:
             if 'sortino_ratio' in metrics[dtype]:
                 data = metrics[dtype]['sortino_ratio']
@@ -272,8 +295,8 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图7: max_drawdown
-        ax = axes[6]
+        # 图8: max_drawdown
+        ax = axes[7]
         for dtype in ['learn', 'val', 'test']:
             if 'max_drawdown' in metrics[dtype]:
                 data = metrics[dtype]['max_drawdown']
@@ -297,8 +320,8 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图8: total_return
-        ax = axes[7]
+        # 图9: total_return
+        ax = axes[8]
         for dtype in ['learn', 'val', 'test']:
             if 'total_return' in metrics[dtype]:
                 data = metrics[dtype]['total_return']

@@ -13,7 +13,7 @@ from matplotlib.widgets import Button
 
 from py_ext.tool import log
 
-from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return
+from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
 
 USE_CODES = [
     '513050',
@@ -491,7 +491,18 @@ class Account:
                     res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(self.net)
                     res['total_return'] = calc_return(log_returns)
                     res['trade_return'] = res['total_return'] / len(log_returns)
+                    res['hold_length'] = len(self.net)# 持仓时间
+                else:
+                    # 策略净值
+                    res['sortino_ratio'] = 0
+                    res['sharpe_ratio'] = 0
+                    res['max_drawdown'] = 0
+                    res['max_drawdown_ticks'] = 0
+                    res['total_return'] = 0
+                    res['trade_return'] = 0
+                    res['hold_length'] = 0
 
+                if (len(self.net_raw_bm) > 1):
                     # 计算基准净值的评价指标
                     buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
                     sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
@@ -503,19 +514,16 @@ class Account:
                     res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
                     res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
                     res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(self.net_bm)
+                    res['max_drawup_ticks_bm'] = calc_drawup_ticks(self.net_bm)
                     res['total_return_bm'] = calc_return(log_returns_bm)
                     res['trade_return_bm'] = res['total_return_bm'] / len(log_returns_bm)
                 else:
-                    res['sortino_ratio'] = 0
-                    res['sharpe_ratio'] = 0
-                    res['max_drawdown'] = 0
-                    res['max_drawdown_ticks'] = 0
-                    res['total_return'] = 0
-                    res['trade_return'] = 0
+                    # 基准净值
                     res['sortino_ratio_bm'] = 0
                     res['sharpe_ratio_bm'] = 0
                     res['max_drawdown_bm'] = 0
                     res['max_drawdown_ticks_bm'] = 0
+                    res['max_drawup_ticks_bm'] = 0
                     res['total_return_bm'] = 0
                     res['trade_return_bm'] = 0
 
@@ -638,9 +646,14 @@ class LOB_trade_env(gym.Env):
             # 4.0 sharpe_ratio 
             # reward = res['sharpe_ratio']
 
-            # 5.0 平均收益 * 放大因子 - 做空可盈利的回撤惩罚
+            # 5.0 
+            # 交易奖励: 平均收益 * 放大因子 - 做空可盈利的回撤惩罚 
+            # 若交易奖励为0，基准净值做多可盈利的收益惩罚
             punish = res['max_drawdown_ticks'] >= 2
             reward = res['trade_return'] * 1e6 + punish * res['max_drawdown']
+            if reward == 0:
+                punish = res['max_drawup_ticks_bm'] >= 2
+                reward = -res['trade_return_bm'] * 1e6 * punish
 
             # 限制范围
             reward = max(min(reward, -ILLEGAL_REWARD), ILLEGAL_REWARD)
@@ -827,7 +840,7 @@ class LOB_trade_env(gym.Env):
             
             # 创建skip步数滑块
             self.skip_slider_ax = plt.axes([0.7, 0.10, 0.15, 0.03])
-            self.skip_slider = Slider(self.skip_slider_ax, 'Skip', 1, 100, valinit=10, valstep=1)
+            self.skip_slider = Slider(self.skip_slider_ax, 'Skip', 1, 2400, valinit=10, valstep=1)
             
             # 修改回调函数
             def make_callback(action):

@@ -128,10 +128,28 @@ def calc_drawdown(net, tick_size=0.001):
     
     # 计算回撤对应的最小刻度数量
     drawdown_price = running_max - net  # 计算价差而不是变动率
-    max_drawdown = np.max(drawdown_price)
-    max_drawdown_ticks = round(abs(max_drawdown) / tick_size)
+    max_drawdown_ticks = round(abs(np.max(drawdown_price)) / tick_size)
     
     return max_drawdown, max_drawdown_ticks
+
+def calc_drawup_ticks(net, tick_size=0.001):
+    """计算净值序列从阶段低点向上变动的最大刻度数量
+    Args:
+        net: 净值序列（直接输入净值，而不是收益率）
+        tick_size: 最小刻度大小，默认0.001
+    Returns:
+        int: 上涨对应的最小刻度数量
+    """
+    if isinstance(net, (pd.Series, pd.DataFrame)):
+        net = net.values
+    running_min = np.minimum.accumulate(net)
+    
+    # 计算价差而不是变动率
+    drawup_price = net - running_min
+    max_drawup_ticks = round(abs(np.max(drawup_price)) / tick_size)
+    
+    return max_drawup_ticks
+
 
 def calc_return(returns):
     """计算总对数收益率
