@@ -114,6 +114,8 @@ class ExperimentHandler:
             图9
             - total_return
             - total_return_bm
+
+        train_days: 训练天数
         """
         # 检查数据是否存在
         if 'dt' not in metrics or not metrics['dt']:
@@ -151,6 +153,9 @@ class ExperimentHandler:
             if processed_dt != last_dt:
                 dt_changes.append((i, processed_dt))
                 last_dt = processed_dt
+
+        # 设置图表标题
+        fig.suptitle(f'Learning Process (Training Days: {int(metrics["learn"]["train_days"])})', fontsize=16)
 
         # 图1: moving_average_reward
         ax = axes[0]
@@ -452,7 +457,9 @@ class ExperimentHandler:
                 response = 'no'
 
                 t = time.time()
-                if t - self.last_val_time > 1800:
+                # if t - self.last_val_time > 1800:
+                # FOR TEST
+                if t - self.last_val_time > 60*5:
                     response = 'val'
                     self.last_val_time = t
                 elif t - self.last_test_time > 7200:
@@ -502,10 +509,16 @@ class ExperimentHandler:
 
                     for k in self.learn_metrics:
                         if k not in self.train_data['learn']:
-                            self.train_data['learn'][k] = []
+                            if k == 'train_days':
+                                self.train_data['learn'][k] = 0
+                            else:
+                                self.train_data['learn'][k] = []
                         length = len(self.learn_metrics[k])
                         if length > 0:
-                            self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
+                            if k == 'train_days':
+                                self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
+                            else:
+                                self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
                         log(f'{msg_header} length learn_metrics[{k}]: {length}')
                     self.learn_metrics = {}

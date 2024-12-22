@@ -67,6 +67,9 @@ class Tracker:
         self.extra_metrics = {}
         self.daily_extra_metrics = {}
 
+        # 训练天数统计
+        self.train_days = 0
+
     def set_rank(self, rank):
         self.rank = rank
 
@@ -141,6 +144,9 @@ class Tracker:
         
         # 保持N天的数据
         self._maintain_n_days_data()
+
+        # 训练天数统计
+        self.train_days += 1
     
     def save(self):
         """保存所有统计数据到文件"""
@@ -157,7 +163,8 @@ class Tracker:
             'win_counts': self.win_counts,
             'loss_counts': self.loss_counts,
             'total_counts': self.total_counts,
-            'extra_metrics': self.extra_metrics
+            'extra_metrics': self.extra_metrics,
+            'train_days': self.train_days
         }
         log(f'save to tracker_{self.title}_{self.rank}.pkl')
         # 保存到文件
@@ -183,6 +190,7 @@ class Tracker:
             self.loss_counts = data['loss_counts']
             self.total_counts = data['total_counts']
             self.extra_metrics = data['extra_metrics']
+            self.train_days = data['train_days']
         else:
             log(f'tracker_{self.title}_{self.rank}.pkl not found')
 
@@ -200,16 +208,19 @@ class Tracker:
         - win_ratio: 平均胜率
         - loss_ratio: 平均败率
         - action_{k}_ratio k: 0-2
+        - train_days: 训练天数
         
         交易评价指标
         - sortino_ratio
         - sharpe_ratio
         - max_drawdown
+        - max_drawdown_ticks
         - total_return
         - trade_return
         - sortino_ratio_bm
         - sharpe_ratio_bm
         - max_drawdown_bm
+        - max_drawdown_ticks_bm
         - total_return_bm
         - trade_return_bm
         """
@@ -233,6 +244,10 @@ class Tracker:
             'loss_ratio': np.nanmean([r['loss_ratio'] for r in self.daily_ratios])
         }
 
+        # 训练天数, 获取后重置
+        metrics['train_days'] = self.train_days
+        self.train_days = 0
+
         # 动作分布
         # action_{k}_ratio k: 0-2
         action_distribution = self._get_action_distribution()
@@ -240,16 +255,6 @@ class Tracker:
             metrics[f'action_{k}_ratio'] = v
         
         # 额外的评价指标
-        # sortino_ratio
-        # sharpe_ratio
-        # max_drawdown
-        # total_return
-        # trade_return
-        # sortino_ratio_bm
-        # sharpe_ratio_bm
-        # max_drawdown_bm
-        # total_return_bm
-        # trade_return_bm
         for k, v in self.daily_extra_metrics.items():
             if k.startswith('total_return'):
                 # 对数收益率累计
