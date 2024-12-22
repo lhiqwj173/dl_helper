@@ -399,11 +399,11 @@ class ExperimentHandler:
         latest_data = {}
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                if isinstance(self.train_data[dtype][k], (list, np.ndarray)) and len(self.train_data[dtype][k]) > 0:
+                if hasattr(self.train_data[dtype][k], '__len__') and len(self.train_data[dtype][k]) > 0:
                     latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k][-1]
                 else:
                     latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k]
-            
+
         if len(self.train_data['dt']) > 0:
             latest_data['dt'] = self.train_data['dt'][-1]
         
@@ -427,12 +427,12 @@ class ExperimentHandler:
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
                 # 只对列表/数组类型的数据进行max_len判断
-                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                if hasattr(self.train_data[dtype][k], '__len__'):
                     max_len = max(max_len, len(self.train_data[dtype][k]))
                 
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                if hasattr(self.train_data[dtype][k], '__len__'):
                     curr_len = len(self.train_data[dtype][k])
                     if curr_len < max_len:
                         pad_value = self.train_data[dtype][k][-1] if curr_len > 0 else float('nan')
@@ -440,7 +440,7 @@ class ExperimentHandler:
 
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                if hasattr(self.train_data[dtype][k], '__len__'):
                     self.train_data[dtype][k] = self.train_data[dtype][k][:500]
         self.train_data['dt'] = self.train_data['dt'][:500]
 
