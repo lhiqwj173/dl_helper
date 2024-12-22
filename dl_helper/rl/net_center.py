@@ -424,7 +424,9 @@ class ExperimentHandler:
         max_len = 0
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                max_len = max(max_len, len(self.train_data[dtype][k]))
+                # 只对列表/数组类型的数据进行max_len判断
+                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                    max_len = max(max_len, len(self.train_data[dtype][k]))
                 
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
