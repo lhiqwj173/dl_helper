@@ -399,9 +399,11 @@ class ExperimentHandler:
         latest_data = {}
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                if len(self.train_data[dtype][k]) > 0:
+                if isinstance(self.train_data[dtype][k], (list, np.ndarray)) and len(self.train_data[dtype][k]) > 0:
                     latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k][-1]
-        
+                else:
+                    latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k]
+            
         if len(self.train_data['dt']) > 0:
             latest_data['dt'] = self.train_data['dt'][-1]
         
