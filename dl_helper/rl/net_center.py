@@ -459,10 +459,12 @@ class ExperimentHandler:
                 t = time.time()
                 # if t - self.last_val_time > 1800:
                 # FOR TEST
-                if t - self.last_val_time > 60*5:
+                if t - self.last_val_time > 60 * 5:
                     response = 'val'
                     self.last_val_time = t
-                elif t - self.last_test_time > 7200:
+                # elif t - self.last_test_time > 7200:
+                # FOR TEST
+                elif t - self.last_test_time > 60 * 5:
                     response = 'test'
                     self.last_test_time = t
                 
@@ -514,11 +516,11 @@ class ExperimentHandler:
                             else:
                                 self.train_data['learn'][k] = []
 
-                        if k == 'train_days':
-                            self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
-                        else:
-                            length = len(self.learn_metrics[k])
-                            if length > 0:
+                        length = len(self.learn_metrics[k])
+                        if length > 0:
+                            if k == 'train_days':
+                                self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
+                            else:
                                 self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
                         log(f'{msg_header} length learn_metrics[{k}]: {length}')
@@ -576,57 +578,53 @@ def run_param_center():
             client_socket.close()
             continue
 
+        # 接收请求数据
+        data = recv_msg(client_socket)
+        if not data:
+            block_ips.add(client_ip)
+            client_socket.close()
+            continue
+            
         try:
-            # 接收请求数据
-            data = recv_msg(client_socket)
-            if not data:
-                block_ips.add(client_ip)
-                client_socket.close()
-                continue
-                
-            try:
-                # 请求数据
-                data_str = data.decode()
-            except:
-                block_ips.add(client_ip)
-                client_socket.close()
-                continue
-                
-            # 验证CODE
-            if ':' not in data_str or '_' not in data_str:
-                block_ips.add(client_ip)
-                client_socket.close() 
-                continue
-            _code, a = data_str.split('_', maxsplit=1)
-            if _code != CODE:
-                block_ips.add(client_ip)
-                client_socket.close()
-                continue
+            # 请求数据
+            data_str = data.decode()
+        except:
+            block_ips.add(client_ip)
+            client_socket.close()
+            continue
+            
+        # 验证CODE
+        if ':' not in data_str or '_' not in data_str:
+            block_ips.add(client_ip)
+            client_socket.close() 
+            continue
+        _code, a = data_str.split('_', maxsplit=1)
+        if _code != CODE:
+            block_ips.add(client_ip)
+            client_socket.close()
+            continue
 
-            # 分解指令
-            train_title, cmd = a.split(':', maxsplit=1)
-            
-            # 获取处理器
-            if train_title not in handlers:
-                # 重新读取 
-                train_dict = read_train_title_item()
-                if train_title in train_dict:
-                    agent_class_name, agent_kwargs, tau, simple_test = train_dict[train_title]
-                    handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, tau, simple_test)
-                else:
-                    msg = f'{train_title} not found'
-                    send_wx(msg)
-                    log(msg)
-                    client_socket.close()
-                    continue
-            handler = handlers[train_title]
-            
-            msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}][{handler.update_count}]'
-            handler.handle_request(client_socket, msg_header, cmd)
+        # 分解指令
+        train_title, cmd = a.split(':', maxsplit=1)
+        
+        # 获取处理器
+        if train_title not in handlers:
+            # 重新读取 
+            train_dict = read_train_title_item()
+            if train_title in train_dict:
+                agent_class_name, agent_kwargs, tau, simple_test = train_dict[train_title]
+                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, tau, simple_test)
+            else:
+                msg = f'{train_title} not found'
+                send_wx(msg)
+                log(msg)
+                client_socket.close()
+                continue
+        handler = handlers[train_title]
+        
+        msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}][{handler.update_count}]'
+        handler.handle_request(client_socket, msg_header, cmd)
 
-        except Exception as e:
-            log(f"Error processing request: {e}")
-            
         client_socket.close()
 
 
