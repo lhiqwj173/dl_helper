@@ -49,6 +49,8 @@ USE_CODES = [
 ]
 
 ILLEGAL_REWARD = -100
+# 扩大因子
+SCALE_FACTOR = 1e5
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
 
@@ -650,10 +652,10 @@ class LOB_trade_env(gym.Env):
             # 交易奖励: 平均收益 * 放大因子 - 做空可盈利的回撤惩罚 
             # 若交易奖励为0，基准净值做多可盈利的收益惩罚
             punish = res['max_drawdown_ticks'] >= 2
-            reward = res['trade_return'] * 1e6 + punish * res['max_drawdown']
+            reward = res['trade_return'] * SCALE_FACTOR + punish * res['max_drawdown']
             if reward == 0:
                 punish = res['max_drawup_ticks_bm'] >= 2
-                reward = -res['trade_return_bm'] * 1e6 * punish
+                reward = -res['trade_return_bm'] * SCALE_FACTOR * punish
 
             # 限制范围
             reward = max(min(reward, -ILLEGAL_REWARD), ILLEGAL_REWARD)
