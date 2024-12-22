@@ -504,7 +504,7 @@ class ExperimentHandler:
                         self.train_data[data_type][k] = []
                     self.train_data[data_type][k].append(metrics[k])
                 
-                if cmd == 'val':
+                if cmd in ['val', 'test']:
                     backup_path = os.path.join(self.exp_folder, 'learn_metrics_backup.pkl')
                     with open(backup_path, 'wb') as f:
                         pickle.dump(self.learn_metrics, f)
@@ -523,7 +523,7 @@ class ExperimentHandler:
                             else:
                                 self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
-                        log(f'{msg_header} length learn_metrics[{k}]: {length}')
+                        # log(f'{msg_header} length learn_metrics[{k}]: {length}')
                     self.learn_metrics = {}
 
                 send_msg(client_socket, b'ok')
