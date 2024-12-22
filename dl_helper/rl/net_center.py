@@ -513,11 +513,12 @@ class ExperimentHandler:
                                 self.train_data['learn'][k] = 0
                             else:
                                 self.train_data['learn'][k] = []
-                        length = len(self.learn_metrics[k])
-                        if length > 0:
-                            if k == 'train_days':
-                                self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
-                            else:
+
+                        if k == 'train_days':
+                            self.train_data['learn'][k] += np.nansum(self.learn_metrics[k])
+                        else:
+                            length = len(self.learn_metrics[k])
+                            if length > 0:
                                 self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
                         log(f'{msg_header} length learn_metrics[{k}]: {length}')
