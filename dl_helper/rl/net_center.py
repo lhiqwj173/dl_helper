@@ -430,14 +430,16 @@ class ExperimentHandler:
                 
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                curr_len = len(self.train_data[dtype][k])
-                if curr_len < max_len:
-                    pad_value = self.train_data[dtype][k][-1] if curr_len > 0 else float('nan')
-                    self.train_data[dtype][k].extend([pad_value] * (max_len - curr_len))
+                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                    curr_len = len(self.train_data[dtype][k])
+                    if curr_len < max_len:
+                        pad_value = self.train_data[dtype][k][-1] if curr_len > 0 else float('nan')
+                        self.train_data[dtype][k].extend([pad_value] * (max_len - curr_len))
 
         for dtype in ['val', 'test', 'learn']:
             for k in self.train_data[dtype]:
-                self.train_data[dtype][k] = self.train_data[dtype][k][:500]
+                if isinstance(self.train_data[dtype][k], (list, np.ndarray)):
+                    self.train_data[dtype][k] = self.train_data[dtype][k][:500]
         self.train_data['dt'] = self.train_data['dt'][:500]
 
         self.save_train_data_to_csv()
