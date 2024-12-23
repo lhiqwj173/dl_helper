@@ -60,10 +60,20 @@ class ExperimentHandler:
         self.tau = tau
         self.min_tau = 0.001
         self.max_tau = 0.1
+        self.initial_tau = tau
         self.best_params = None
         self.best_reward = float('-inf')
-        self.patience = 5  # 容忍多少次性能下降
+        
+        # 调整patience相关参数
+        self.patience = 300  # 提高容忍度，约等于5分钟的更新量
         self.poor_updates = 0
+        self.consecutive_threshold = 50  # 连续下降阈值
+        self.consecutive_poor_updates = 0  # 连续下降计数
+        
+        # 并行训练相关参数
+        self.update_window = 100
+        self.recent_updates = []
+        self.update_success_rate = 0.0
 
         # 创建实验目录
         self.exp_folder = os.path.join(root_folder, train_title)
@@ -108,42 +118,82 @@ class ExperimentHandler:
         
         Args:
             new_params: 新的模型参数
-            metrics: 性能指标字典
-        
+            metrics: 性能指标字典，包含 'moving_average_reward' 等
+            
         Returns:
-            bool: 是否执行了参数更新
+            bool: 是否成功更新参数
         """
         current_reward = metrics.get('moving_average_reward', float('-inf'))
         
         # 首次更新或性能提升
         if self.best_params is None or current_reward > self.best_reward:
             self.agent.apply_new_params(new_params, tau=self.tau)
-            self.best_params = self.agent.get_params_to_send()  # 保存当前最佳参数
+            self.best_params = self.agent.get_params_to_send()
             self.best_reward = current_reward
             self.poor_updates = 0
+            self.consecutive_poor_updates = 0
             
-            # 性能提升时可以适当增加 tau 以加快学习
-            self.tau = min(self.tau * 1.1, self.max_tau)
-            return True
+            # 记录成功更新
+            self.recent_updates.append(1)
+            success = True
             
         # 性能下降
         else:
             self.poor_updates += 1
+            self.consecutive_poor_updates += 1
             
-            # 如果连续多次性能下降
-            if self.poor_updates >= self.patience:
-                # 回滚到最佳参数
-                self.agent.apply_new_params(self.best_params, tau=1.0)
-                # 减小 tau 值以更谨慎地学习
-                self.tau = max(self.tau * 0.9, self.min_tau)
+            # 如果连续下降次数超过阈值或总下降次数超过patience
+            if (self.consecutive_poor_updates >= self.consecutive_threshold or 
+                self.poor_updates >= self.patience):
+                
+                # 软回滚 - 向最佳参数方向移动但不完全回滚
+                rollback_tau = 0.3  # 降低回滚程度，避免过度回滚
+                self.agent.apply_new_params(self.best_params, tau=rollback_tau)
+                
+                # 重置tau到初始值的一半，而不是持续降低
+                self.tau = self.initial_tau * 0.5
                 self.poor_updates = 0
-                return False
-            
-            # 容忍范围内的性能下降，仍然更新但使用较小的 tau
+                self.consecutive_poor_updates = 0
+                
+                # 记录失败更新
+                self.recent_updates.append(0)
+                success = False
+                
             else:
-                reduced_tau = self.tau * 0.5
+                # 使用较小的tau进行更新
+                reduced_tau = self.tau * 0.7  # 温和降低tau
                 self.agent.apply_new_params(new_params, tau=reduced_tau)
-                return True
+                
+                # 记录成功更新（虽然性能有所下降）
+                self.recent_updates.append(1)
+                success = True
+        
+        # 维护更新窗口
+        if len(self.recent_updates) > self.update_window:
+            self.recent_updates.pop(0)
+        
+        # 计算成功率并动态调整tau
+        if len(self.recent_updates) >= self.update_window * 0.5:  # 至少有半个窗口的数据
+            self.update_success_rate = sum(self.recent_updates) / len(self.recent_updates)
+            
+            if self.update_success_rate > 0.8:
+                # 高成功率，可以适度增加tau
+                self.tau = min(self.tau * 1.05, self.max_tau)
+            elif self.update_success_rate < 0.5:
+                # 低成功率，需要降低tau
+                self.tau = max(self.tau * 0.95, self.min_tau)
+        
+        # 保存当前tau值
+        self.save_tau(self.tau)
+        
+        # 记录日志（可选）
+        if not success:
+            log(f"Parameter rollback triggered - consecutive_poor_updates: {self.consecutive_poor_updates}, "
+                f"total_poor_updates: {self.poor_updates}, new_tau: {self.tau:.6f}, "
+                f"success_rate: {self.update_success_rate:.2f}")
+        
+        return success
+
 
     def plot_learning_process(self, metrics):
         """
