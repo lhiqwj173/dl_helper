@@ -58,9 +58,6 @@ class ExperimentHandler:
         
         # 参数更新相关的属性
         self.tau = tau
-        # 读取tau记录（若存在）
-        self.tau_record_file = os.path.join(self.exp_folder, 'tau_record.txt')
-        self.tau = self.read_tau()
         self.min_tau = 0.001
         self.max_tau = 0.1
         self.best_params = None
@@ -72,6 +69,10 @@ class ExperimentHandler:
         self.exp_folder = os.path.join(root_folder, train_title)
         os.makedirs(self.exp_folder, exist_ok=True)
         self.csv_path = os.path.join(self.exp_folder, 'val_test.csv')
+
+        # 读取tau记录（若存在）
+        self.tau_record_file = os.path.join(self.exp_folder, 'tau_record.txt')
+        self.tau = self.read_tau()
         
         # 载入模型数据
         self.agent.load(self.exp_folder)
