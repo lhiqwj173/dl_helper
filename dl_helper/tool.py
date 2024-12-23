@@ -34,7 +34,7 @@ def init_logger_by_ip(train_title=''):
         # 如果获取外网IP失败,使用内网IP作为备选
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
-    init_logger(f'{ip}' if train_title == '' else f'[{train_title}]{ip}', level='INFO', timestamp=False, enqueue=True, 
+    init_logger(f'{ip}' if train_title == '' else f'{train_title}@{ip}', level='INFO', timestamp=False, enqueue=True, 
                 home=f'' if not os.path.exists(r'/kaggle/working') else r'/kaggle/working',
                 )
     log(f'init_logger: {get_log_file()}')
@@ -50,7 +50,7 @@ def upload_log_file(train_title):
         upload_folder = f'/rl_learning_process/{train_title}/logs/'
         client.mkdir(upload_folder)
         client.upload(log_file, upload_folder)
-        log(f'Upload log file to alist: {log_file}')
+        log(f'Upload log file {log_file} \n\t-> alist {upload_folder}')
 
 def keep_upload_log_file(train_title):
     """保持上传日志文件"""

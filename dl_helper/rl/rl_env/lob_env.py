@@ -48,9 +48,9 @@ USE_CODES = [
     '159659',
 ]
 
-ILLEGAL_REWARD = -100
+ILLEGAL_REWARD = -10000
 # 扩大因子
-SCALE_FACTOR = 1e5
+SCALE_FACTOR = 1e6
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
 
@@ -658,7 +658,7 @@ class LOB_trade_env(gym.Env):
                 reward = -res['trade_return_bm'] * SCALE_FACTOR * punish
 
             # 限制范围
-            reward = max(min(reward, -ILLEGAL_REWARD), ILLEGAL_REWARD)
+            reward = max(min(reward, -ILLEGAL_REWARD*0.5), ILLEGAL_REWARD*0.5)
             # reward 校正
             if info['act_criteria'] == 1:
                 # loss: reward 一定为负数

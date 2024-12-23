@@ -54,9 +54,20 @@ class ExperimentHandler:
     def __init__(self, train_title, agent_class_name, agent_kwargs, tau=0.005, simple_test=False):
         self.train_title = train_title
         self.agent = globals()[agent_class_name](**agent_kwargs)
-        self.tau = tau
         self.simple_test = simple_test
         
+        # 参数更新相关的属性
+        self.tau = tau
+        # 读取tau记录（若存在）
+        self.tau_record_file = os.path.join(self.exp_folder, 'tau_record.txt')
+        self.tau = self.read_tau()
+        self.min_tau = 0.001
+        self.max_tau = 0.1
+        self.best_params = None
+        self.best_reward = float('-inf')
+        self.patience = 5  # 容忍多少次性能下降
+        self.poor_updates = 0
+
         # 创建实验目录
         self.exp_folder = os.path.join(root_folder, train_title)
         os.makedirs(self.exp_folder, exist_ok=True)
@@ -78,6 +89,60 @@ class ExperimentHandler:
         t = time.time()
         self.last_val_time = t
         self.last_test_time = t
+
+    def save_tau(self, tau):
+        """保存tau记录"""
+        with open(self.tau_record_file, 'w') as f:
+            f.write(str(tau))
+
+    def read_tau(self):
+        """读取tau记录"""
+        if not os.path.exists(self.tau_record_file):
+            return self.tau
+        with open(self.tau_record_file, 'r') as f:
+            return float(f.read())
+
+    def adaptive_update_params(self, new_params, metrics):
+        """自适应地更新模型参数
+        
+        Args:
+            new_params: 新的模型参数
+            metrics: 性能指标字典
+        
+        Returns:
+            bool: 是否执行了参数更新
+        """
+        current_reward = metrics.get('moving_average_reward', float('-inf'))
+        
+        # 首次更新或性能提升
+        if self.best_params is None or current_reward > self.best_reward:
+            self.agent.apply_new_params(new_params, tau=self.tau)
+            self.best_params = self.agent.get_params_to_send()  # 保存当前最佳参数
+            self.best_reward = current_reward
+            self.poor_updates = 0
+            
+            # 性能提升时可以适当增加 tau 以加快学习
+            self.tau = min(self.tau * 1.1, self.max_tau)
+            return True
+            
+        # 性能下降
+        else:
+            self.poor_updates += 1
+            
+            # 如果连续多次性能下降
+            if self.poor_updates >= self.patience:
+                # 回滚到最佳参数
+                self.agent.apply_new_params(self.best_params, tau=1.0)
+                # 减小 tau 值以更谨慎地学习
+                self.tau = max(self.tau * 0.9, self.min_tau)
+                self.poor_updates = 0
+                return False
+            
+            # 容忍范围内的性能下降，仍然更新但使用较小的 tau
+            else:
+                reduced_tau = self.tau * 0.5
+                self.agent.apply_new_params(new_params, tau=reduced_tau)
+                return True
 
     def plot_learning_process(self, metrics):
         """
@@ -353,7 +418,7 @@ class ExperimentHandler:
         # 设置x轴刻度和标签
         for ax in axes:
             ax.set_xticks([i for i, _, _ in dt_changes])
-            ax.set_xticklabels([f"{dt.strftime('%d %H')}({days:.1f})" for _, dt, days in dt_changes], rotation=45)
+            ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{int(days/365):.2e}' if int(days/365)>=1000 else int(days/365)}Ys {int(days%365)}ds)" if days >= 365 else f"{dt.strftime('%d %H')}({int(days)}ds)" for _, dt, days in dt_changes], rotation=45)
         
         # 设置共享的x轴标签
         fig.text(0.5, 0.02, 'Episode', ha='center')
@@ -485,8 +550,10 @@ class ExperimentHandler:
                     
                 new_params, metrics = pickle.loads(update_data)
 
-                self.agent.apply_new_params(new_params, tau=self.tau)
-                log(f'{msg_header} Parameters updated')
+                # 使用自适应更新替换原来的直接更新
+                updated = self.adaptive_update_params(new_params, metrics)
+                log(f'{msg_header} Parameters {"updated" if updated else "rolled back"} (tau={self.tau:.6f})')
+
                 send_msg(client_socket, b'ok')
                 self.agent.save(self.exp_folder)
                 
