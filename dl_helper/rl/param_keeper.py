@@ -33,7 +33,7 @@ class AsyncRLParameterServer:
         self.max_version_delay = max_version_delay
             
         # 动量相关状态
-        self.velocity = {k: np.zeros_like(v.detach().numpy()) for k, v in self.params.items()}
+        self.velocity = {k: v.new_zeros(v.shape) for k, v in self.params.items()}
         
     def process_update(self, grads, importance, client_version) -> bool:
         """处理客户端的梯度更新
@@ -97,17 +97,21 @@ class AsyncRLParameterServer:
                              lr: float,
                              importance: float):
         """应用梯度更新
-        
-        使用动量方法更新参数，同时考虑重要性权重
+
+        使用动量方法更新参数，同时考虑重要性权重。直接使用 PyTorch 操作以提高性能。
         """
         for name, grad in grads.items():
             if name not in self.params:
                 continue
                 
-            # 1. 更新动量
-            self.velocity[name] = self.momentum * self.velocity[name] + \
-                                (1 - self.momentum) * grad * importance
+            # 将 numpy 数组转换为 tensor，并确保设备匹配
+            grad_tensor = torch.from_numpy(grad).to(self.params[name].device)
             
-            # 2. 应用梯度更新
-            self.params[name] -= lr * self.velocity[name]
+            # 1. 更新动量 (直接使用 tensor 运算)
+            self.velocity[name].mul_(self.momentum).add_(
+                grad_tensor * importance * (1 - self.momentum)
+            )
+            
+            # 2. 应用梯度更新 (使用 PyTorch 的 in-place 操作)
+            self.params[name].data.add_(self.velocity[name], alpha=-lr)
             
