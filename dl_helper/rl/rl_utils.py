@@ -495,7 +495,7 @@ def update_model_params(model, new_params, tau=0.005):
             param.copy_((1 - tau) * param + tau * new_param)
     return model
 
-def calculate_importance_loss(self, loss: torch.Tensor) -> float:
+def calculate_importance_loss(loss: torch.Tensor) -> float:
     """计算更新的重要性权重
     
     Args:

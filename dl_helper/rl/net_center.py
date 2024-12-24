@@ -468,7 +468,7 @@ class ExperimentHandler:
             if cmd == 'get':
                 params_data = pickle.dumps((self.agent.get_params_to_send(), self.agent.version))
                 send_msg(client_socket, params_data)
-                log(f'{msg_header} Parameters sent')
+                log(f'{msg_header} Parameters sent, version: {self.agent.version}')
 
             elif cmd == 'check':
                 # 30min一次val, 2小时一次test
@@ -497,7 +497,11 @@ class ExperimentHandler:
                 grads, importance, version, metrics = pickle.loads(update_data)
 
                 # 更新梯度
-                self.param_server.process_update(grads, importance, version)
+                res = self.param_server.process_update(grads, importance, version)
+                if not res:
+                    return
+
+                log(f'{msg_header} Parameters updated, version: {self.agent.version}')
 
                 send_msg(client_socket, b'ok')
                 self.agent.save(self.exp_folder)
