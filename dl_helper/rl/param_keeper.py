@@ -33,7 +33,7 @@ class AsyncRLParameterServer:
         self.max_version_delay = max_version_delay
             
         # 动量相关状态
-        self.velocity = {k: np.zeros_like(v) for k, v in self.params.items()}
+        self.velocity = {k: np.zeros_like(v.detach().numpy()) for k, v in self.params.items()}
         
     def process_update(self, grads, importance, client_version) -> bool:
         """处理客户端的梯度更新
