@@ -215,8 +215,6 @@ class BaseAgent:
     def state_dict(self):
         """只保存模型参数"""
         state_dict = {}
-        # 保存版本
-        state_dict['version'] = self.version
         for name, model in self.models.items():
             state_dict[name] = model.state_dict()
         return state_dict
@@ -228,9 +226,11 @@ class BaseAgent:
         Args:
             state_dict (dict): 包含模型参数的状态字典
         """
-        # 加载版本
-        self.version = state_dict.get('version', 0)
-
+        
+        # 兼容版本， 删除版本
+        if 'version' in state_dict:
+            del state_dict['version']
+            
         # 兼容旧 state_dict
         model_key_suffix = "_state_dict@@@"
         is_old = False
@@ -240,6 +240,7 @@ class BaseAgent:
                 if model_name in self.models:
                     self.models[model_name].load_state_dict(value)
                     is_old = True
+
 
         # 加载模型参数
         if not is_old:
