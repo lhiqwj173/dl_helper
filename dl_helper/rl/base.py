@@ -320,7 +320,6 @@ class OffPolicyAgent(BaseAgent):
             for name, model in self.models.items():
                 self.models[name] = replace_linear_with_noisy(model)
                 log(f"Replaced linear layers with noisy layers in {name}")
-        else:
 
     def _build_model(self):
         """子类需要实现此方法来构建具体的模型结构"""
