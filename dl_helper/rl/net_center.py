@@ -97,7 +97,6 @@ class ExperimentHandler:
             - moving_average_reward: 移动平均奖励
 
             图2
-            - average_td_error: 平均TD误差
             - average_loss: 平均损失值
 
             图3
@@ -136,7 +135,6 @@ class ExperimentHandler:
         # 固定颜色
         colors = {
             'moving_average_reward': '#ff7f0e',
-            'average_td_error': '#d62728',
             'average_loss': '#9467bd',
             'illegal_ratio': '#8c564b',
             'win_ratio': '#e377c2',
@@ -188,22 +186,22 @@ class ExperimentHandler:
         ax.grid(True)
         ax.legend()
 
-        # 图2: average_td_error & average_loss
+        # 图2: average_loss
         ax = axes[1]
         for dtype in ['learn', 'val', 'test']:
-            for key in ['average_td_error', 'average_loss']:
-                if key in metrics[dtype]:
-                    data = metrics[dtype][key]
-                    last_value = data[-1] if len(data) > 0 else 0
-                    if dtype == 'learn':
-                        ax.plot(data, color=colors[key], alpha=0.3,
-                            label=f'{dtype}_{key}: {last_value:.4f}')
-                    elif dtype == 'val':
-                        ax.plot(data, color=colors[key],
-                            label=f'{dtype}_{key}: {last_value:.4f}')
-                    else:  # test
-                        ax.plot(data, color=colors[key], linestyle='--',
-                            label=f'{dtype}_{key}: {last_value:.4f}')
+            key = 'average_loss'
+            if key in metrics[dtype]:
+                data = metrics[dtype][key]
+                last_value = data[-1] if len(data) > 0 else 0
+                if dtype == 'learn':
+                    ax.plot(data, color=colors[key], alpha=0.3,
+                        label=f'{dtype}_{key}: {last_value:.4f}')
+                elif dtype == 'val':
+                    ax.plot(data, color=colors[key],
+                        label=f'{dtype}_{key}: {last_value:.4f}')
+                else:  # test
+                    ax.plot(data, color=colors[key], linestyle='--',
+                        label=f'{dtype}_{key}: {last_value:.4f}')
         ax.set_ylabel('Error/Loss')
         ax.grid(True)
         ax.legend()
