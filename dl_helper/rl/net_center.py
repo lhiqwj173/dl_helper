@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.dqn.dqn import DQN
 from dl_helper.rl.dqn.c51 import C51
+from dl_helper.rl.param_keeper import AsyncRLParameterServer
 
 class BlockIPs:
     """管理block ip的类"""
@@ -51,41 +52,26 @@ root_folder = '' if not os.path.exists(alist_folder) else alist_folder
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, agent_class_name, agent_kwargs, tau=0.005, simple_test=False):
+    def __init__(self, train_title, agent_class_name, agent_kwargs, simple_test=False):
         self.train_title = train_title
         self.agent = globals()[agent_class_name](**agent_kwargs)
         self.simple_test = simple_test
-        
-        # 参数更新相关的属性
-        self.tau = tau
-        self.min_tau = 0.001
-        self.max_tau = 0.1
-        self.initial_tau = tau
-        self.best_params = None
-        self.best_reward = float('-inf')
-        
-        # 调整patience相关参数
-        self.patience = 300  # 提高容忍度，约等于5分钟的更新量
-        self.poor_updates = 0
-        self.consecutive_threshold = 50  # 连续下降阈值
-        self.consecutive_poor_updates = 0  # 连续下降计数
-        
-        # 并行训练相关参数
-        self.update_window = 100
-        self.recent_updates = []
-        self.update_success_rate = 0.0
 
         # 创建实验目录
         self.exp_folder = os.path.join(root_folder, train_title)
         os.makedirs(self.exp_folder, exist_ok=True)
         self.csv_path = os.path.join(self.exp_folder, 'val_test.csv')
-
-        # 读取tau记录（若存在）
-        self.tau_record_file = os.path.join(self.exp_folder, 'tau_record.txt')
-        self.tau = self.read_tau()
         
         # 载入模型数据
         self.agent.load(self.exp_folder)
+
+        # 参数服务器
+        self.param_server = AsyncRLParameterServer(self.agent,
+                                                  learning_rate=agent_kwargs.get('learning_rate', 0.001),
+                                                  staleness_threshold=20,
+                                                  momentum=0.9,
+                                                  importance_decay=0.8,
+                                                  max_version_delay=100)
         
         # 学习进度数据
         self.learn_metrics = {}
@@ -101,99 +87,8 @@ class ExperimentHandler:
         self.last_val_time = t
         self.last_test_time = t
 
-    def save_tau(self, tau):
-        """保存tau记录"""
-        with open(self.tau_record_file, 'w') as f:
-            f.write(str(tau))
-
-    def read_tau(self):
-        """读取tau记录"""
-        if not os.path.exists(self.tau_record_file):
-            return self.tau
-        with open(self.tau_record_file, 'r') as f:
-            return float(f.read())
-
-    def adaptive_update_params(self, new_params, metrics):
-        """自适应地更新模型参数
-        
-        Args:
-            new_params: 新的模型参数
-            metrics: 性能指标字典，包含 'moving_average_reward' 等
-            
-        Returns:
-            bool: 是否成功更新参数
-        """
-        current_reward = metrics.get('moving_average_reward', float('-inf'))
-        
-        # 首次更新或性能提升
-        if self.best_params is None or current_reward > self.best_reward:
-            self.agent.apply_new_params(new_params, tau=self.tau)
-            self.best_params = self.agent.get_params_to_send()
-            self.best_reward = current_reward
-            self.poor_updates = 0
-            self.consecutive_poor_updates = 0
-            
-            # 记录成功更新
-            self.recent_updates.append(1)
-            success = True
-            
-        # 性能下降
-        else:
-            self.poor_updates += 1
-            self.consecutive_poor_updates += 1
-            
-            # 如果连续下降次数超过阈值或总下降次数超过patience
-            if (self.consecutive_poor_updates >= self.consecutive_threshold or 
-                self.poor_updates >= self.patience):
-                
-                # 软回滚 - 向最佳参数方向移动但不完全回滚
-                rollback_tau = 0.3  # 降低回滚程度，避免过度回滚
-                self.agent.apply_new_params(self.best_params, tau=rollback_tau)
-                
-                # 重置tau到初始值的一半，而不是持续降低
-                self.tau = self.initial_tau * 0.5
-                self.poor_updates = 0
-                self.consecutive_poor_updates = 0
-                
-                # 记录失败更新
-                self.recent_updates.append(0)
-                success = False
-                
-            else:
-                # 使用较小的tau进行更新
-                reduced_tau = self.tau * 0.7  # 温和降低tau
-                self.agent.apply_new_params(new_params, tau=reduced_tau)
-                
-                # 记录成功更新（虽然性能有所下降）
-                self.recent_updates.append(1)
-                success = True
-        
-        # 维护更新窗口
-        if len(self.recent_updates) > self.update_window:
-            self.recent_updates.pop(0)
-        
-        # 计算成功率并动态调整tau
-        if len(self.recent_updates) >= self.update_window * 0.5:  # 至少有半个窗口的数据
-            self.update_success_rate = sum(self.recent_updates) / len(self.recent_updates)
-            
-            if self.update_success_rate > 0.8:
-                # 高成功率，可以适度增加tau
-                self.tau = min(self.tau * 1.05, self.max_tau)
-            elif self.update_success_rate < 0.5:
-                # 低成功率，需要降低tau
-                self.tau = max(self.tau * 0.95, self.min_tau)
-        
-        # 保存当前tau值
-        self.save_tau(self.tau)
-        
-        # 记录日志（可选）
-        if not success:
-            log(f"Parameter rollback triggered - consecutive_poor_updates: {self.consecutive_poor_updates}, "
-                f"total_poor_updates: {self.poor_updates}, new_tau: {self.tau:.6f}, "
-                f"success_rate: {self.update_success_rate:.2f}")
-        
-        return success
-
+        # 客户端id
+        self.client_ids = []
 
     def plot_learning_process(self, metrics):
         """
@@ -271,7 +166,8 @@ class ExperimentHandler:
                 last_dt = processed_dt
 
         # 设置图表标题
-        fig.suptitle(f'Learning Process (Training Days: {int(metrics["learn"]["train_days"][-1])})', fontsize=16)
+        days = metrics["learn"]["train_days"][-1]
+        fig.suptitle(f'Learning Process ({f"{int(days/365):.2e}" if int(days/365)>=1000 else int(days/365)}Ys {int(days%365)}ds)', fontsize=16)
 
         # 图1: moving_average_reward
         ax = axes[0]
@@ -570,7 +466,7 @@ class ExperimentHandler:
         """处理客户端请求"""
         try:
             if cmd == 'get':
-                params_data = pickle.dumps(self.agent.get_params_to_send())
+                params_data = pickle.dumps((self.agent.get_params_to_send(), self.agent.version))
                 send_msg(client_socket, params_data)
                 log(f'{msg_header} Parameters sent')
 
@@ -594,16 +490,14 @@ class ExperimentHandler:
                 msg = f'{msg_header} Check response sent: {response}'
                 log(msg)
 
-            elif cmd == 'update':
+            elif cmd == 'update_gradients':
                 update_data = recv_msg(client_socket)
                 if update_data is None:
                     return
-                    
-                new_params, metrics = pickle.loads(update_data)
+                grads, importance, version, metrics = pickle.loads(update_data)
 
-                # 使用自适应更新替换原来的直接更新
-                updated = self.adaptive_update_params(new_params, metrics)
-                log(f'{msg_header} Parameters {"updated" if updated else "rolled back"} (tau={self.tau:.6f})')
+                # 更新梯度
+                self.param_server.process_update(grads, importance, version)
 
                 send_msg(client_socket, b'ok')
                 self.agent.save(self.exp_folder)
@@ -614,6 +508,12 @@ class ExperimentHandler:
                     self.learn_metrics[k].append(v)
 
                 self.update_count += 1
+
+            elif cmd == 'request_id':   
+                _id = len(self.client_ids)
+                # 记录并返回
+                self.client_ids.append(_id)
+                send_msg(client_socket, str(_id).encode())
 
             elif cmd in ['val', 'test']:
                 data_type = cmd
@@ -660,20 +560,20 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
-def add_train_title_item(train_title, agent_class, agent_kwargs, tau, simple_test):
+def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test):
     file = os.path.join(root_folder, f'{train_title}.data')
     if os.path.exists(file):
         return
     with open(file, 'wb') as f:
-        pickle.dump((agent_class.__name__, agent_kwargs, tau, simple_test), f)
+        pickle.dump((agent_class.__name__, agent_kwargs, simple_test), f)
 
 def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
             title = file.replace('.data', '')
-            agent_class_name, agent_kwargs, tau, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
-            res[title] = (agent_class_name, agent_kwargs, tau, simple_test)
+            agent_class_name, agent_kwargs, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
+            res[title] = (agent_class_name, agent_kwargs, simple_test)
     return res
 
 def run_param_center():
@@ -689,9 +589,9 @@ def run_param_center():
     # 初始化实验处理器
     handlers = {}
     train_dict = read_train_title_item()
-    for title, (agent_class_name, agent_kwargs, tau, simple_test) in train_dict.items():
+    for title, (agent_class_name, agent_kwargs, simple_test) in train_dict.items():
         log(f'{title} init')
-        handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, tau, simple_test)
+        handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, simple_test)
 
     while True:
         client_socket, client_address = server_socket.accept()
@@ -736,8 +636,8 @@ def run_param_center():
             # 重新读取 
             train_dict = read_train_title_item()
             if train_title in train_dict:
-                agent_class_name, agent_kwargs, tau, simple_test = train_dict[train_title]
-                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, tau, simple_test)
+                agent_class_name, agent_kwargs, simple_test = train_dict[train_title]
+                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, simple_test)
             else:
                 msg = f'{train_title} not found'
                 send_wx(msg)

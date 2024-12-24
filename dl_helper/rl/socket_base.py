@@ -65,8 +65,8 @@ def get_net_params(train_title):
             raise Exception('Failed to receive parameters')
             
         # 反序列化参数
-        net_params = pickle.loads(response)
-        return net_params
+        net_params, version = pickle.loads(response)
+        return net_params, version
 
     return _connect_server_apply(_get_net_params)
 
@@ -87,31 +87,49 @@ def check_need_val_test(train_title):
 
     return _connect_server_apply(_check_need_val_test)
 
-def send_net_updates(train_title, params, metrics):
-    """
-    推送更新net
-    包含 (模型参数, 学习监控指标)
-    """
-    # 将GPU上的参数转移到CPU
-    cpu_params = {
-        k: v.cpu() if hasattr(v, 'cpu') else v 
-        for k, v in params.items()
-    }
-
-    def _send_net_updates(_socket):
-        # 发送更新参数请求
-        message = f'{CODE}_{train_title}:update'
+def send_accumulated_gradients(train_title, grads, importance, version, metrics):
+    """发送累积的梯度"""
+    def _send_accumulated_gradients(_socket):
+        # 发送累积梯度请求
+        message = f'{CODE}_{train_title}:update_gradients'
         send_msg(_socket, message.encode())
         
-        # 发送参数数据
-        params_data = pickle.dumps((cpu_params, metrics))
-        send_msg(_socket, params_data)
+        # 发送累积梯度
+        data = pickle.dumps((grads, importance, version, metrics))
+        send_msg(_socket, data)
         
         # 等待确认
         response = recv_msg(_socket)
         return response == b'ok'
 
-    return _connect_server_apply(_send_net_updates)
+    return _connect_server_apply(_send_accumulated_gradients)
+
+# 弃用
+# def send_net_updates(train_title, params, metrics):
+#     """
+#     推送更新net
+#     包含 (模型参数, 学习监控指标)
+#     """
+#     # 将GPU上的参数转移到CPU
+#     cpu_params = {
+#         k: v.cpu() if hasattr(v, 'cpu') else v 
+#         for k, v in params.items()
+#     }
+
+#     def _send_net_updates(_socket):
+#         # 发送更新参数请求
+#         message = f'{CODE}_{train_title}:update'
+#         send_msg(_socket, message.encode())
+        
+#         # 发送参数数据
+#         params_data = pickle.dumps((cpu_params, metrics))
+#         send_msg(_socket, params_data)
+        
+#         # 等待确认
+#         response = recv_msg(_socket)
+#         return response == b'ok'
+
+#     return _connect_server_apply(_send_net_updates)
 
 def send_val_test_data(train_title, data_type, metrics):
     """发送训练数据"""
@@ -129,5 +147,20 @@ def send_val_test_data(train_title, data_type, metrics):
         return response == b'ok'
 
     return _connect_server_apply(_send_val_test_data)
+
+def request_client_id(train_title):
+    """请求分配客户端id"""
+    def _request_client_id(_socket):
+        # 发送请求分配id
+        message = f'{CODE}_{train_title}:request_id'
+        send_msg(_socket, message.encode())
+        
+        # 接收分配的id
+        response = recv_msg(_socket)
+        if response:
+            return int(response.decode())
+        return -1
+
+    return _connect_server_apply(_request_client_id)
 
 

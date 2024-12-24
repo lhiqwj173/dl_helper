@@ -29,7 +29,6 @@ minimal_size = 3000
 batch_size = 256
 sync_interval_learn_step=150
 learn_interval_step=4
-server_tau = 0.005
 
 # 初始化日志
 init_logger_by_ip(train_title)
@@ -67,7 +66,6 @@ if __name__ == '__main__':
         batch_size=<int>            批次大小, 默认64
         sync_interval_learn_step=<int>  同步参数间隔, 默认150
         learn_interval_step=<int>   学习更新间隔, 默认4
-        server_tau=<float>                 服务端软更新参数, 默认0.005
     
     运行模式:
         server                      以服务端模式运行
@@ -117,8 +115,6 @@ if __name__ == '__main__':
                 sync_interval_learn_step = int(arg.split('=')[1])
             elif arg.startswith('learn_interval_step='):
                 learn_interval_step = int(arg.split('=')[1])
-            elif arg.startswith('server_tau='):
-                server_tau = float(arg.split('=')[1])
             elif arg == 'server':
                 is_server = True
             elif arg == 'client':
@@ -189,7 +185,7 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device, args, kwargs)
     else:
         # 服务端
-        add_train_title_item(train_title, agent_class, agent_kwargs, server_tau, simple_test)
+        add_train_title_item(train_title, agent_class, agent_kwargs, simple_test)
 
     # 如果启用了性能分析，输出并保存结果
     if enable_profiling:

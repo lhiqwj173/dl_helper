@@ -3,6 +3,7 @@ import os
 import time
 import shutil
 import numpy as np
+from collections import defaultdict
 
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info
 from py_ext.lzma import compress_folder, decompress
@@ -10,8 +11,8 @@ from py_ext.wechat import wx
 from py_ext.alist import alist
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
-from dl_helper.rl.socket_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test
-from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose
+from dl_helper.rl.socket_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test, request_client_id, send_accumulated_gradients
+from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose, calculate_importance_loss
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.noisy import replace_linear_with_noisy
 
@@ -69,10 +70,23 @@ class BaseAgent:
         # 储存模型
         self.models = {}
 
+        # 参数
+        self.version = 0
+
+        # 获取客户端id
+        self.client_id = request_client_id(self.train_title)
+
+        # 累积的梯度和重要性
+        self.accumulated_grads = defaultdict(list)  # 存储每个参数的梯度列表
+        self.importance_weights = []  # 存储每个batch的重要性
+
     def build_model(self):
         raise NotImplementedError
 
     def take_action(self, state):
+        raise NotImplementedError
+
+    def get_model_to_sync(self):
         raise NotImplementedError
 
     def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
@@ -91,6 +105,85 @@ class BaseAgent:
 
         return self._update(states, actions, rewards, next_states, dones, data_type, weights)
 
+    def compute_importance_loss(self, loss):
+        """计算重要性损失"""
+        importance = calculate_importance_loss(loss)
+        self.importance_weights.append(importance)
+
+    def collect_gradients(self, model):
+        """收集当前batch的梯度"""
+        for param_name, param in model.named_parameters():
+            if param.grad is not None:
+                # 转换为numpy并立即释放GPU内存
+                grad_cpu = param.grad.detach().cpu().numpy()  # 直接转numpy
+                self.accumulated_grads[param_name].append(grad_cpu)
+    
+    def produce_submit_accumulated_gradients(self, averaging_strategy='mean'):
+        """生成并提交累积的梯度"""
+        assert averaging_strategy in ['mean', 'weighted'], "averaging_strategy 必须是 'mean' 或 'weighted'"
+        
+        if len(self.accumulated_grads) == 0 or len(self.importance_weights) == 0:
+            log(f"{self.msg_head} No gradients or importance weights accumulated")
+            return {}, 0.0
+        
+        # 预处理：移除包含NaN/Inf的梯度
+        valid_indices = []
+        for i in range(len(next(iter(self.accumulated_grads.values())))):
+            is_valid = True
+            for grad_list in self.accumulated_grads.values():
+                if np.any(np.isnan(grad_list[i])) or np.any(np.isinf(grad_list[i])):
+                    is_valid = False
+                    break
+            if is_valid:
+                valid_indices.append(i)
+        
+        if not valid_indices:
+            log(f"{self.msg_head} Warning: All gradients are invalid (NaN/Inf)")
+            return {}, 0.0
+        
+        # 只保留有效的梯度和对应的重要性权重
+        filtered_grads = {
+            name: [grad_list[i] for i in valid_indices]
+            for name, grad_list in self.accumulated_grads.items()
+        }
+        filtered_weights = [self.importance_weights[i] for i in valid_indices]
+        
+        if len(valid_indices) < len(self.importance_weights):
+            log(f"{self.msg_head} Filtered out {len(self.importance_weights) - len(valid_indices)} invalid gradients")
+        
+        if averaging_strategy == 'weighted':
+            # 基于重要性权重的加权平均
+            weights = np.array(filtered_weights)
+            eps = 1e-8
+            weights = np.clip(weights, eps, None)
+            weights = weights / (weights.sum() + eps)
+            
+            averaged_grads = {}
+            for name, grad_list in filtered_grads.items():
+                stacked_grads = np.stack(grad_list, axis=0)
+                averaged_grads[name] = np.average(stacked_grads, axis=0, weights=weights)
+                
+            averaged_importance = np.max(filtered_weights)
+        else:
+            # 简单平均
+            averaged_grads = {
+                name: np.mean(grad_list, axis=0)
+                for name, grad_list in filtered_grads.items()
+            }
+            averaged_importance = np.mean(filtered_weights)
+        
+        # 最后的有效性检查
+        for name, grad in averaged_grads.items():
+            if np.any(np.isnan(grad)) or np.any(np.isinf(grad)):
+                log(f"{self.msg_head} Critical error: averaged gradients still contain NaN/Inf")
+                return {}, 0.0
+                
+        # 清理累积状态
+        self.accumulated_grads.clear()
+        self.importance_weights.clear()
+        
+        return averaged_grads, averaged_importance
+        
     def eval(self):
         for model in self.models.values():
             model.eval()
@@ -125,6 +218,8 @@ class BaseAgent:
     def state_dict(self):
         """只保存模型参数"""
         state_dict = {}
+        # 保存版本
+        state_dict['version'] = self.version
         for name, model in self.models.items():
             state_dict[name] = model.state_dict()
         return state_dict
@@ -136,6 +231,9 @@ class BaseAgent:
         Args:
             state_dict (dict): 包含模型参数的状态字典
         """
+        # 加载版本
+        self.version = state_dict.get('version', 0)
+
         # 兼容旧 state_dict
         model_key_suffix = "_state_dict@@@"
         is_old = False
@@ -165,6 +263,7 @@ class BaseAgent:
         if os.path.exists(file):
             self.load_state_dict(torch.load(file))
 
+
 class OffPolicyAgent(BaseAgent):
     def __init__(self, buffer_size, train_buffer_class, use_noisy, n_step, *args, **kwargs):
         """
@@ -188,6 +287,7 @@ class OffPolicyAgent(BaseAgent):
         需要子类重写的函数
             _build_model: 构建模型
             take_action(self, state): 根据状态选择动作
+            get_model_to_sync: 获取需要同步的模型
             _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
             sync_update_net_params_in_agent: 同步更新模型参数
             get_params_to_send: 获取需要上传的参数
@@ -261,21 +361,20 @@ class OffPolicyAgent(BaseAgent):
     def get_params_to_send(self):
         raise NotImplementedError
 
-    def update_params_from_server(self, env):
-        new_params = get_net_params(self.train_title)
-        if new_params:
-            self.apply_new_params(new_params)
-            # 重置 buffer, 因为使用了最新的参数，之前的经验已经不正确
-            self.replay_buffer.reset()
-            log(f'{self.msg_head} replay_buffer reset > {self.replay_buffer.size()}')
-            # 重置环境中的账户
-            env.acc.reset()
+    def update_params_from_server(self):
+        params, self.version = get_net_params(self.train_title)
+        log(f'{self.msg_head} update params from server, version: {self.version}')
+        self.apply_new_params(params)
 
-    def push_params_to_server(self):
-        # 同步agent内部参数
-        self.sync_update_net_params_in_agent()
-        # 上传参数 /上传学习监控指标
-        send_net_updates(self.train_title, self.get_params_to_send(), self.tracker.get_metrics())
+    def push_update_to_server(self):
+        # 推送模型参数，弃用
+        # # 同步agent内部参数
+        # self.sync_update_net_params_in_agent()
+        # # 上传参数 /上传学习监控指标
+        # send_net_updates(self.train_title, self.get_params_to_send(), self.tracker.get_metrics())
+
+        # 改用推送 累积的梯度
+        send_accumulated_gradients(self.train_title, *self.produce_submit_accumulated_gradients(), self.version, self.tracker.get_metrics())
 
     def track_error(self, td_error, loss_value, data_type='train'):
         # tracker 记录
@@ -413,7 +512,7 @@ class OffPolicyAgent(BaseAgent):
         learn_step = 0
 
         # 拉取服务器的最新参数并更新
-        self.update_params_from_server(env)
+        self.update_params_from_server()
 
         # 学习是否开始
         for i in range(num_episodes):
@@ -510,9 +609,9 @@ class OffPolicyAgent(BaseAgent):
                         log(f'{self.msg_head} {learn_step} sync params')
                         # 同步最新参数
                         # 推送参数更新
-                        self.push_params_to_server()
+                        self.push_update_to_server()
                         # 拉取服务器的最新参数并更新
-                        self.update_params_from_server(env)
+                        self.update_params_from_server()
 
                         # 验证/测试
                         # 询问 服务器 是否需要 验证/测试
@@ -531,6 +630,7 @@ class OffPolicyAgent(BaseAgent):
                     #################################
                     # 服务器通讯
                     #################################
+
                     # 切换回训练模式
                     if need_train_back:
                         self.train()

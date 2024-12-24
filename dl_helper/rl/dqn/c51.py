@@ -176,6 +176,7 @@ class C51(OffPolicyAgent):
     # 需要重写的函数
     #     _build_model: 构建模型
     #     _take_action(self, state): 根据状态选择动作
+    #     get_model_to_sync: 获取需要同步的模型
     #     _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
     #     sync_update_net_params_in_agent: 同步更新模型参数
     #     get_params_to_send: 获取需要上传的参数
@@ -360,6 +361,12 @@ class C51(OffPolicyAgent):
             loss.backward()
             self.optimizer.step()
 
+            # 计算/记录重要性损失
+            self.compute_importance_loss(loss)
+
+            # 收集梯度
+            self.collect_gradients(self.models['q_net'])
+
             if self.count > 0 and self.count % self.target_update == 0:
                 self.sync_update_net_params_in_agent()
             self.count += 1
@@ -371,3 +378,7 @@ class C51(OffPolicyAgent):
 
     def get_params_to_send(self):
         return self.models['q_net'].state_dict()
+
+    def get_model_to_sync(self):
+        return self.models['q_net']
+

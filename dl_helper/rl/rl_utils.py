@@ -494,3 +494,18 @@ def update_model_params(model, new_params, tau=0.005):
                 new_param = new_param.to(param.device)
             param.copy_((1 - tau) * param + tau * new_param)
     return model
+
+def calculate_importance_loss(self, loss: torch.Tensor) -> float:
+    """计算更新的重要性权重
+    
+    Args:
+        loss: 当前批次的损失值
+    
+    Returns:
+        float: 重要性权重
+    """
+    # 基于loss值计算重要性
+    importance = float(loss.item())
+    # 归一化到[0, 1]范围
+    importance = np.clip(importance / 10.0, 0, 1)
+    return importance
