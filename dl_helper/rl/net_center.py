@@ -593,6 +593,7 @@ def run_param_center():
         log(f'{title} init')
         handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, simple_test)
 
+    log('all init done')
     while True:
         client_socket, client_address = server_socket.accept()
         client_ip, client_port = client_address
