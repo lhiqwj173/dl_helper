@@ -104,33 +104,6 @@ def send_accumulated_gradients(train_title, grads, importance, version, metrics)
 
     return _connect_server_apply(_send_accumulated_gradients)
 
-# 弃用
-# def send_net_updates(train_title, params, metrics):
-#     """
-#     推送更新net
-#     包含 (模型参数, 学习监控指标)
-#     """
-#     # 将GPU上的参数转移到CPU
-#     cpu_params = {
-#         k: v.cpu() if hasattr(v, 'cpu') else v 
-#         for k, v in params.items()
-#     }
-
-#     def _send_net_updates(_socket):
-#         # 发送更新参数请求
-#         message = f'{CODE}_{train_title}:update'
-#         send_msg(_socket, message.encode())
-        
-#         # 发送参数数据
-#         params_data = pickle.dumps((cpu_params, metrics))
-#         send_msg(_socket, params_data)
-        
-#         # 等待确认
-#         response = recv_msg(_socket)
-#         return response == b'ok'
-
-#     return _connect_server_apply(_send_net_updates)
-
 def send_val_test_data(train_title, data_type, metrics):
     """发送训练数据"""
     def _send_val_test_data(_socket):

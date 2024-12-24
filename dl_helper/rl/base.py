@@ -11,7 +11,7 @@ from py_ext.wechat import wx
 from py_ext.alist import alist
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
-from dl_helper.rl.socket_base import get_net_params, send_net_updates, send_val_test_data, check_need_val_test, request_client_id, send_accumulated_gradients
+from dl_helper.rl.socket_base import get_net_params, send_val_test_data, check_need_val_test, request_client_id, send_accumulated_gradients
 from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose, calculate_importance_loss
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.noisy import replace_linear_with_noisy
@@ -183,7 +183,7 @@ class BaseAgent:
         self.importance_weights.clear()
         
         return averaged_grads, averaged_importance
-        
+
     def eval(self):
         for model in self.models.values():
             model.eval()
@@ -367,12 +367,6 @@ class OffPolicyAgent(BaseAgent):
         self.apply_new_params(params)
 
     def push_update_to_server(self):
-        # 推送模型参数，弃用
-        # # 同步agent内部参数
-        # self.sync_update_net_params_in_agent()
-        # # 上传参数 /上传学习监控指标
-        # send_net_updates(self.train_title, self.get_params_to_send(), self.tracker.get_metrics())
-
         # 改用推送 累积的梯度
         send_accumulated_gradients(self.train_title, *self.produce_submit_accumulated_gradients(), self.version, self.tracker.get_metrics())
 
