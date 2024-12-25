@@ -5,6 +5,7 @@ import pickle
 import collections
 
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent
+from dl_helper.rl.dqn.dqn import dqn_base
 from dl_helper.rl.rl_env.lob_env import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE
 
 class c51_network(torch.nn.Module):
@@ -93,7 +94,7 @@ class c51_network(torch.nn.Module):
         q_values = torch.sum(probs * self.support.expand_as(probs), dim=2)
         return q_values
 
-class C51(OffPolicyAgent):
+class C51(dqn_base):
 
     def __init__(
         self,
@@ -172,15 +173,18 @@ class C51(OffPolicyAgent):
             self.models['q_net'].parameters(),
             lr=learning_rate,
         )
+
     ############################################################
     # 需要重写的函数
     #     _build_model: 构建模型
     #     _take_action(self, state): 根据状态选择动作
-    #     get_model_to_sync: 获取需要同步的模型
-    #     _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
-    #     sync_update_net_params_in_agent: 同步更新模型参数
-    #     get_params_to_send: 获取需要上传的参数
+    #     _update(self, states, actions, rewards, next_states, dones, data_type, n_step_rewards=None, n_step_next_states=None, n_step_dones=None): 更新模型
+    #     
+    #     X(在dqn_base中已实现) get_model_to_sync: 获取需要同步的模型
+    #     X(在dqn_base中已实现) sync_update_net_params_in_agent: 同步更新模型参数
+    #     X(在dqn_base中已实现) get_params_to_send: 获取需要上传的参数
     ############################################################
+
     def _build_model(self):
         q_net = c51_network(self.obs_shape, self.features_extractor_class,
                           self.features_extractor_kwargs, self.features_dim,
@@ -373,12 +377,4 @@ class C51(OffPolicyAgent):
 
         return td_error_for_update
 
-    def sync_update_net_params_in_agent(self):
-        self.models['target_q_net'].load_state_dict(self.models['q_net'].state_dict())
-
-    def get_params_to_send(self):
-        return self.models['q_net'].state_dict()
-
-    def get_model_to_sync(self):
-        return self.models['q_net']
 

@@ -48,18 +48,7 @@ class BaseAgent:
         self.features_extractor_class = features_extractor_class
         self.features_extractor_kwargs = features_extractor_kwargs or {}
         self.features_dim = features_dim
-
-        if net_arch is None:
-            self.net_arch = dict(pi=[action_dim], vf=[action_dim])
-        elif isinstance(net_arch, list):
-            self.net_arch = dict(pi=net_arch, vf=net_arch)
-        elif isinstance(net_arch, dict):
-            if 'pi' in net_arch and 'vf' in net_arch:
-                self.net_arch = net_arch
-            else:
-                raise ValueError("net_arch 字典需包含 'pi' 和 'vf' 键")
-        else:
-            raise ValueError("net_arch 必须是列表或字典, 表示mlp每层的神经元个数")
+        self.net_arch = self.fix_net_arch(net_arch, action_dim)
 
         # 初始化msg_head
         self.msg_head = f''
@@ -88,6 +77,19 @@ class BaseAgent:
 
     def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None):
         raise NotImplementedError
+
+    def fix_net_arch(self, net_arch, action_dim):
+        if net_arch is None:
+            return dict(pi=[action_dim], vf=[action_dim])
+        elif isinstance(net_arch, list):
+            return dict(pi=net_arch, vf=net_arch)
+        elif isinstance(net_arch, dict):
+            if 'pi' in net_arch and 'vf' in net_arch:
+                return net_arch
+            else:
+                raise ValueError("net_arch 字典需包含 'pi' 和 'vf' 键")
+        else:
+            raise ValueError("net_arch 必须是列表或字典, 表示mlp每层的神经元个数")
 
     def update(self, transition_dict, data_type='train', weights=None):
         states = torch.from_numpy(transition_dict['states']).to(self.device)
@@ -230,7 +232,7 @@ class BaseAgent:
         # 兼容版本， 删除版本
         if 'version' in state_dict:
             del state_dict['version']
-            
+
         # 兼容旧 state_dict
         model_key_suffix = "_state_dict@@@"
         is_old = False
