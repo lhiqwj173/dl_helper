@@ -537,7 +537,7 @@ class OffPolicyAgent(BaseAgent):
         self.tracker_val_test = None
 
         # 若是 test，上传预测数据文件到alist
-        if data_type in ['val', 'test']:
+        if hasattr(env, 'predict_file'):
             # 上传更新到alist
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             # 上传文件夹

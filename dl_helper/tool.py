@@ -51,8 +51,8 @@ def upload_log_file(train_title):
         client.mkdir(upload_folder)
         client.upload(log_file, upload_folder)
         log(f'Upload log file {log_file} \n\t-> alist {upload_folder}')
-
 def keep_upload_log_file(train_title):
+
     """保持上传日志文件"""
     log(f'keep_upload_log_file start: {get_log_file()}')
     while True:
