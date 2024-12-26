@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from py_ext.tool import log, get_log_file
 
 class Tracker:
-    def __init__(self, title, n_periods, rank=0, action_space):
+    def __init__(self, title, n_periods, action_space, rank=0):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
 
