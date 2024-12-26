@@ -8,7 +8,7 @@ from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.dqn.dqn import dqn_base
 
 class c51_network(BaseModel):
-    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max, need_reshape=None):
+    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms=51, v_min=-10, v_max=10, need_reshape=None):
         """
         features_dim: features_extractor_class输出维度  + extra_features的维度
             log_env: features_extractor_class输出维度 + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
@@ -164,12 +164,12 @@ class C51(dqn_base):
     def _build_model(self):
         q_net = c51_network(self.features_extractor_class,
                           self.features_extractor_kwargs, self.features_dim,
-                          self.net_arch, self.need_reshape,
-                          self.n_atoms, self.v_min, self.v_max)
+                          self.net_arch,
+                          self.n_atoms, self.v_min, self.v_max, self.need_reshape)
         target_q_net = c51_network(self.features_extractor_class,
                                  self.features_extractor_kwargs, self.features_dim,
-                                 self.net_arch, self.need_reshape,
-                                 self.n_atoms, self.v_min, self.v_max)
+                                 self.net_arch,
+                                 self.n_atoms, self.v_min, self.v_max, self.need_reshape)
 
         self.models = {'q_net': q_net, 'target_q_net': target_q_net}
         self.models['q_net'].train()
