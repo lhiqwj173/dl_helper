@@ -31,7 +31,7 @@ class cnn_breakout(nn.Module):
         return x
 
     @staticmethod
-    def get_feature_size(cls):
+    def get_feature_size():
         # 使用新的卷积参数计算输出尺寸
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(161, 8, 4), 4, 4), 3, 2)
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(144, 8, 4), 4, 4), 3, 2)
