@@ -58,14 +58,12 @@ class BaseModel(torch.nn.Module):
                 total_xs = np.prod(x.shape[1:])
                 self.extra_features = total_xs - total_items
             
-            x = x[:,:-self.extra_features].view(-1, *self.need_reshape)
+            main_x = x[:,:-self.extra_features].view(-1, *self.need_reshape)
             extra_x = x[:,-self.extra_features:]
         
         # 特征提取
-        feature = self.features_extractor(x)
+        feature = self.features_extractor(main_x)
         if extra_x is not None:
-            log(f"feature: {feature.shape}")
-            log(f"extra_x: {extra_x.shape}")
             feature = torch.cat([feature, extra_x], dim=1)
 
         # 应用Batch Normalization
