@@ -64,6 +64,8 @@ class BaseModel(torch.nn.Module):
         # 特征提取
         feature = self.features_extractor(x)
         if extra_x is not None:
+            log(f"feature: {feature.shape}")
+            log(f"extra_x: {extra_x.shape}")
             feature = torch.cat([feature, extra_x], dim=1)
 
         # 应用Batch Normalization
