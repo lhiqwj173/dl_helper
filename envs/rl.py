@@ -13,12 +13,12 @@ subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
 for cmd in [
         'pip install dill',
+        'pip install ale_py',
         'pip install gymnasium',
         'pip install df2img',
         'pip install imgkit',
         'pip install loguru',
         'pip install einops',
-        'pip install dill',
         'pip install torchmetrics',
         'pip install requests_toolbelt',
         'pip install torchstat',

@@ -1,9 +1,9 @@
 import gymnasium as gym
-import ale_py
+# import ale_py
 import collections
 import numpy as np
 
-gym.register_envs(ale_py)
+# gym.register_envs(ale_py)
 
 def crop_observation(obs):
     return obs[32:193, 8:152]
