@@ -47,8 +47,8 @@ def _connect_server_apply(func, *args, **kwargs):
         _socket.connect((HOST, PORT))
         return func(_socket, *args, **kwargs)
     except Exception as e:
-        log(f"连接服务器失败: {e}")
-        return None
+        log(f"连接服务器失败")
+        raise e
     finally:
         _socket.close()
 
