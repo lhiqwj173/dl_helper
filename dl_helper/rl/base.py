@@ -104,6 +104,7 @@ class BaseAgent:
         self.features_extractor_kwargs = features_extractor_kwargs or {}
         self.features_dim = features_dim
         self.net_arch = self.fix_net_arch(net_arch, action_dim)
+        self.action_dim = action_dim
 
         # 初始化msg_head
         self.msg_head = f''
