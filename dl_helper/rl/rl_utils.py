@@ -400,7 +400,7 @@ class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
             if not isinstance(experience, (tuple, list)) or len(experience) != 5:
                 pickle.dump(experience, open("error_update_reward.pkl", "wb"))
                 raise ValueError(f"Invalid experience format before adding to buffer: {experience}")
-            super().add(experience)
+            super().add(*experience)
 
         # 清空n步缓冲区
         self.clear_n_step_buffer()
