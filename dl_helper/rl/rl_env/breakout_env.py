@@ -2,6 +2,8 @@ import gymnasium as gym
 # import ale_py
 import collections
 import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
 
 # gym.register_envs(ale_py)
 
