@@ -50,7 +50,7 @@ class BreakoutEnv(gym.Env):
         """
         s: 游戏画面 shape: (161, 144)
         """
-        self.env = gym.make('ALE/Breakout-v5', render_mode='grayscale')
+        self.env = gym.make('ALE/Breakout-v5', obs_type='grayscale')
         self.env = TransformObservation(self.env, crop_observation)
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(161, 144), dtype=np.uint8)
         self.action_space = self.env.action_space
