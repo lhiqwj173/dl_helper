@@ -58,7 +58,7 @@ class data_producer:
     遍历日期文件，每天随机选择一个标的
     当天的数据读取完毕后，需要强制平仓
     """
-    def __init__(self, data_folder, _type='train', his_len=100, file_num=0, simple_test=False):
+    def __init__(self, _type='train', his_len=100, file_num=0, simple_test=False):
         # 快速测试
         self.simple_test = simple_test
         if self.simple_test:
