@@ -8,7 +8,7 @@ from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.dqn.dqn import dqn_base
 
 class c51_network(BaseModel):
-    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, need_reshape=None):
+    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max, need_reshape=None):
         """
         features_dim: features_extractor_class输出维度  + extra_features的维度
             log_env: features_extractor_class输出维度 + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
