@@ -60,7 +60,9 @@ class BaseModel(torch.nn.Module):
             
             main_x = x[:,:-self.extra_features].view(-1, *self.need_reshape)
             extra_x = x[:,-self.extra_features:]
-        
+        else:
+            main_x = x
+
         # 特征提取
         feature = self.features_extractor(main_x)
         if extra_x is not None:
