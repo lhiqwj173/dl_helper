@@ -1,11 +1,14 @@
 import gymnasium as gym
-# import ale_py
+try:
+    import ale_py
+    gym.register_envs(ale_py)
+except:
+    pass
 import collections
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-# gym.register_envs(ale_py)
 
 # 计算经过卷积后的特征图大小
 def conv2d_size_out(size, kernel_size, stride):
