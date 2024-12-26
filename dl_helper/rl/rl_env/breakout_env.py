@@ -1,4 +1,6 @@
 import gymnasium as gym
+from gymnasium.wrappers import TransformObservation
+
 try:
     import ale_py
     gym.register_envs(ale_py)
