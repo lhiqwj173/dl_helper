@@ -72,9 +72,9 @@ class data_producer:
             input_folder = r'/kaggle/input'
             # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
             data_folder_name = os.listdir(input_folder)[0]
-            self.data_folde = os.path.join(input_folder, data_folder_name)
+            self.data_folder = os.path.join(input_folder, data_folder_name)
         else:
-            self.data_folde = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
 
         self.data_type = _type
         self.files = []
