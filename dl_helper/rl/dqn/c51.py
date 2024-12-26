@@ -4,29 +4,25 @@ import numpy as np
 import pickle
 import collections
 
-from dl_helper.rl.base import BaseAgent, OffPolicyAgent
+from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.dqn.dqn import dqn_base
-from dl_helper.rl.rl_env.lob_env import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE
 
-class c51_network(torch.nn.Module):
-    def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms, v_min, v_max):
+class c51_network(BaseModel):
+    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, need_reshape=None):
         """
-        features_dim: features_extractor_class输出维度  + 4(symbol_id + 持仓 + 未实现收益率 + 距离收盘秒数)
+        features_dim: features_extractor_class输出维度  + extra_features的维度
+            log_env: features_extractor_class输出维度 + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
+            breakout_env: features_extractor_class输出维度
         """
-        super().__init__()
-        self.obs_shape = obs_shape
+        super().__init__(features_extractor_class, features_extractor_kwargs, features_dim, need_reshape)
+
         self.n_atoms = n_atoms
         self.v_min = v_min
         self.v_max = v_max
         # 计算支持点
         self.support = torch.linspace(v_min, v_max, n_atoms)
         self.delta_z = (v_max - v_min) / (n_atoms - 1)
-
-        # 特征提取器
-        self.features_extractor = features_extractor_class(**features_extractor_kwargs)
         
-        # 添加Batch Normalization
-        self.bn = torch.nn.BatchNorm1d(features_dim)
         self.dropout = torch.nn.Dropout(p=0.5)
         
         # 网络结构
@@ -47,30 +43,11 @@ class c51_network(torch.nn.Module):
 
         self.init_weights()
 
-    def init_weights(self):
-        for m in self.modules():
-            if isinstance(m, torch.nn.Linear):
-                torch.nn.init.kaiming_normal_(m.weight)
-                torch.nn.init.constant_(m.bias, 0)
-
     def forward(self, x):
-        """
-        先将x分成两个tensor
-        lob: x[:, :-4]
-        acc: x[:, -4:]
-        """
-        lob_data = x[:, :-4].view(-1, self.obs_shape[0], self.obs_shape[1])
-        acc_data = x[:, -4:]
-
-        # 标准化 距离收盘秒数
-        acc_data[:, 0] -= MEAN_SEC_BEFORE_CLOSE
-        acc_data[:, 0] /= STD_SEC_BEFORE_CLOSE
-
-        feature = self.features_extractor(lob_data)
-        feature = torch.cat([feature, acc_data], dim=1)
+        # 特征提取
+        feature = self.features_forward(x)
         
-        # 应用Batch Normalization
-        x = self.bn(feature)
+        x = feature
         if self.fc_length > 1:
             for i in range(self.fc_length - 1):
                 x = F.leaky_relu(self.fc[i](x))
@@ -98,7 +75,6 @@ class C51(dqn_base):
 
     def __init__(
         self,
-        obs_shape,
         learning_rate,
         gamma,
         epsilon,
@@ -116,6 +92,7 @@ class C51(dqn_base):
         n_step=1,
         net_arch=None,
 
+        need_reshape=None,
         n_atoms=51,
         v_min=-10,
         v_max=10,
@@ -124,11 +101,11 @@ class C51(dqn_base):
         DQN
         
         Args:
-            obs_shape: 观测空间维度
             learning_rate: 学习率
             gamma: TD误差折扣因子
             epsilon: epsilon-greedy策略参数
             target_update: 目标网络更新间隔
+            need_reshape: 需要reshape的维度, 例如(8, 10, 10)
             n_atoms: 分位数数量
             v_min: 值分布的最小值
             v_max: 值分布的最大值
@@ -148,8 +125,7 @@ class C51(dqn_base):
         """
         super().__init__(buffer_size, train_buffer_class, use_noisy, n_step, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
 
-        self.obs_shape = obs_shape
-        
+        self.need_reshape = need_reshape
         self.n_atoms = n_atoms
         self.v_min = v_min
         self.v_max = v_max
@@ -186,12 +162,14 @@ class C51(dqn_base):
     ############################################################
 
     def _build_model(self):
-        q_net = c51_network(self.obs_shape, self.features_extractor_class,
+        q_net = c51_network(self.features_extractor_class,
                           self.features_extractor_kwargs, self.features_dim,
-                          self.net_arch, self.n_atoms, self.v_min, self.v_max)
-        target_q_net = c51_network(self.obs_shape, self.features_extractor_class,
+                          self.net_arch, self.need_reshape,
+                          self.n_atoms, self.v_min, self.v_max)
+        target_q_net = c51_network(self.features_extractor_class,
                                  self.features_extractor_kwargs, self.features_dim,
-                                 self.net_arch, self.n_atoms, self.v_min, self.v_max)
+                                 self.net_arch, self.need_reshape,
+                                 self.n_atoms, self.v_min, self.v_max)
 
         self.models = {'q_net': q_net, 'target_q_net': target_q_net}
         self.models['q_net'].train()
@@ -334,7 +312,7 @@ class C51(dqn_base):
             td_error = kl_div.mean().item()
 
         # tracker 记录
-        self.track_error(td_error, loss.item(), data_type)
+        self.track_error(loss.item(), data_type)
 
         # 检查是否有nan/inf值
         if (torch.isnan(loss) or torch.isinf(loss) or 

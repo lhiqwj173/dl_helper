@@ -1,8 +1,8 @@
 import gymnasium as gym
+import ale_py
 from gymnasium.wrappers import TransformObservation
 import pygame, time
 import numpy as np
-import ale_py
 
 gym.register_envs(ale_py)
 delay = 0.05  # 设置延迟时间（秒），可以调整这个值来改变速度
@@ -54,7 +54,7 @@ def main():
             clock.tick(60)
 
         time.sleep(delay)  # 添加延时
-        action = 1  # NOOP 默认动作
+        action = 0  # NOOP 默认动作
         
         # 处理键盘输入
         for event in pygame.event.get():
@@ -74,8 +74,17 @@ def main():
         observation, reward, done, truncated, info = env.step(action)
         total_reward += reward
 
+        # 如果获得奖励,显示奖励值
+        if reward > 0:
+            reward_font = pygame.font.Font(None, 48)
+            reward_text = reward_font.render(f'+{reward}', True, (255, 255, 0))
+            screen.blit(reward_text, (160, 210))  # 在屏幕中央显示
+            pygame.display.flip()
+
+        if info:
+            print(info)
         
-    
+        time.sleep(0.5)  # 显示半秒钟
     env.close()
     pygame.quit()
 

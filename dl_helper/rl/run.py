@@ -5,6 +5,7 @@ import torch.multiprocessing as mp
 from py_ext.tool import log    
 
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
+from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.train_param import match_num_processes, get_gpu_info
 
 def run_val_test(val_test, rank, agent, env):
@@ -50,7 +51,7 @@ def run_val_test(val_test, rank, agent, env):
             # 发送验证结果给服务器
             send_val_test_data(agent.train_title, test_type, metrics)
 
-def run_client_learning_device(rank, num_processes, data_folder, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+def _run_client_learning_device(init_env_func,rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -67,8 +68,7 @@ def run_client_learning_device(rank, num_processes, data_folder, agent, num_epis
     agent.tracker.set_rank(rank)
     
     # 初始化环境
-    dp = data_producer(data_folder=data_folder, simple_test=simple_test, file_num=15 if enable_profiling else 0)
-    env = LOB_trade_env(data_producer=dp)
+    env = init_env_func()
 
     # 开始训练
     if val_test:
@@ -77,6 +77,20 @@ def run_client_learning_device(rank, num_processes, data_folder, agent, num_epis
     else:
         log(f'{rank} learn...')
         agent.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+
+def run_client_learning_device_lob(rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+    # 初始化环境
+    def init_env():
+        dp = data_producer(simple_test=simple_test, file_num=15 if enable_profiling else 0)
+        return LOB_trade_env(data_producer=dp)
+
+    return _run_client_learning_device(init_env, rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test, val_test, enable_profiling)
+
+def run_client_learning_device_breakout(rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+    def init_env():
+        return BreakoutEnv()
+
+    return _run_client_learning_device(init_env, rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test, val_test, enable_profiling)
 
 def train_func_device(rank, num_processes, a, b, c):
     # 根据环境获取对应设备

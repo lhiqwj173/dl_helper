@@ -10,7 +10,7 @@ from py_ext.tool import log
 
 from dl_helper.rl.dqn.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN, DQN
 from dl_helper.rl.net_center import add_train_title_item
-from dl_helper.rl.run import run_client_learning, run_client_learning_device
+from dl_helper.rl.run import run_client_learning, run_client_learning_device_lob
 from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBufferWaitClose
 from dl_helper.models.binctabl import m_bin_ctabl_fix_shape
 from dl_helper.train_param import in_kaggle
@@ -145,7 +145,6 @@ if __name__ == '__main__':
 
     agent_class = DQN
     agent_kwargs = {
-        'obs_shape': (100, 130),
         'learning_rate': lr,
         'gamma': gamma,
         'epsilon': epsilon,
@@ -161,6 +160,7 @@ if __name__ == '__main__':
         'features_extractor_kwargs': features_extractor_kwargs,
         'net_arch': [6, 3],
         'dqn_type': DD_DQN,
+        'need_reshape': (100, 130),
     }
 
     if not is_server:
@@ -171,18 +171,9 @@ if __name__ == '__main__':
         # 初始化agrnt
         agent = agent_class(**agent_kwargs)
 
-        # 训练数据
-        if in_kaggle:
-            input_folder = r'/kaggle/input'
-            # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-            data_folder_name = os.listdir(input_folder)[0]
-            data_folder = os.path.join(input_folder, data_folder_name)
-        else:
-            data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
-
-        args = (data_folder, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        args = (agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
         kwargs = {'simple_test': simple_test, 'val_test': val_test, 'enable_profiling': enable_profiling}
-        run_client_learning(run_client_learning_device, args, kwargs)
+        run_client_learning(run_client_learning_device_lob, args, kwargs)
     else:
         # 服务端
         add_train_title_item(train_title, agent_class, agent_kwargs, simple_test)

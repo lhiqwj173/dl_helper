@@ -52,7 +52,14 @@ root_folder = '' if not os.path.exists(alist_folder) else alist_folder
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, agent_class_name, agent_kwargs, simple_test=False):
+    def __init__(self, train_title, agent_class_name, agent_kwargs, simple_test=False, period_day=True):
+        """
+        train_title: 训练标题
+        agent_class_name: 代理类名
+        agent_kwargs: 代理参数
+        simple_test: 是否简单测试
+        period_day: train_periods 是否按天统计
+        """
         self.train_title = train_title
         self.agent = globals()[agent_class_name](**agent_kwargs)
         self.simple_test = simple_test
@@ -125,7 +132,7 @@ class ExperimentHandler:
             - total_return
             - total_return_bm
 
-        train_days: 训练天数
+        train_periods: 训练周期数
         """
         # 检查数据是否存在
         if 'dt' not in metrics or not metrics['dt']:
@@ -160,12 +167,15 @@ class ExperimentHandler:
         for i, dt in enumerate(metrics['dt']):
             processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
             if processed_dt != last_dt:
-                dt_changes.append((i, processed_dt, metrics['learn']['train_days'][i]))
+                dt_changes.append((i, processed_dt, metrics['learn']['train_periods'][i]))
                 last_dt = processed_dt
 
         # 设置图表标题
-        days = metrics["learn"]["train_days"][-1]
-        fig.suptitle(f'Learning Process ({f"{int(days/365):.2e}" if int(days/365)>=1000 else int(days/365)}Ys {int(days%365)}ds)', fontsize=16)
+        periods = metrics["learn"]["train_periods"][-1]
+        if period_day:
+            fig.suptitle(f'Learning Process ({f"{int(periods/365):.2e}" if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)', fontsize=16)
+        else:
+            fig.suptitle(f'Learning Process ({f"{periods:.2e}" if periods >= 1000 else int(periods)} periods)', fontsize=16)
 
         # 图1: moving_average_reward
         ax = axes[0]
@@ -363,7 +373,10 @@ class ExperimentHandler:
         # 设置x轴刻度和标签
         for ax in axes:
             ax.set_xticks([i for i, _, _ in dt_changes])
-            ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{int(days/365):.2e}' if int(days/365)>=1000 else int(days/365)}Ys {int(days%365)}ds)" if days >= 365 else f"{dt.strftime('%d %H')}({int(days)}ds)" for _, dt, days in dt_changes], rotation=45)
+            if period_day:
+                ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{int(periods/365):.2e}' if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)" if periods >= 365 else f"{dt.strftime('%d %H')}({int(periods)}ds)" for _, dt, periods in dt_changes], rotation=45)
+            else:
+                ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{periods:.2e}' if periods >= 1000 else int(periods)} periods)" for _, dt, periods in dt_changes], rotation=45)
         
         # 设置共享的x轴标签
         fig.text(0.5, 0.02, 'Episode', ha='center')
@@ -529,38 +542,37 @@ class ExperimentHandler:
                     if k not in self.train_data[data_type]:
                         self.train_data[data_type][k] = []
                     self.train_data[data_type][k].append(metrics[k])
-                
-                if cmd in ['val', 'test']:
-                    backup_path = os.path.join(self.exp_folder, 'learn_metrics_backup.pkl')
-                    with open(backup_path, 'wb') as f:
-                        pickle.dump(self.learn_metrics, f)
 
-                    handle_action_probs = False
-                    for k in self.learn_metrics:
-                        if k not in self.train_data['learn']:
-                            self.train_data['learn'][k] = []
+                backup_path = os.path.join(self.exp_folder, 'learn_metrics_backup.pkl')
+                with open(backup_path, 'wb') as f:
+                    pickle.dump(self.learn_metrics, f)
 
-                        length = len(self.learn_metrics[k])
-                        if length > 0:
-                            if k == 'train_days':
-                                add_days = np.nansum(self.learn_metrics[k])
-                                if len(self.train_data['learn'][k]) > 0:
-                                    add_days += self.train_data['learn'][k][-1]
-                                self.train_data['learn'][k].append(add_days)
-                            elif k.startswith('action_'):
-                                if not handle_action_probs:
-                                    # For action probabilities, take the mean of each action separately
-                                    # and normalize to ensure they sum to 1
-                                    action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(3)])
-                                    action_probs = action_probs / np.sum(action_probs)  # Normalize
-                                    for i in range(3):
-                                        self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
-                                    handle_action_probs = True
-                            else:
-                                self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
+                handle_action_probs = False
+                for k in self.learn_metrics:
+                    if k not in self.train_data['learn']:
+                        self.train_data['learn'][k] = []
 
-                        # log(f'{msg_header} length learn_metrics[{k}]: {length}')
-                    self.learn_metrics = {}
+                    length = len(self.learn_metrics[k])
+                    if length > 0:
+                        if k == 'train_periods':
+                            add_days = np.nansum(self.learn_metrics[k])
+                            if len(self.train_data['learn'][k]) > 0:
+                                add_days += self.train_data['learn'][k][-1]
+                            self.train_data['learn'][k].append(add_days)
+                        elif k.startswith('action_'):
+                            if not handle_action_probs:
+                                # For action probabilities, take the mean of each action separately
+                                # and normalize to ensure they sum to 1
+                                action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(3)])
+                                action_probs = action_probs / np.sum(action_probs)  # Normalize
+                                for i in range(3):
+                                    self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
+                                handle_action_probs = True
+                        else:
+                            self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
+
+                    # log(f'{msg_header} length learn_metrics[{k}]: {length}')
+                self.learn_metrics = {}
 
                 send_msg(client_socket, b'ok')
 

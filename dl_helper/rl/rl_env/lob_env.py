@@ -10,10 +10,9 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
-
 from py_ext.tool import log
-
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
+from dl_helper.train_param import in_kaggle
 
 USE_CODES = [
     '513050',
@@ -68,8 +67,15 @@ class data_producer:
         self.his_len = his_len
         self.file_num = file_num
 
-        # 数据
-        self.data_folder = data_folder
+        # 训练数据
+        if in_kaggle:
+            input_folder = r'/kaggle/input'
+            # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+            data_folder_name = os.listdir(input_folder)[0]
+            self.data_folde = os.path.join(input_folder, data_folder_name)
+        else:
+            self.data_folde = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+
         self.data_type = _type
         self.files = []
 
@@ -282,7 +288,7 @@ class data_producer:
     def get(self):
         """
         输出观察值
-        返回 symbol_id, before_market_close_sec, x, done, need_close, date_done
+        返回 symbol_id, before_market_close_sec, x, done, need_close, period_done
         """
         # # 测试用
         # print(self.idxs[0])
@@ -566,7 +572,7 @@ class LOB_trade_env(gym.Env):
         
         # 数据生产器
         self.data_producer = data_producer
-        self.date_done = False
+        self.period_done = False
 
         # 账户数据
         self.need_close = False # 下一个动作无论是什么，都要对做平仓操作(因为没有更多的连续数据)
@@ -594,6 +600,12 @@ class LOB_trade_env(gym.Env):
         # Add notification system
         self.notification_window = None
 
+    def no_need_track_info_item(self):
+        return ['close', 'act_criteria', 'period_done']
+
+    def need_wait_close(self):
+        return True
+
     def set_data_type(self, _type):
         if _type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
@@ -602,9 +614,14 @@ class LOB_trade_env(gym.Env):
 
     def _get_data(self):
         # 获取数据
-        symbol_id, before_market_close_sec, x, all_data_done, need_close, date_done = self.data_producer.get()
+        symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done = self.data_producer.get()
         x = x.reshape(-1)
-        return symbol_id, before_market_close_sec, x, all_data_done, need_close, date_done
+
+        # 标准化 距离收盘秒数
+        before_market_close_sec -= MEAN_SEC_BEFORE_CLOSE
+        before_market_close_sec /= STD_SEC_BEFORE_CLOSE
+
+        return symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -694,11 +711,11 @@ class LOB_trade_env(gym.Env):
         # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
         # 备份 self.need_close
         _need_close = self.need_close
-        symbol_id, before_market_close_sec, observation, data_done, self.need_close, self.date_done = self._get_data()
+        symbol_id, before_market_close_sec, observation, data_done, self.need_close, self.period_done = self._get_data()
 
         info = {
             'close': False,# 若为True, 需要回溯属于本次交易的所有时间步, 修改 reward=收益率
-            'date_done': self.date_done,
+            'period_done': self.period_done,
         }
 
         # 计算奖励
@@ -727,7 +744,7 @@ class LOB_trade_env(gym.Env):
             del self.fig
         # 数据
         self.data_producer.reset()
-        symbol_id, before_market_close_sec, x, _, self.need_close, self.date_done = self._get_data()
+        symbol_id, before_market_close_sec, x, _, self.need_close, self.period_done = self._get_data()
         # 账户
         pos, profit = self.acc.reset()
         # 添加标的持仓数据
@@ -810,6 +827,9 @@ class LOB_trade_env(gym.Env):
         # 获取其他数据
         before_market_close_sec, symbol_id, pos, profit = state[-4:].astype(float)
         plot_data, plot_cur, id = self.data_producer.get_plot_data()
+
+        # before_market_close_sec 逆标准化
+        before_market_close_sec = before_market_close_sec * STD_SEC_BEFORE_CLOSE + MEAN_SEC_BEFORE_CLOSE
         
         # 创建图形和轴
         if not hasattr(self, 'fig'):

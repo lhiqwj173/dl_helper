@@ -16,6 +16,61 @@ from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBuffe
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.noisy import replace_linear_with_noisy
 
+class BaseModel(torch.nn.Module):
+    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, need_reshape=None):
+        super().__init__()
+        self.features_dim = features_dim
+        self.need_reshape = need_reshape
+        self.extra_features = -1# forward时计算一次
+
+        # 特征提取器
+        self.features_extractor = features_extractor_class(**features_extractor_kwargs)
+
+        # 添加Batch Normalization
+        self.bn = torch.nn.BatchNorm1d(features_dim)
+        
+    def init_weights(self):
+        """Initialize network weights using appropriate initialization schemes"""
+        for m in self.modules():
+            if isinstance(m, (torch.nn.Linear, torch.nn.Conv1d, torch.nn.Conv2d)):
+                # Initialize weights using kaiming normal initialization
+                torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    torch.nn.init.constant_(m.bias, 0)
+            elif isinstance(m, (torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.GroupNorm)):
+                # Initialize batchnorm/groupnorm weights
+                torch.nn.init.constant_(m.weight, 1)
+                torch.nn.init.constant_(m.bias, 0)
+            elif isinstance(m, torch.nn.LSTM):
+                # Initialize LSTM weights
+                for name, param in m.named_parameters():
+                    if 'weight' in name:
+                        torch.nn.init.orthogonal_(param)
+                    elif 'bias' in name:
+                        torch.nn.init.constant_(param, 0)
+
+    def features_forward(self, x):
+        extra_x = None
+        if self.need_reshape:
+            assert len(x.shape) == 2, "if need_reshape, x must be 2D(batch_size, features_dim)"
+            if self.extra_features == -1:
+                total_items = np.prod(self.need_reshape)
+                total_xs = np.prod(x.shape[1:])
+                self.extra_features = total_xs - total_items
+            
+            x = x[:,:-self.extra_features].view(-1, *self.need_reshape)
+            extra_x = x[:,-self.extra_features:]
+        
+        # 特征提取
+        feature = self.features_extractor(x)
+        if extra_x is not None:
+            feature = torch.cat([feature, extra_x], dim=1)
+
+        # 应用Batch Normalization
+        feature = self.bn(feature)
+
+        return feature
+
 class BaseAgent:
     def __init__(self,
         train_title,
@@ -306,7 +361,7 @@ class OffPolicyAgent(BaseAgent):
         self.replay_buffer = self.train_buffer_class(self.buffer_size, n_step=self.n_step)
 
         # 跟踪器
-        self.tracker = Tracker('learn', 10)
+        self.tracker = Tracker('learn', 10, action_space=self.action_dim)
         self.tracker_val_test = None
 
         # 是否是训练状态
@@ -370,11 +425,9 @@ class OffPolicyAgent(BaseAgent):
         # 改用推送 累积的梯度
         send_accumulated_gradients(self.train_title, *self.produce_submit_accumulated_gradients(), self.version, self.tracker.get_metrics())
 
-    def track_error(self, td_error, loss_value, data_type='train'):
+    def track_error(self, loss_value, data_type='train'):
         # tracker 记录
         tracker = self.tracker if data_type == 'train' else self.tracker_val_test
-        # 计算TD误差
-        tracker.update_td_error(td_error)
         # 计算损失
         tracker.update_loss_value(loss_value)
 
@@ -409,13 +462,12 @@ class OffPolicyAgent(BaseAgent):
         self.eval()
 
         # 初始化跟踪器
-        self.tracker_val_test = Tracker(data_type, 10000, rank=self.tracker.rank)
+        self.tracker_val_test = Tracker(data_type, 10000, rank=self.tracker.rank, action_space=self.action_dim)
 
         env.set_data_type(data_type)
 
         # 回放池
-        # 固定使用 ReplayBufferWaitClose, 因为需要回溯更新所有 reward 为最终close时的reward
-        replay_buffer = ReplayBufferWaitClose(self.buffer_size)
+        replay_buffer = ReplayBufferWaitClose(self.buffer_size) if env.need_wait_close() else ReplayBuffer(self.buffer_size)
 
         log(f'{self.msg_head} {data_type} begin')
         state, info = env.reset()
@@ -430,9 +482,11 @@ class OffPolicyAgent(BaseAgent):
             # 添加到回放池
             replay_buffer.add(state, action, reward, next_state, done)
 
-            # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
-            if info.get('close', False):
+            if env.need_wait_close() and info.get('close', False):
+                # 需要wait close 时, 且 close为True时, 更新reward
                 replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
+
+            if (env.need_wait_close() and info.get('close', False)) or (not env.need_wait_close()):
                 # 更新跟踪器 奖励
                 self.tracker_val_test.update_reward(reward)
 
@@ -446,12 +500,12 @@ class OffPolicyAgent(BaseAgent):
 
                 # 更新评价指标
                 for k, v in info.items():
-                    if k not in ['close', 'date_done', 'act_criteria']:
+                    if k not in env.no_need_track_info_item():
                         self.tracker_val_test.update_extra_metrics(k, v)
 
             # 更新跟踪器 日期文件完成, 需要更新
-            if info.get('date_done', False):
-                self.tracker_val_test.day_end()
+            if info.get('period_done', False):
+                self.tracker_val_test.period_end()
 
             state = next_state
 
@@ -531,10 +585,11 @@ class OffPolicyAgent(BaseAgent):
                 # 添加到回放池
                 self.replay_buffer.add(state, action, reward, next_state, done)
 
-                # 如果 交易close 则需要回溯更新所有 reward 为最终close时的reward
-                if info.get('close', False):
+                if env.need_wait_close() and info.get('close', False):
+                    # 需要wait close 时, 且 close为True时, 更新reward
                     self.replay_buffer.update_reward(reward if reward!=ILLEGAL_REWARD else None)
 
+                if (env.need_wait_close() and info.get('close', False)) or (not env.need_wait_close()):
                     # 更新跟踪器 奖励
                     self.tracker.update_reward(reward)
 
@@ -548,12 +603,12 @@ class OffPolicyAgent(BaseAgent):
 
                     # 更新评价指标
                     for k, v in info.items():
-                        if k not in ['close', 'date_done', 'act_criteria']:
+                        if k not in ['close', 'period_done', 'act_criteria']:
                             self.tracker.update_extra_metrics(k, v)
                 
                 # 更新跟踪器 日期文件完成, 需要更新
-                if info.get('date_done', False):
-                    self.tracker.day_end()
+                if info.get('period_done', False):
+                    self.tracker.period_end()
 
                 # 更新状态
                 state = next_state

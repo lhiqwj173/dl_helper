@@ -6,13 +6,13 @@ from collections import defaultdict, deque
 from py_ext.tool import log, get_log_file
 
 class Tracker:
-    def __init__(self, title, n_days, rank=0):
+    def __init__(self, title, n_periods, rank=0, action_space):
         """
         DQN学习过程跟踪器,用于记录和统计DQN训练过程中的各项指标
 
         Args:
             title: 标题,用于标识跟踪器
-            n_days: 统计周期（天数）,用于设定保留多少天的历史数据进行统计分析
+            n_periods: 统计周期,用于设定保留多少天的历史数据进行统计分析
                    比如设置为7,则只保留最近7天的数据用于计算移动平均等指标
             rank: 排名,用于标识跟踪器
 
@@ -34,7 +34,8 @@ class Tracker:
         """
         self.title = title 
         self.rank = rank
-        self.n_days = n_days
+        self.n_periods = n_periods
+        self.action_space = action_space
         
         # 奖励相关
         self.daily_rewards = []  # 每天的奖励列表
@@ -45,7 +46,6 @@ class Tracker:
         self.daily_action_counts = []  # 每天的动作分布
         
         # 损失相关
-        self.td_errors = []  # 当天的TD误差
         self.losses = []     # 当天的损失值
         
         # 比率相关
@@ -56,19 +56,20 @@ class Tracker:
         self.daily_ratios = []       # 每天的各种比率
 
         # 额外的评价指标(从 lob_env step返回的info中获取)
-        # sortino_ratio
-        # sharpe_ratio
-        # max_drawdown
-        # trade_return
-        # sortino_ratio_bm
-        # sharpe_ratio_bm
-        # max_drawdown_bm
-        # trade_return_bm
+        # lob_env:
+        #     sortino_ratio
+        #     sharpe_ratio
+        #     max_drawdown
+        #     trade_return
+        #     sortino_ratio_bm
+        #     sharpe_ratio_bm
+        #     max_drawdown_bm
+        #     trade_return_bm
         self.extra_metrics = {}
         self.daily_extra_metrics = {}
 
-        # 训练天数统计
-        self.train_days = 0
+        # 训练天数统计 TODO bo不需要
+        self.train_periods = 0
 
     def set_rank(self, rank):
         self.rank = rank
@@ -88,10 +89,6 @@ class Tracker:
         self.action_counts[action] += 1
         self.total_counts += 1
     
-    def update_td_error(self, td_error):
-        """更新TD误差"""
-        self.td_errors.append(td_error)
-    
     def update_loss_value(self, loss):
         """更新损失值"""
         self.losses.append(loss)
@@ -108,18 +105,14 @@ class Tracker:
         """更新失败计数"""
         self.loss_counts += 1
     
-    def day_end(self):
+    def period_end(self):
         """一天结束时的统计"""
         # 奖励统计
         daily_total_reward = sum(self.episode_rewards)
         self.daily_rewards.append(daily_total_reward)
-        # log(f'day_end self.episode_rewards: {self.episode_rewards}')
-        # log(f'day_end daily_total_reward: {daily_total_reward}')
         
         # 动作分布统计
         self.daily_action_counts.append(dict(self.action_counts))
-        # log(f'day_end self.action_counts: {self.action_counts}')
-        # log(f'day_end self.daily_action_counts: {self.daily_action_counts}')
         
         # 比率统计
         self.daily_ratios.append({
@@ -127,11 +120,6 @@ class Tracker:
             'win_ratio': self.win_counts / max(1, self.win_counts + self.loss_counts),
             'loss_ratio': self.loss_counts / max(1, self.win_counts + self.loss_counts)
         })
-        # log(f'day_end self.total_counts: {self.total_counts}')
-        # log(f'day_end self.illegal_counts: {self.illegal_counts}')
-        # log(f'day_end self.win_counts: {self.win_counts}')
-        # log(f'day_end self.loss_counts: {self.loss_counts}')
-        # log(f'day_end self.daily_ratios: {self.daily_ratios}')  
 
         # 更新额外的评价指标
         for k, v in self.extra_metrics.items():
@@ -143,10 +131,10 @@ class Tracker:
         self._reset_daily_stats()
         
         # 保持N天的数据
-        self._maintain_n_days_data()
+        self._maintain_n_periods_data()
 
         # 训练天数统计
-        self.train_days += 1
+        self.train_periods += 1
     
     def save(self):
         """保存所有统计数据到文件"""
@@ -157,14 +145,13 @@ class Tracker:
             'daily_extra_metrics': self.daily_extra_metrics,
             'episode_rewards': self.episode_rewards,
             'action_counts': self.action_counts,
-            'td_errors': self.td_errors,
             'losses': self.losses,
             'illegal_counts': self.illegal_counts,
             'win_counts': self.win_counts,
             'loss_counts': self.loss_counts,
             'total_counts': self.total_counts,
             'extra_metrics': self.extra_metrics,
-            'train_days': self.train_days
+            'train_periods': self.train_periods
         }
         log(f'save to tracker_{self.title}_{self.rank}.pkl')
         # 保存到文件
@@ -177,20 +164,24 @@ class Tracker:
             log(f'load from tracker_{self.title}_{self.rank}.pkl')  
             with open(f'tracker_{self.title}_{self.rank}.pkl', 'rb') as f:
                 data = pickle.load(f)
+
+            # 兼容旧代码
+            if 'train_periods' not in data and 'train_days' in data:
+                data['train_periods'] = data['train_days']
+
             self.daily_rewards = data['daily_rewards']
             self.daily_action_counts = data['daily_action_counts']
             self.daily_ratios = data['daily_ratios']
             self.daily_extra_metrics = data['daily_extra_metrics']
             self.episode_rewards = data['episode_rewards']
             self.action_counts = data['action_counts']
-            self.td_errors = data['td_errors']
             self.losses = data['losses']
             self.illegal_counts = data['illegal_counts']
             self.win_counts = data['win_counts']
             self.loss_counts = data['loss_counts']
             self.total_counts = data['total_counts']
             self.extra_metrics = data['extra_metrics']
-            self.train_days = data['train_days']
+            self.train_periods = data['train_periods']
         else:
             log(f'tracker_{self.title}_{self.rank}.pkl not found')
 
@@ -202,13 +193,12 @@ class Tracker:
         - total_reward: 总奖励
         - average_reward: 平均奖励
         - moving_average_reward: 移动平均奖励
-        - average_td_error: 平均TD误差
         - average_loss: 平均损失值
         - illegal_ratio: 平均非法动作率
         - win_ratio: 平均胜率
         - loss_ratio: 平均败率
         - action_{k}_ratio k: 0-2
-        - train_days: 训练天数
+        - train_periods: 训练周期数
         
         交易评价指标
         - sortino_ratio
@@ -224,7 +214,7 @@ class Tracker:
         - total_return_bm
         - trade_return_bm
         """
-        if not self.daily_rewards:# or len(self.daily_rewards) < self.n_days:
+        if not self.daily_rewards:
             return {}
         
         self.save()
@@ -235,7 +225,6 @@ class Tracker:
             'moving_average_reward': self._calculate_moving_average(self.daily_rewards),
             
             # 损失相关
-            'average_td_error': np.nanmean(self.td_errors),
             'average_loss': np.nanmean(self.losses),
             
             # 比率相关
@@ -245,14 +234,18 @@ class Tracker:
         }
 
         # 训练天数, 获取后重置
-        metrics['train_days'] = self.train_days
-        self.train_days = 0
+        metrics['train_periods'] = self.train_periods
+        self.train_periods = 0
 
         # 动作分布
         # action_{k}_ratio k: 0-2
         action_distribution = self._get_action_distribution()
         for k, v in action_distribution.items():
             metrics[f'action_{k}_ratio'] = v
+        # 检查action_space是否匹配
+        for i in range(self.action_space):
+            if f'action_{i}_ratio' not in metrics:
+                metrics[f'action_{i}_ratio'] = 0
         
         # 额外的评价指标
         for k, v in self.daily_extra_metrics.items():
@@ -268,7 +261,6 @@ class Tracker:
         """重置当天的统计数据"""
         self.episode_rewards = []
         self.action_counts.clear()
-        self.td_errors = []
         self.losses = []
         self.illegal_counts = 0
         self.total_counts = 0
@@ -276,14 +268,14 @@ class Tracker:
         self.loss_counts = 0
         self.extra_metrics.clear()
     
-    def _maintain_n_days_data(self):
+    def _maintain_n_periods_data(self):
         """维护N天的数据"""
-        self.daily_rewards = self.daily_rewards[-self.n_days:]
-        self.daily_action_counts = self.daily_action_counts[-self.n_days:]
-        self.daily_ratios = self.daily_ratios[-self.n_days:]
+        self.daily_rewards = self.daily_rewards[-self.n_periods:]
+        self.daily_action_counts = self.daily_action_counts[-self.n_periods:]
+        self.daily_ratios = self.daily_ratios[-self.n_periods:]
 
         for k in list(self.daily_extra_metrics.keys()):
-            self.daily_extra_metrics[k] = self.daily_extra_metrics[k][-self.n_days:]
+            self.daily_extra_metrics[k] = self.daily_extra_metrics[k][-self.n_periods:]
 
     def _calculate_moving_average(self, data, window=3):
         """计算移动平均"""
@@ -310,14 +302,13 @@ class Tracker:
 
 if __name__ == '__main__':
     # 测试代码
-    tracker = Tracker(n_days=5)
+    tracker = Tracker(n_periods=5)
     
     # 测试添加每日数据
     for i in range(10):
-        # 模拟一天的数据
+        # 模拟 统计区间 的数据
         tracker.update_reward(0.5)  # 更合理的奖励值
         tracker.update_action(np.random.randint(0,3))  # 随机动作 0-2
-        tracker.update_td_error(0.1)  # 更小的TD误差
         tracker.update_loss_value(0.05)  # 更小的损失值
         
         if np.random.random() < 0.1:  # 10%概率非法动作
@@ -328,8 +319,8 @@ if __name__ == '__main__':
         else:
             tracker.update_loss_count()
         
-        # 结束当天
-        tracker.day_end()
+        # 结束 统计区间
+        tracker.period_end()
         
     # 获取统计指标
     metrics = tracker.get_metrics()

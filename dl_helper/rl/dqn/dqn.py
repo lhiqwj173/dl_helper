@@ -10,8 +10,8 @@ import torch.nn as nn
 import numpy as np
 
 from dl_helper.rl.tracker import Tracker
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD, MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE
-from dl_helper.rl.base import BaseAgent, OffPolicyAgent
+from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
+from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.socket_base import send_val_test_data
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.trainer import notebook_launcher
@@ -57,71 +57,15 @@ class test_features_extractor_class(torch.nn.Module):
     def forward(self, x):
         return F.relu(self.fc1(x))
 
-class dqn_network_0(torch.nn.Module):
-    def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
+class dqn_network(BaseModel):
+    def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type, need_reshape=None):
         """
-        features_dim: features_extractor_class输出维度  + 3(symbol_id + 持仓 + 未实现收益率)
+        features_dim: features_extractor_class输出维度  + extra_features的维度
+            log_env: features_extractor_class输出维度 + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
+            breakout_env: features_extractor_class输出维度
         """
-        super().__init__()
-        self.obs_shape = obs_shape
-        self.features_extractor = features_extractor_class(
-            **features_extractor_kwargs
-        )
+        super().__init__(features_extractor_class, features_extractor_kwargs, features_dim, need_reshape)
 
-        # 剩余部分
-        net_arch = net_arch['pi']
-
-        self.fc_a_length = len(net_arch)
-        if self.fc_a_length == 1:
-            self.fc_a = torch.nn.Linear(features_dim, net_arch[0])
-        else:
-            self.fc_a = torch.nn.ModuleList([torch.nn.Linear(features_dim, net_arch[0])])
-            for i in range(1, self.fc_a_length):
-                self.fc_a.append(torch.nn.Linear(net_arch[i - 1], net_arch[i]))
-
-        self.fc_v = None
-        if dqn_type in [DUELING_DQN, DD_DQN]:
-            self.fc_v = torch.nn.Linear(features_dim, 1)
-
-    def forward(self, x):
-        """
-        先将x分成两个tensor
-        lob: x[:, :-3]
-        acc: x[:, -3:]
-        """
-        # -> batchsize, 100， 130
-        lob_data = x[:, :-3].view(-1, self.obs_shape[0], self.obs_shape[1])
-        acc_data = x[:, -3:]
-
-        feature = self.features_extractor(lob_data)# -> batchsize, 3
-        # concat acc
-        feature = torch.cat([feature, acc_data], dim=1)
-
-        x = feature
-        if self.fc_a_length > 1:
-            for i in range(self.fc_a_length - 1):
-                x = F.relu(self.fc_a[i](x))
-            x = self.fc_a[-1](x)
-        else:
-            x = self.fc_a(x)
-
-        if self.fc_v is not None:
-            v = self.fc_v(feature)
-            x = v + x - x.mean(1).view(-1, 1)  # Q值由V值和A值计算得到
-
-        return x
-
-class dqn_network(torch.nn.Module):
-    def __init__(self, obs_shape, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, dqn_type):
-        """
-        features_dim: features_extractor_class输出维度  + 4(symbol_id + 持仓 + 未实现收益率 + 距离市场关闭的秒数)
-        """
-        super().__init__()
-        self.obs_shape = obs_shape
-        self.features_extractor = features_extractor_class(**features_extractor_kwargs)
-        
-        # 添加Batch Normalization
-        self.bn = torch.nn.BatchNorm1d(features_dim)
         self.dropout = torch.nn.Dropout(p=0.5)
         
         net_arch = net_arch['pi']
@@ -140,30 +84,11 @@ class dqn_network(torch.nn.Module):
             
         self.init_weights()
 
-    def init_weights(self):
-        for m in self.modules():
-            if isinstance(m, torch.nn.Linear):
-                torch.nn.init.kaiming_normal_(m.weight)
-                torch.nn.init.constant_(m.bias, 0)
-
     def forward(self, x):
-        """
-        先将x分成两个tensor
-        lob: x[:, :-4]
-        acc: x[:, -4:]
-        """
-        lob_data = x[:, :-4].view(-1, self.obs_shape[0], self.obs_shape[1])
-        other_data = x[:, -4:]
+        # 特征提取
+        feature = self.features_forward(x)
 
-        # 标准化 距离收盘秒数
-        other_data[:, 0] -= MEAN_SEC_BEFORE_CLOSE
-        other_data[:, 0] /= STD_SEC_BEFORE_CLOSE
-
-        feature = self.features_extractor(lob_data)
-        feature = torch.cat([feature, other_data], dim=1)
-        
-        # 应用Batch Normalization
-        x = self.bn(feature)
+        x = feature
         if self.fc_a_length > 1:
             for i in range(self.fc_a_length - 1):
                 x = F.leaky_relu(self.fc_a[i](x))
@@ -195,7 +120,6 @@ class DQN(dqn_base):
 
     def __init__(
         self,
-        obs_shape,
         learning_rate,
         gamma,
         epsilon,
@@ -213,17 +137,18 @@ class DQN(dqn_base):
         n_step=1,
         net_arch=None,
 
+        need_reshape=None,
         dqn_type=VANILLA_DQN,
     ):
         """
         DQN
         
         Args:
-            obs_shape: 观测空间维度
             learning_rate: 学习率
             gamma: TD误差折扣因子
             epsilon: epsilon-greedy策略参数
             target_update: 目标网络更新间隔
+            need_reshape: 需要reshape的维度, 例如(8, 10, 10)
             dqn_type=VANILLA_DQN: DQN类型
 
             基类参数
@@ -242,12 +167,12 @@ class DQN(dqn_base):
         super().__init__(buffer_size, train_buffer_class, use_noisy, n_step, train_title, action_dim, features_dim, features_extractor_class, features_extractor_kwargs, net_arch)
         assert dqn_type in DQN_TYPES, f'dqn_type 必须是 {DQN_TYPES} 中的一个, 当前为 {dqn_type}'
 
-        self.obs_shape = obs_shape
         self.action_dim = action_dim
         self.gamma = gamma
         self.epsilon = epsilon
         self.target_update = target_update
         self.count = 0
+        self.need_reshape = need_reshape
         self.dqn_type = dqn_type
 
         # 初始化网络
@@ -268,8 +193,8 @@ class DQN(dqn_base):
     ############################################################
 
     def _build_model(self):
-        q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
-        target_q_net = dqn_network(self.obs_shape, self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type)
+        q_net = dqn_network(self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type, self.need_reshape)
+        target_q_net = dqn_network(self.features_extractor_class, self.features_extractor_kwargs, self.features_dim, self.net_arch, self.dqn_type, self.need_reshape)
         self.models = {'q_net': q_net, 'target_q_net': target_q_net}
 
         self.models['q_net'].train()
@@ -341,7 +266,7 @@ class DQN(dqn_base):
             td_error = torch.abs(q_targets - q_values).mean().item()
         
         # tracker 记录
-        self.track_error(td_error, dqn_loss.item(), data_type)
+        self.track_error(dqn_loss.item(), data_type)
 
         # 检查是否有nan/inf值
         if (torch.isnan(dqn_loss) or torch.isinf(dqn_loss) or 
