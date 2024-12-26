@@ -228,11 +228,12 @@ class PrioritizedReplayBuffer:
         # 预定义数据类型
         self.dtypes = [np.float32, np.int64, np.float32, np.float32, np.float32]    
 
-    def add(self, transition):
+    def add(self, state, action, reward, next_state, done):
         """
         添加新的经验
         默认给最大优先级
         """
+        transition = (state, action, reward, next_state, done)
         if self.n_step > 1:
             self.n_step_buffer.append(transition)
 
