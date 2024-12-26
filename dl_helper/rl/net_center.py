@@ -17,6 +17,7 @@ from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.dqn.dqn import DQN
 from dl_helper.rl.dqn.c51 import C51
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
+from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 
 class BlockIPs:
     """管理block ip的类"""

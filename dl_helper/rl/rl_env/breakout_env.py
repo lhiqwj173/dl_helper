@@ -5,6 +5,38 @@ import numpy as np
 
 # gym.register_envs(ale_py)
 
+# 计算经过卷积后的特征图大小
+def conv2d_size_out(size, kernel_size, stride):
+    return ((size - (kernel_size - 1) - 1) // stride) + 1
+
+class cnn_breakout(nn.Module):
+    def __init__(self):
+        super(cnn_breakout, self).__init__()
+        
+        # 修改卷积层参数以减小输出维度
+        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=4)  # 增加stride到4
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2)  # 增加stride到2
+
+    def forward(self, x):
+        if len(x.shape) == 3:
+            x = x.unsqueeze(1)
+            
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.view(x.size(0), -1)
+        return x
+
+    @staticmethod
+    def get_feature_size(cls):
+        # 使用新的卷积参数计算输出尺寸
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(161, 8, 4), 4, 4), 3, 2)
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(144, 8, 4), 4, 4), 3, 2)
+        # 特征提取层输出维度
+        features_dim = convw * convh * 64
+        return features_dim
+
 def crop_observation(obs):
     return obs[32:193, 8:152]
 

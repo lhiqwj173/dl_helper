@@ -13,33 +13,11 @@ from py_ext.tool import log
 from dl_helper.rl.dqn.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.dqn.c51 import C51 
 from dl_helper.rl.net_center import add_train_title_item
+from dl_helper.rl.rl_env.breakout_env import cnn_breakout
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBuffer
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
-
-# 计算经过卷积后的特征图大小
-def conv2d_size_out(size, kernel_size, stride):
-    return ((size - (kernel_size - 1) - 1) // stride) + 1
-
-class cnn_breakout(nn.Module):
-    def __init__(self):
-        super(cnn_breakout, self).__init__()
-        
-        # 修改卷积层参数以减小输出维度
-        self.conv1 = nn.Conv2d(in_channels=4, out_channels=32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=4)  # 增加stride到4
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2)  # 增加stride到2
-
-    def forward(self, x):
-        if len(x.shape) == 3:
-            x = x.unsqueeze(1)
-            
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = x.view(x.size(0), -1)
-        return x
 
 # 训练参数
 train_title = 'C51_breakout_20241226'
@@ -155,11 +133,8 @@ if __name__ == '__main__':
             elif arg.startswith('profile_output_dir='):
                 profile_output_dir = arg.split('=')[1]
 
-    # 使用新的卷积参数计算输出尺寸
-    convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(161, 8, 4), 4, 4), 3, 2)
-    convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(144, 8, 4), 4, 4), 3, 2)
-    # 特征提取层输出维度
-    features_dim = convw * convh * 64
+
+    features_dim = cnn_breakout.get_feature_size()
 
     # 动作维度
     action_dim = 4
