@@ -14,7 +14,7 @@ from dl_helper.rl.dqn.dqn import VANILLA_DQN, DOUBLE_DQN, DUELING_DQN, DD_DQN
 from dl_helper.rl.dqn.c51 import C51 
 from dl_helper.rl.net_center import add_train_title_item
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
-from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBufferWaitClose
+from dl_helper.rl.rl_utils import ReplayBufferWaitClose, PrioritizedReplayBuffer
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip
 
