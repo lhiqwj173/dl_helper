@@ -465,7 +465,8 @@ class OffPolicyAgent(BaseAgent):
         # 初始化跟踪器
         self.tracker_val_test = Tracker(data_type, 10000, rank=self.tracker.rank, action_space=self.action_dim)
 
-        env.set_data_type(data_type)
+        if hasattr(env, 'set_data_type'):
+            env.set_data_type(data_type)
 
         # 回放池
         replay_buffer = ReplayBufferWaitClose(self.buffer_size) if env.need_wait_close() else ReplayBuffer(self.buffer_size)
