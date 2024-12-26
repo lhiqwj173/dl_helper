@@ -12,6 +12,7 @@ import struct
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import traceback
 
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.dqn.dqn import DQN
@@ -678,6 +679,8 @@ def run_param_center():
             handler.handle_request(client_socket, msg_header, cmd)
         except Exception as e:
             log(f"Error handling request: {e}")
+            error_info = traceback.format_exc()
+            log(f"Error details:\n{error_info}")
             client_socket.close()
             continue
         finally:

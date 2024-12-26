@@ -687,7 +687,8 @@ class OffPolicyAgent(BaseAgent):
                     # 切换回训练模式
                     if need_train_back:
                         self.train()
-                        env.set_data_type('train')
+                        if hasattr(env, 'set_data_type'):
+                            env.set_data_type('train')
                         state, info = env.reset()
                         done = False
 
