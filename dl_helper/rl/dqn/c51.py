@@ -6,6 +6,7 @@ import collections
 
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.dqn.dqn import dqn_base
+from dl_helper.tool import _check_nan
 
 class c51_network(BaseModel):
     def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms=51, v_min=-10, v_max=10, need_reshape=None):
@@ -198,6 +199,9 @@ class C51(dqn_base):
 
         # 获取当前网络的分布预测
         current_probs = self.models['q_net'](states)
+        # FOR TEST
+        if len(_check_nan(current_probs)) > 0:
+            raise ValueError(f'current_probs 检测到NaN值')
 
         with torch.no_grad():
             # 1. 计算单步目标分布
@@ -205,6 +209,15 @@ class C51(dqn_base):
             next_q_values_1 = self.models['q_net'].get_q_values(next_probs_1)
             next_actions_1 = next_q_values_1.argmax(1)
             target_probs_1 = next_probs_1[range(batch_size), next_actions_1]
+            # FOR TEST
+            if len(_check_nan(target_probs_1)) > 0:
+                raise ValueError(f'target_probs_1 检测到NaN值')
+            if len(_check_nan(next_actions_1)) > 0:
+                raise ValueError(f'next_actions_1 检测到NaN值')
+            if len(_check_nan(next_q_values_1)) > 0: 
+                raise ValueError(f'next_q_values_1 检测到NaN值')
+            if len(_check_nan(next_probs_1)) > 0:
+                raise ValueError(f'next_probs_1 检测到NaN值')
 
             # 确保support在正确的设备上
             if self.support.device != rewards.device:
@@ -216,6 +229,15 @@ class C51(dqn_base):
             b1 = (tz1 - self.v_min) / self.delta_z
             l1 = b1.floor().long()
             u1 = b1.ceil().long()
+            # FOR TEST
+            if len(_check_nan(tz1)) > 0:
+                raise ValueError(f'tz1 检测到NaN值')
+            if len(_check_nan(b1)) > 0:
+                raise ValueError(f'b1 检测到NaN值')
+            if len(_check_nan(l1)) > 0:
+                raise ValueError(f'l1 检测到NaN值')
+            if len(_check_nan(u1)) > 0:
+                raise ValueError(f'u1 检测到NaN值')
             
             # 处理上下界相等的情况
             l1[(u1 > 0) * (l1 == u1)] -= 1
@@ -227,6 +249,15 @@ class C51(dqn_base):
                 next_q_values_n = self.models['q_net'].get_q_values(next_probs_n)
                 next_actions_n = next_q_values_n.argmax(1)
                 target_probs_n = next_probs_n[range(batch_size), next_actions_n]
+                # FOR TEST
+                if len(_check_nan(next_probs_n)) > 0:
+                    raise ValueError(f'next_probs_n 检测到NaN值')
+                if len(_check_nan(next_q_values_n)) > 0:
+                    raise ValueError(f'next_q_values_n 检测到NaN值')
+                if len(_check_nan(next_actions_n)) > 0:
+                    raise ValueError(f'next_actions_n 检测到NaN值')
+                if len(_check_nan(target_probs_n)) > 0:
+                    raise ValueError(f'target_probs_n 检测到NaN值')
 
                 # 计算n步目标分布
                 tzn = n_step_rewards.unsqueeze(1) + (1 - n_step_dones.unsqueeze(1)) * (self.gamma ** self.n_step) * self.support
@@ -234,6 +265,15 @@ class C51(dqn_base):
                 bn = (tzn - self.v_min) / self.delta_z
                 ln = bn.floor().long()
                 un = bn.ceil().long()
+                # FOR TEST
+                if len(_check_nan(tzn)) > 0:
+                    raise ValueError(f'tzn 检测到NaN值')
+                if len(_check_nan(bn)) > 0:
+                    raise ValueError(f'bn 检测到NaN值')
+                if len(_check_nan(ln)) > 0:
+                    raise ValueError(f'ln 检测到NaN值')
+                if len(_check_nan(un)) > 0:
+                    raise ValueError(f'un 检测到NaN值')
                 
                 # 处理上下界相等的情况
                 ln[(un > 0) * (ln == un)] -= 1
@@ -242,6 +282,11 @@ class C51(dqn_base):
                 # 3. 计算两个目标分布
                 target_dist_1 = torch.zeros_like(target_probs_1)
                 target_dist_n = torch.zeros_like(target_probs_n)
+                # FOR TEST
+                if len(_check_nan(target_dist_1)) > 0:
+                    raise ValueError(f'target_dist_1 检测到NaN值')
+                if len(_check_nan(target_dist_n)) > 0:
+                    raise ValueError(f'target_dist_n 检测到NaN值')
 
                 # 计算单步投影概率
                 target_dist_1.view(-1).index_add_(
@@ -252,6 +297,11 @@ class C51(dqn_base):
                     0, (u1 + self.offset).view(-1),
                     (target_probs_1 * (b1 - l1.float())).view(-1)
                 )
+                # FOR TEST
+                if len(_check_nan(target_dist_1)) > 0:
+                    raise ValueError(f'target_dist_1 检测到NaN值')
+                if len(_check_nan(target_dist_n)) > 0:
+                    raise ValueError(f'target_dist_n 检测到NaN值')
 
                 # 计算n步投影概率
                 target_dist_n.view(-1).index_add_(
@@ -262,22 +312,41 @@ class C51(dqn_base):
                     0, (un + self.offset).view(-1),
                     (target_probs_n * (bn - ln.float())).view(-1)
                 )
+                # FOR TEST
+                if len(_check_nan(target_dist_1)) > 0:
+                    raise ValueError(f'target_dist_1 检测到NaN值')
+                if len(_check_nan(target_dist_n)) > 0:
+                    raise ValueError(f'target_dist_n 检测到NaN值')
 
                 # 4. 动态计算权重
                 actions = actions.squeeze(-1)
                 current_dist = current_probs[range(batch_size), actions]
-                
+                # FOR TEST
+                if len(_check_nan(current_dist)) > 0:
+                    raise ValueError(f'current_dist 检测到NaN值')
+
                 # 计算单步和n步的KL散度
                 kl_div_1 = -(target_dist_1 * torch.log(current_dist + 1e-8)).sum(1)
                 kl_div_n = -(target_dist_n * torch.log(current_dist + 1e-8)).sum(1)
+                # FOR TEST
+                if len(_check_nan(kl_div_1)) > 0:
+                    raise ValueError(f'kl_div_1 检测到NaN值')
+                if len(_check_nan(kl_div_n)) > 0:
+                    raise ValueError(f'kl_div_n 检测到NaN值')
                 
                 # 使用softmax计算动态权重
                 kl_divs = torch.stack([kl_div_1, kl_div_n], dim=1)
                 weights_soft = F.softmax(-kl_divs, dim=1)  # 负号使得误差越小权重越大
-                
+                # FOR TEST
+                if len(_check_nan(weights_soft)) > 0:
+                    raise ValueError(f'weights_soft 检测到NaN值')
+
                 # 最终目标分布是加权平均
                 target_dist = (weights_soft[:, 0].unsqueeze(1) * target_dist_1 + 
                             weights_soft[:, 1].unsqueeze(1) * target_dist_n)
+                # FOR TEST
+                if len(_check_nan(target_dist)) > 0:
+                    raise ValueError(f'target_dist 检测到NaN值')
             else:
                 # 如果没有n步数据，只使用单步目标
                 target_dist = torch.zeros_like(target_probs_1)
@@ -285,19 +354,30 @@ class C51(dqn_base):
                     0, (l1 + self.offset).view(-1),
                     (target_probs_1 * (u1.float() - b1)).view(-1)
                 )
+                # FOR TEST
+                if len(_check_nan(target_dist)) > 0:
+                    raise ValueError(f'target_dist 检测到NaN值')
                 target_dist.view(-1).index_add_(
                     0, (u1 + self.offset).view(-1),
                     (target_probs_1 * (b1 - l1.float())).view(-1)
                 )
-        
+                # FOR TEST
+                if len(_check_nan(target_dist)) > 0:
+                    raise ValueError(f'target_dist 检测到NaN值')
 
         # 计算KL散度损失
         # 将actions压缩为一维
         actions = actions.squeeze(-1)  # 将shape从[256, 1]变为[256]
         current_dist = current_probs[range(batch_size), actions]
+        # FOR TEST
+        if len(_check_nan(current_dist)) > 0:
+            raise ValueError(f'current_dist 检测到NaN值')
 
         # 计算KL散度 (对所有情况都使用相同的KL散度公式)
         kl_div = -(target_dist * torch.log(current_dist + 1e-8)).sum(1)
+        # FOR TEST
+        if len(_check_nan(kl_div)) > 0:
+            raise ValueError(f'kl_div 检测到NaN值')
 
         td_error_for_update = None
         if weights is not None:
