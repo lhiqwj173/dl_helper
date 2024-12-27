@@ -554,7 +554,6 @@ class ExperimentHandler:
                 with open(backup_path, 'wb') as f:
                     pickle.dump(self.learn_metrics, f)
 
-                handle_action_probs = False
                 action_dim = len([i for i in self.learn_metrics if i.startswith('action_')])
                 for k in self.learn_metrics:
                     if k not in self.train_data['learn']:
@@ -567,19 +566,21 @@ class ExperimentHandler:
                             if len(self.train_data['learn'][k]) > 0:
                                 add_days += self.train_data['learn'][k][-1]
                             self.train_data['learn'][k].append(add_days)
+
                         elif k.startswith('action_'):
-                            if not handle_action_probs:
-                                # For action probabilities, take the mean of each action separately
-                                # and normalize to ensure they sum to 1
-                                action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(action_dim)])
-                                action_probs = action_probs / np.sum(action_probs)  # Normalize
-                                for i in range(action_dim):
-                                    self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
-                                handle_action_probs = True
+                            continue
+
                         else:
                             self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
 
-                    # log(f'{msg_header} length learn_metrics[{k}]: {length}')
+                # 处理 action_ratio
+                # For action probabilities, take the mean of each action separately
+                # and normalize to ensure they sum to 1
+                action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(action_dim)])
+                action_probs = action_probs / np.sum(action_probs)  # Normalize
+                for i in range(action_dim):
+                    self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
+
                 self.learn_metrics = {}
 
                 send_msg(client_socket, b'ok')
