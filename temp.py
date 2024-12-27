@@ -7,7 +7,7 @@ gym.register_envs(ale_py)
 
 def record_game(video_name="my_breakout"):
     # 创建环境
-    env = gym.make('ALE/Breakout-v5', render_mode='rgb_array')
+    env = gym.make('ALE/Breakout-v5', render_mode='rgb_array', obs_type='grayscale')
     
     # 使用 RecordVideo 包装环境
     env = RecordVideo(env, 

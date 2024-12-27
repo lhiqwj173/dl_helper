@@ -84,7 +84,7 @@ class BreakoutEnv(gym.Env):
             self.env_bak = self.env
 
             # 使用 RecordVideo 包装环境
-            new_env = gym.make('ALE/Breakout-v5', obs_type='grayscale')
+            new_env = gym.make('ALE/Breakout-v5', render_mode='rgb_array', obs_type='grayscale')
             new_env = TransformObservation(new_env, crop_observation)
             self.env = RecordVideo(
                 new_env,
