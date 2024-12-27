@@ -324,11 +324,14 @@ class C51(dqn_base):
                 'rewards': rewards.cpu().numpy(), 
                 'next_states': next_states.cpu().numpy(),
                 'dones': dones.cpu().numpy(),
+                'current_probs': current_probs.detach().cpu().numpy(),
                 'current_dist': current_dist.detach().cpu().numpy(),
                 'target_dist': target_dist.detach().cpu().numpy(),
                 'weights': weights.cpu().numpy() if weights is not None else None,
                 'loss': loss.item(),
-                'td_error': td_error
+                'td_error': td_error,
+                'q_net': self.models['q_net'].state_dict(),
+                'target_q_net': self.models['target_q_net'].state_dict(),
             }
             
             # 保存到文件
