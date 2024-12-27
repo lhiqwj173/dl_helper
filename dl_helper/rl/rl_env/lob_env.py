@@ -593,7 +593,7 @@ class LOB_trade_env(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 1,), dtype=np.float32)
 
         # 测试数据集 预测输出文件
-        self.predict_file = ''
+        self.need_upload_file = ''
 
         # 记录上一个买入的idx
         self.last_buy_idx = -1
@@ -610,7 +610,7 @@ class LOB_trade_env(gym.Env):
     def set_data_type(self, _type):
         if _type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
-            self.predict_file = f'{_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
+            self.need_upload_file = f'{_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
         self.data_producer.set_data_type(_type)
 
     def _get_data(self):
@@ -698,10 +698,10 @@ class LOB_trade_env(gym.Env):
         id,predict
         """
         # 输出列名
-        if not os.path.exists(self.predict_file):
-            with open(self.predict_file, 'w') as f:
+        if not os.path.exists(self.need_upload_file):
+            with open(self.need_upload_file, 'w') as f:
                 f.write('id,predict\n')
-        with open(self.predict_file, 'a') as f:
+        with open(self.need_upload_file, 'a') as f:
             f.write(f'{self.data_producer.id},{int(action)}\n')
     
     def step(self, action):

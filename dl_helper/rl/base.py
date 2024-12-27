@@ -537,13 +537,14 @@ class OffPolicyAgent(BaseAgent):
         self.tracker_val_test = None
 
         # 若是 test，上传预测数据文件到alist
-        if hasattr(env, 'predict_file'):
-            # 上传更新到alist
-            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-            # 上传文件夹
-            upload_folder = f'/rl_learning_process/{self.train_title}/predict_{data_type}/'
-            client.mkdir(upload_folder)
-            client.upload(env.predict_file, upload_folder)
+        if hasattr(env, 'need_upload_file'):
+            if env.need_upload_file:
+                # 上传更新到alist
+                client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+                # 上传文件夹
+                upload_folder = f'/rl_learning_process/{self.train_title}/file_{data_type}/'
+                client.mkdir(upload_folder)
+                client.upload(env.need_upload_file, upload_folder)
 
         log(f'{self.msg_head} {data_type} all done')
         return metrics

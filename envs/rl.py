@@ -15,6 +15,7 @@ for cmd in [
         'pip install dill',
         'pip install ale_py',
         'pip install gymnasium',
+        'pip install MoviePy',
         'pip install df2img',
         'pip install imgkit',
         'pip install loguru',

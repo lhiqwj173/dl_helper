@@ -1,5 +1,8 @@
+import copy, os
+import datetime
 import gymnasium as gym
 from gymnasium.wrappers import TransformObservation
+from gymnasium.wrappers import RecordVideo
 
 try:
     import ale_py
@@ -60,6 +63,43 @@ class BreakoutEnv(gym.Env):
         # 累计最近的4个状态
         self.capacity = capacity
         self.buffer = collections.deque(maxlen=capacity)
+
+        # 上传文件
+        self.need_upload_file = ''
+        self.env_bak = None
+
+    def set_data_type(self, _type):
+        file_bak_name = '-episode-0.mp4'
+        if _type in ['val', 'test']:
+            # 删除当前目录下的所有 mp4 文件
+            for file in os.listdir('.'):
+                if file.endswith('.mp4'):
+                    os.remove(file)
+
+            # 录制游戏
+            # {name}-episode-0.mp4
+            self.need_upload_file = f'{_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}' + file_bak_name
+            
+            # 只在第一次调用时备份原始环境
+            self.env_bak = self.env
+
+            # 使用 RecordVideo 包装环境
+            new_env = gym.make('ALE/Breakout-v5', obs_type='grayscale')
+            new_env = TransformObservation(new_env, crop_observation)
+            self.env = RecordVideo(
+                new_env,
+                video_folder='.',
+                episode_trigger=lambda x: True,  # 录制所有回合
+                name_prefix=self.need_upload_file.replace(file_bak_name, ''))
+        else:
+            if self.env_bak is not None:
+                # 关闭 RecordVideo 包装
+                self.env.close()
+                # 恢复原始环境
+                self.env = self.env_bak
+                # 重置变量
+                self.env_bak = None
+                self.need_upload_file = ''
 
     def reset(self):
         state, info = self.env.reset()

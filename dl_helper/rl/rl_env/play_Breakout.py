@@ -1,10 +1,11 @@
 import gymnasium as gym
-import ale_py
 from gymnasium.wrappers import TransformObservation
 import pygame, time
 import numpy as np
 
+import ale_py
 gym.register_envs(ale_py)
+
 delay = 0.05  # 设置延迟时间（秒），可以调整这个值来改变速度
 
 def rotate_observation(obs):
