@@ -151,6 +151,10 @@ class ExperimentHandler:
             'action_0': '#bcbd22',
             'action_1': '#17becf',
             'action_2': '#1f77b4',
+            'action_3': '#ff7f0e',
+            'action_4': '#2ca02c',
+            'action_5': '#d62728',
+            'action_6': '#9467bd',
             'hold_length': '#2ca02c',
             'sortino_ratio': '#d62728',
             'sortino_ratio_bm': '#d62728',
@@ -259,8 +263,9 @@ class ExperimentHandler:
 
         # 图5: action ratios
         ax = axes[4]
+        action_dim = len([i for i in metrics['learn'] if i.startswith('action_')])
         for dtype in ['learn', 'val', 'test']:
-            for i in range(3):
+            for i in range(action_dim):
                 key = f'action_{i}_ratio'
                 if key in metrics[dtype]:
                     data = metrics[dtype][key]
@@ -550,6 +555,7 @@ class ExperimentHandler:
                     pickle.dump(self.learn_metrics, f)
 
                 handle_action_probs = False
+                action_dim = len([i for i in self.learn_metrics if i.startswith('action_')])
                 for k in self.learn_metrics:
                     if k not in self.train_data['learn']:
                         self.train_data['learn'][k] = []
@@ -565,9 +571,9 @@ class ExperimentHandler:
                             if not handle_action_probs:
                                 # For action probabilities, take the mean of each action separately
                                 # and normalize to ensure they sum to 1
-                                action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(3)])
+                                action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(action_dim)])
                                 action_probs = action_probs / np.sum(action_probs)  # Normalize
-                                for i in range(3):
+                                for i in range(action_dim):
                                     self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
                                 handle_action_probs = True
                         else:
