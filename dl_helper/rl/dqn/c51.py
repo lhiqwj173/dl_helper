@@ -188,6 +188,14 @@ class C51(dqn_base):
         return action
 
     def _update(self, states, actions, rewards, next_states, dones, data_type, weights=None, n_step_rewards=None, n_step_next_states=None, n_step_dones=None):
+        # FOR TEST
+        if not hasattr(self, 'count'):
+            self.count = 0
+        log(f'update {self.count}')
+        self.count += 1
+        if len(_check_nan(states)) > 0:
+            raise ValueError(f'states 检测到NaN值')
+
         # 分布式Q学习更新
         batch_size = states.shape[0]
 

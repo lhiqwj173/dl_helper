@@ -69,14 +69,14 @@ class BreakoutEnv(gym.Env):
             state, reward, done, truncated, info = self.env.step(0)# NOOP
             self.buffer.append(state)
 
-        return np.stack(self.buffer, axis=0), info
+        return np.stack(self.buffer, axis=0) / 255, info
 
     def step(self, action):
         state, reward, done, truncated, info = self.env.step(action)
         info['period_done'] = truncated or done
         info['act_criteria'] = 0
         self.buffer.append(state)
-        return np.stack(self.buffer, axis=0), reward, done, truncated, info
+        return np.stack(self.buffer, axis=0) / 255, reward, done, truncated, info
 
     def render(self):
         return self.env.render()
