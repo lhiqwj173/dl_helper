@@ -36,6 +36,9 @@ learn_interval_step=4
 # 初始化日志
 init_logger_by_ip(train_title)
 
+# 是否使用周期为天
+period_day = False
+
 # 快速测试
 simple_test = False
 
@@ -181,7 +184,7 @@ if __name__ == '__main__':
         run_client_learning(run_client_learning_device_breakout, args, kwargs)
     else:
         # 服务端
-        add_train_title_item(train_title, agent_class, agent_kwargs, simple_test)
+        add_train_title_item(train_title, agent_class, agent_kwargs, simple_test, period_day=period_day)
 
     # 如果启用了性能分析，输出并保存结果
     if enable_profiling:

@@ -65,6 +65,7 @@ class ExperimentHandler:
         self.train_title = train_title
         self.agent = globals()[agent_class_name](**agent_kwargs)
         self.simple_test = simple_test
+        self.period_day = period_day
 
         # 创建实验目录
         self.exp_folder = os.path.join(root_folder, train_title)
@@ -178,7 +179,7 @@ class ExperimentHandler:
 
         # 设置图表标题
         periods = metrics["learn"]["train_periods"][-1]
-        if period_day:
+        if self.period_day:
             fig.suptitle(f'Learning Process ({f"{int(periods/365):.2e}" if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)', fontsize=16)
         else:
             fig.suptitle(f'Learning Process ({f"{periods:.2e}" if periods >= 1000 else int(periods)} periods)', fontsize=16)
@@ -380,7 +381,7 @@ class ExperimentHandler:
         # 设置x轴刻度和标签
         for ax in axes:
             ax.set_xticks([i for i, _, _ in dt_changes])
-            if period_day:
+            if self.period_day:
                 ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{int(periods/365):.2e}' if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)" if periods >= 365 else f"{dt.strftime('%d %H')}({int(periods)}ds)" for _, dt, periods in dt_changes], rotation=45)
             else:
                 ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{periods:.2e}' if periods >= 1000 else int(periods)} periods)" for _, dt, periods in dt_changes], rotation=45)
@@ -593,20 +594,20 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
-def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test):
+def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test, period_day=True):
     file = os.path.join(root_folder, f'{train_title}.data')
     if os.path.exists(file):
         return
     with open(file, 'wb') as f:
-        pickle.dump((agent_class.__name__, agent_kwargs, simple_test), f)
+        pickle.dump((agent_class.__name__, agent_kwargs, simple_test, period_day), f)
 
 def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
             title = file.replace('.data', '')
-            agent_class_name, agent_kwargs, simple_test = pickle.load(open(os.path.join(root_folder, file), 'rb'))
-            res[title] = (agent_class_name, agent_kwargs, simple_test)
+            agent_class_name, agent_kwargs, simple_test, period_day = pickle.load(open(os.path.join(root_folder, file), 'rb'))
+            res[title] = (agent_class_name, agent_kwargs, simple_test, period_day)
     return res
 
 def run_param_center():
@@ -622,9 +623,9 @@ def run_param_center():
     # 初始化实验处理器
     handlers = {}
     train_dict = read_train_title_item()
-    for title, (agent_class_name, agent_kwargs, simple_test) in train_dict.items():
+    for title, (agent_class_name, agent_kwargs, simple_test, period_day) in train_dict.items():
         log(f'{title} init')
-        handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, simple_test)
+        handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, simple_test, period_day)
 
     log('all init done')
     while True:
@@ -670,8 +671,8 @@ def run_param_center():
             # 重新读取 
             train_dict = read_train_title_item()
             if train_title in train_dict:
-                agent_class_name, agent_kwargs, simple_test = train_dict[train_title]
-                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, simple_test)
+                agent_class_name, agent_kwargs, simple_test, period_day = train_dict[train_title]
+                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, simple_test, period_day)
             else:
                 msg = f'{train_title} not found'
                 send_wx(msg)
