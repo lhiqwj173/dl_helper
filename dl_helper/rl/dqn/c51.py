@@ -7,6 +7,7 @@ import collections
 from dl_helper.rl.base import BaseAgent, OffPolicyAgent, BaseModel
 from dl_helper.rl.dqn.dqn import dqn_base
 from dl_helper.tool import _check_nan
+from py_ext.tool import log
 
 class c51_network(BaseModel):
     def __init__(self, features_extractor_class, features_extractor_kwargs, features_dim, net_arch, n_atoms=51, v_min=-10, v_max=10, need_reshape=None):
