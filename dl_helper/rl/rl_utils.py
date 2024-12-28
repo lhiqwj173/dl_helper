@@ -533,7 +533,7 @@ class ExperimentHandler:
                 self.learn_metrics[k] = []
             self.learn_metrics[k].append(v)
 
-    def handle_val_test_data(self, data_type, metrics):
+    def update_val_test_metrics(self, data_type, metrics):
         for k in metrics:
             if k not in self.train_data[data_type]:
                 self.train_data[data_type][k] = []
@@ -622,7 +622,7 @@ class ExperimentHandler:
                     
                 metrics = pickle.loads(train_data_new)
                 log(f'{msg_header} {cmd}_metrics: {metrics}')
-                self.handle_val_test_data(data_type, metrics)   
+                self.update_val_test_metrics(data_type, metrics)   
                 log(f'{msg_header} handle {cmd}_data done')
 
                 send_msg(client_socket, b'ok')
