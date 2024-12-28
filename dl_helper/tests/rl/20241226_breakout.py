@@ -30,7 +30,7 @@ if __name__ == '__main__':
         need_reshape=None,
         features_dim=cnn_breakout.get_feature_size(), 
         action_dim=4,
-        net_arch=[512, action_dim],
+        net_arch=[512, 4],
 
         ####################
         # 回放池
@@ -41,6 +41,9 @@ if __name__ == '__main__':
         features_extractor_class=cnn_breakout,
         features_extractor_kwargs={},
     )
+
+    params.local = True
+    params.num_episodes = float('inf')
 
     # 使用命令行 更新参数
     if len(sys.argv) > 1:

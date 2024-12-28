@@ -573,7 +573,12 @@ class OffPolicyAgent(BaseAgent):
         local_handler = ExperimentHandler(self.train_title) if local else None
 
         # 学习是否开始
-        for i in range(num_episodes):
+        i = 0
+        while True:
+            if i >= num_episodes:
+                break
+            i+=1
+
             self.msg_head = f'[{self.device}][e{i}]'
 
             # 回合的评价指标
