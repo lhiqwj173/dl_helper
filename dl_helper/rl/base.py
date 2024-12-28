@@ -516,7 +516,7 @@ class OffPolicyAgent(BaseAgent):
         log(f'{self.msg_head} {data_type} done, begin update...')
 
         # 超大batchsize计算error
-        batch_size = 1024 * 1024
+        batch_size = 1024 * 2
         while replay_buffer.size() > 0:
             b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(batch_size)
             transition_dict = {
