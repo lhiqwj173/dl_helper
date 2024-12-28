@@ -12,7 +12,7 @@ from py_ext.alist import alist
 
 from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.socket_base import get_net_params, send_val_test_data, check_need_val_test, request_client_id, send_accumulated_gradients
-from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose, calculate_importance_loss
+from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose, calculate_importance_loss,ExperimentHandler
 from dl_helper.rl.tracker import Tracker
 from dl_helper.rl.noisy import replace_linear_with_noisy
 
@@ -549,7 +549,7 @@ class OffPolicyAgent(BaseAgent):
         log(f'{self.msg_head} {data_type} all done')
         return metrics
 
-    def learn(self, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step):
+    def learn(self, env, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, local=False):
         """
         训练
 
@@ -559,13 +559,18 @@ class OffPolicyAgent(BaseAgent):
             minimal_size: 最小训练次数
             batch_size: 批次大小
             sync_interval_learn_step:   同步参数间隔，会询问是否需要验证/测试
-            learn_interval_step:        学习更新间隔                     
+            learn_interval_step:        学习更新间隔  
+            local:                     是否是本地训练
         """
         # 学习步数
         learn_step = 0
 
-        # 拉取服务器的最新参数并更新
-        self.update_params_from_server()
+        if not local:
+            # 拉取服务器的最新参数并更新
+            self.update_params_from_server()
+
+        # 本地处理器
+        local_handler = ExperimentHandler(self.train_title) if local else None
 
         # 学习是否开始
         for i in range(num_episodes):
@@ -577,14 +582,17 @@ class OffPolicyAgent(BaseAgent):
             step = 0
             while not done:
                 step += 1
+                log(f'{self.msg_head}{step} obs shape: {state.shape}')
 
                 # 动作
                 action = self.take_action(state)
+                log(f'{self.msg_head}{step} action: {action}')
                 # 更新跟踪器 动作
                 self.tracker.update_action(action)
 
                 # 环境交互
                 next_state, reward, done1, done2, info = env.step(action)
+                log(f'{self.msg_head}{step} reward: {reward}')
                 done = done1 or done2
 
                 # 添加到回放池
@@ -654,23 +662,26 @@ class OffPolicyAgent(BaseAgent):
                         # 更新优先级
                         self.replay_buffer.update_priorities(indices, td_error_for_update)  
 
-                    #################################
-                    # 服务器通讯
-                    #################################
                     learn_step += 1
                     need_train_back = False
                     if learn_step % sync_interval_learn_step == 0:
-                        log(f'{self.msg_head} {learn_step} sync params')
-                        # 同步最新参数
-                        # 推送参数更新
-                        self.push_update_to_server()
-                        # 拉取服务器的最新参数并更新
-                        self.update_params_from_server()
+                        #################################
+                        # 服务器通讯
+                        #################################
+                        if not local:
+                            log(f'{self.msg_head} {learn_step} sync params')
+                            # 同步最新参数
+                            # 推送参数更新
+                            self.push_update_to_server()
+                            # 拉取服务器的最新参数并更新
+                            self.update_params_from_server()
+                        else:
+                            local_handler.update_learn_metrics(self.tracker.get_metrics())
 
                         # 验证/测试
                         # 询问 服务器 是否需要 验证/测试
                         # 返回: 'val' / 'test' / 'no'
-                        need_val_test_res = check_need_val_test(self.train_title)
+                        need_val_test_res = check_need_val_test(self.train_title) if not local else local_handler.check_need_val_test()
                         if need_val_test_res != 'no':
                             test_type = need_val_test_res
                             need_train_back = True  
@@ -679,11 +690,10 @@ class OffPolicyAgent(BaseAgent):
                             metrics = self.val_test(env, data_type=test_type)
                             log(f'{self.msg_head} metrics: {metrics}, cost: {time.time() - t:.2f}s')
                             # 发送验证结果给服务器
-                            send_val_test_data(self.train_title, test_type, metrics)
-
-                    #################################
-                    # 服务器通讯
-                    #################################
+                            send_val_test_data(self.train_title, test_type, metrics) if not local else local_handler.handle_val_test_data(self.train_title,test_type, metrics)
+                        #################################
+                        # 服务器通讯
+                        #################################
 
                     # 切换回训练模式
                     if need_train_back:

@@ -1,6 +1,7 @@
 import psutil, pickle, torch, os, time
 import numpy as np
 from tqdm import tqdm
+import platform
 
 import pandas as pd
 import numpy as np
@@ -27,6 +28,9 @@ from py_ext.alist import alist
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 
+def in_windows():
+    return platform.system() == 'Windows'
+
 def init_logger_by_ip(train_title=''):
     try:
         ip = requests.get('https://api.ipify.org').text
@@ -35,7 +39,7 @@ def init_logger_by_ip(train_title=''):
         hostname = socket.gethostname()
         ip = socket.gethostbyname(hostname)
     init_logger(f'{ip}' if train_title == '' else f'{train_title}@{ip}', level='INFO', timestamp=False, enqueue=True, 
-                home=f'' if not os.path.exists(r'/kaggle/working') else r'/kaggle/working',
+                home=os.path.expanduser("~") if (in_windows()) or (not os.path.exists(r'/kaggle/working')) else r'/kaggle/working',
                 )
     log(f'init_logger: {get_log_file()}')
 

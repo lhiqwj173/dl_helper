@@ -6,6 +6,7 @@ from py_ext.tool import log
 
 from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
+from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
 from dl_helper.train_param import match_num_processes, get_gpu_info
 
 def run_val_test(val_test, rank, agent, env):
@@ -51,7 +52,7 @@ def run_val_test(val_test, rank, agent, env):
             # 发送验证结果给服务器
             send_val_test_data(agent.train_title, test_type, metrics)
 
-def _run_client_learning_device(init_env_func,rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+def _run_client_learning_device(init_env_func, rank, num_processes, *args, **kwargs):
     # 根据环境获取对应设备
     _run_device = get_gpu_info()
     if _run_device == 'TPU':  # 如果是TPU环境
@@ -64,6 +65,8 @@ def _run_client_learning_device(init_env_func,rank, num_processes, agent, num_ep
     log(f'rank: {rank}, num_processes: {num_processes} device: {device}, run...')
     
     # 移动到设备
+    agent,num_episodes  = args[:2]
+    args = args[2:]
     agent.to(device)
     agent.tracker.set_rank(rank)
     
@@ -71,26 +74,29 @@ def _run_client_learning_device(init_env_func,rank, num_processes, agent, num_ep
     env = init_env_func()
 
     # 开始训练
-    if val_test:
+    if kwargs.get('val_test', False):
         # 验证/测试
-        run_val_test(val_test, rank, agent, env)
+        run_val_test(kwargs['val_test'], rank, agent, env)
     else:
         log(f'{rank} learn...')
-        agent.learn(env, 5 if enable_profiling else num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step)
+        agent.learn(env, 5 if kwargs.get('enable_profiling', False) else num_episodes, *args)
 
-def run_client_learning_device_lob(rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
-    # 初始化环境
+def run_client_learning_device_lob(rank, num_processes, *args, **kwargs):
+    # 初始化环境 
     def init_env():
-        dp = data_producer(simple_test=simple_test, file_num=15 if enable_profiling else 0)
+        dp = data_producer(simple_test=kwargs.get('simple_test', False), file_num=15 if kwargs.get('enable_profiling', False) else 0)
         return LOB_trade_env(data_producer=dp)
+    return _run_client_learning_device(init_env, rank, num_processes, *args, **kwargs)
 
-    return _run_client_learning_device(init_env, rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test, val_test, enable_profiling)
-
-def run_client_learning_device_breakout(rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test=False, val_test='', enable_profiling=False):
+def run_client_learning_device_breakout(rank, num_processes, *args, **kwargs):
     def init_env():
         return BreakoutEnv()
+    return _run_client_learning_device(init_env, rank, num_processes, *args, **kwargs)
 
-    return _run_client_learning_device(init_env, rank, num_processes, agent, num_episodes, minimal_size, batch_size, sync_interval_learn_step, learn_interval_step, simple_test, val_test, enable_profiling)
+def run_client_learning_device_carpole(rank, num_processes, *args, **kwargs):
+    def init_env():
+        return CartPoleEnv()
+    return _run_client_learning_device(init_env, rank, num_processes, *args, **kwargs)
 
 def train_func_device(rank, num_processes, a, b, c):
     # 根据环境获取对应设备

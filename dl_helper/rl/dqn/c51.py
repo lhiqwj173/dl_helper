@@ -74,7 +74,7 @@ class c51_network(BaseModel):
         return q_values
 
 class C51(dqn_base):
-
+    
     def __init__(
         self,
         learning_rate,

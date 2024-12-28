@@ -3,6 +3,928 @@ import numpy as np
 import torch
 import collections
 import random, pickle
+import cProfile
+import time
+import os
+import sys
+import pstats
+from datetime import datetime
+import threading
+
+from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
+from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
+from py_ext.tool import log
+
+alist_folder = r'/root/alist_data/rl_learning_process'
+root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(alist_folder))) else alist_folder
+
+class ExperimentHandler:
+    """处理单个实验的类"""
+    def __init__(self, train_title, agent_class_name=None, agent_kwargs=None, simple_test=False, period_day=True):
+        """
+        train_title: 训练标题
+        agent_class_name: 代理类名
+        agent_kwargs: 代理参数
+        simple_test: 是否简单测试
+        period_day: train_periods 是否按天统计
+        """
+        self.train_title = train_title
+
+        self.simple_test = simple_test
+        self.period_day = period_day
+
+        # 创建实验目录
+        self.exp_folder = os.path.join(root_folder, train_title)
+        os.makedirs(self.exp_folder, exist_ok=True)
+        self.csv_path = os.path.join(self.exp_folder, 'val_test.csv')
+        
+        self.agent = None
+        self.param_server = None
+        if agent_class_name is not None:    
+            self.agent = globals()[agent_class_name](**agent_kwargs)
+            # 载入模型数据
+            self.agent.load(self.exp_folder)
+            # 参数服务器
+            self.param_server = AsyncRLParameterServer(self.agent,
+                                                    learning_rate=agent_kwargs.get('learning_rate', 0.001),
+                                                    staleness_threshold=20,
+                                                    momentum=0.9,
+                                                    importance_decay=0.8,
+                                                    max_version_delay=100)
+        
+        # 学习进度数据
+        self.learn_metrics = {}
+        
+        # 验证测试数据
+        self.train_data = self.init_train_data_from_csv()
+        
+        # 参数更新计数
+        self.update_count = 0
+
+        # 是否需要验证测试
+        t = time.time()
+        self.last_val_time = t
+        self.last_test_time = t
+
+    def plot_learning_process(self, metrics):
+        """
+        强化学习评价指标
+            图1
+            - moving_average_reward: 移动平均奖励
+
+            图2
+            - average_loss: 平均损失值
+
+            图3 (若方差为0, 则不进行绘制)
+            - illegal_ratio: 平均非法动作率
+
+            图4 (若方差为0, 则不进行绘制)
+            - win_ratio: 平均胜率
+            - loss_ratio: 平均败率
+
+            图5
+            - action_{k}_ratio k: 0-2
+
+            图6 (不存在字段, 则不进行绘制)
+            - hold_length: 平均持仓时间
+
+        交易评价指标
+            图7 (不存在字段, 则不进行绘制)
+            - sortino_ratio
+            - sortino_ratio_bm
+
+            图8 (不存在字段, 则不进行绘制)
+            - max_drawdown
+            - max_drawdown_bm
+
+            图9 (不存在字段, 则不进行绘制)
+            - total_return
+            - total_return_bm
+
+        train_periods: 训练周期数
+        """
+        # 检查数据是否存在
+        if 'dt' not in metrics or not metrics['dt']:
+            log('No dt data found')
+            return
+            
+        # 固定颜色
+        colors = {
+            'moving_average_reward': '#ff7f0e',
+            'average_loss': '#9467bd',
+            'illegal_ratio': '#8c564b',
+            'win_ratio': '#e377c2',
+            'loss_ratio': '#7f7f7f',
+            'action_0': '#bcbd22',
+            'action_1': '#17becf',
+            'action_2': '#1f77b4',
+            'action_3': '#ff7f0e',
+            'action_4': '#2ca02c',
+            'action_5': '#d62728',
+            'action_6': '#9467bd',
+            'hold_length': '#2ca02c',
+            'sortino_ratio': '#d62728',
+            'sortino_ratio_bm': '#d62728',
+            'max_drawdown': '#ff7f0e',
+            'max_drawdown_bm': '#ff7f0e',
+            'total_return': '#9467bd',
+            'total_return_bm': '#9467bd'
+        }
+
+        # 确定需要绘制的图表数量
+        plots_to_draw = []
+        
+        # 图1-2总是绘制
+        plots_to_draw.extend([0, 1])
+        
+        # 检查图3-4是否有非零方差
+        for metric in ['illegal_ratio']:
+            for dtype in ['learn', 'val', 'test']:
+                if metric in metrics[dtype] and np.var(metrics[dtype][metric]) > 0:
+                    plots_to_draw.append(2)
+                    break
+                    
+        for metric in ['win_ratio', 'loss_ratio']:
+            for dtype in ['learn', 'val', 'test']:
+                if metric in metrics[dtype] and np.var(metrics[dtype][metric]) > 0:
+                    plots_to_draw.append(3)
+                    break
+                    
+        # 图5总是绘制
+        plots_to_draw.append(4)
+        
+        # 检查图6-9是否存在相应字段
+        metrics_to_check = [
+            ['hold_length'],
+            ['sortino_ratio'],
+            ['max_drawdown'],
+            ['total_return']
+        ]
+        
+        for i, metric_group in enumerate(metrics_to_check):
+            for metric in metric_group:
+                for dtype in ['learn', 'val', 'test']:
+                    if metric in metrics[dtype]:
+                        plots_to_draw.append(i + 5)
+                        break
+                if i + 5 in plots_to_draw:
+                    break
+                    
+        plots_to_draw = sorted(list(set(plots_to_draw)))
+        
+        # 创建图表
+        fig, axes = plt.subplots(len(plots_to_draw), 1, figsize=(12, 4*len(plots_to_draw)), sharex=True)
+        if len(plots_to_draw) == 1:
+            axes = [axes]
+        
+        # 获取时间变化点的索引
+        dt_changes = []
+        last_dt = None
+        for i, dt in enumerate(metrics['dt']):
+            processed_dt = dt.replace(hour=dt.hour - dt.hour % 4, minute=0, second=0, microsecond=0)
+            if processed_dt != last_dt:
+                dt_changes.append((i, processed_dt, metrics['learn']['train_periods'][i]))
+                last_dt = processed_dt
+
+        # 设置图表标题
+        periods = metrics["learn"]["train_periods"][-1]
+        if self.period_day:
+            fig.suptitle(f'Learning Process ({f"{int(periods/365):.2e}" if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)', fontsize=16)
+        else:
+            fig.suptitle(f'Learning Process ({f"{periods:.2e}" if periods >= 1000 else int(periods)} periods)', fontsize=16)
+
+        plot_idx = 0
+        
+        # 图1: moving_average_reward
+        if 0 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'moving_average_reward' in metrics[dtype]:
+                    data = metrics[dtype]['moving_average_reward']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['moving_average_reward'], alpha=0.3,
+                            label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['moving_average_reward'],
+                            label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['moving_average_reward'], linestyle='--',
+                            label=f'{dtype}_moving_average_reward: {last_value:.4f}')
+            ax.set_ylabel('Moving Average Reward')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图2: average_loss
+        if 1 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                key = 'average_loss'
+                if key in metrics[dtype]:
+                    data = metrics[dtype][key]
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors[key], alpha=0.3,
+                            label=f'{dtype}_{key}: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors[key],
+                            label=f'{dtype}_{key}: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors[key], linestyle='--',
+                            label=f'{dtype}_{key}: {last_value:.4f}')
+            ax.set_ylabel('Error/Loss')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图3: illegal_ratio
+        if 2 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'illegal_ratio' in metrics[dtype]:
+                    data = metrics[dtype]['illegal_ratio']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['illegal_ratio'], alpha=0.3,
+                            label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['illegal_ratio'],
+                            label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['illegal_ratio'], linestyle='--',
+                            label=f'{dtype}_illegal_ratio: {last_value:.4f}')
+            ax.set_ylabel('Illegal Ratio')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图4: win_ratio & loss_ratio
+        if 3 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                for key in ['win_ratio', 'loss_ratio']:
+                    if key in metrics[dtype]:
+                        data = metrics[dtype][key]
+                        last_value = data[-1] if len(data) > 0 else 0
+                        if dtype == 'learn':
+                            ax.plot(data, color=colors[key], alpha=0.3,
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+                        elif dtype == 'val':
+                            ax.plot(data, color=colors[key],
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+                        else:  # test
+                            ax.plot(data, color=colors[key], linestyle='--',
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+            ax.set_ylabel('Win/Loss Ratio')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图5: action ratios
+        if 4 in plots_to_draw:
+            ax = axes[plot_idx]
+            action_dim = len([i for i in metrics['learn'] if i.startswith('action_')])
+            for dtype in ['learn', 'val', 'test']:
+                for i in range(action_dim):
+                    key = f'action_{i}_ratio'
+                    if key in metrics[dtype]:
+                        data = metrics[dtype][key]
+                        last_value = data[-1] if len(data) > 0 else 0
+                        if dtype == 'learn':
+                            ax.plot(data, color=colors[f'action_{i}'], alpha=0.3,
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+                        elif dtype == 'val':
+                            ax.plot(data, color=colors[f'action_{i}'],
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+                        else:  # test
+                            ax.plot(data, color=colors[f'action_{i}'], linestyle='--',
+                                label=f'{dtype}_{key}: {last_value:.4f}')
+            ax.set_ylabel('Action Ratio')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图6: hold_length
+        if 5 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'hold_length' in metrics[dtype]:
+                    data = metrics[dtype]['hold_length']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['hold_length'], alpha=0.3,
+                            label=f'{dtype}_hold_length: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['hold_length'],
+                            label=f'{dtype}_hold_length: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['hold_length'], linestyle='--',
+                            label=f'{dtype}_hold_length: {last_value:.4f}')
+            ax.set_ylabel('Hold Length')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图7: sortino_ratio
+        if 6 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'sortino_ratio' in metrics[dtype]:
+                    data = metrics[dtype]['sortino_ratio']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['sortino_ratio'], alpha=0.3,
+                            label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['sortino_ratio'],
+                            label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['sortino_ratio'], linestyle='--',
+                            label=f'{dtype}_sortino_ratio: {last_value:.4f}')
+                        if 'sortino_ratio_bm' in metrics[dtype]:
+                            bm_data = metrics[dtype]['sortino_ratio_bm']
+                            last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                            ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                        color=colors['sortino_ratio_bm'],
+                                        label=f'{dtype}_sortino_ratio_bm: {last_value:.4f}')
+            ax.set_ylabel('Sortino Ratio')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图8: max_drawdown
+        if 7 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'max_drawdown' in metrics[dtype]:
+                    data = metrics[dtype]['max_drawdown']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['max_drawdown'], alpha=0.3,
+                            label=f'{dtype}_max_drawdown: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['max_drawdown'],
+                            label=f'{dtype}_max_drawdown: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['max_drawdown'], linestyle='--',
+                            label=f'{dtype}_max_drawdown: {last_value:.4f}')
+                        if 'max_drawdown_bm' in metrics[dtype]:
+                            bm_data = metrics[dtype]['max_drawdown_bm']
+                            last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                            ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                        color=colors['max_drawdown_bm'],
+                                        label=f'{dtype}_max_drawdown_bm: {last_value:.4f}')
+            ax.set_ylabel('Max Drawdown')
+            ax.grid(True)
+            ax.legend()
+            plot_idx += 1
+
+        # 图9: total_return
+        if 8 in plots_to_draw:
+            ax = axes[plot_idx]
+            for dtype in ['learn', 'val', 'test']:
+                if 'total_return' in metrics[dtype]:
+                    data = metrics[dtype]['total_return']
+                    last_value = data[-1] if len(data) > 0 else 0
+                    if dtype == 'learn':
+                        ax.plot(data, color=colors['total_return'], alpha=0.3,
+                            label=f'{dtype}_total_return: {last_value:.4f}')
+                    elif dtype == 'val':
+                        ax.plot(data, color=colors['total_return'],
+                            label=f'{dtype}_total_return: {last_value:.4f}')
+                    else:  # test
+                        ax.plot(data, color=colors['total_return'], linestyle='--',
+                            label=f'{dtype}_total_return: {last_value:.4f}')
+                        if 'total_return_bm' in metrics[dtype]:
+                            bm_data = metrics[dtype]['total_return_bm']
+                            last_value = bm_data[-1] if len(bm_data) > 0 else 0
+                            ax.fill_between(range(len(bm_data)), bm_data, alpha=0.1,
+                                        color=colors['total_return_bm'],
+                                        label=f'{dtype}_total_return_bm: {last_value:.4f}')
+            ax.set_ylabel('Total Return')
+            ax.grid(True)
+            ax.legend()
+
+        # 设置x轴刻度和标签
+        for ax in axes:
+            ax.set_xticks([i for i, _, _ in dt_changes])
+            if self.period_day:
+                ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{int(periods/365):.2e}' if int(periods/365)>=1000 else int(periods/365)}Ys {int(periods%365)}ds)" if periods >= 365 else f"{dt.strftime('%d %H')}({int(periods)}ds)" for _, dt, periods in dt_changes], rotation=45)
+            else:
+                ax.set_xticklabels([f"{dt.strftime('%d %H')}({f'{periods:.2e}' if periods >= 1000 else int(periods)} periods)" for _, dt, periods in dt_changes], rotation=45)
+        
+        # 设置共享的x轴标签
+        fig.text(0.5, 0.02, 'Episode', ha='center')
+        
+        # 调整子图之间的间距
+        plt.tight_layout()
+        
+        # 保存图像
+        plt.savefig(os.path.join(self.exp_folder, 'learning_process.png'))
+        plt.close()
+
+    def init_train_data_from_csv(self):
+        """从CSV文件初始化训练数据"""
+        train_data = {
+            'learn': {},
+            'val': {},
+            'test': {},
+            'dt': []
+        }
+        
+        if not os.path.exists(self.csv_path):
+            return train_data
+            
+        df = pd.read_csv(self.csv_path)
+        
+        if 'dt' in df.columns:
+            train_data['dt'] = pd.to_datetime(df['dt']).tolist()
+        
+        for col in df.columns:
+            if col == 'dt':
+                continue
+                
+            dtype, key = col.split('_', 1)
+            if dtype in ['val', 'test', 'learn']:
+                if key not in train_data[dtype]:
+                    train_data[dtype][key] = []
+                train_data[dtype][key] = [float(x) if not pd.isna(x) else float('nan') for x in df[col].tolist()]
+                
+        return train_data
+
+    def save_train_data_to_csv(self):
+        """将训练数据保存到CSV文件"""
+        latest_data = {}
+        for dtype in ['val', 'test', 'learn']:
+            for k in self.train_data[dtype]:
+                if hasattr(self.train_data[dtype][k], '__len__') and len(self.train_data[dtype][k]) > 0:
+                    latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k][-1]
+                else:
+                    latest_data[f'{dtype}_{k}'] = self.train_data[dtype][k]
+
+        if len(self.train_data['dt']) > 0:
+            latest_data['dt'] = self.train_data['dt'][-1]
+        
+        file_exists = os.path.exists(self.csv_path)
+        
+        headers = sorted(latest_data.keys())
+        values = [str(latest_data[h]) for h in headers]
+        
+        if file_exists:
+            old_df = pd.read_csv(self.csv_path)
+            new_df = pd.DataFrame([values], columns=headers)
+            df = pd.concat([old_df, new_df], ignore_index=True)
+            df.to_csv(self.csv_path, index=False)
+        else:
+            df = pd.DataFrame([values], columns=headers)
+            df.to_csv(self.csv_path, index=False)
+
+    def handle_val_test_data(self):
+        """处理验证测试数据"""
+        max_len = 0
+        for dtype in ['val', 'test', 'learn']:
+            for k in self.train_data[dtype]:
+                # 只对列表/数组类型的数据进行max_len判断
+                if hasattr(self.train_data[dtype][k], '__len__'):
+                    max_len = max(max_len, len(self.train_data[dtype][k]))
+                
+        for dtype in ['val', 'test', 'learn']:
+            for k in self.train_data[dtype]:
+                if hasattr(self.train_data[dtype][k], '__len__'):
+                    curr_len = len(self.train_data[dtype][k])
+                    if curr_len < max_len:
+                        pad_value = self.train_data[dtype][k][-1] if curr_len > 0 else float('nan')
+                        self.train_data[dtype][k].extend([pad_value] * (max_len - curr_len))
+
+        for dtype in ['val', 'test', 'learn']:
+            for k in self.train_data[dtype]:
+                if hasattr(self.train_data[dtype][k], '__len__'):
+                    self.train_data[dtype][k] = self.train_data[dtype][k][:500]
+        self.train_data['dt'] = self.train_data['dt'][:500]
+
+        self.save_train_data_to_csv()
+        
+        self.plot_learning_process(self.train_data)
+
+        return self.train_data
+
+    def check_need_val_test(self):
+        """检查是否需要进行验证/测试"""
+        # 30min一次val, 2小时一次test
+        response = 'no'
+
+        t = time.time()
+        if t - self.last_val_time > 1800:
+        # # FOR TEST
+        # if t - self.last_val_time > 60 * 3:
+            response = 'val'
+            self.last_val_time = t
+        elif t - self.last_test_time > 7200:
+        # # FOR TEST
+        # elif t - self.last_test_time > 60 * 3:
+            response = 'test'
+            self.last_test_time = t
+        return response
+
+    def update_learn_metrics(self, metrics):
+        for k, v in metrics.items():
+            if k not in self.learn_metrics:
+                self.learn_metrics[k] = []
+            self.learn_metrics[k].append(v)
+
+    def handle_val_test_data(self, data_type, metrics):
+        for k in metrics:
+            if k not in self.train_data[data_type]:
+                self.train_data[data_type][k] = []
+            self.train_data[data_type][k].append(metrics[k])
+
+        backup_path = os.path.join(self.exp_folder, 'learn_metrics_backup.pkl')
+        with open(backup_path, 'wb') as f:
+            pickle.dump(self.learn_metrics, f)
+
+        action_dim = len([i for i in self.learn_metrics if i.startswith('action_')])
+        for k in self.learn_metrics:
+            if k not in self.train_data['learn']:
+                self.train_data['learn'][k] = []
+
+            length = len(self.learn_metrics[k])
+            if length > 0:
+                if k == 'train_periods':
+                    add_days = np.nansum(self.learn_metrics[k])
+                    if len(self.train_data['learn'][k]) > 0:
+                        add_days += self.train_data['learn'][k][-1]
+                    self.train_data['learn'][k].append(add_days)
+
+                elif k.startswith('action_'):
+                    continue
+
+                else:
+                    self.train_data['learn'][k].append(np.nanmean(self.learn_metrics[k]))
+
+        # 处理 action_ratio
+        # For action probabilities, take the mean of each action separately
+        # and normalize to ensure they sum to 1
+        action_probs = np.array([np.nanmean(self.learn_metrics[f'action_{act}_ratio']) for act in range(action_dim)])
+        action_probs = action_probs / np.sum(action_probs)  # Normalize
+        for i in range(action_dim):
+            self.train_data['learn'][f'action_{i}_ratio'].append(action_probs[i])
+
+        # 重置学习指标
+        self.learn_metrics = {}
+
+        dt = datetime.now(timezone(timedelta(hours=8)))
+        self.train_data['dt'].append(dt)
+        self.train_data = self.handle_val_test_data()
+
+    def handle_request(self, client_socket, msg_header, cmd):
+        """处理客户端请求"""
+        try:
+            if cmd == 'get':
+                assert self.agent is not None, 'agent is not initialized'
+                params_data = pickle.dumps((self.agent.get_params_to_send(), self.agent.version))
+                send_msg(client_socket, params_data)
+                log(f'{msg_header} Parameters sent, version: {self.agent.version}')
+
+            elif cmd == 'check':
+                response = self.check_need_val_test()
+                send_msg(client_socket, response.encode())
+                msg = f'{msg_header} Check response sent: {response}'
+                log(msg)
+
+            elif cmd == 'update_gradients':
+                assert self.param_server is not None, 'param_server is not initialized'
+                update_data = recv_msg(client_socket)
+                if update_data is None:
+                    return
+                grads, importance, version, metrics = pickle.loads(update_data)
+
+                # 更新梯度
+                res = self.param_server.process_update(grads, importance, version)
+                if not res:
+                    return
+
+                log(f'{msg_header} Parameters updated, version: {self.agent.version}')
+
+                send_msg(client_socket, b'ok')
+                self.agent.save(self.exp_folder)
+                
+                # 更新学习指标
+                self.update_learn_metrics(metrics)
+
+                self.update_count += 1
+
+            elif cmd in ['val', 'test']:
+                data_type = cmd
+                train_data_new = recv_msg(client_socket)
+                if train_data_new is None:
+                    return
+                    
+                metrics = pickle.loads(train_data_new)
+                log(f'{msg_header} {cmd}_metrics: {metrics}')
+                self.handle_val_test_data(data_type, metrics)   
+                log(f'{msg_header} handle {cmd}_data done')
+
+                send_msg(client_socket, b'ok')
+
+        except ConnectionResetError:
+            pass
+
+
+def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test, period_day=True):
+    file = os.path.join(root_folder, f'{train_title}.data')
+    if os.path.exists(file):
+        return
+    with open(file, 'wb') as f:
+        pickle.dump((agent_class.__name__, agent_kwargs, simple_test, period_day), f)
+
+def read_train_title_item():
+    res = {}
+    for file in os.listdir(root_folder):
+        if file.endswith('.data'):
+            title = file.replace('.data', '')
+            agent_class_name, agent_kwargs, simple_test, period_day = pickle.load(open(os.path.join(root_folder, file), 'rb'))
+            res[title] = (agent_class_name, agent_kwargs, simple_test, period_day)
+    return res
+
+class LRTrainParams:
+    help_doc = """
+    命令行参数说明:
+    
+    训练参数:
+        train_title=<str>           训练标题
+        run_client_learning_func=<func>  运行客户端学习函数
+        agent_class=<class>         智能体类
+        agent_kwargs=<dict>         智能体初始化参数
+        lr=<float>                  学习率, 默认1e-4
+        num_episodes=<int>          训练回合数, 默认5000
+        hidden_dim=<int>            隐藏层维度, 默认128
+        gamma=<float>               折扣因子, 默认0.98
+        epsilon=<float>             探索率, 默认0.5
+        target_update=<int>         目标网络更新频率, 默认50
+        buffer_size=<int>           经验回放池大小, 默认3000
+        minimal_size=<int>          最小训练样本数, 默认3000
+        batch_size=<int>            批次大小, 默认256
+        sync_interval_learn_step=<int>  同步参数间隔, 默认150
+        learn_interval_step=<int>   学习更新间隔, 默认4
+        n_step=<int>                多步学习步数, 默认1
+        use_noisy=<bool>            是否使用noisy网络, 默认True
+        train_buffer_class=<class>  训练经验回放池类
+
+    模型参数:
+        need_reshape=<tuple>        是否需要reshape, 默认None
+        features_dim=<int>          特征维度
+        action_dim=<int>            动作维度
+        net_arch=<list>             网络结构
+        features_extractor_class=<class>  特征提取器类
+        features_extractor_kwargs=<dict>  特征提取器参数, 默认{}
+
+    运行参数:
+        period_day=<bool>           是否是周期性训练, 默认False
+        simple_test=<bool>          启用简单测试模式, 默认False
+        test_val=<val/test/all>     验证/测试模式
+        local=<bool>                是否是本地训练, 默认False
+        server                      以服务端模式运行
+        client                      以客户端模式运行(默认)
+
+    性能分析参数:
+        profile                     启用性能分析, 默认False
+        profile_stats_n=<int>       显示前N个耗时函数, 默认30
+        profile_output_dir=<str>    性能分析结果保存目录, 默认'profile_results'
+
+    使用示例:
+        python script.py lr=0.001 num_episodes=1000 server
+    """
+
+    def __init__(self, 
+        train_title, 
+        run_client_learning_func,
+        agent_class, 
+        need_reshape, 
+        features_dim, 
+        action_dim, 
+        net_arch, 
+        train_buffer_class, 
+        features_extractor_class, 
+        features_extractor_kwargs,
+        **kwargs
+    ):
+        self.kwargs = kwargs
+
+        # 训练参数
+        self.train_title = train_title
+        self.run_client_learning_func = run_client_learning_func
+        self.agent_class = agent_class
+        self.lr = 1e-4
+        self.num_episodes = 5000
+        self.hidden_dim = 128
+        self.gamma = 0.98
+        self.epsilon = 0.5
+        self.target_update = 50
+        self.buffer_size = 3000
+        self.minimal_size = 3000
+        self.batch_size = 256
+        self.sync_interval_learn_step = 150
+        self.learn_interval_step = 4
+        self.n_step = 1
+        self.use_noisy = True
+        self.train_buffer_class = train_buffer_class
+
+        # 模型参数
+        self.need_reshape = need_reshape
+        self.features_dim = features_dim
+        self.action_dim = action_dim
+        self.net_arch = net_arch
+        self.features_extractor_class = features_extractor_class
+        self.features_extractor_kwargs = features_extractor_kwargs
+
+        # 运行参数
+        self.period_day = False
+        self.simple_test = False
+        self.val_test = ''
+        self.local = False
+        self.is_server = False
+
+        # 性能分析参数
+        self.enable_profiling = False
+        self.profile_stats_n = 30  # 显示前N个耗时函数
+        self.profile_output_dir = 'profile_results'  # 性能分析结果保存目录
+
+    def run(self):
+        """运行训练"""
+        if not self.is_server:
+            # 训练者客户端
+            # 保持上传日志文件
+            upload_thread = threading.Thread(target=keep_upload_log_file, args=(self.train_title,), daemon=True)
+            upload_thread.start()
+
+            # 初始化agent
+            agent = self.agent_class(**self.get_agent_kwargs())
+
+            args = (agent, self.num_episodes, self.minimal_size, self.batch_size, 
+                self.sync_interval_learn_step, self.learn_interval_step, self.local)
+            kwargs = {'simple_test': self.simple_test, 'val_test': self.val_test, 
+                    'enable_profiling': self.enable_profiling}
+            run_client_learning(self.run_client_learning_func, args, kwargs)
+        else:
+            # 服务端
+            add_train_title_item(
+                self.train_title, 
+                self.agent_class, 
+                self.get_agent_kwargs(), 
+                self.simple_test, 
+                period_day=self.period_day
+            )
+
+    def update_from_args(self, args):
+        """从命令行参数更新配置"""
+        # 如果输入help,打印帮助文档并退出
+        if 'help' in args:
+            print(self.help_doc)
+            sys.exit(0)
+
+        for arg in args:
+            if arg.startswith('train_title='):
+                self.train_title = arg.split('=')[1]
+            elif arg.startswith('lr='):
+                self.lr = float(arg.split('=')[1])
+            elif arg.startswith('num_episodes='):
+                self.num_episodes = int(arg.split('=')[1])
+            elif arg.startswith('hidden_dim='):
+                self.hidden_dim = int(arg.split('=')[1])
+            elif arg.startswith('gamma='):
+                self.gamma = float(arg.split('=')[1])
+            elif arg.startswith('epsilon='):
+                self.epsilon = float(arg.split('=')[1])
+            elif arg.startswith('target_update='):
+                self.target_update = int(arg.split('=')[1])
+            elif arg.startswith('buffer_size='):
+                self.buffer_size = int(arg.split('=')[1])
+            elif arg.startswith('minimal_size='):
+                self.minimal_size = int(arg.split('=')[1])
+            elif arg.startswith('batch_size='):
+                self.batch_size = int(arg.split('=')[1])
+            elif arg.startswith('sync_interval_learn_step='):
+                self.sync_interval_learn_step = int(arg.split('=')[1])
+            elif arg.startswith('learn_interval_step='):
+                self.learn_interval_step = int(arg.split('=')[1])
+            elif arg == 'local':
+                self.local = True
+            elif arg == 'simple_test':
+                self.simple_test = True
+            elif arg.startswith('test_val='):
+                self.val_test = arg.split('=')[1]
+            elif arg == 'profile':
+                self.enable_profiling = True
+            elif arg.startswith('profile_stats_n='):
+                self.profile_stats_n = int(arg.split('=')[1])
+            elif arg.startswith('profile_output_dir='):
+                self.profile_output_dir = arg.split('=')[1]
+            elif arg == 'server':
+                self.is_server = True
+
+    def get_agent_kwargs(self):
+        """获取agent初始化参数"""
+        # # 基础参数
+        # learning_rate,
+        # gamma,
+        # epsilon,
+        # target_update,
+        # # 基类参数
+        # buffer_size,
+        # train_buffer_class,
+        # train_title,
+        # action_dim,
+        # features_dim,
+        # features_extractor_class,
+        # features_extractor_kwargs=None,
+        # use_noisy=True,
+        # n_step=1,
+        # net_arch=None,
+        # need_reshape=None,
+        agent_kwarg = {
+            'learning_rate': self.lr,
+            'gamma': self.gamma,
+            'epsilon': self.epsilon,
+            'target_update': self.target_update,
+            'buffer_size': self.buffer_size,
+            'train_buffer_class': self.train_buffer_class,
+            'train_title': self.train_title,
+            'action_dim': self.action_dim,
+            'features_dim': self.features_dim,
+            'features_extractor_class': self.features_extractor_class,
+            'features_extractor_kwargs': self.features_extractor_kwargs,
+            'use_noisy': self.use_noisy,
+            'n_step': self.n_step,
+            'net_arch': self.net_arch,
+            'need_reshape': self.need_reshape,
+        }
+
+        # 特定的参数
+        if self.agent_class.__name__ == 'C51':
+            extra_kwargs = {'n_atoms':51, 'v_min':-10, 'v_max':10}
+        elif self.agent_class.__name__ == 'DQN':
+            extra_kwargs = {'dqn_type':DD_DQN}
+        else:
+            extra_kwargs = {}
+
+        for k, v in extra_kwargs.items():
+            if k in self.kwargs:
+                agent_kwarg[k] = self.kwargs[k]
+            else:
+                log(f"{self.agent_class.__name__}使用默认参数{k}: {v}")
+
+        return agent_kwarg
+
+class Profiler:
+    def __init__(self, params):
+        self.params = params
+        self.profiler = None
+        self.start_time = None
+
+    def before_train(self):
+        # 根据参数决定是否启用性能分析
+        if self.params.enable_profiling:
+            # 创建性能分析结果保存目录
+            os.makedirs(self.params.profile_output_dir, exist_ok=True)
+            self.profiler = cProfile.Profile()
+            self.profiler.enable()
+            self.start_time = time.time()
+
+    def after_train(self):
+        # 如果启用了性能分析，输出并保存结果
+        if self.params.enable_profiling:
+            self.profiler.disable()
+            end_time = time.time()
+
+            # 生成时间戳
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # 创建结果文件名
+            stats_file = os.path.join(self.params.profile_output_dir, f'profile_stats_{timestamp}.txt')
+            
+            # 打开文件并重定向stdout
+            with open(stats_file, 'w') as f:
+                # 记录总运行时间
+                total_time = end_time - self.start_time
+                f.write(f"Total execution time: {total_time:.2f} seconds\n\n")
+                
+                # 创建性能分析报告
+                stats = pstats.Stats(self.profiler, stream=f)
+                stats.sort_stats('cumulative')  # 按累计时间排序
+                stats.print_stats(self.params.profile_stats_n)  # 显示前N个耗时最多的函数
+                
+                # 保存调用关系图
+                stats.print_callers()
+                stats.print_callees()
+            
+            # 同时在控制台显示结果
+            log(f"Total execution time: {total_time:.2f} seconds")
+            log(f"Profile results saved to: {stats_file}")
+            
+            # 创建二进制统计文件以供后续分析
+            stats.dump_stats(os.path.join(self.params.profile_output_dir, f'profile_stats_{timestamp}.prof'))
+
 
 def _get_n_step_info(n_step_buffer, gamma):
     """计算n步return"""
