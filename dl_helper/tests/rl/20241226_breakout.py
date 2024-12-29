@@ -44,6 +44,7 @@ if __name__ == '__main__':
 
     params.local = True
     params.num_episodes = float('inf')
+    params.buffer_size = 1000
 
     # 使用命令行 更新参数
     if len(sys.argv) > 1:
