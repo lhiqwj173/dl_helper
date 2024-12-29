@@ -93,8 +93,6 @@ class BreakoutEnv(gym.Env):
                 name_prefix=self.need_upload_file.replace(file_bak_name, ''))
         else:
             if self.env_bak is not None:
-                # 关闭 RecordVideo 包装
-                self.env.close()
                 # 恢复原始环境
                 self.env = self.env_bak
                 # 重置变量

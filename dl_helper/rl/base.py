@@ -516,7 +516,7 @@ class OffPolicyAgent(BaseAgent):
         log(f'{self.msg_head} {data_type} done, begin update...')
 
         # 超大batchsize计算error
-        batch_size = 1024 * 2
+        batch_size = 512
         while replay_buffer.size() > 0:
             b_s, b_a, b_r, b_ns, b_d = replay_buffer.get(batch_size)
             transition_dict = {
@@ -528,6 +528,8 @@ class OffPolicyAgent(BaseAgent):
             }
             self.update(transition_dict, data_type=data_type)
         log(f'{self.msg_head} {data_type} update done')
+
+        env.close()
 
         # 获取统计指标
         metrics = self.tracker_val_test.get_metrics()
