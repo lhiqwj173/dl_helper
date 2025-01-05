@@ -99,8 +99,8 @@ class BreakoutEnv(gym.Env):
                 self.env_bak = None
                 self.need_upload_file = ''
 
-    def reset(self, seed=None):
-        state, info = self.env.reset(seed=seed)
+    def reset(self, seed=None, options=None):
+        state, info = self.env.reset(seed=seed, options=options)
         self.buffer.append(state)
         
         while len(self.buffer) < self.capacity:

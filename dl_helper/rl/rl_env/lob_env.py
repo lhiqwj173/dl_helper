@@ -738,7 +738,7 @@ class LOB_trade_env(gym.Env):
         return observation, reward, terminated, False, info
 
     def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         # 清理图形对象
         if hasattr(self, 'fig'):
             plt.close(self.fig)
