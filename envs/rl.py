@@ -14,7 +14,7 @@ subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 for cmd in [
         'pip install dill',
         'pip install ale_py',
-        'pip install gymnasium[accept-rom-license, atari]==1.0.0',
+        'pip install gymnasium[accept-rom-license,atari]==1.0.0',
         'pip install MoviePy',
         'pip install df2img',
         'pip install imgkit',
