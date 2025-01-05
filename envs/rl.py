@@ -24,6 +24,8 @@ if '__main__' == __name__:
     for cmd in [
             'pip install dill',
             'pip install ale_py',
+            'pip install tensorboardX',
+            'pip install lz4',
             'pip install gymnasium[accept-rom-license,atari]==1.0.0',
             'pip install MoviePy',
             'pip install df2img',
