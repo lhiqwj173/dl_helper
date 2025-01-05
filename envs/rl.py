@@ -3,30 +3,37 @@ import importlib.metadata
 import os
 import sys
 
-# !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git
-cmd = 'mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git'
-subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+if '__main__' == __name__:
 
-# !cd /kaggle/working/3rd/dl_helper && pip install -e .
-cmd = 'cd /kaggle/working/3rd/dl_helper && pip install -e .'
-subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+    install_dl_helper = True
+    if sys.argv[1] == 'not_install':
+        install_dl_helper = False
 
-for cmd in [
-        'pip install dill',
-        'pip install ale_py',
-        'pip install gymnasium[accept-rom-license,atari]==1.0.0',
-        'pip install MoviePy',
-        'pip install df2img',
-        'pip install imgkit',
-        'pip install loguru',
-        'pip install einops',
-        'pip install torchmetrics',
-        'pip install requests_toolbelt',
-        'pip install torchstat',
-        'pip install torchinfo',
-        'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
-    ]:
+    # !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git
+    cmd = 'mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git'
     subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
-root = r'/kaggle/working/'
-sys.path.append(os.path.join(root, '3rd', 'dl_helper'))
+    if install_dl_helper:
+        # !cd /kaggle/working/3rd/dl_helper && pip install -e .
+        cmd = 'cd /kaggle/working/3rd/dl_helper && pip install -e .'
+        subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+
+        root = r'/kaggle/working/'
+        sys.path.append(os.path.join(root, '3rd', 'dl_helper'))
+
+    for cmd in [
+            'pip install dill',
+            'pip install ale_py',
+            'pip install gymnasium[accept-rom-license,atari]==1.0.0',
+            'pip install MoviePy',
+            'pip install df2img',
+            'pip install imgkit',
+            'pip install loguru',
+            'pip install einops',
+            'pip install torchmetrics',
+            'pip install requests_toolbelt',
+            'pip install torchstat',
+            'pip install torchinfo',
+            'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
+        ]:
+        subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
