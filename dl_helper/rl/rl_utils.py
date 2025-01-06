@@ -20,6 +20,112 @@ from py_ext.tool import log
 alist_folder = r'/root/alist_data/rl_learning_process'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(alist_folder))) else alist_folder
 
+def simplify_rllib_metrics(data, out_func=print):
+    important_metrics = {
+        "环境运行器": {},
+        "评估": {},
+        "学习者": {},
+    }
+
+    if 'counters' in data:
+        if 'num_env_steps_sampled' in data["counters"]:
+            important_metrics["环境运行器"]["采样环境总步数"] = data["counters"]["num_env_steps_sampled"]
+
+    if 'env_runners' in data:
+        if 'episode_return_mean' in data["env_runners"]:
+            important_metrics["环境运行器"]["episode平均回报"] = data["env_runners"]["episode_return_mean"]
+        if 'episode_return_max' in data["env_runners"]:
+            important_metrics["环境运行器"]["episode最大回报"] = data["env_runners"]["episode_return_max"]
+        if 'episode_len_mean' in data["env_runners"]:
+            important_metrics["环境运行器"]["episode平均步数"] = data["env_runners"]["episode_len_mean"]
+        if 'episode_len_max' in data["env_runners"]:
+            important_metrics["环境运行器"]["episode最大步数"] = data["env_runners"]["episode_len_max"]
+        if 'num_env_steps_sampled' in data["env_runners"]:
+            important_metrics["环境运行器"]["采样环境总步数"] = data["env_runners"]["num_env_steps_sampled"]
+        if 'num_episodes' in data["env_runners"]:
+            important_metrics["环境运行器"]["episodes计数"] = data["env_runners"]["num_episodes"]
+
+    if 'evaluation' in data:
+        if 'env_runners' in data["evaluation"]:
+            if 'episode_return_mean' in data["evaluation"]["env_runners"]:
+                important_metrics["评估"]["episode平均回报"] = data["evaluation"]["env_runners"]["episode_return_mean"]
+            if 'episode_return_max' in data["evaluation"]["env_runners"]:
+                important_metrics["评估"]["episode最大回报"] = data["evaluation"]["env_runners"]["episode_return_max"]
+            if 'episode_len_mean' in data["evaluation"]["env_runners"]:
+                important_metrics["评估"]["episode平均步数"] = data["evaluation"]["env_runners"]["episode_len_mean"]
+            if 'episode_len_max' in data["evaluation"]["env_runners"]:
+                important_metrics["评估"]["episode最大步数"] = data["evaluation"]["env_runners"]["episode_len_max"]
+
+    if 'learners' in data:
+        if 'default_policy' in data["learners"]:
+            if 'entropy' in data["learners"]["default_policy"]:
+                important_metrics["学习者"]["默认策略"]["熵"] = data["learners"]["default_policy"]["entropy"]
+            if 'policy_loss' in data["learners"]["default_policy"]:
+                important_metrics["学习者"]["默认策略"]["策略损失"] = data["learners"]["default_policy"]["policy_loss"]
+            if 'vf_loss' in data["learners"]["default_policy"]:
+                important_metrics["学习者"]["默认策略"]["值函数损失"] = data["learners"]["default_policy"]["vf_loss"]
+            if 'total_loss' in data["learners"]["default_policy"]:
+                important_metrics["学习者"]["默认策略"]["总损失"] = data["learners"]["default_policy"]["total_loss"]
+
+    if 'time_this_iter_s' in data:
+        important_metrics["本轮时间"] = data["time_this_iter_s"]
+    if 'num_training_step_calls_per_iteration' in data:
+        important_metrics["每轮训练步数"] = data["num_training_step_calls_per_iteration"]
+    if 'training_iteration' in data:
+        important_metrics["训练迭代次数"] = data["training_iteration"]
+            
+    out_func(f"--------- 训练迭代: {important_metrics['训练迭代次数']} ---------")
+    out_func("环境运行器:")
+    if '环境运行器' in important_metrics and important_metrics['环境运行器']:
+        if 'episode平均回报' in important_metrics['环境运行器']:
+            out_func(f"  episode平均回报: {important_metrics['环境运行器']['episode平均回报']:.4f}")
+        if 'episode最大回报' in important_metrics['环境运行器']:
+            out_func(f"  episode最大回报: {important_metrics['环境运行器']['episode最大回报']:.4f}")
+        if 'episode平均步数' in important_metrics['环境运行器']:
+            out_func(f"  episode平均步数: {important_metrics['环境运行器']['episode平均步数']:.4f}")
+        if 'episode最大步数' in important_metrics['环境运行器'] and important_metrics['环境运行器']['episode最大步数'] is not None:
+            out_func(f"  episode最大步数: {important_metrics['环境运行器']['episode最大步数']}")
+        if '采样环境总步数' in important_metrics['环境运行器']:
+            out_func(f"  采样环境总步数: {important_metrics['环境运行器']['采样环境总步数']}")
+        if 'episodes计数' in important_metrics['环境运行器']:
+            out_func(f"  episodes计数: {important_metrics['环境运行器']['episodes计数']}")
+    else:
+        out_func("  无环境运行器数据")
+    
+    out_func("\n评估:")
+    if '评估' in important_metrics and important_metrics['评估']:
+        if 'episode平均回报' in important_metrics['评估'] and important_metrics['评估']['episode平均回报'] is not None:
+            out_func(f"  episode平均回报: {important_metrics['评估']['episode平均回报']:.4f}")
+            if 'episode最大回报' in important_metrics['评估']:
+                out_func(f"  episode最大回报: {important_metrics['评估']['episode最大回报']:.4f}")
+            if 'episode平均步数' in important_metrics['评估']:
+                out_func(f"  episode平均步数: {important_metrics['评估']['episode平均步数']:.4f}")
+            if 'episode最大步数' in important_metrics['评估'] and important_metrics['评估']['episode最大步数'] is not None:
+                out_func(f"  episode最大步数: {important_metrics['评估']['episode最大步数']}")
+        else:
+            out_func("  无评估数据")
+    else:
+        out_func("  无评估数据")
+        
+    out_func("\n学习者(默认策略):")
+    if '学习者' in important_metrics and important_metrics['学习者'] and '默认策略' in important_metrics['学习者']:
+        if '熵' in important_metrics['学习者']['默认策略']:
+            out_func(f"  熵: {important_metrics['学习者']['默认策略']['熵']:.4f}")
+        if '策略损失' in important_metrics['学习者']['默认策略']:
+            out_func(f"  策略损失: {important_metrics['学习者']['默认策略']['策略损失']:.4f}")
+        if '值函数损失' in important_metrics['学习者']['默认策略']:
+            out_func(f"  值函数损失: {important_metrics['学习者']['默认策略']['值函数损失']:.4f}")
+        if '总损失' in important_metrics['学习者']['默认策略']:
+            out_func(f"  总损失: {important_metrics['学习者']['默认策略']['总损失']:.4f}")
+    else:
+        out_func("  无学习者数据")
+    
+    if '本轮时间' in important_metrics:
+        out_func(f"\n本轮时间: {important_metrics['本轮时间']:.4f}")
+    if '每轮训练步数' in important_metrics:
+        out_func(f"每轮训练步数: {important_metrics['每轮训练步数']}")
+    out_func('-'*30)
+
 class ExperimentHandler:
     """处理单个实验的类"""
     def __init__(self, train_title, agent_class_name=None, agent_kwargs=None, simple_test=False, period_day=True):
