@@ -31,6 +31,7 @@ if '__main__' == __name__:
             'pip install df2img',
             'pip install imgkit',
             'pip install loguru',
+            'pip install seaborn',
             'pip install einops',
             'pip install torchmetrics',
             'pip install requests_toolbelt',

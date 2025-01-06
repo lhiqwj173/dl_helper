@@ -58,6 +58,7 @@ def simplify_rllib_metrics(data, out_func=print):
 
     if 'learners' in data:
         if 'default_policy' in data["learners"]:
+            important_metrics["学习者"]["默认策略"] = {}
             if 'entropy' in data["learners"]["default_policy"]:
                 important_metrics["学习者"]["默认策略"]["熵"] = data["learners"]["default_policy"]["entropy"]
             if 'policy_loss' in data["learners"]["default_policy"]:
@@ -76,47 +77,22 @@ def simplify_rllib_metrics(data, out_func=print):
             
     out_func(f"--------- 训练迭代: {important_metrics['训练迭代次数']} ---------")
     out_func("环境运行器:")
-    if '环境运行器' in important_metrics and important_metrics['环境运行器']:
-        if 'episode平均回报' in important_metrics['环境运行器']:
-            out_func(f"  episode平均回报: {important_metrics['环境运行器']['episode平均回报']:.4f}")
-        if 'episode最大回报' in important_metrics['环境运行器']:
-            out_func(f"  episode最大回报: {important_metrics['环境运行器']['episode最大回报']:.4f}")
-        if 'episode平均步数' in important_metrics['环境运行器']:
-            out_func(f"  episode平均步数: {important_metrics['环境运行器']['episode平均步数']:.4f}")
-        if 'episode最大步数' in important_metrics['环境运行器'] and important_metrics['环境运行器']['episode最大步数'] is not None:
-            out_func(f"  episode最大步数: {important_metrics['环境运行器']['episode最大步数']}")
-        if '采样环境总步数' in important_metrics['环境运行器']:
-            out_func(f"  采样环境总步数: {important_metrics['环境运行器']['采样环境总步数']}")
-        if 'episodes计数' in important_metrics['环境运行器']:
-            out_func(f"  episodes计数: {important_metrics['环境运行器']['episodes计数']}")
+    if important_metrics['环境运行器']:
+        for k, v in important_metrics['环境运行器'].items():
+            out_func(f"  {k}: {v:.4f}")
     else:
         out_func("  无环境运行器数据")
     
     out_func("\n评估:")
-    if '评估' in important_metrics and important_metrics['评估']:
-        if 'episode平均回报' in important_metrics['评估'] and important_metrics['评估']['episode平均回报'] is not None:
-            out_func(f"  episode平均回报: {important_metrics['评估']['episode平均回报']:.4f}")
-            if 'episode最大回报' in important_metrics['评估']:
-                out_func(f"  episode最大回报: {important_metrics['评估']['episode最大回报']:.4f}")
-            if 'episode平均步数' in important_metrics['评估']:
-                out_func(f"  episode平均步数: {important_metrics['评估']['episode平均步数']:.4f}")
-            if 'episode最大步数' in important_metrics['评估'] and important_metrics['评估']['episode最大步数'] is not None:
-                out_func(f"  episode最大步数: {important_metrics['评估']['episode最大步数']}")
-        else:
-            out_func("  无评估数据")
+    for k, v in important_metrics['评估'].items():
+        out_func(f"  {k}: {v:.4f}")
     else:
         out_func("  无评估数据")
-        
+
     out_func("\n学习者(默认策略):")
-    if '学习者' in important_metrics and important_metrics['学习者'] and '默认策略' in important_metrics['学习者']:
-        if '熵' in important_metrics['学习者']['默认策略']:
-            out_func(f"  熵: {important_metrics['学习者']['默认策略']['熵']:.4f}")
-        if '策略损失' in important_metrics['学习者']['默认策略']:
-            out_func(f"  策略损失: {important_metrics['学习者']['默认策略']['策略损失']:.4f}")
-        if '值函数损失' in important_metrics['学习者']['默认策略']:
-            out_func(f"  值函数损失: {important_metrics['学习者']['默认策略']['值函数损失']:.4f}")
-        if '总损失' in important_metrics['学习者']['默认策略']:
-            out_func(f"  总损失: {important_metrics['学习者']['默认策略']['总损失']:.4f}")
+    if important_metrics['学习者']['默认策略']:
+        for k, v in important_metrics['学习者']['默认策略'].items():
+            out_func(f"  {k}: {v:.4f}")
     else:
         out_func("  无学习者数据")
     
