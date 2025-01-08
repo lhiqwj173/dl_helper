@@ -6,7 +6,7 @@ import sys
 if '__main__' == __name__:
 
     install_dl_helper = True
-    if sys.argv[1] == 'not_install_dl_helper':
+    if len(sys.argv) > 1 and sys.argv[1] == 'not_install_dl_helper':
         install_dl_helper = False
 
     # !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git
