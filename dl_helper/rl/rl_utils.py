@@ -90,7 +90,7 @@ def simplify_rllib_metrics(data, out_func=print):
         out_func("  无评估数据")
 
     out_func("\n学习者(默认策略):")
-    if important_metrics['学习者']['默认策略']:
+    if '默认策略' in important_metrics['学习者'] and important_metrics['学习者']['默认策略']:
         for k, v in important_metrics['学习者']['默认策略'].items():
             out_func(f"  {k}: {v:.4f}")
     else:
@@ -714,7 +714,6 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
-
 def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test, period_day=True):
     file = os.path.join(root_folder, f'{train_title}.data')
     if os.path.exists(file):
@@ -1008,7 +1007,6 @@ class Profiler:
             
             # 创建二进制统计文件以供后续分析
             stats.dump_stats(os.path.join(self.params.profile_output_dir, f'profile_stats_{timestamp}.prof'))
-
 
 def _get_n_step_info(n_step_buffer, gamma):
     """计算n步return"""

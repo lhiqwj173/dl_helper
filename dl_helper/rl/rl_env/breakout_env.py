@@ -57,7 +57,7 @@ class BreakoutEnv(gym.Env):
         """
         self.env = gym.make('ALE/Breakout-v5', obs_type='grayscale', frameskip=1)
         self.env = TransformObservation(self.env, crop_observation, observation_space=gym.spaces.Box(low=0, high=255, shape=(161, 144), dtype=np.uint8))
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(capacity, 161, 144), dtype=np.uint8)
+        self.observation_space = gym.spaces.Box(low=0, high=1.0, shape=(capacity, 161, 144), dtype=np.float32)
         self.action_space = self.env.action_space
 
         # 累计最近的4个状态
@@ -85,7 +85,7 @@ class BreakoutEnv(gym.Env):
 
             # 使用 RecordVideo 包装环境
             new_env = gym.make('ALE/Breakout-v5', render_mode='rgb_array', obs_type='grayscale')
-            new_env = TransformObservation(new_env, crop_observation)
+            new_env = TransformObservation(new_env, crop_observation, observation_space=gym.spaces.Box(low=0, high=255, shape=(161, 144), dtype=np.uint8))
             self.env = RecordVideo(
                 new_env,
                 video_folder='.',
@@ -99,6 +99,10 @@ class BreakoutEnv(gym.Env):
                 self.env_bak = None
                 self.need_upload_file = ''
 
+    def _get_state(self):
+        stacked_states = np.stack(self.buffer, axis=0)
+        return (stacked_states / 255).astype(np.float32)
+
     def reset(self, seed=None, options=None):
         state, info = self.env.reset(seed=seed, options=options)
         self.buffer.append(state)
@@ -106,15 +110,14 @@ class BreakoutEnv(gym.Env):
         while len(self.buffer) < self.capacity:
             state, reward, done, truncated, info = self.env.step(0)# NOOP
             self.buffer.append(state)
-
-        return np.stack(self.buffer, axis=0) / 255, info
+        return self._get_state(), info
 
     def step(self, action):
         state, reward, done, truncated, info = self.env.step(action)
         info['period_done'] = truncated or done
         info['act_criteria'] = 0
         self.buffer.append(state)
-        return np.stack(self.buffer, axis=0) / 255, reward, done, truncated, info
+        return self._get_state(), reward, done, truncated, info
 
     def render(self):
         return self.env.render()
