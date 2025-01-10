@@ -108,13 +108,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.init_weights()
         # 其他learner什么也不做
 
+    @ray.method(num_returns=0)
     def set_communicate_with_param_server(self, need_communicate_id: int):
         """
         设置是否与参数服务器通信
         """
         self.communicate_with_param_server = id(self) == need_communicate_id
 
-    def init_weights(self, weights):
+    @ray.method(num_returns=0)
+    def init_weights(self):
         """
         从参数服务器获取初始化权重
         """
