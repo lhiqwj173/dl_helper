@@ -3,12 +3,6 @@ import datetime
 import gymnasium as gym
 from gymnasium.wrappers import TransformObservation
 from gymnasium.wrappers import RecordVideo
-
-try:
-    import ale_py
-    gym.register_envs(ale_py)
-except:
-    pass
 import collections
 import numpy as np
 import torch.nn as nn

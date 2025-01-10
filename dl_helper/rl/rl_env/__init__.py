@@ -1,3 +1,10 @@
+import gymnasium as gym
+try:
+    import ale_py
+    gym.register_envs(ale_py)
+except:
+    pass
+
 from ray.tune.registry import register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
