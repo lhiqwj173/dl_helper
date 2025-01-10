@@ -13,10 +13,10 @@ class Register:
 
     def __init__(self):
         # 注册环境
-        register_env(BreakoutEnv.REG_NAME, lambda config: BreakoutEnv())
+        register_env(BreakoutEnv.REG_NAME, lambda config={}: BreakoutEnv())
         # print(CartPoleEnv.__dict__)
-        # register_env(CartPoleEnv.REG_NAME, lambda config: CartPoleEnv())
-        register_env(LOB_trade_env.REG_NAME, lambda config: LOB_trade_env())
+        # register_env(CartPoleEnv.REG_NAME, lambda config={}: CartPoleEnv())
+        register_env(LOB_trade_env.REG_NAME, lambda config={}: LOB_trade_env())
 
 # 实例化
 _ = Register()
