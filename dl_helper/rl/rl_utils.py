@@ -17,8 +17,8 @@ from dl_helper.rl.run import run_client_learning, run_client_learning_device_bre
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
 from py_ext.tool import log
 
-alist_folder = r'/root/alist_data/rl_learning_process'
-root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(alist_folder))) else alist_folder
+rl_folder = r'/root/rl_learning'
+root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
 def simplify_rllib_metrics(data, out_func=print):
     important_metrics = {

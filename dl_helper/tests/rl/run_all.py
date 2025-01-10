@@ -3,11 +3,17 @@ import sys
 import shutil
 import subprocess 
 
+from dl_helper.rl.rl_utils import rl_folder
+
 def run(need_clear):
     if need_clear:
-        print('清理 /root/alist_data/rl_learning_process 目录下的所有文件')
-        shutil.rmtree('/root/alist_data/rl_learning_process')
-        os.makedirs('/root/alist_data/rl_learning_process')
+        if os.path.exists(rl_folder):
+            print('清理 /root/rl_learning 目录下的所有文件')
+            shutil.rmtree(rl_folder)
+            os.makedirs(rl_folder)
+        else:
+            # 创建目录
+            os.makedirs(rl_folder)
 
     code_folder = r'/root/code/dl_helper'
 
