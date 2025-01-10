@@ -107,6 +107,7 @@ class ExperimentHandler:
                 new_id = 0
                 self.client_ip_ids[client_ip] = [new_id, current_time]
                 send_msg(client_socket, str(new_id).encode())
+                log(f'{msg_header} Send back client_id: {client_ip}:{new_id}')
 
         except ConnectionResetError:
             pass
