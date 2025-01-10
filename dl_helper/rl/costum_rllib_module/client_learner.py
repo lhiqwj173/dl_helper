@@ -25,14 +25,12 @@ class ClientLearnerGroup(LearnerGroup):
 
     def _sync_learner_weights(self):
         """广播 communicate_learner 的参数到其他learner"""
-        print(f"set weights to all learners")
-        # 获取id==communicate_learner_id的learner的参数，并更新到其他learner
-        state_future = self.communicate_learner.get_state.remote()
-        # 等待权重获取完成
-        state = ray.get(state_future)
+        # 获取服务器的参数，并更新到其他learner
+        state, version = get_server_weights(self.train_title)
         weights = {'default_policy': state['rl_module']['default_policy']}
         # 更新到所有learner
         self.set_weights(weights)
+        print(f"set weights to all learners, version: {version}")
 
     def update_from_batch(
         self,
