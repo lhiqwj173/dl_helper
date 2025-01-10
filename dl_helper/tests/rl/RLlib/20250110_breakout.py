@@ -51,8 +51,10 @@ if __name__ == "__main__":
             learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
         )
         .extra_config(
-            train_title=train_title,
             learner_group_class=ClientLearnerGroup,
+            learner_group_kwargs={
+                "train_title": train_title,
+            },
         )
         .learners(    
             num_learners=num_learners,

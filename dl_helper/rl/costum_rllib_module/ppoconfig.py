@@ -18,11 +18,10 @@ class ClientPPOConfig(PPOConfig):
         learner_group = self._extra_learner_group_class(config=self.copy(), module_spec=rl_module_spec, **self._extra_learner_group_kwargs)
         return learner_group
     
-    def extra_config(self, train_title, learner_group_class=LearnerGroup, learner_group_kwargs={}):
+    def extra_config(self, learner_group_class=LearnerGroup, learner_group_kwargs={}):
         """
         额外的自定义配置
         """
-        self._extra_train_title = train_title
         self._extra_learner_group_class = learner_group_class
         self._extra_learner_group_kwargs = learner_group_kwargs
         return self
