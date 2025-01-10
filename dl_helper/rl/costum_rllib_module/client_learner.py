@@ -38,6 +38,7 @@ class ClientLearnerGroup(LearnerGroup):
         # 更新到所有learner
         self.set_weights(weights)
         print(f"set weights to all learners, version: {version}")
+        self.foreach_learner(lambda learner: learner.set_weights_version(version))
 
     def update_from_batch(
         self,
@@ -87,3 +88,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.train_title = train_title
         # 获取客户端 id
         self.client_id = request_client_id(self.train_title)
+
+    def set_weights_version(self, version):
+        print(f"[{id(self)}] set_version: {version}")
+        self.version = version
