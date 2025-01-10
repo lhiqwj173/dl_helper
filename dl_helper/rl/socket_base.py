@@ -42,9 +42,11 @@ def _connect_server_apply(func, *args, **kwargs):
     *args: 函数其他参数
     **kwargs: 函数其他参数
     """
+    print('connect server')
     _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         _socket.connect((HOST, PORT))
+        print('connected')
         return func(_socket, *args, **kwargs)
     except Exception as e:
         log(f"连接服务器失败")
@@ -95,11 +97,14 @@ def request_client_id(train_title):
     def _request_client_id(_socket):
         # 发送请求分配id
         message = f'{CODE}_{train_title}:request_id'
+        print(f'send message: {message}')
         send_msg(_socket, message.encode())
         
         # 接收分配的id
+        print('wait response')
         response = recv_msg(_socket)
         if response:
+            print(f'response: {response}')
             return int(response.decode())
         return -1
 
