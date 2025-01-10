@@ -105,19 +105,22 @@ def run_param_center():
         train_title, cmd = a.split(':', maxsplit=1)
         
         # 获取处理器
-        if train_title not in handlers:
-            # 重新读取 
-            train_dict = read_train_title_item()
-            if train_title in train_dict:
-                config = train_dict[train_title]
-                handlers[train_title] = ExperimentHandler(train_title, config)
-            else:
-                msg = f'{train_title} not found'
-                send_wx(msg)
-                log(msg)
-                client_socket.close()
-                continue
-        handler = handlers[train_title]
+        if train_title == 'test':
+            handler = handlers.values()[0]
+        else:
+            if train_title not in handlers:
+                # 重新读取 
+                train_dict = read_train_title_item()
+                if train_title in train_dict:
+                    config = train_dict[train_title]
+                    handlers[train_title] = ExperimentHandler(train_title, config)
+                else:
+                    msg = f'{train_title} not found'
+                    send_wx(msg)
+                    log(msg)
+                    client_socket.close()
+                    continue
+            handler = handlers[train_title]
         
         # 不要影响到其他客户端
         try:
