@@ -2,6 +2,7 @@
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+
 from py_ext.tool import log, init_logger
 from py_ext.wechat import send_wx
 
@@ -15,7 +16,8 @@ import matplotlib.pyplot as plt
 import traceback
 
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
-from dl_helper.rl.rl_utils import read_train_title_item, ExperimentHandler
+from dl_helper.rl.rl_utils import read_train_title_item
+from dl_helper.rl.param_keeper import ExperimentHandler
 
 class BlockIPs:
     """管理block ip的类"""
@@ -59,9 +61,9 @@ def run_param_center():
     # 初始化实验处理器
     handlers = {}
     train_dict = read_train_title_item()
-    for title, (agent_class_name, agent_kwargs, simple_test, period_day) in train_dict.items():
+    for title, config in train_dict.items():
         log(f'{title} init')
-        handlers[title] = ExperimentHandler(title, agent_class_name, agent_kwargs, simple_test, period_day)
+        handlers[title] = ExperimentHandler(title, config)
 
     log('all init done')
     while True:
@@ -107,8 +109,8 @@ def run_param_center():
             # 重新读取 
             train_dict = read_train_title_item()
             if train_title in train_dict:
-                agent_class_name, agent_kwargs, simple_test, period_day = train_dict[train_title]
-                handlers[train_title] = ExperimentHandler(train_title, agent_class_name, agent_kwargs, simple_test, period_day)
+                config = train_dict[train_title]
+                handlers[train_title] = ExperimentHandler(train_title, config)
             else:
                 msg = f'{train_title} not found'
                 send_wx(msg)
@@ -129,7 +131,6 @@ def run_param_center():
             continue
         finally:
             client_socket.close()
-
 
 if __name__ == '__main__':
     init_logger('net_center')

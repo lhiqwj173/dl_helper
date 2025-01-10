@@ -1,13 +1,19 @@
-import torch
+import torch, time
 
 import numpy as np
-import pickle
+import pickle, requests
 from typing import Dict, Any
 from collections import deque
 
+from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
+
+from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
+from ray.rllib.core import COMPONENT_RL_MODULE
+from ray.tune.registry import _global_registry, ENV_CREATOR
+
 from py_ext.tool import log
 
-class AsyncRLParameterServer:
+class AsyncRLParameterServer_0:
     def __init__(self,
                  agent,
                  learning_rate: float = 0.001,
@@ -26,6 +32,8 @@ class AsyncRLParameterServer:
             importance_decay: 重要性衰减系数
             max_version_delay: 最大允许版本延迟
         """
+        raise NotImplementedError("弃用")
+
         self.agent = agent
         self.params = dict(agent.get_model_to_sync().named_parameters()) # 不拷贝，直接引用
         self.base_lr = learning_rate
@@ -70,7 +78,6 @@ class AsyncRLParameterServer:
 
         return True
         
-            
     def _adjust_importance(self, importance: float, delay: int) -> float:
         """基于延迟调整重要性权重
         
@@ -116,4 +123,96 @@ class AsyncRLParameterServer:
             
             # 2. 应用梯度更新 (使用 PyTorch 的 in-place 操作)
             self.params[name].data.add_(self.velocity[name], alpha=-lr)
-            
+
+class AsyncRLParameterServer:
+    def __init__(self,
+                 config, env
+        ):
+        """分布式强化学习参数服务器
+        
+        Args:
+            config: RLlib 配置
+            env: 环境
+        """
+        self.learner = config.build_learner(env=env)
+        self.learner.build()
+        self.ver = 0
+        
+    def apply_gradients(self, gradients_dict, client_version):
+        """更新参数"""
+        self.learner.apply_gradients(gradients_dict)
+        self.ver += 1
+        return self.get_weights()
+    
+    def get_weights(self):
+        """获取参数"""
+        return (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
+
+class ExperimentHandler:
+    """处理单个实验的类"""
+    def __init__(self, train_title, config):
+        """
+        train_title: 训练标题
+        config: RLlib 配置
+        """
+        # 训练标题
+        self.train_title = train_title
+
+        # 客户端 IP/id
+        self.client_ip_ids = {}
+
+        # 参数服务器
+        env_creater = _global_registry.get(ENV_CREATOR, config.env)
+        self.env = env_creater()
+        self.param_server = AsyncRLParameterServer(config, self.env)
+
+        # 版本号
+        self.version = 0
+
+    def handle_request(self, client_socket, msg_header, cmd):
+        """处理客户端请求"""
+        try:
+            if cmd == 'get':
+                # 返回模型参数
+                weights = self.param_server.get_weights()
+                send_msg(client_socket, pickle.dumps(weights))
+                log(f'{msg_header} Parameters sent, version: {weights[1]}')
+
+            elif cmd == 'update_gradients':
+                update_data = recv_msg(client_socket)
+                if update_data is None:
+                    return
+                grads, version = pickle.loads(update_data)
+                # 更新梯度并返回模型参数
+                weights = self.param_server.apply_gradients(grads, version)
+                send_msg(client_socket, pickle.dumps(weights))
+
+            elif cmd == 'client_id':
+                """
+                根据ip分配返回客户端id
+                若ip已经存在, 返回 ''
+                """
+                client_ip = msg_header['ip']
+                current_time = time.time()
+
+                # 清理过期的ip-id映射并检查当前ip
+                if client_ip in self.client_ip_ids:
+                    # ip存在,检查是否过期
+                    if current_time - int(self.client_ip_ids[client_ip])/1000 <= 12 * 3600:
+                        # 未过期,返回空
+                        send_msg(client_socket, b'')
+                        return
+                    # 已过期,删除
+                    del self.client_ip_ids[client_ip]
+
+                # 分配新id(毫秒时间戳)
+                new_id = str(int(current_time * 1000))
+                self.client_ip_ids[client_ip] = new_id
+                send_msg(client_socket, new_id.encode())
+
+        except ConnectionResetError:
+            pass
+
+
+if __name__ == '__main__':
+    pass

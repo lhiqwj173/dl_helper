@@ -51,6 +51,9 @@ def crop_observation(obs):
     return obs[32:193, 8:152]
 
 class BreakoutEnv(gym.Env):
+    
+    REG_NAME = 'breakout'
+
     def __init__(self, capacity=4):
         """
         s: 游戏画面 shape: (161, 144)

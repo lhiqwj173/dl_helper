@@ -52,9 +52,12 @@ def _connect_server_apply(func, *args, **kwargs):
     finally:
         _socket.close()
 
-def get_net_params(train_title):
-    """获取net参数"""
-    def _get_net_params(_socket):
+def get_server_weights(train_title):
+    """
+    获取参数服务器权重
+    server返回: (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
+    """
+    def _get_server_weights(_socket):
         # 发送获取参数请求
         message = f'{CODE}_{train_title}:get'
         send_msg(_socket, message.encode())
@@ -65,61 +68,27 @@ def get_net_params(train_title):
             raise Exception('Failed to receive parameters')
             
         # 反序列化参数
-        net_params, version = pickle.loads(response)
-        return net_params, version
+        weights, version = pickle.loads(response)
+        return weights, version
 
-    return _connect_server_apply(_get_net_params)
+    return _connect_server_apply(_get_server_weights)
 
-def check_need_val_test(train_title):
-    """查询是否需要验证测试
-    返回: 'val' / 'test' / 'no'
-    """
-    def _check_need_val_test(_socket):
-        # 发送查询请求
-        message = f'{CODE}_{train_title}:check'
-        send_msg(_socket, message.encode())
-        
-        # 接收响应
-        response = recv_msg(_socket)
-        if response:
-            return response.decode()
-        return 'no'
-
-    return _connect_server_apply(_check_need_val_test)
-
-def send_accumulated_gradients(train_title, grads, importance, version, metrics):
-    """发送累积的梯度"""
-    def _send_accumulated_gradients(_socket):
-        # 发送累积梯度请求
+def send_gradients(train_title, grads, version):
+    """发送梯度"""
+    def _send_gradients(_socket):
+        # 发送梯度请求
         message = f'{CODE}_{train_title}:update_gradients'
         send_msg(_socket, message.encode())
         
         # 发送累积梯度
-        data = pickle.dumps((grads, importance, version, metrics))
+        data = pickle.dumps((grads, version))
         send_msg(_socket, data)
         
         # 等待确认
         response = recv_msg(_socket)
         return response == b'ok'
 
-    return _connect_server_apply(_send_accumulated_gradients)
-
-def send_val_test_data(train_title, data_type, metrics):
-    """发送训练数据"""
-    def _send_val_test_data(_socket):
-        # 发送训练数据请求
-        message = f'{CODE}_{train_title}:{data_type}'
-        send_msg(_socket, message.encode())
-        
-        # 发送训练数据
-        data = pickle.dumps(metrics)
-        send_msg(_socket, data)
-        
-        # 等待确认
-        response = recv_msg(_socket)
-        return response == b'ok'
-
-    return _connect_server_apply(_send_val_test_data)
+    return _connect_server_apply(_send_gradients)
 
 def request_client_id(train_title):
     """请求分配客户端id"""

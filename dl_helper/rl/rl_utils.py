@@ -103,7 +103,7 @@ def simplify_rllib_metrics(data, out_func=print):
     out_func('-'*30)
 
 class ExperimentHandler:
-    """处理单个实验的类"""
+    """弃用 处理单个实验的类"""
     def __init__(self, train_title, agent_class_name=None, agent_kwargs=None, simple_test=False, period_day=True):
         """
         train_title: 训练标题
@@ -112,6 +112,8 @@ class ExperimentHandler:
         simple_test: 是否简单测试
         period_day: train_periods 是否按天统计
         """
+        raise NotImplementedError("弃用")
+    
         self.train_title = train_title
 
         self.simple_test = simple_test
@@ -714,20 +716,20 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
-def add_train_title_item(train_title, agent_class, agent_kwargs, simple_test, period_day=True):
+def add_train_title_item(train_title, config):
     file = os.path.join(root_folder, f'{train_title}.data')
     if os.path.exists(file):
         return
     with open(file, 'wb') as f:
-        pickle.dump((agent_class.__name__, agent_kwargs, simple_test, period_day), f)
+        pickle.dump(config, f)
 
 def read_train_title_item():
     res = {}
     for file in os.listdir(root_folder):
         if file.endswith('.data'):
             title = file.replace('.data', '')
-            agent_class_name, agent_kwargs, simple_test, period_day = pickle.load(open(os.path.join(root_folder, file), 'rb'))
-            res[title] = (agent_class_name, agent_kwargs, simple_test, period_day)
+            config = pickle.load(open(os.path.join(root_folder, file), 'rb'))
+            res[title] = config
     return res
 
 class LRTrainParams:

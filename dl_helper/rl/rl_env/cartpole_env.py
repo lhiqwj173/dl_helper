@@ -23,6 +23,9 @@ class cartpole_mlp(nn.Module):
         return 64
 
 class CartPoleEnv(gym.Env):
+
+    REG_NAME = 'cartpole'
+
     def __init__(self, *args, **kwargs):
         """
         CartPole 环境
@@ -65,8 +68,8 @@ class CartPoleEnv(gym.Env):
                 self.env_bak = None
                 self.need_upload_file = ''
 
-    def reset(self):
-        return self.env.reset()
+    def reset(self, seed=None, options=None):
+        return self.env.reset(seed=seed, options=options)
 
     def step(self, action):
         state, reward, done, truncated, info = self.env.step(action)

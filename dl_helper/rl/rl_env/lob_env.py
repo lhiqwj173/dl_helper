@@ -563,8 +563,9 @@ class LOB_trade_env(gym.Env):
     返回的 obs 结构:
         lob数据 + 持仓 + 未实现收益率
     """
-    metadata = {"render_modes": ["ansi"]}
 
+    REG_NAME = 'lob'
+    
     def __init__(self, data_producer: data_producer):
         """
         :param data_producer: 数据生产器

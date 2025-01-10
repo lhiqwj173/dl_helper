@@ -9,6 +9,7 @@ init_logger('20250108_breakout', home='breakout', timestamp=False)
 
 if __name__ == "__main__":
     algo = "Rainbow_DQN"
+    algo = "PPO"
     if len(sys.argv) > 1:
         algo = sys.argv[1]
 
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_base_dir, exist_ok=True)
 
     # 训练循环
-    rounds = 10000
+    rounds = 2000
     for i in range(rounds):
         log(f"\nTraining iteration {i+1}/{rounds}")
         result = algo.train()

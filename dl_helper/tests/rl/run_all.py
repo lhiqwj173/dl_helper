@@ -14,7 +14,7 @@ def run(need_clear):
     # 训练服务
     print('注册训练服务')
     # for py_file in ['20241203_dddqn.py', '20241216_per_dqn.py', '20241217_c51.py']:
-    for py_file in ['20241217_c51.py', '20241226_breakout_c51.py']:
+    for py_file in ['RLlib/20250110_breakout.py']:
         path = os.path.join(code_folder, 'dl_helper', 'tests', 'rl', py_file)
         subprocess.run(['python3', path, 'server'], check=True)
 
