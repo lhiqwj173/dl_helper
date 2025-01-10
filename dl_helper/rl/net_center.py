@@ -106,7 +106,7 @@ def run_param_center():
         
         # 获取处理器
         if train_title == 'test':
-            handler = handlers.values()[0]
+            handler = list(handlers.values())[0]
         else:
             if train_title not in handlers:
                 # 重新读取 
