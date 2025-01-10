@@ -17,9 +17,8 @@ class ClientLearnerGroup(LearnerGroup):
     - 需要在每次 update_from_batch 后，获取communicate_learner的参数，并更新到其他learner
     """
     def __init__(self, *args, **kwargs):
-        assert not isinstance(self.config.algo_class, (IMPALA, APPO)), "暂不支持异步算法 IMPALA/APPO"
-
         super().__init__(*args, **kwargs)
+        assert not isinstance(self.config.algo_class, (IMPALA, APPO)), "暂不支持异步算法 IMPALA/APPO"
 
         # 获取learner列表 self.config.num_learners
         actors = self._worker_manager.actors()
