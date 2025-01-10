@@ -205,17 +205,19 @@ class ExperimentHandler:
                 # 清理过期的ip-id映射并检查当前ip
                 if client_ip in self.client_ip_ids:
                     # ip存在,检查是否过期
-                    if current_time - int(self.client_ip_ids[client_ip])/1000 <= 12 * 3600:
-                        # 未过期,返回空
-                        send_msg(client_socket, b'')
+                    _, timestamp = self.client_ip_ids[client_ip]
+                    if current_time - timestamp <= 12 * 3600:
+                        # 未过期,id+1 返回
+                        self.client_ip_ids[client_ip][0] += 1
+                        send_msg(client_socket, str(self.client_ip_ids[client_ip][0]).encode())
                         return
                     # 已过期,删除
                     del self.client_ip_ids[client_ip]
 
-                # 分配新id(毫秒时间戳)
-                new_id = str(int(current_time * 1000))
-                self.client_ip_ids[client_ip] = new_id
-                send_msg(client_socket, new_id.encode())
+                # 分配新id
+                new_id = 0
+                self.client_ip_ids[client_ip] = [new_id, current_time]
+                send_msg(client_socket, str(new_id).encode())
 
         except ConnectionResetError:
             pass
