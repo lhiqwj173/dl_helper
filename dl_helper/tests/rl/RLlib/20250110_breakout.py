@@ -17,7 +17,6 @@ if __name__ == "__main__":
             if arg == "server":
                 is_server = True
 
-    algo = "PPO"
     train_title = f'20250110_breakout'
 
     # 根据设备gpu数量选择 num_learners
