@@ -7,6 +7,7 @@ from dl_helper.rl.rl_utils import rl_folder
 
 def run(need_clear):
     if need_clear:
+        print('需要清理...')
         if os.path.exists(rl_folder):
             print('清理 /root/rl_learning 目录下的所有文件')
             shutil.rmtree(rl_folder)
