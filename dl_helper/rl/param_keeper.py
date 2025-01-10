@@ -162,7 +162,7 @@ class ExperimentHandler:
         self.client_ip_ids = {}
 
         # 参数服务器
-        config = config.config.learners(    
+        config = config.learners(    
             num_learners=1,
             num_gpus_per_learner=0,
             num_cpus_per_learner=0.5,
