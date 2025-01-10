@@ -30,7 +30,7 @@ class ClientLearnerGroup(LearnerGroup):
         if self.config.num_learners > 1:
             # 广播id，非id的learner将不会进行与参数服务器通信
             self.foreach_learner(
-                lambda _learner, _id=communicate_learner_id: _learner.set_communicate_with_param_server(_id)
+                func = lambda _learner: _learner.set_communicate_with_param_server(communicate_learner_id)
             )
         
         # 从服务器初始化参数
