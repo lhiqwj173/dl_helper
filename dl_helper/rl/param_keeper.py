@@ -162,6 +162,11 @@ class ExperimentHandler:
         self.client_ip_ids = {}
 
         # 参数服务器
+        config = config.config.learners(    
+            num_learners=1,
+            num_gpus_per_learner=0,
+            num_cpus_per_learner=0.5,
+        )
         env_creater = _global_registry.get(ENV_CREATOR, config.env)
         self.env = env_creater()
         self.param_server = AsyncRLParameterServer(config, self.env)
