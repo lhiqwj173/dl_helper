@@ -6,7 +6,7 @@ import pickle
 import struct
 
 CODE = '0QYg9Ky17dWnN4eK'
-HOST = '146.235.33.108'
+HOST = '132.226.234.60'
 PORT = 12346
 
 def recvall(sock, n):
