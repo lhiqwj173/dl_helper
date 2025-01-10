@@ -1,6 +1,8 @@
 import sys, os
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
+from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item
@@ -45,16 +47,23 @@ if __name__ == "__main__":
                 ],
             },
         )
-        # .learners(    
-        #     num_learners=num_learners,
-        #     num_gpus_per_learner=1,
-        # )
-
-        .learners(    
-            num_learners=2,
-            num_gpus_per_learner=0,
-            num_cpus_per_learner=0.3,
+        .training(
+            learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
         )
+        .extra_config(
+            train_title=train_title,
+            learner_group_class=ClientLearnerGroup,
+        )
+        .learners(    
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
+        )
+        # for debug
+        # .learners(    
+        #     num_learners=2,
+        #     num_gpus_per_learner=0,
+        #     num_cpus_per_learner=0.3,
+        # )
     )
 
     if is_server:

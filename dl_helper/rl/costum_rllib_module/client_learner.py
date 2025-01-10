@@ -16,9 +16,16 @@ class ClientLearnerGroup(LearnerGroup):
     - 若存在多个 learner，则需要选择设置是否与参数服务器通信
     - 需要在每次 update_from_batch 后，获取communicate_learner的参数，并更新到其他learner
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, train_title='', **kwargs):
         super().__init__(*args, **kwargs)
         assert not isinstance(self.config.algo_class, (IMPALA, APPO)), "暂不支持异步算法 IMPALA/APPO"
+
+        # 训练标题
+        assert train_title != '', "train_title 不能为空"
+        self.train_title = train_title
+
+        # 设置每个learner的train_title
+        self.foreach_learner(lambda learner: learner.set_train_title(self.train_title))
 
         # 同步参数
         self._sync_learner_weights()
@@ -62,16 +69,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     """
     每个客户端只需要有一个与参数服务器通信的learner
     """
-    def __init__(self, train_title, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # 训练标题
-        self.train_title = train_title
 
         # 版本号
         self.version = 0
-
-        # 获取客户端 id
-        self.client_id = request_client_id(self.train_title)
 
     def apply_gradients(self, gradients_dict) -> None:
         if self.client_id == 0:
@@ -80,3 +82,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             send_gradients(self.train_title, gradients_dict, self.version)
         # 其他learner什么也不做
 
+    def set_train_title(self, train_title):
+        print(f"[{id(self)}] set_train_title: {train_title}")
+        self.train_title = train_title
+        # 获取客户端 id
+        self.client_id = request_client_id(self.train_title)
