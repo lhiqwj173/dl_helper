@@ -121,7 +121,7 @@ def run_param_center():
         
         # 不要影响到其他客户端
         try:
-            msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}][{handler.update_count}]'
+            msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}][{handler.version}]'
             handler.handle_request(client_socket, msg_header, cmd)
         except Exception as e:
             log(f"Error handling request: {e}")
