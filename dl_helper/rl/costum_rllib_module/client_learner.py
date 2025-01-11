@@ -24,7 +24,10 @@ class ClientLearnerGroup(LearnerGroup):
         assert train_title != '', "train_title 不能为空"
         self.train_title = train_title
 
-    def init_client_learner(self):
+        # 初始化客户端learner
+        self._init_client_learner()
+
+    def _init_client_learner(self):
         """初始化客户端learner"""
         # 设置每个learner的train_title
         print(f"init_client_learner")
@@ -80,6 +83,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # 客户端 id
+        self.client_id = -1
 
         # 版本号
         self.version = 0
