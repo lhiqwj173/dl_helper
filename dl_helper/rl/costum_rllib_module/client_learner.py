@@ -3,7 +3,13 @@ from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core.learner.learner_group import LearnerGroup
 from ray.rllib.algorithms.impala.impala import IMPALA
 from ray.rllib.algorithms.appo.appo import APPO
+from ray.rllib.core import (
+    COMPONENT_LEARNER,
+    COMPONENT_MULTI_RL_MODULE_SPEC,
+    COMPONENT_RL_MODULE,
+)
 
+import copy
 from typing import Dict, Any
 import requests
 
@@ -87,7 +93,7 @@ class ClientLearnerGroup(LearnerGroup):
         state, version = get_server_weights(self.train_title)
         # print('state:', state)
         # print('version:', version)
-        weights = {'default_policy': state['rl_module']['default_policy']}
+        weights = {'default_policy': state}
         # 更新到所有learner
         self.set_weights(weights)
         print(f"set weights to all learners, version: {version}")
@@ -107,27 +113,48 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 版本号
         self.version = 0
 
+        # 更新计数
+        self.update_count = 0
+
         # 梯度同步频率
         self.gradient_sync_frequency = 8
         self.gradient_buffer = []
-        
+
     def _merge_gradients(self, gradient_list):
         # 简单平均多个batch的梯度
-        merged = {}
-        for key in gradient_list[0].keys():
-            merged[key] = sum(g[key] for g in gradient_list) / len(gradient_list)
+        merged = []
+        length = len(gradient_list)
+        for i in range(length):
+            merged.append(sum(g[i] for g in gradient_list) / length)
         return merged
     
-    def apply_gradients(self, gradients_dict) -> None:
+    def compute_gradients(self, *args, **kwargs):
+        gradients_dict = super().compute_gradients(*args, **kwargs)
+        
+        self.update_count += 1
+
         if self.client_id == 0:
-            self.gradient_buffer.append(gradients_dict)
-            if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+            self.gradient_buffer.append(cpu_gradients)
+            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+            if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
                 merged_gradients = self._merge_gradients(self.gradient_buffer)
                 print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
-        super().apply_gradients(gradients_dict)
+
+        # 拉取最新的模型
+        if self.update_count % self.gradient_sync_frequency == 0:
+            state, self.version = get_server_weights(self.train_title)
+            weights = {COMPONENT_RL_MODULE: {'default_policy': state}}
+            self.set_weights(weights)
+
+        return gradients_dict
+
+    def after_gradient_based_update(self, *args, **kwargs):
+        self.update_count = 0
+        return super().after_gradient_based_update(*args, **kwargs)
 
     def set_client_id(self, client_id):
         print(f"[{id(self)}] set_client_id: {client_id}")

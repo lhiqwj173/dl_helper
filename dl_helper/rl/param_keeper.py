@@ -27,15 +27,19 @@ class AsyncRLParameterServer:
         self.learner.build()
         self.ver = 0
         
-    def apply_gradients(self, gradients_dict, client_version):
+    def apply_gradients(self, gradients_list, client_version):
         """更新参数"""
-        self.learner.apply_gradients(gradients_dict)
+        params = self.learner._params
+        for idx, k in enumerate(params.keys()):
+            params[k].grad = gradients_list[idx].to(self.learner._device)
+        
+        self.learner.apply_gradients({})
         self.ver += 1
         return self.get_weights()
     
     def get_weights(self):
         """获取参数"""
-        return (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
+        return (self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy'], self.ver)
 
 class ExperimentHandler:
     """处理单个实验的类"""
