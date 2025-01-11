@@ -46,7 +46,7 @@ class ClientLearnerGroup(LearnerGroup):
         self.set_weights(weights)
         print(f"set weights to all learners, version: {version}")
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        print(f"set weights to all learners, version: {res}")
+        print(f"set weights to all learners, res: {res}")
 
     def update_from_batch(
         self,
