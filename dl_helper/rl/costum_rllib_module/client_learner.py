@@ -89,9 +89,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 其他learner什么也不做
 
     def set_train_title(self, train_title):
-        print(f"[{id(self)}] set_train_title: {train_title}")
         return True 
     
+        print(f"[{id(self)}] set_train_title: {train_title}")
         self.train_title = train_title
         # 获取客户端 id
         print(f"[{id(self)}] request_client_id")
