@@ -31,7 +31,8 @@ class ClientLearnerGroup(LearnerGroup):
         """初始化客户端learner"""
         # 设置每个learner的train_title
         print(f"init_client_learner")
-        res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
+        # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
+        res = self.foreach_learner(lambda learner: learner.set_train_title(self.train_title))
         print(f"set train_title to all learners, res: {res}")
 
         # 同步参数
@@ -42,8 +43,8 @@ class ClientLearnerGroup(LearnerGroup):
         # 获取服务器的参数，并更新到其他learner
         print('request server weights')
         state, version = get_server_weights(self.train_title)
-        print('state:', state)
-        print('version:', version)
+        # print('state:', state)
+        # print('version:', version)
         weights = {'default_policy': state['rl_module']['default_policy']}
         # 更新到所有learner
         self.set_weights(weights)
