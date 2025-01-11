@@ -136,6 +136,13 @@ def test_pickle_numpy():
 
 
 if "__main__" == __name__:
+
+    file = r"C:\Users\lh\Desktop\fsdownload\debug_pickle.pkl"
+    with open(file, 'rb') as f:
+        data = f.read()
+    response = pickle.loads(data)
+    print(response)
+
     while 1:
         choose = input("1.get_server_weights\n2.request_client_id\n3.test_pickle_numpy\n")
         if choose == "1":

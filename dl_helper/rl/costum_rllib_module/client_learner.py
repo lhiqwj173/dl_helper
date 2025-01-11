@@ -25,7 +25,8 @@ class ClientLearnerGroup(LearnerGroup):
         self.train_title = train_title
 
         # 设置每个learner的train_title
-        self.foreach_learner(lambda learner: learner.set_train_title(self.train_title))
+        res = self.foreach_learner(lambda learner: learner.set_train_title(self.train_title))
+        print(f"set train_title to all learners, res: {res}")
 
         # 同步参数
         self._sync_learner_weights()
@@ -41,7 +42,8 @@ class ClientLearnerGroup(LearnerGroup):
         # 更新到所有learner
         self.set_weights(weights)
         print(f"set weights to all learners, version: {version}")
-        self.foreach_learner(lambda learner: learner.set_weights_version(version))
+        res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
+        print(f"set weights to all learners, version: {res}")
 
     def update_from_batch(
         self,
@@ -93,7 +95,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         print(f"[{id(self)}] request_client_id")
         self.client_id = request_client_id(self.train_title)
         print(f"[{id(self)}] client_id: {self.client_id}")
+        return self.client_id
 
     def set_weights_version(self, version):
         print(f"[{id(self)}] set_version: {version}")
         self.version = version
+        return self.version
