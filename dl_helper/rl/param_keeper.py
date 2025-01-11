@@ -80,8 +80,8 @@ class ExperimentHandler:
                 log(f'{msg_header} Received gradients, version: {version}')
                 # 更新梯度并返回模型参数
                 weights = self.param_server.apply_gradients(grads, version)
-                send_msg(client_socket, pickle.dumps(weights))
-                log(f'{msg_header} Send back weights, version: {weights[1]}')
+                # send_msg(client_socket, pickle.dumps(weights))
+                # log(f'{msg_header} Send back weights, version: {weights[1]}')
 
             elif cmd == 'client_id':
                 """
