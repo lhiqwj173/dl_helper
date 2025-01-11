@@ -47,9 +47,6 @@ if __name__ == "__main__":
                 ],
             },
         )
-        .training(
-            learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
-        )
         .extra_config(
             learner_group_class=ClientLearnerGroup,
             learner_group_kwargs={
@@ -73,6 +70,11 @@ if __name__ == "__main__":
         add_train_title_item(train_title, config)
 
     else:
+        # 客户端配置
+        config = config.training(
+            learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
+        )
+
         # 客户端运行
         # 构建算法
         algo = config.build()
