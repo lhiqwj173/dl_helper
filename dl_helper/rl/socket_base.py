@@ -96,7 +96,7 @@ def request_client_id(train_title):
     """请求分配客户端id"""
     def _request_client_id(_socket):
         # 发送请求分配id
-        message = f'{CODE}_{train_title}:request_id'
+        message = f'{CODE}_{train_title}:client_id'
         print(f'send message: {message}')
         send_msg(_socket, message.encode())
         
