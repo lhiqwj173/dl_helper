@@ -24,6 +24,8 @@ class ClientLearnerGroup(LearnerGroup):
         assert train_title != '', "train_title 不能为空"
         self.train_title = train_title
 
+    def init_client_learner(self):
+        """初始化客户端learner"""
         # 设置每个learner的train_title
         res = self.foreach_learner(lambda learner: learner.set_train_title(self.train_title))
         print(f"set train_title to all learners, res: {res}")
