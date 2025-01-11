@@ -68,7 +68,14 @@ def get_server_weights(train_title):
             raise Exception('Failed to receive parameters')
             
         # 反序列化参数
-        weights, version = pickle.loads(response)
+        try:
+            weights, version = pickle.loads(response)
+        except Exception as e:
+            print(f"反序列化失败: {e}")
+            with open('debug_pickle.pkl', 'wb') as f:
+                f.write(response)
+            print(f'已保存到 debug_pickle.pkl')
+            raise e
         return weights, version
 
     return _connect_server_apply(_get_server_weights)
