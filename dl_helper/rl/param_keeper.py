@@ -88,7 +88,7 @@ class ExperimentHandler:
                 根据ip分配返回客户端id
                 若ip已经存在, 返回 id+1
                 """
-                client_ip = msg_header['ip']
+                client_ip = client_socket.getpeername()[0]
                 current_time = time.time()
 
                 # 清理过期的ip-id映射并检查当前ip
