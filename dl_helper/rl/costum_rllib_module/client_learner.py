@@ -140,7 +140,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
                 merged_gradients = self._merge_gradients(self.gradient_buffer)
-                print(f"[{self.client_id}] send_gradients")
+                print(f"[{self.client_id}] send_gradients\n{merged_gradients}")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
 
@@ -148,7 +148,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.update_count % self.gradient_sync_frequency == 0:
             state, self.version = get_server_weights(self.train_title)
             weights = {COMPONENT_RL_MODULE: {'default_policy': state}}
-            self.set_weights(weights)
+            self.set_state(weights)
 
         return gradients_dict
 

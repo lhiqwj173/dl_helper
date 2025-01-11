@@ -29,6 +29,7 @@ class AsyncRLParameterServer:
         
     def apply_gradients(self, gradients_list, client_version):
         """更新参数"""
+        log(f'gradients_list length: {len(gradients_list)}')
         params = self.learner._params
         for idx, k in enumerate(params.keys()):
             params[k].grad = gradients_list[idx].to(self.learner._device)
