@@ -76,7 +76,6 @@ if __name__ == "__main__":
         # 客户端运行
         # 构建算法
         algo = config.build()
-        sys.exit()
 
         # 创建检查点保存目录
         checkpoint_base_dir = os.path.join(train_folder, 'checkpoints')

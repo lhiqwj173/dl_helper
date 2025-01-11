@@ -31,6 +31,7 @@ class ClientLearnerGroup(LearnerGroup):
         """初始化客户端learner"""
         # 设置每个learner的train_title
         print(f"init_client_learner")
+        # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
         # res = self.foreach_learner(lambda learner: learner.set_train_title(1))
         state_ref = ray.put(self.train_title)
@@ -38,6 +39,14 @@ class ClientLearnerGroup(LearnerGroup):
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
         print(f"set train_title to all learners, res: {res}")
+
+        # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
+        remote_actor_ids = self._worker_manager.actor_ids()[1:]
+        res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids)
+
+        # # 或 请求client_id
+        # res = self.foreach_learner(lambda learner: learner.request_client_id())
+        print(f"set client_id to all learners, res: {res}")
 
         # 同步参数
         self._sync_learner_weights()
@@ -89,8 +98,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # 客户端 id
-        self.client_id = -1
+        # 客户端 id, 0表示与参数服务器通信
+        self.client_id = 0
 
         # 版本号
         self.version = 0
@@ -102,12 +111,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             send_gradients(self.train_title, gradients_dict, self.version)
         # 其他learner什么也不做
 
+    def set_client_id(self, client_id):
+        print(f"[{id(self)}] set_client_id: {client_id}")
+        self.client_id = client_id
+
     def set_train_title(self, train_title):
         print(f"[{id(self)}] set_train_title: {train_title}")
-        return 1
-    
-        print(f"[{id(self)}] set_train_title: {train_title}")
         self.train_title = train_title
+
+    def request_client_id(self):
         # 获取客户端 id
         print(f"[{id(self)}] request_client_id")
         self.client_id = request_client_id(self.train_title)
