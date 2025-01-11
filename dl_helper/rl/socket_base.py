@@ -115,8 +115,8 @@ if "__main__" == __name__:
     while 1:
         choose = input("1.get_server_weights\n2.request_client_id\n")
         if choose == "1":
-            get_server_weights('test')
+            print(get_server_weights('test'))
         elif choose == "2":
-            request_client_id('test')
+            print(request_client_id('test'))
         else:
             print("invalid input")

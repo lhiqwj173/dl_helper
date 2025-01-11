@@ -86,7 +86,7 @@ class ExperimentHandler:
             elif cmd == 'client_id':
                 """
                 根据ip分配返回客户端id
-                若ip已经存在, 返回 ''
+                若ip已经存在, 返回 id+1
                 """
                 client_ip = msg_header['ip']
                 current_time = time.time()
@@ -99,15 +99,17 @@ class ExperimentHandler:
                         # 未过期,id+1 返回
                         self.client_ip_ids[client_ip][0] += 1
                         send_msg(client_socket, str(self.client_ip_ids[client_ip][0]).encode())
+                        log(f'{msg_header} ip:{client_ip} exist, Send back client_id:{self.client_ip_ids[client_ip][0]}')
                         return
                     # 已过期,删除
                     del self.client_ip_ids[client_ip]
+                    log(f'{msg_header} ip:{client_ip} out of date')
 
                 # 分配新id
                 new_id = 0
                 self.client_ip_ids[client_ip] = [new_id, current_time]
                 send_msg(client_socket, str(new_id).encode())
-                log(f'{msg_header} Send back client_id: {client_ip}:{new_id}')
+                log(f'{msg_header} new ip:{client_ip}, Send back client_id: {client_ip}:{new_id}')
 
         except ConnectionResetError:
             pass
