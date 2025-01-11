@@ -9,7 +9,7 @@ from ray.rllib.core import (
     COMPONENT_RL_MODULE,
 )
 
-import copy
+import copy, pickle
 from typing import Dict, Any
 import requests
 
@@ -139,8 +139,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
+                print(f'gradient_buffer length: {len(self.gradient_buffer)}')
+                pickle.dump(self.gradient_buffer, open(f'gradient_buffer_{self.client_id}.pkl', 'wb'))
                 merged_gradients = self._merge_gradients(self.gradient_buffer)
-                print(f"[{self.client_id}] send_gradients\n{merged_gradients}")
+                print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
 
