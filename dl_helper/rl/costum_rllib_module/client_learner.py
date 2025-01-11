@@ -65,28 +65,32 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
         print(f"set weights to all learners, res: {res}")
 
-    def update_from_batch(
+    def _update(
         self,
-        batch,
         *,
+        batch = None,
+        episodes = None,
         timesteps = None,
-        async_update = False,
-        return_state = False,
-        num_epochs = 1,
+        async_update: bool = False,
+        return_state: bool = False,
+        num_epochs: int = 1,
+        num_iters: int = 1,
         minibatch_size = None,
-        shuffle_batch_per_epoch = False,
-        # User kwargs.
+        shuffle_batch_per_epoch: bool = False,
         **kwargs,
     ):
-        res = super().update_from_batch(
-            batch, 
-            timesteps=timesteps, 
-            async_update=async_update, 
-            return_state=return_state, 
-            num_epochs=num_epochs, 
-            minibatch_size=minibatch_size, 
-            shuffle_batch_per_epoch=shuffle_batch_per_epoch, 
-            **kwargs)
+        res = super()._update(
+            batch=batch,
+            episodes=episodes,
+            timesteps=timesteps,
+            async_update=async_update,
+            return_state=return_state,
+            num_epochs=num_epochs,
+            num_iters=num_iters,
+            minibatch_size=minibatch_size,
+            shuffle_batch_per_epoch=shuffle_batch_per_epoch,
+            **kwargs
+        )
         # 同步参数
         self._sync_learner_weights()
         return res
