@@ -102,6 +102,8 @@ def simplify_rllib_metrics(data, out_func=print):
         out_func(f"每轮训练步数: {important_metrics['每轮训练步数']}")
     out_func('-'*30)
 
+    return important_metrics
+
 class ExperimentHandler:
     """弃用 处理单个实验的类"""
     def __init__(self, train_title, agent_class_name=None, agent_kwargs=None, simple_test=False, period_day=True):
