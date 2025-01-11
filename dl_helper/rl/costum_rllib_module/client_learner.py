@@ -33,7 +33,10 @@ class ClientLearnerGroup(LearnerGroup):
     def _sync_learner_weights(self):
         """广播 communicate_learner 的参数到其他learner"""
         # 获取服务器的参数，并更新到其他learner
+        print('request server weights')
         state, version = get_server_weights(self.train_title)
+        print('state:', state)
+        print('version:', version)
         weights = {'default_policy': state['rl_module']['default_policy']}
         # 更新到所有learner
         self.set_weights(weights)
@@ -89,6 +92,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 获取客户端 id
         print(f"[{id(self)}] request_client_id")
         self.client_id = request_client_id(self.train_title)
+        print(f"[{id(self)}] client_id: {self.client_id}")
 
     def set_weights_version(self, version):
         print(f"[{id(self)}] set_version: {version}")

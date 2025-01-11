@@ -106,12 +106,36 @@ def request_client_id(train_title):
     return _connect_server_apply(_request_client_id)
 
 
+def test_pickle_numpy():
+    """测试pickle序列化numpy数组"""
+    import numpy as np
+    
+    # 创建numpy数组
+    arr = np.random.rand(3,4)
+    print("原始数组:")
+    print(arr)
+    
+    # 序列化
+    data = pickle.dumps(arr)
+    print("\n序列化后的bytes长度:", len(data))
+    
+    # 反序列化
+    arr2 = pickle.loads(data)
+    print("\n还原后的数组:")
+    print(arr2)
+    
+    # 验证是否完全相同
+    print("\n两个数组是否完全相同:", np.array_equal(arr, arr2))
+
+
 if "__main__" == __name__:
     while 1:
-        choose = input("1.get_server_weights\n2.request_client_id\n")
+        choose = input("1.get_server_weights\n2.request_client_id\n3.test_pickle_numpy\n")
         if choose == "1":
             print(get_server_weights('test'))
         elif choose == "2":
             print(request_client_id('test'))
+        elif choose == "3":
+            test_pickle_numpy()
         else:
             print("invalid input")
