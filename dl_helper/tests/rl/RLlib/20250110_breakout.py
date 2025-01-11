@@ -34,10 +34,10 @@ if __name__ == "__main__":
         .environment("breakout")# 直接使用
         .env_runners(num_env_runners=2)# 4核cpu，暂时选择2个环境运行器
         # 暂时不支持，计划将eval放在服务端
-        # .evaluation(
-        #     evaluation_interval=50,
-        #     evaluation_duration=5,
-        # )
+        .evaluation(
+            evaluation_interval=2,
+            evaluation_duration=2,
+        )
         .rl_module(
             model_config={
                 "conv_filters": [
