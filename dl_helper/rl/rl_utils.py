@@ -15,10 +15,29 @@ import matplotlib.pyplot as plt
 
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
-from py_ext.tool import log
+from py_ext.tool import log, get_log_file
 
 rl_folder = r'/root/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
+
+def plot_training_curve(train_folder):
+    # 绘制训练曲线
+    log_file = get_log_file()
+    # 读取log文件
+    mean_reward = []
+    max_reward = []
+    with open(log_file, 'r') as f:
+        for line in f:
+            if '185 -   episode平均回报:' in line:
+                mean_reward.append(float(line.split(' ')[-1]))
+            if '185 -   episode最大回报:' in line:
+                max_reward.append(float(line.split(' ')[-1]))
+    
+    # 绘制训练曲线并保存到 train_folder 中
+    plt.plot(mean_reward, label='mean_reward')
+    plt.plot(max_reward, label='max_reward')
+    plt.legend()
+    plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
 def simplify_rllib_metrics(data, out_func=print):
     important_metrics = {

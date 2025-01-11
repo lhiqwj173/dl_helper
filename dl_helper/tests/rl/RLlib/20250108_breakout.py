@@ -1,14 +1,17 @@
 import sys, os
+import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv# 自定义环境
 from dl_helper.rl.easy_helper import *
+from dl_helper.rl.rl_utils import plot_training_curve
 from dl_helper.train_param import match_num_processes
-from py_ext.tool import init_logger, log
+from py_ext.tool import init_logger, log, get_log_file
 
+train_folder = 'breakout'
 init_logger('20250108_breakout', home='breakout', timestamp=False)
 
 if __name__ == "__main__":
-    algo = "Rainbow_DQN"
+    # algo = "Rainbow_DQN"
     algo = "PPO"
     if len(sys.argv) > 1:
         algo = sys.argv[1]
@@ -56,7 +59,7 @@ if __name__ == "__main__":
     algo = config.build()
 
     # 创建检查点保存目录
-    checkpoint_base_dir = 'checkpoints'
+    checkpoint_base_dir = os.path.join(train_folder, 'checkpoints')
     os.makedirs(checkpoint_base_dir, exist_ok=True)
 
     # 训练循环
@@ -77,3 +80,7 @@ if __name__ == "__main__":
         os.path.join(os.path.abspath(checkpoint_base_dir), "final_model")
     )
     log(f"Final model saved in directory {final_checkpoint_dir}")
+
+    # 绘制训练曲线
+    plot_training_curve(train_folder)
+    
