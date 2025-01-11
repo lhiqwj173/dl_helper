@@ -77,8 +77,10 @@ if __name__ == "__main__":
         # 构建算法
         algo = config.build()
 
-        # 初始化客户端learner
-        algo.learner_group.init_client_learner()
+        algo.learner_group._sync_learner_weights()
+
+        # # 初始化客户端learner
+        # algo.learner_group.init_client_learner()
 
         # 创建检查点保存目录
         checkpoint_base_dir = os.path.join(train_folder, 'checkpoints')

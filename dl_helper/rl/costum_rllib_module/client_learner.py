@@ -92,7 +92,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 其他learner什么也不做
 
     def set_train_title(self, train_title):
-        return True 
+        print(f"[{id(self)}] set_train_title: {train_title}")
+        return q 
     
         print(f"[{id(self)}] set_train_title: {train_title}")
         self.train_title = train_title
