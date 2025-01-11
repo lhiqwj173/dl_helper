@@ -120,11 +120,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_sync_frequency = 8
         self.gradient_buffer = []
 
-    def _merge_gradients(self, gradient_list):
+    @staticmethod
+    def merge_gradients(gradient_list):
         # 简单平均多个batch的梯度
         merged = []
         length = len(gradient_list)
-        for i in range(length):
+        for i in range(len(gradient_list[0])):
             merged.append(sum(g[i] for g in gradient_list) / length)
         return merged
     
@@ -139,9 +140,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
-                print(f'gradient_buffer length: {len(self.gradient_buffer)}')
-                pickle.dump(self.gradient_buffer, open(f'gradient_buffer_{self.client_id}.pkl', 'wb'))
-                merged_gradients = self._merge_gradients(self.gradient_buffer)
+                # print(f'gradient_buffer length: {len(self.gradient_buffer)}')
+                # pickle.dump(self.gradient_buffer, open(f'gradient_buffer_{self.client_id}.pkl', 'wb'))
+                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
                 print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
@@ -177,3 +178,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         print(f"[{id(self)}] set_version: {version}")
         self.version = version
         return self.version
+
+
+if __name__ == '__main__':
+    gradient_buffer_file = r"C:\Users\lh\Downloads\gradient_buffer_0.pkl"
+    gradient_buffer = pickle.load(open(gradient_buffer_file, 'rb'))
+    print(gradient_buffer)
+
+    merged_gradients = ClientPPOTorchLearner.merge_gradients(gradient_buffer)
+    print(merged_gradients)
