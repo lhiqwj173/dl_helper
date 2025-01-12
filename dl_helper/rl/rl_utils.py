@@ -115,6 +115,61 @@ class GradientCompressor:
             
         return decompressed_grads
 
+class GradientAccumulator:
+    def __init__(self, momentum=0.9, eps=1e-5):
+        self.momentum = momentum
+        self.eps = eps
+        self.gradient_buffer = []
+        self.accumulated_grads = None
+        self.count = 0
+    
+    def add_gradients(self, cpu_gradients):
+        """添加新的梯度列表到缓冲区
+        Args:
+            cpu_gradients: List[np.ndarray] - CPU上的梯度列表
+        """
+        self.gradient_buffer.append(cpu_gradients)
+        self.count += 1
+    
+    def merge_gradients(self):
+        """合并所有累积的梯度列表"""
+        if not self.gradient_buffer:
+            return None
+            
+        # 第一次累积，初始化accumulated_grads
+        if self.accumulated_grads is None:
+            self.accumulated_grads = [
+                np.zeros_like(grad, dtype=np.float32)
+                for grad in self.gradient_buffer[0]
+            ]
+        
+        # 使用动量累积处理每批梯度
+        for grads in self.gradient_buffer:
+            for i, grad in enumerate(grads):
+                # 动量更新
+                self.accumulated_grads[i] = (
+                    self.momentum * self.accumulated_grads[i] + 
+                    (1 - self.momentum) * grad
+                )
+        
+        # 计算最终梯度（加入eps避免除零）
+        bias_correction = 1 - self.momentum ** self.count
+        final_grads = [
+            grad / (bias_correction + self.eps)
+            for grad in self.accumulated_grads
+        ]
+        
+        # 清空缓冲区但保持累积梯度
+        self.gradient_buffer = []
+        
+        return final_grads
+    
+    def reset(self):
+        """重置累积器"""
+        self.gradient_buffer = []
+        self.accumulated_grads = None
+        self.count = 0
+
 class ParamCompressor:
     def __init__(self, quantize_bits=8):
         self.quantize_bits = quantize_bits

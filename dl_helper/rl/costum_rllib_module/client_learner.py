@@ -18,7 +18,7 @@ import requests
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
-from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor
+from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 
 """
 # 分布式训练流程
@@ -188,6 +188,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 参数压缩器
         self.param_compressor = ParamCompressor()
 
+        # 梯度累积器
+        self.gradient_accumulator = GradientAccumulator()
+        
+        # 梯度同步频率 8
+        self.gradient_sync_frequency = 30
+
         # 共享参数
         self.shared_param = None
         self.params_update_count = 0# shared_param 的更新计数
@@ -200,10 +206,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 更新计数
         self.update_count = 0
-
-        # 梯度同步频率 8
-        self.gradient_sync_frequency = 30
-        self.gradient_buffer = []
 
     def init_shared_param(self):
         print(f"[{self.client_id}] init_shared_param")
@@ -242,18 +244,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            self.gradient_buffer.append(cpu_gradients)
-            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+            self.gradient_accumulator.add_gradients(cpu_gradients)
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
-                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
+                merged_gradients = self.gradient_accumulator.merge_gradients()
                 # 压缩梯度
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
                 # 发送梯度
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
                 # nouse2
-                self.gradient_buffer = []
         # nouse3
 
         return gradients_dict
