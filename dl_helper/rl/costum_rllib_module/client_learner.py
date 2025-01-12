@@ -170,7 +170,7 @@ class ClientLearnerGroup(LearnerGroup):
         print(f"set weights to all learners, res: {res}")
 
         # 创建共享参数
-        self.shared_param = SharedParam(state, create=True)
+        self.shared_param = SharedParam(params_dict, create=True)
 
         # 初始化learner的共享参数
         self.foreach_learner(lambda learner: learner.init_shared_param())
