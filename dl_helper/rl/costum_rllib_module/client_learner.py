@@ -115,6 +115,9 @@ class ClientLearnerGroup(LearnerGroup):
         # 训练标题
         assert train_title != '', "train_title 不能为空"
         self.train_title = train_title
+        
+        # 参数压缩器
+        self.param_compressor = ParamCompressor()
 
         # 初始化客户端learner
         self._init_client_learner()
@@ -122,8 +125,6 @@ class ClientLearnerGroup(LearnerGroup):
         # 共享参数
         self.shared_param = None
 
-        # 参数压缩器
-        self.param_compressor = ParamCompressor()
 
     def __del__(self):
         # 清理共享参数
