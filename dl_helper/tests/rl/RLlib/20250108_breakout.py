@@ -50,8 +50,13 @@ if __name__ == "__main__":
         )
         .training(**simple_algo.training_kwargs)
         .learners(    
-            num_learners=num_learners,
-            num_gpus_per_learner=1,
+            # num_learners=num_learners,
+            # num_gpus_per_learner=1,
+            
+            # for debug
+            num_learners=2,
+            num_gpus_per_learner=0,
+            num_cpus_per_learner=0.3,
         )
     )
 
@@ -64,7 +69,7 @@ if __name__ == "__main__":
 
     # 训练循环
     # rounds = 2000
-    rounds = 30
+    rounds = 100
     for i in range(rounds):
         log(f"\nTraining iteration {i+1}/{rounds}")
         result = algo.train()
