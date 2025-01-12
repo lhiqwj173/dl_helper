@@ -54,16 +54,16 @@ if __name__ == "__main__":
                 "train_title": train_title,
             },
         )
-        # .learners(    
-        #     num_learners=num_learners,
-        #     num_gpus_per_learner=1,
-        # )
-        # for debug
         .learners(    
-            num_learners=2,
-            num_gpus_per_learner=0,
-            num_cpus_per_learner=0.3,
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
         )
+        # for debug
+        # .learners(    
+        #     num_learners=2,
+        #     num_gpus_per_learner=0,
+        #     num_cpus_per_learner=0.3,
+        # )
     )
 
     if is_server:

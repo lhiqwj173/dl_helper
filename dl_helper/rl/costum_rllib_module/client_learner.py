@@ -213,69 +213,68 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             merged.append(sum(g[i] for g in gradient_list) / length)
         return merged
     
-    # nouse5 100 iter about H
-    # nouse4 100 iter about H
-    # def compute_gradients(self, *args, **kwargs):
-    #     # 记录更新计数
-    #     self.params_update_count = self.shared_param.update_count()
+    # all use 100 iter about 11.6H
+    # nouse5 100 iter about 6.9H
+    # nouse4 100 iter about 7.03H
+    def compute_gradients(self, *args, **kwargs):
+        # 记录更新计数
+        self.params_update_count = self.shared_param.update_count()
 
-    #     # 计算梯度
-    #     gradients_dict = super().compute_gradients(*args, **kwargs)
+        # 计算梯度
+        gradients_dict = super().compute_gradients(*args, **kwargs)
         
-    #     self.update_count += 1
+        self.update_count += 1
 
-    #     # nouse2 100 iter about 7.27H
-    #     if self.client_id == 0:
-    #         # 主learner
-    #         cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-    #         self.gradient_buffer.append(cpu_gradients)
-    #         # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
-    #         if self.update_count % self.gradient_sync_frequency == 0:
-    #             # 发送梯度
-    #             merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
-    #             # nouse3 100 iter about 6.8H
-    #             # send_gradients(self.train_title, merged_gradients, self.version)
-    #             # nouse3
-    #             self.gradient_buffer = []
-    #     # nouse2
+        # nouse2 100 iter about 7.27H
+        if self.client_id == 0:
+            # 主learner
+            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+            self.gradient_buffer.append(cpu_gradients)
+            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+            if self.update_count % self.gradient_sync_frequency == 0:
+                # 发送梯度
+                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
+                # nouse3 100 iter about 6.8H
+                send_gradients(self.train_title, merged_gradients, self.version)
+                # nouse3
+                self.gradient_buffer = []
+        # nouse2
 
-    #     return gradients_dict
+        return gradients_dict
     # nouse4
     
-    # def apply_gradients(self, *args, **kwargs):
-    #     # 不要影响原apply_gradients更新
-    #     res = super().apply_gradients(*args, **kwargs)
+    def apply_gradients(self, *args, **kwargs):
+        # 不要影响原apply_gradients更新
+        res = super().apply_gradients(*args, **kwargs)
 
-    #     # all use 100 iter about 11.6H
+        # nouse1 100 iter about 9.72H
+        # 拉取模型 并同步到所有learner上
+        if self.update_count % self.gradient_sync_frequency == 0:
+            if self.client_id == 0:
+                # 主learner
+                params_dict, self.version = get_server_weights(self.train_title)
+                # 更新共享参数
+                self.shared_param.set_param(params_dict)
+            else:
+                # 其他learner
+                # 等待参数更新
+                while self.shared_param.update_count() == self.params_update_count:
+                    time.sleep(0.001)
+                params_dict = self.shared_param.get_param_dict()
 
-    #     # nouse1 100 iter about 9.72H
-    #     # # 拉取模型 并同步到所有learner上
-    #     # if self.update_count % self.gradient_sync_frequency == 0:
-    #     #     if self.client_id == 0:
-    #     #         # 主learner
-    #     #         params_dict, self.version = get_server_weights(self.train_title)
-    #     #         # 更新共享参数
-    #     #         self.shared_param.set_param(params_dict)
-    #     #     else:
-    #     #         # 其他learner
-    #     #         # 等待参数更新
-    #     #         while self.shared_param.update_count() == self.params_update_count:
-    #     #             time.sleep(0.001)
-    #     #         params_dict = self.shared_param.get_param_dict()
+            # 应用到learner
+            weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+            self.set_state(weights)
+        # nouse1
 
-    #     #     # 应用到learner
-    #     #     weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-    #     #     self.set_state(weights)
-    #     # nouse1
+        return res
 
-    #     return res
-
-    # def after_gradient_based_update(self, *args, **kwargs):
-    #     self.update_count = 0
-    #     if self.client_id == 0:
-    #         # 重置更新计数
-    #         self.shared_param.reset_update_count()
-    #     return super().after_gradient_based_update(*args, **kwargs)
+    def after_gradient_based_update(self, *args, **kwargs):
+        self.update_count = 0
+        if self.client_id == 0:
+            # 重置更新计数
+            self.shared_param.reset_update_count()
+        return super().after_gradient_based_update(*args, **kwargs)
     # nouse5
 
     def set_client_id(self, client_id):
