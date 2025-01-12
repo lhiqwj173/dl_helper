@@ -2,7 +2,7 @@ import sys, os
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner, Events
+from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
@@ -21,9 +21,6 @@ if __name__ == "__main__":
                 is_server = True
 
     train_title = f'20250110_breakout'
-
-    # 事件
-    events = Events()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
