@@ -222,16 +222,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         self.update_count += 1
 
-        if self.client_id == 0:
-            # 主learner
-            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            self.gradient_buffer.append(cpu_gradients)
-            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
-            if self.update_count % self.gradient_sync_frequency == 0:
-                # 发送梯度
-                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
-                send_gradients(self.train_title, merged_gradients, self.version)
-                self.gradient_buffer = []
+        # if self.client_id == 0:
+        #     # 主learner
+        #     cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+        #     self.gradient_buffer.append(cpu_gradients)
+        #     # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+        #     if self.update_count % self.gradient_sync_frequency == 0:
+        #         # 发送梯度
+        #         merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
+        #         send_gradients(self.train_title, merged_gradients, self.version)
+        #         self.gradient_buffer = []
 
         return gradients_dict
     
@@ -239,7 +239,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 不要影响原apply_gradients更新
         res = super().apply_gradients(*args, **kwargs)
 
-        # 100 iter 11.6H
+        # use 100 iter about 11.6H / nouse 100 iter about 9.75H
         # # 拉取模型 并同步到所有learner上
         # if self.update_count % self.gradient_sync_frequency == 0:
         #     if self.client_id == 0:
