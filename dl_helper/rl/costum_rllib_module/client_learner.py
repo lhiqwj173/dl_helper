@@ -201,8 +201,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 更新计数
         self.update_count = 0
 
-        # 梯度同步频率
-        self.gradient_sync_frequency = 8
+        # 梯度同步频率 8
+        self.gradient_sync_frequency = 30
         self.gradient_buffer = []
 
     def init_shared_param(self):
@@ -225,7 +225,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return merged
     
     # BENCHMARK 100 iter about 0.6H
-    # all use 100 iter about 6.73H
+    # compress data all use 100 iter about 4.35H -35%
+    # all use 100 iter about 6.73H 
     # nouse5 100 iter about H
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
