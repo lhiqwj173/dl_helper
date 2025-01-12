@@ -167,6 +167,9 @@ class ClientLearnerGroup(LearnerGroup):
         # 创建共享参数
         self.shared_param = SharedParam(state, create=True)
 
+        # 初始化learner的共享参数
+        self.foreach_learner(lambda learner: learner.init_shared_param())
+
 class ClientPPOTorchLearner(PPOTorchLearner):
     """
     每个客户端只需要有一个与参数服务器通信的learner
