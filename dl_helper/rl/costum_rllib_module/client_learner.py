@@ -239,23 +239,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 不要影响原apply_gradients更新
         res = super().apply_gradients(*args, **kwargs)
 
-        # 拉取模型 并同步到所有learner上
-        if self.update_count % self.gradient_sync_frequency == 0:
-            if self.client_id == 0:
-                # 主learner
-                params_dict, self.version = get_server_weights(self.train_title)
-                # 更新共享参数
-                self.shared_param.set_param(params_dict)
-            else:
-                # 其他learner
-                # 等待参数更新
-                while self.shared_param.update_count() == self.params_update_count:
-                    time.sleep(0.001)
-                params_dict = self.shared_param.get_param_dict()
+        # # 拉取模型 并同步到所有learner上
+        # if self.update_count % self.gradient_sync_frequency == 0:
+        #     if self.client_id == 0:
+        #         # 主learner
+        #         params_dict, self.version = get_server_weights(self.train_title)
+        #         # 更新共享参数
+        #         self.shared_param.set_param(params_dict)
+        #     else:
+        #         # 其他learner
+        #         # 等待参数更新
+        #         while self.shared_param.update_count() == self.params_update_count:
+        #             time.sleep(0.001)
+        #         params_dict = self.shared_param.get_param_dict()
 
-            # 应用到learner
-            weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-            self.set_state(weights)
+        #     # 应用到learner
+        #     weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+        #     self.set_state(weights)
 
         return res
 
