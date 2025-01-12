@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, time
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv# 自定义环境
@@ -67,6 +67,8 @@ if __name__ == "__main__":
     checkpoint_base_dir = os.path.join(train_folder, 'checkpoints')
     os.makedirs(checkpoint_base_dir, exist_ok=True)
 
+    begin_time = time.time()
+
     # 训练循环
     # rounds = 2000
     rounds = 100
@@ -88,5 +90,5 @@ if __name__ == "__main__":
     log(f"Final model saved in directory {final_checkpoint_dir}")
 
     # 绘制训练曲线
-    plot_training_curve(train_folder)
+    plot_training_curve(train_folder, time.time() - begin_time)
     

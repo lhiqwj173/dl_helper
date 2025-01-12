@@ -20,7 +20,10 @@ from py_ext.tool import log, get_log_file
 rl_folder = r'/root/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
-def plot_training_curve(train_folder):
+def plot_training_curve(train_folder, total_time=None):
+    """
+    total_time: 训练总时间 sec
+    """
     # 绘制训练曲线
     log_file = get_log_file()
     # 读取log文件
@@ -37,6 +40,7 @@ def plot_training_curve(train_folder):
     plt.plot(mean_reward, label='mean_reward')
     plt.plot(max_reward, label='max_reward')
     plt.legend()
+    plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
 def simplify_rllib_metrics(data, out_func=print):
