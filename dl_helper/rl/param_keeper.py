@@ -80,11 +80,11 @@ class ExperimentHandler:
         try:
             if cmd == 'get':
                 # 返回模型参数
-                weights = self.param_server.get_weights()
+                weights, version = self.param_server.get_weights()
                 # 压缩参数
-                weights[0] = self.param_compressor.compress_params_dict(weights[0])
-                send_msg(client_socket, pickle.dumps(weights))
-                log(f'{msg_header} Parameters sent, version: {weights[1]}')
+                weights = self.param_compressor.compress_params_dict(weights)
+                send_msg(client_socket, pickle.dumps((weights, version)))
+                log(f'{msg_header} Parameters sent, version: {version}')
 
             elif cmd == 'update_gradients':
                 update_data = recv_msg(client_socket)
