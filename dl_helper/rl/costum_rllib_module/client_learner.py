@@ -237,11 +237,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.gradient_buffer.append(cpu_gradients)
             # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
             if self.update_count % self.gradient_sync_frequency == 0:
-                # 发送梯度
+                # 汇总梯度
                 merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
                 # 压缩梯度
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
+                # 发送梯度
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
                 # nouse2
                 self.gradient_buffer = []
