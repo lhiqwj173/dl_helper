@@ -230,7 +230,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
                 merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
-                print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
 
