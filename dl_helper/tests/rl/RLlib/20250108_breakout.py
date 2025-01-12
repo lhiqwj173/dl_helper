@@ -34,7 +34,7 @@ if __name__ == "__main__":
             enable_env_runner_and_connector_v2=True,
         )
         .environment("breakout")# 
-        .env_runners(num_env_runners=2)# 4核cpu，暂时选择2个环境运行器
+        .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
         .evaluation(
             evaluation_interval=50,
             evaluation_duration=5,
@@ -63,7 +63,8 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_base_dir, exist_ok=True)
 
     # 训练循环
-    rounds = 2000
+    # rounds = 2000
+    rounds = 30
     for i in range(rounds):
         log(f"\nTraining iteration {i+1}/{rounds}")
         result = algo.train()
