@@ -239,6 +239,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 不要影响原apply_gradients更新
         res = super().apply_gradients(*args, **kwargs)
 
+        # 100 iter 11.6H
         # # 拉取模型 并同步到所有learner上
         # if self.update_count % self.gradient_sync_frequency == 0:
         #     if self.client_id == 0:
