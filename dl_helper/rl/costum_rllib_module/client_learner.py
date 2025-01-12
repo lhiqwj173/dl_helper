@@ -18,6 +18,7 @@ import requests
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
+from dl_helper.rl.rl_utils import GradientCompressor
 
 """
 # 分布式训练流程
@@ -177,6 +178,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # 梯度压缩器
+        self.gradient_compressor = GradientCompressor()
+
         # 共享参数
         self.shared_param = None
         self.params_update_count = 0# shared_param 的更新计数
@@ -226,19 +230,21 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         self.update_count += 1
 
-        # nouse3 100 iter about H
-        # if self.client_id == 0:
-        #     # 主learner
-        #     cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-        #     self.gradient_buffer.append(cpu_gradients)
-        #     # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
-        #     if self.update_count % self.gradient_sync_frequency == 0:
-        #         # 发送梯度
-        #         merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
-        #         # nouse2 100 iter about 0.706H -89.51%
-        #         # send_gradients(self.train_title, merged_gradients, self.version)
-        #         # nouse2
-        #         self.gradient_buffer = []
+        # nouse3 100 iter about 0.695H -89.66%
+        if self.client_id == 0:
+            # 主learner
+            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+            self.gradient_buffer.append(cpu_gradients)
+            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+            if self.update_count % self.gradient_sync_frequency == 0:
+                # 发送梯度
+                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
+                # 压缩梯度
+                compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+                # nouse2 100 iter about 0.706H -89.51%
+                send_gradients(self.train_title, compressed_grads, compress_info, self.version)
+                # nouse2
+                self.gradient_buffer = []
         # nouse3
 
         return gradients_dict

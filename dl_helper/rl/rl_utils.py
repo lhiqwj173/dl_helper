@@ -43,89 +43,76 @@ def plot_training_curve(train_folder, total_time=None):
     plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
-def simplify_rllib_metrics(data, out_func=print):
-    important_metrics = {
-        "环境运行器": {},
-        "评估": {},
-        "学习者": {},
-    }
-
-    if 'counters' in data:
-        if 'num_env_steps_sampled' in data["counters"]:
-            important_metrics["环境运行器"]["采样环境总步数"] = data["counters"]["num_env_steps_sampled"]
-
-    if 'env_runners' in data:
-        if 'episode_return_mean' in data["env_runners"]:
-            important_metrics["环境运行器"]["episode平均回报"] = data["env_runners"]["episode_return_mean"]
-        if 'episode_return_max' in data["env_runners"]:
-            important_metrics["环境运行器"]["episode最大回报"] = data["env_runners"]["episode_return_max"]
-        if 'episode_len_mean' in data["env_runners"]:
-            important_metrics["环境运行器"]["episode平均步数"] = data["env_runners"]["episode_len_mean"]
-        if 'episode_len_max' in data["env_runners"]:
-            important_metrics["环境运行器"]["episode最大步数"] = data["env_runners"]["episode_len_max"]
-        if 'num_env_steps_sampled' in data["env_runners"]:
-            important_metrics["环境运行器"]["采样环境总步数"] = data["env_runners"]["num_env_steps_sampled"]
-        if 'num_episodes' in data["env_runners"]:
-            important_metrics["环境运行器"]["episodes计数"] = data["env_runners"]["num_episodes"]
-
-    if 'evaluation' in data:
-        if 'env_runners' in data["evaluation"]:
-            if 'episode_return_mean' in data["evaluation"]["env_runners"]:
-                important_metrics["评估"]["episode平均回报"] = data["evaluation"]["env_runners"]["episode_return_mean"]
-            if 'episode_return_max' in data["evaluation"]["env_runners"]:
-                important_metrics["评估"]["episode最大回报"] = data["evaluation"]["env_runners"]["episode_return_max"]
-            if 'episode_len_mean' in data["evaluation"]["env_runners"]:
-                important_metrics["评估"]["episode平均步数"] = data["evaluation"]["env_runners"]["episode_len_mean"]
-            if 'episode_len_max' in data["evaluation"]["env_runners"]:
-                important_metrics["评估"]["episode最大步数"] = data["evaluation"]["env_runners"]["episode_len_max"]
-
-    if 'learners' in data:
-        if 'default_policy' in data["learners"]:
-            important_metrics["学习者"]["默认策略"] = {}
-            if 'entropy' in data["learners"]["default_policy"]:
-                important_metrics["学习者"]["默认策略"]["熵"] = data["learners"]["default_policy"]["entropy"]
-            if 'policy_loss' in data["learners"]["default_policy"]:
-                important_metrics["学习者"]["默认策略"]["策略损失"] = data["learners"]["default_policy"]["policy_loss"]
-            if 'vf_loss' in data["learners"]["default_policy"]:
-                important_metrics["学习者"]["默认策略"]["值函数损失"] = data["learners"]["default_policy"]["vf_loss"]
-            if 'total_loss' in data["learners"]["default_policy"]:
-                important_metrics["学习者"]["默认策略"]["总损失"] = data["learners"]["default_policy"]["total_loss"]
-
-    if 'time_this_iter_s' in data:
-        important_metrics["本轮时间"] = data["time_this_iter_s"]
-    if 'num_training_step_calls_per_iteration' in data:
-        important_metrics["每轮训练步数"] = data["num_training_step_calls_per_iteration"]
-    if 'training_iteration' in data:
-        important_metrics["训练迭代次数"] = data["training_iteration"]
+class GradientCompressor:
+    """梯度压缩器，支持量化和稀疏化"""
+    def __init__(self, quantize_bits=8, sparsity_ratio=0.1):
+        """
+        参数:
+            quantize_bits: 量化位数，默认8位
+            sparsity_ratio: 稀疏化比例，默认保留10%的梯度
+        """
+        self.quantize_bits = quantize_bits
+        self.sparsity_ratio = sparsity_ratio
+        
+    def compress(self, gradients):
+        """
+        压缩梯度
+        gradients: List[torch.Tensor] - 梯度列表
+        返回: (压缩后的梯度, 压缩信息)
+        """
+        compressed_grads = []
+        compress_info = []
+        
+        for grad in gradients:
+            # 转换为numpy处理
+            grad_np = grad.numpy()
             
-    out_func(f"--------- 训练迭代: {important_metrics['训练迭代次数']} ---------")
-    out_func("环境运行器:")
-    if important_metrics['环境运行器']:
-        for k, v in important_metrics['环境运行器'].items():
-            out_func(f"  {k}: {v:.4f}")
-    else:
-        out_func("  无环境运行器数据")
+            # 1. 稀疏化
+            threshold = np.percentile(np.abs(grad_np), 
+                                   (1 - self.sparsity_ratio) * 100)
+            mask = np.abs(grad_np) >= threshold
+            indices = np.nonzero(mask)
+            values = grad_np[indices]
+            
+            # 2. 量化
+            min_val = values.min()
+            max_val = values.max()
+            scale = (max_val - min_val) / (2**self.quantize_bits - 1)
+            quantized_values = np.round((values - min_val) / scale).astype(np.uint8)
+            
+            # 保存压缩信息
+            compress_info.append({
+                'shape': grad_np.shape,
+                'indices': indices,
+                'min_val': min_val,
+                'scale': scale
+            })
+            
+            compressed_grads.append(quantized_values)
+            
+        return compressed_grads, compress_info
     
-    out_func("\n评估:")
-    for k, v in important_metrics['评估'].items():
-        out_func(f"  {k}: {v:.4f}")
-    else:
-        out_func("  无评估数据")
-
-    out_func("\n学习者(默认策略):")
-    if '默认策略' in important_metrics['学习者'] and important_metrics['学习者']['默认策略']:
-        for k, v in important_metrics['学习者']['默认策略'].items():
-            out_func(f"  {k}: {v:.4f}")
-    else:
-        out_func("  无学习者数据")
-    
-    if '本轮时间' in important_metrics:
-        out_func(f"\n本轮时间: {important_metrics['本轮时间']:.4f}")
-    if '每轮训练步数' in important_metrics:
-        out_func(f"每轮训练步数: {important_metrics['每轮训练步数']}")
-    out_func('-'*30)
-
-    return important_metrics
+    def decompress(self, compressed_grads, compress_info):
+        """
+        解压梯度
+        compressed_grads: List[np.ndarray] - 压缩后的梯度
+        compress_info: List[dict] - 压缩信息
+        返回: List[torch.Tensor] - 解压后的梯度
+        """
+        decompressed_grads = []
+        
+        for grad, info in zip(compressed_grads, compress_info):
+            # 1. 反量化
+            values = grad.astype(np.float32) * info['scale'] + info['min_val']
+            
+            # 2. 重建稀疏矩阵
+            decompressed = np.zeros(info['shape'])
+            decompressed[info['indices']] = values
+            
+            # 转回tensor
+            decompressed_grads.append(torch.from_numpy(decompressed))
+            
+        return decompressed_grads
 
 class ExperimentHandler:
     """弃用 处理单个实验的类"""

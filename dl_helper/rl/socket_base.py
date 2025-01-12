@@ -80,7 +80,7 @@ def get_server_weights(train_title):
 
     return _connect_server_apply(_get_server_weights)
 
-def send_gradients(train_title, grads, version):
+def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""
     def _send_gradients(_socket):
         # 发送梯度请求
@@ -88,7 +88,7 @@ def send_gradients(train_title, grads, version):
         send_msg(_socket, message.encode())
         
         # 发送累积梯度
-        data = pickle.dumps((grads, version))
+        data = pickle.dumps((grads, compress_info, version))
         send_msg(_socket, data)
         
         # 等待确认
