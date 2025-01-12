@@ -36,7 +36,7 @@ if __name__ == "__main__":
         .environment("breakout")# 
         .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
         .evaluation(
-            evaluation_interval=50,
+            evaluation_interval=30,
             evaluation_duration=5,
         )
         .rl_module(
@@ -50,13 +50,13 @@ if __name__ == "__main__":
         )
         .training(**simple_algo.training_kwargs)
         .learners(    
-            # num_learners=num_learners,
-            # num_gpus_per_learner=1,
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
             
-            # for debug
-            num_learners=2,
-            num_gpus_per_learner=0,
-            num_cpus_per_learner=0.3,
+            # # for debug
+            # num_learners=2,
+            # num_gpus_per_learner=0,
+            # num_cpus_per_learner=0.3,
         )
     )
 

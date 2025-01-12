@@ -2,7 +2,7 @@ import sys, os
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner, Events
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
@@ -22,6 +22,9 @@ if __name__ == "__main__":
 
     train_title = f'20250110_breakout'
 
+    # 事件
+    events = Events()
+
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
 
@@ -36,7 +39,7 @@ if __name__ == "__main__":
         .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
         # TODO 计划将eval放在服务端
         .evaluation(
-            evaluation_interval=50,
+            evaluation_interval=30,
             evaluation_duration=5,
         )
         .rl_module(

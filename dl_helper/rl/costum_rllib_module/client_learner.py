@@ -12,6 +12,7 @@ from ray.rllib.core import (
 import copy, pickle
 from typing import Dict, Any
 import requests
+from multiprocessing import Process, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -45,6 +46,23 @@ for epoch in range(num_epochs):
         if steps % param_sync_frequency == 0:
             async_pull_params_from_server()
 """
+
+class Events:
+    """
+    事件类，用于多进程间的同步
+    """
+    def __init__(self):
+        self._event = Event()
+
+    def set(self):
+        self._event.set()
+
+    def clear(self):
+        self._event.clear()
+
+    def wait(self):
+        self._event.wait()
+
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -147,8 +165,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
 
-        # 拉取最新的模型
         if self.update_count % self.gradient_sync_frequency == 0:
+            # 拉取最新的模型
             state, self.version = get_server_weights(self.train_title)
             weights = {COMPONENT_RL_MODULE: {'default_policy': state}}
             self.set_state(weights)
