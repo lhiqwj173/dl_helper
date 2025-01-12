@@ -179,6 +179,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享参数
         self.shared_param = None
+        self.params_update_count = 0# shared_param 的更新计数
 
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
@@ -214,7 +215,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
     def compute_gradients(self, *args, **kwargs):
         # 记录更新计数
-        params_update_count = self.shared_param.update_count()
+        self.params_update_count = self.shared_param.update_count()
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
@@ -232,27 +233,33 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
-                # 拉取最新的模型
-                params_dict, self.version = get_server_weights(self.train_title)
-                # 更新共享参数
-                self.shared_param.set_param(params_dict)
-                # 应用到learner
-                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-                self.set_state(weights)
-
-        else:
-            # 其他learner
-            if self.update_count % self.gradient_sync_frequency == 0:
-                # 等待参数更新
-                while self.shared_param.update_count() == params_update_count:
-                    time.sleep(0.001)
-                # 应用到learner
-                params_dict = self.shared_param.get_param_dict()
-                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-                self.set_state(weights)
 
         return gradients_dict
     
+    def apply_gradients(self, *args, **kwargs):
+        # 不要影响原apply_gradients更新
+        res = super().apply_gradients(*args, **kwargs)
+
+        # 拉取模型 并同步到所有learner上
+        if self.update_count % self.gradient_sync_frequency == 0:
+            if self.client_id == 0:
+                # 主learner
+                params_dict, self.version = get_server_weights(self.train_title)
+                # 更新共享参数
+                self.shared_param.set_param(params_dict)
+            else:
+                # 其他learner
+                # 等待参数更新
+                while self.shared_param.update_count() == self.params_update_count:
+                    time.sleep(0.001)
+                params_dict = self.shared_param.get_param_dict()
+
+            # 应用到learner
+            weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+            self.set_state(weights)
+
+        return res
+
     def after_gradient_based_update(self, *args, **kwargs):
         self.update_count = 0
         if self.client_id == 0:
