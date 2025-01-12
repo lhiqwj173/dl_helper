@@ -185,10 +185,20 @@ class ParamCompressor:
         # 计算量化参数
         min_val = flat_param.min().astype(np.float32)
         max_val = flat_param.max().astype(np.float32)
-        scale = ((max_val - min_val) / (2**self.quantize_bits - 1)).astype(np.float32)
         
-        # 量化
-        quantized = np.round((flat_param - min_val) / scale).astype(np.uint8)
+        # 避免零除错误
+        if max_val == min_val:
+            scale = np.array(1.0, dtype=np.float32)  # 使用一个默认值，确保除法有效
+        else:
+            scale = ((max_val - min_val) / (2**self.quantize_bits - 1)).astype(np.float32)
+        
+        # 确保 scale 有一个最小值，以避免数值溢出
+        min_scale = 1e-8  # 你可以根据需要调整这个值
+        scale = np.maximum(scale, min_scale)
+        
+        # 量化并使用 np.clip 确保结果在 uint8 范围内
+        quantized = np.round((flat_param - min_val) / scale)
+        quantized = np.clip(quantized, 0, 2**self.quantize_bits - 1).astype(np.uint8)
         
         compress_info = {
             'shape': original_shape,
