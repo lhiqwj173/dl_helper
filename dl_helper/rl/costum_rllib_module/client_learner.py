@@ -9,10 +9,12 @@ from ray.rllib.core import (
     COMPONENT_RL_MODULE,
 )
 
+import numpy as np
+import time
+from multiprocessing import shared_memory
 import copy, pickle
 from typing import Dict, Any
 import requests
-from multiprocessing import Process, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -47,22 +49,57 @@ for epoch in range(num_epochs):
             async_pull_params_from_server()
 """
 
-class Events:
+class SharedParam:
     """
-    事件类，用于多进程间的同步
+    共享参数类，用于多进程间的同步
     """
-    def __init__(self):
-        self._event = Event()
+    def __init__(self, params_dict, create=True):
+        """
+        params_dict: 参数字典, 键为参数名, 值为numpy.ndarray
+        create: 是否创建共享内存
+        """
+        self.create = create
+        self.params = []
+        self.shms = []
 
-    def set(self):
-        self._event.set()
+        # 更新计数
+        _shm_update_count = shared_memory.SharedMemory(name=f'_SharedParam_update_count', create=create, size=8)
+        _update_count = np.ndarray(1, dtype=np.int64, buffer=_shm_update_count.buf)
+        self.params.append(_update_count)
+        self.shms.append(_shm_update_count)
+        if create:
+            self.params[0][0] = 0
+
+        # 共享内存
+        self.params.append({})
+        for k, v in params_dict.items():
+            # v 是numpy.ndarray
+            shm = shared_memory.SharedMemory(name=f'_SharedParam_{k}', create=create, size=v.nbytes)
+            _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
+            self.params[1][k] = _v
+            self.shms.append(shm)
+
+    def update_count(self):
+        return self.params[0][0]
+    
+    def reset_update_count(self):
+        self.params[0][0] = 0
+
+    def get_param_dict(self):
+        return self.params[1]
+
+    def set_param(self, params_dict):
+        for k, v in params_dict.items():
+            self.params[1][k][:] = v[:]
+        # 更新计数
+        self.params[0][0] += 1
 
     def clear(self):
-        self._event.clear()
-
-    def wait(self):
-        self._event.wait()
-
+        self.params = []
+        if self.create:
+            for i in self.shms:
+                i.close()
+                i.unlink()
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -80,6 +117,15 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 初始化客户端learner
         self._init_client_learner()
+
+        # 共享参数
+        self.shared_param = None
+
+    def __del__(self):
+        # 清理共享参数
+        if not self.shared_param is None:
+            self.shared_param.clear()
+        super().__del__()
 
     def _init_client_learner(self):
         """初始化客户端learner"""
@@ -118,12 +164,18 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
         print(f"set weights to all learners, res: {res}")
 
+        # 创建共享参数
+        self.shared_param = SharedParam(state, create=True)
+
 class ClientPPOTorchLearner(PPOTorchLearner):
     """
     每个客户端只需要有一个与参数服务器通信的learner
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # 共享参数
+        self.shared_param = None
 
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
@@ -138,6 +190,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_sync_frequency = 8
         self.gradient_buffer = []
 
+    def init_shared_param(self):
+        print(f"[{self.client_id}] init_shared_param")
+        # 获取参数字典
+        params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        # 获取共享参数
+        self.shared_param = SharedParam(params_dict, create=False)
+        if self.client_id == 0:
+            # 重置更新计数
+            self.shared_param.reset_update_count()
+
     @staticmethod
     def merge_gradients(gradient_list):
         # 简单平均多个batch的梯度
@@ -148,33 +210,51 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return merged
     
     def compute_gradients(self, *args, **kwargs):
+        # 记录更新计数
+        params_update_count = self.shared_param.update_count()
+
+        # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
         
         self.update_count += 1
 
         if self.client_id == 0:
+            # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
             self.gradient_buffer.append(cpu_gradients)
             # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 发送梯度
-                # print(f'gradient_buffer length: {len(self.gradient_buffer)}')
-                # pickle.dump(self.gradient_buffer, open(f'gradient_buffer_{self.client_id}.pkl', 'wb'))
                 merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
                 print(f"[{self.client_id}] send_gradients")
                 send_gradients(self.train_title, merged_gradients, self.version)
                 self.gradient_buffer = []
+                # 拉取最新的模型
+                params_dict, self.version = get_server_weights(self.train_title)
+                # 更新共享参数
+                self.shared_param.set_param(params_dict)
+                # 应用到learner
+                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+                self.set_state(weights)
 
-        if self.update_count % self.gradient_sync_frequency == 0:
-            # 拉取最新的模型
-            state, self.version = get_server_weights(self.train_title)
-            weights = {COMPONENT_RL_MODULE: {'default_policy': state}}
-            self.set_state(weights)
+        else:
+            # 其他learner
+            if self.update_count % self.gradient_sync_frequency == 0:
+                # 等待参数更新
+                while self.shared_param.update_count() == params_update_count:
+                    time.sleep(0.001)
+                # 应用到learner
+                params_dict = self.shared_param.get_param_dict()
+                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+                self.set_state(weights)
 
         return gradients_dict
-
+    
     def after_gradient_based_update(self, *args, **kwargs):
         self.update_count = 0
+        if self.client_id == 0:
+            # 重置更新计数
+            self.shared_param.reset_update_count()
         return super().after_gradient_based_update(*args, **kwargs)
 
     def set_client_id(self, client_id):
