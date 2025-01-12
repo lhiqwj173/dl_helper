@@ -139,7 +139,7 @@ class GradientAccumulator:
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:
             self.accumulated_grads = [
-                np.zeros_like(grad, dtype=np.float32)
+                torch.zeros_like(grad, dtype=torch.float32)
                 for grad in self.gradient_buffer[0]
             ]
         
