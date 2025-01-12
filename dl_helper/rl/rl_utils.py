@@ -106,7 +106,7 @@ class GradientCompressor:
             values = grad.astype(np.float32) * info['scale'] + info['min_val']
             
             # 2. 重建稀疏矩阵
-            decompressed = np.zeros(info['shape'])
+            decompressed = np.zeros(info['shape'], dtype=np.float32)
             decompressed[info['indices']] = values
             
             # 转回tensor
