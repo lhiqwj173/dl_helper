@@ -226,20 +226,20 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         self.update_count += 1
 
-        # nouse2 100 iter about H
-        if self.client_id == 0:
-            # 主learner
-            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            self.gradient_buffer.append(cpu_gradients)
-            # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
-            if self.update_count % self.gradient_sync_frequency == 0:
-                # 发送梯度
-                merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
-                # nouse3 100 iter about H
-                # send_gradients(self.train_title, merged_gradients, self.version)
-                # nouse3
-                self.gradient_buffer = []
-        # nouse2
+        # nouse3 100 iter about H
+        # if self.client_id == 0:
+        #     # 主learner
+        #     cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+        #     self.gradient_buffer.append(cpu_gradients)
+        #     # if len(self.gradient_buffer) >= self.gradient_sync_frequency:
+        #     if self.update_count % self.gradient_sync_frequency == 0:
+        #         # 发送梯度
+        #         merged_gradients = ClientPPOTorchLearner.merge_gradients(self.gradient_buffer)
+        #         # nouse2 100 iter about 0.706H -89.51%
+        #         # send_gradients(self.train_title, merged_gradients, self.version)
+        #         # nouse2
+        #         self.gradient_buffer = []
+        # nouse3
 
         return gradients_dict
     # nouse4
