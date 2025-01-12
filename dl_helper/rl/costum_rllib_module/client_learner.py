@@ -18,7 +18,7 @@ import requests
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
-from dl_helper.rl.rl_utils import GradientCompressor
+from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor
 
 """
 # 分布式训练流程
@@ -122,6 +122,9 @@ class ClientLearnerGroup(LearnerGroup):
         # 共享参数
         self.shared_param = None
 
+        # 参数压缩器
+        self.param_compressor = ParamCompressor()
+
     def __del__(self):
         # 清理共享参数
         if not self.shared_param is None:
@@ -155,10 +158,10 @@ class ClientLearnerGroup(LearnerGroup):
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
         print('request server weights')
-        state, version = get_server_weights(self.train_title)
-        # print('state:', state)
-        # print('version:', version)
-        weights = {'default_policy': state}
+        params_dict, version = get_server_weights(self.train_title)
+        # 解压参数
+        params_dict = self.param_compressor.decompress_params_dict(params_dict)
+        weights = {'default_policy': params_dict}
         # 更新到所有learner
         self.set_weights(weights)
         print(f"set weights to all learners, version: {version}")
@@ -180,6 +183,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 梯度压缩器
         self.gradient_compressor = GradientCompressor()
+
+        # 参数压缩器
+        self.param_compressor = ParamCompressor()
 
         # 共享参数
         self.shared_param = None
@@ -257,27 +263,29 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # compress nouse1 100 iter about 2.59H -62%
         # nouse1 100 iter about 3.63H -46%
-        # # 拉取模型 并同步到所有learner上
-        # if self.update_count % self.gradient_sync_frequency == 0:
-        #     if self.client_id == 0:
-        #         # 主learner
-        #         params_dict, self.version = get_server_weights(self.train_title)
-        #         # 更新共享参数
-        #         self.shared_param.set_param(params_dict)
-        #         # 应用到learner
-        #         weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-        #         self.set_state(weights)
-        #     # nouse0 100 iter about 6.36H -5.5%
-        #     else:
-        #         # 其他learner
-        #         # 等待参数更新
-        #         while self.shared_param.update_count() == self.params_update_count:
-        #             time.sleep(0.001)
-        #         params_dict = self.shared_param.get_param_dict()
-        #         # 应用到learner
-        #         weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-        #         self.set_state(weights)
-        #     # nouse0
+        # 拉取模型 并同步到所有learner上
+        if self.update_count % self.gradient_sync_frequency == 0:
+            if self.client_id == 0:
+                # 主learner
+                params_dict, self.version = get_server_weights(self.train_title)
+                # 解压参数
+                params_dict = self.param_compressor.decompress_params_dict(params_dict)
+                # 更新共享参数
+                self.shared_param.set_param(params_dict)
+                # 应用到learner
+                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+                self.set_state(weights)
+            # nouse0 100 iter about 6.36H -5.5%
+            else:
+                # 其他learner
+                # 等待参数更新
+                while self.shared_param.update_count() == self.params_update_count:
+                    time.sleep(0.001)
+                params_dict = self.shared_param.get_param_dict()
+                # 应用到learner
+                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
+                self.set_state(weights)
+            # nouse0
         # nouse1
 
         return res

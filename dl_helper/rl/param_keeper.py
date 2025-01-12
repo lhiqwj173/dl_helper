@@ -6,7 +6,7 @@ from typing import Dict, Any
 from collections import deque
 
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
-from dl_helper.rl.rl_utils import GradientCompressor
+from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -56,6 +56,9 @@ class ExperimentHandler:
         # 梯度压缩器
         self.gradient_compressor = GradientCompressor()
 
+        # 参数压缩器
+        self.param_compressor = ParamCompressor()
+
         # 客户端 IP/id
         self.client_ip_ids = {}
 
@@ -78,6 +81,8 @@ class ExperimentHandler:
             if cmd == 'get':
                 # 返回模型参数
                 weights = self.param_server.get_weights()
+                # 压缩参数
+                weights[0] = self.param_compressor.compress_params_dict(weights[0])
                 send_msg(client_socket, pickle.dumps(weights))
                 log(f'{msg_header} Parameters sent, version: {weights[1]}')
 

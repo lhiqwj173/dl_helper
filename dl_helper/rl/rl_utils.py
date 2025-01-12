@@ -12,6 +12,7 @@ import pstats
 from datetime import datetime, timedelta, timezone
 import threading
 import matplotlib.pyplot as plt
+from collections import OrderedDict
 
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
@@ -113,6 +114,64 @@ class GradientCompressor:
             decompressed_grads.append(torch.from_numpy(decompressed))
             
         return decompressed_grads
+
+class ParamCompressor:
+    def __init__(self, quantize_bits=8):
+        self.quantize_bits = quantize_bits
+    
+    def compress_param(self, param):
+        """压缩单个参数张量"""
+        # 记录原始形状
+        original_shape = param.shape
+        
+        # 展平数组以便处理
+        flat_param = param.reshape(-1)
+        
+        # 计算量化参数
+        min_val = flat_param.min().astype(np.float32)
+        max_val = flat_param.max().astype(np.float32)
+        scale = ((max_val - min_val) / (2**self.quantize_bits - 1)).astype(np.float32)
+        
+        # 量化
+        quantized = np.round((flat_param - min_val) / scale).astype(np.uint8)
+        
+        compress_info = {
+            'shape': original_shape,
+            'min_val': min_val,
+            'scale': scale
+        }
+        
+        return quantized, compress_info
+    
+    def decompress_param(self, quantized, compress_info):
+        """解压单个参数张量"""
+        # 反量化
+        decompressed = (quantized.astype(np.float32) * compress_info['scale'] + 
+                       compress_info['min_val'])
+        
+        # 恢复原始形状
+        decompressed = decompressed.reshape(compress_info['shape'])
+        
+        return decompressed
+    
+    def compress_params_dict(self, params_dict):
+        """压缩整个参数字典"""
+        compressed_dict = OrderedDict()
+        
+        for key, param in params_dict.items():
+            quantized, compress_info = self.compress_param(param)
+            compressed_dict[key] = (quantized, compress_info)
+            
+        return compressed_dict
+    
+    def decompress_params_dict(self, compressed_dict):
+        """解压整个参数字典"""
+        decompressed_dict = OrderedDict()
+        
+        for key, (quantized, compress_info) in compressed_dict.items():
+            decompressed_dict[key] = self.decompress_param(quantized, compress_info)
+            
+        return decompressed_dict
 
 class ExperimentHandler:
     """弃用 处理单个实验的类"""
