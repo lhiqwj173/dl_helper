@@ -43,10 +43,15 @@ if os.path.exists(os.path.join(root, '3rd')):
         #!cd /kaggle/working/3rd/dl_helper && git pull
         cmd = 'cd /kaggle/working/3rd/dl_helper && git pull'
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+    
+        # 安装 py_ext
+        cmd = 'cd /kaggle/working/3rd && wget https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz && tar -xzvf py_ext-1.0.0.tar.gz && cd py_ext-1.0.0 && python setup.py install'
+        subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
     else:
         # !cd /content/3rd/dl_helper && git pull
         cmd = 'cd /content/3rd/dl_helper && git pull'
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+
 else:
     # !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git
     cmd = 'mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git'
@@ -76,7 +81,6 @@ else:
     # !pip install torchstat
     # !pip install torchinfo
     # # !pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0-py3-none-any.whl
-    # !pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz
     for cmd in [
             'pip install "pandas<2.0.0"',
             'pip install df2img',
@@ -89,7 +93,6 @@ else:
             'pip install requests_toolbelt',
             'pip install torchstat',
             'pip install torchinfo',
-            'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
         ]:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
