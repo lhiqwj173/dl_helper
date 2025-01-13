@@ -20,9 +20,9 @@ if '__main__' == __name__:
         root = r'/kaggle/working/'
         sys.path.append(os.path.join(root, '3rd', 'dl_helper'))
 
-    # 安装 py_ext
-    cmd = 'cd /kaggle/working/3rd && wget https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz && tar -xzvf py_ext-1.0.0.tar.gz && cd py_ext-1.0.0 && python setup.py install'
-    subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
+    # # 安装 py_ext
+    # cmd = 'cd /kaggle/working/3rd && wget https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz && tar -xzvf py_ext-1.0.0.tar.gz && cd py_ext-1.0.0 && python setup.py install'
+    # subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
     for cmd in [
             'pip install dill',
@@ -40,6 +40,6 @@ if '__main__' == __name__:
             'pip install requests_toolbelt',
             'pip install torchstat',
             'pip install torchinfo',
-            # 'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
+            'pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz',
         ]:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
