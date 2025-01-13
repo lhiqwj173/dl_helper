@@ -245,18 +245,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
             self.gradient_accumulator.add_gradients(cpu_gradients)
-            print(f'add gradients to gradient_accumulator')
+            # print(f'add gradients to gradient_accumulator')
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
-                print(f'merge gradients')
+                # print(f'merge gradients')
                 pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
                 merged_gradients = self.gradient_accumulator.merge_gradients()
                 # 压缩梯度
-                print(f'compress gradients')
+                # print(f'compress gradients')
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
                 # 发送梯度
-                print(f'send gradients')
+                # print(f'send gradients')
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
                 # nouse2
         # nouse3
