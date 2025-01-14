@@ -210,7 +210,7 @@ class AsyncSocketServer:
             return
 
         self.clients.add(writer)
-        log(f"Client connected from {peer}")
+        # log(f"Client connected from {peer}")
         
         try:
             while True:
@@ -262,7 +262,7 @@ class AsyncSocketServer:
             self.clients.remove(writer)
             writer.close()
             await writer.wait_closed()
-            log(f"Client disconnected from {peer}")
+            # log(f"Client disconnected from {peer}")
 
     async def start(self):
         self.sock.bind((self.host, self.port))
