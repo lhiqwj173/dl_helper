@@ -21,6 +21,7 @@ if '__main__' == __name__:
         sys.path.append(os.path.join(root, '3rd', 'dl_helper'))
 
     # 安装 py_ext
+    # pip install https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz
     cmd = 'cd /kaggle/working/3rd && wget https://raw.githubusercontent.com/lhiqwj173/dl_helper/master/py_ext-1.0.0.tar.gz && tar -xzvf py_ext-1.0.0.tar.gz && cd py_ext-1.0.0 && python setup.py install'
     subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
 
