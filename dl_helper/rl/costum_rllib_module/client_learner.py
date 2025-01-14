@@ -148,9 +148,9 @@ class ClientLearnerGroup(LearnerGroup):
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
         print('request server weights')
-        params_dict, version = get_server_weights(self.train_title)
+        params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
-        params_dict = self.param_compressor.decompress_params_dict(params_dict)
+        params_dict = self.param_compressor.decompress_params_dict(params_list, info)
         weights = {'default_policy': params_dict}
         # 更新到所有learner
         self.set_weights(weights)
@@ -263,9 +263,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.update_count % self.gradient_sync_frequency == 0:
             if self.client_id == 0:
                 # 主learner
-                params_dict, self.version = get_server_weights(self.train_title)
+                params_list, info, self.version = get_server_weights(self.train_title)
                 # 解压参数
-                params_dict = self.param_compressor.decompress_params_dict(params_dict)
+                params_dict = self.param_compressor.decompress_params_dict(params_list, info)
                 # 更新共享参数
                 self.shared_param.set_param(params_dict)
                 # 应用到learner

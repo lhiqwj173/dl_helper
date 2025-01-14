@@ -108,7 +108,7 @@ class ExperimentHandler:
             weights, info = param_compressor.compress_params_dict(weights)
             return weights, info, version
         
-        def update_params(lock, q, params, info, version, params_cache_share):
+        def update_params(lock, q, params_list, info, version, params_cache_share):
             """更新参数信息"""
             with lock:
                 # 清空q
@@ -117,7 +117,7 @@ class ExperimentHandler:
                 # 最新数据
                 q.put((info, version))
                 # 更新参数
-                for idx, p in enumerate(params):
+                for idx, p in enumerate(params_list):
                     params_cache_share[idx].data[:] = p[:]
 
         log(f'{train_title} calculate most init')

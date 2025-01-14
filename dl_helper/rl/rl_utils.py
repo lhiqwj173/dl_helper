@@ -220,23 +220,27 @@ class ParamCompressor:
         return decompressed
     
     def compress_params_dict(self, params_dict):
-        """压缩整个参数字典"""
-        compressed_dict = OrderedDict()
+        """压缩整个参数字典
+        返回是 压缩后的参数列表，以及压缩信息字典
+        """
+        compressed_list = []
         info_dict = OrderedDict()
         
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
-            compressed_dict[key] = quantized
+            compressed_list.append(quantized)
             info_dict[key] = compress_info
             
-        return compressed_dict, info_dict
+        return compressed_list, info_dict
     
-    def decompress_params_dict(self, compressed_dict, info_dict):
-        """解压整个参数字典"""
+    def decompress_params_dict(self, compressed_list, info_dict):
+        """
+        根据 解压参数列表，压缩信息字典
+        解压整个参数"""
         decompressed_dict = OrderedDict()
         
-        for key, quantized in compressed_dict.items():
-            decompressed_dict[key] = self.decompress_param(quantized, info_dict[key])
+        for idx, (k, v) in enumerate(info_dict.items()):
+            decompressed_dict[k] = self.decompress_param(compressed_list[idx], v)
             
         return decompressed_dict
 
