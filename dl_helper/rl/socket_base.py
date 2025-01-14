@@ -69,14 +69,14 @@ def get_server_weights(train_title):
             
         # 反序列化参数
         try:
-            weights, version = pickle.loads(response)
+            weights, info, version = pickle.loads(response)
         except Exception as e:
             print(f"反序列化失败: {e}")
             with open('debug_pickle.pkl', 'wb') as f:
                 f.write(response)
             print(f'已保存到 debug_pickle.pkl')
             raise e
-        return weights, version
+        return weights, info, version
 
     return _connect_server_apply(_get_server_weights)
 
