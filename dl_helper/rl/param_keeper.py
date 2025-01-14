@@ -79,7 +79,8 @@ class ExperimentHandler:
         # 共享梯度
         self.gradients_cache_share = []
         # 共享参数
-        self.params_cache_share = None
+        self.params_cache_share = self.produce_params_cache()
+        self.params_cache_share_version = 0
 
         # 共享数据锁
         self.share_gradients_lock = multiprocessing.Lock()
@@ -96,6 +97,14 @@ class ExperimentHandler:
     def __del__(self):
         self.p.terminate()
 
+    def produce_params_cache(self): 
+        """生成发送次数缓存"""
+        # 获取模型参数
+        weights, version = self.param_server.get_weights()
+        # 压缩参数
+        weights = self.param_compressor.compress_params_dict(weights)
+        return pickle.dumps((weights, version))
+
     def cpu_most_task(self):
         """CPU密集型任务"""
         log(f'{self.train_title} calculate most start')
@@ -111,6 +120,8 @@ class ExperimentHandler:
                 _gradients_cache = self.gradients_cache_share
                 self.gradients_cache_share = []
 
+            log(f'{self.train_title} wait gradients: {len(_gradients_cache)}')
+
             # 计算梯度
             for data in _gradients_cache:
                 # 解压梯度
@@ -118,15 +129,13 @@ class ExperimentHandler:
                 g = self.gradient_compressor.decompress(g, compress_info)
                 # 更新梯度
                 self.param_server.apply_gradients(g, version)
-
-                # 获取模型参数
-                weights, version = self.param_server.get_weights()
-                # 压缩参数
-                weights = self.param_compressor.compress_params_dict(weights)
-                res = pickle.dumps((weights, version))
+                # 生成参数缓存
+                res = self.produce_params_cache()
                 # 更新到共享参数
                 with self.share_params_lock:
                     self.params_cache_share = res
+                    self.params_cache_share_version = version
+                log(f'{self.train_title} update params, version: {version}')
 
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
@@ -192,6 +201,8 @@ class ExperimentHandler:
                 # 交换
                 res = self.params_cache_share
                 self.params_cache_share = None
+                v = self.params_cache_share_version
+            log(f'{msg_header} send params, version: {v}')
             return res
 
         elif cmd == 'update_gradients':

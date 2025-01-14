@@ -22,6 +22,8 @@ from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import read_train_title_item
 from dl_helper.rl.param_keeper import ExperimentHandler
 
+init_logger(f'net_center_{datetime.now().strftime("%Y%m%d")}', enqueue=True, timestamp=False)
+
 class BlockIPs:
     """管理block ip的类"""
     def __init__(self):
@@ -53,6 +55,7 @@ class BlockIPs:
 
 def run_param_center():
     """参数中心服务器"""
+    raise Exception('弃用，使用 AsyncSocketServer 代替')
     HOST = '0.0.0.0'
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
@@ -316,8 +319,6 @@ def main():
         log("Server stopped")
 
 if __name__ == '__main__':
-    init_logger(f'net_center_{datetime.now().strftime("%Y%m%d")}', enqueue=True, timestamp=False)
-
     # 初始化实验处理器
     # run_param_center()
 
