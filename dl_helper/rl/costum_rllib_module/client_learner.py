@@ -11,10 +11,11 @@ from ray.rllib.core import (
 
 import numpy as np
 import time
-from multiprocessing import shared_memory
 import copy, pickle
 from typing import Dict, Any
 import requests
+
+from py_ext.tool import safe_share_memory
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -61,24 +62,26 @@ class SharedParam:
         """
         self.create = create
         self.params = []
-        self.shms = []
+        self.ssms = []
 
-        # 更新计数
-        _shm_update_count = shared_memory.SharedMemory(name=f'_SharedParam_update_count', create=create, size=8)
+        # 更新计数 safe_share_memory
+        _ssm_update_count = safe_share_memory(name=f'_SharedParam_update_count', size=8)
+        _shm_update_count = _ssm_update_count.get()
         _update_count = np.ndarray(1, dtype=np.int64, buffer=_shm_update_count.buf)
         self.params.append(_update_count)
-        self.shms.append(_shm_update_count)
         if create:
             self.params[0][0] = 0
+        self.ssms.append(_ssm_update_count)
 
         # 共享内存
         self.params.append({})
         for k, v in params_dict.items():
             # v 是numpy.ndarray
-            shm = shared_memory.SharedMemory(name=f'_SharedParam_{k}', create=create, size=v.nbytes)
+            ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.nbytes)
+            shm = ssm.get()
             _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
             self.params[1][k] = _v
-            self.shms.append(shm)
+            self.ssms.append(ssm)
 
     def update_count(self):
         return self.params[0][0]
@@ -94,13 +97,6 @@ class SharedParam:
             self.params[1][k][:] = v[:]
         # 更新计数
         self.params[0][0] += 1
-
-    def clear(self):
-        self.params = []
-        if self.create:
-            for i in self.shms:
-                i.close()
-                i.unlink()
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -124,13 +120,6 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 共享参数
         self.shared_param = None
-
-
-    def __del__(self):
-        # 清理共享参数
-        if not self.shared_param is None:
-            self.shared_param.clear()
-        super().__del__()
 
     def _init_client_learner(self):
         """初始化客户端learner"""
