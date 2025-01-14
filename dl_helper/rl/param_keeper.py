@@ -82,7 +82,7 @@ class ExperimentHandler:
 
         # 等待接受一个参数字典数据
         # 用于初始化共享数据
-        _params_dict = self.params_info_share_q.get()
+        _params_dict = self.gradients_info_share_q.get()
         # 共享梯度列表
         self.gradients_cache_share = []
         # 共享参数, 只需要维护一份最新的数据
@@ -160,7 +160,7 @@ class ExperimentHandler:
         
         # 回传 _params_dict 
         # 回传后，共享参数以及初始化完成
-        params_info_share_q.put(_params_dict)
+        gradients_info_share_q.put(_params_dict)
 
         log(f'{train_title} calculate most start')
         while True:
