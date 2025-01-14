@@ -116,6 +116,7 @@ class ExperimentHandler:
 
             with self.share_gradients_lock:
                 if len(self.gradients_cache_share) == 0:
+                    log(f'{self.train_title} no gradients, keep wait')
                     continue
                 # 拷贝梯度到临时梯度
                 _gradients_cache = self.gradients_cache_share
@@ -206,13 +207,15 @@ class ExperimentHandler:
             return res
 
         elif cmd == 'update_gradients':
+            gradients_cache_share_length = 0
             with self.share_gradients_lock:
                 # 添加到共享梯度信息中
                 self.gradients_cache_share.append(data)
+                gradients_cache_share_length = len(self.gradients_cache_share)
 
             # 通知新梯度
             self.share_data_new_event.set()
-            log(f'{msg_header} Received gradients')
+            log(f'{msg_header} Received gradients, gradients_cache_share length: {gradients_cache_share_length}')
 
         elif cmd == 'client_id':
             pass
