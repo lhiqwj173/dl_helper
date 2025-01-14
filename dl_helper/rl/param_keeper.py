@@ -76,9 +76,6 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
-        # 梯度缓存
-        # 获取梯度（参数）的shape
-        _p_dict = self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
         # 共享梯度
         self.gradients_cache_share = []
         # 共享参数
