@@ -222,19 +222,21 @@ class ParamCompressor:
     def compress_params_dict(self, params_dict):
         """压缩整个参数字典"""
         compressed_dict = OrderedDict()
+        info_dict = OrderedDict()
         
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
-            compressed_dict[key] = (quantized, compress_info)
+            compressed_dict[key] = quantized
+            info_dict[key] = compress_info
             
-        return compressed_dict
+        return compressed_dict, info_dict
     
-    def decompress_params_dict(self, compressed_dict):
+    def decompress_params_dict(self, compressed_dict, info_dict):
         """解压整个参数字典"""
         decompressed_dict = OrderedDict()
         
-        for key, (quantized, compress_info) in compressed_dict.items():
-            decompressed_dict[key] = self.decompress_param(quantized, compress_info)
+        for key, quantized in compressed_dict.items():
+            decompressed_dict[key] = self.decompress_param(quantized, info_dict[key])
             
         return decompressed_dict
 
