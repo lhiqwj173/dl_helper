@@ -1,43 +1,105 @@
-from multiprocessing import Process, Event
+import asyncio
 import time
+import random
+import multiprocessing
+from py_ext.tool import share_ndarray, share_ndarray_list
+import numpy as np
 
-def task_a(event, rounds):
-    for round in range(rounds):
-        print(f"Process A: Starting round {round + 1} of task A")
-        time.sleep(2)  # 模拟 A 完成任务所需的时间
-        print(f"Process A: Finished round {round + 1} of task A")
-        event.set()  # 通知 B 任务可以开始
-        event.clear()  # 重置事件，等待下一轮
+def cpu_bound_task(lock, event_queue):
+    # 模拟 CPU 密集型任务
+    print("cpu 开始")
 
-def task_b(event, rounds, identifier):
-    for round in range(rounds):
-        print(f"Process B{identifier}: Waiting for round {round + 1} of task A to complete")
-        event.wait()  # 等待 A 发送信号
-        print(f"Process B{identifier}: Round {round + 1} of task A completed, starting round {round + 1} of task B{identifier}")
-        time.sleep(1)  # 模拟 B 完成任务所需的时间
-        print(f"Process B{identifier}: Finished round {round + 1} of task B{identifier}")
-        event.clear()  # 虽然 A 已经清除了，但确保 B 不互相干扰
+    # 共享任务
+    wait_task = share_ndarray_list('wait_task', (1,), 'int64', 20)
+    # 共享结果
+    results = share_ndarray_list('results', (1,), 'int64', 20)
 
-if __name__ == '__main__':
-    rounds = 3  # 设定进行三轮任务
-    event = Event()
+    # 临时任务 大小与共享数据相同
+    temp_task_idx = 0
+    temp_task = wait_task.get_blank_same_data_local()
+    # 临时结果 大小与共享数据相同
+    temp_result_idx = 0
+    temp_result = results.get_blank_same_data_local()
 
-    # 启动进程 A
-    process_a = Process(target=task_a, args=(event, rounds))
-    process_a.start()
+    while True:
+        with lock:
+            if wait_task.size() == 0:
+                # 没有新任务，等待
+                try:
+                    event = event_queue.get(timeout=0.1)
+                    if event == 'stop':
+                        return
+                except:
+                    continue
 
-    # 启动多个进程 B
-    b_processes = []
-    for i in range(3):  # 这里我们创建3个 B 任务
-        b_process = Process(target=task_b, args=(event, rounds, i))
-        b_processes.append(b_process)
-        b_process.start()
+            # 全部拷贝到temp任务, 并清空原任务 > 转移数据
+            task_size = wait_task.size()
+            wait_task.all_copy_slice(temp_task, temp_task_idx)
+            temp_task_idx += task_size
 
-    # 等待进程 A 完成
-    process_a.join()
+        print(f"cpu 获取 {temp_task_idx} 个任务")
+        for idx in range(temp_task_idx):
+            print(f"cpu 开始任务 {temp_task[idx]}")
+            sleep_time = random.randint(1, 3)
+            time.sleep(sleep_time)
+            result = sleep_time * temp_task[idx]
+            print(f"cpu 完成任务 {temp_task[idx]} > {result}")
+            temp_result[temp_result_idx] = result
+            temp_result_idx += 1
+        print(f"cpu 获取任务全部完成")
+        with lock:
+            # 将临时结果拷贝到结果队列, 并清空临时结果
+            for i in range(temp_result_idx):
+                results.append(temp_result[i])
+        # 全部处理完成，清理临时数据
+        temp_result_idx = 0
+        temp_task_idx = 0
 
-    # 等待所有 B 进程完成
-    for b_process in b_processes:
-        b_process.join()
+async def main():
+    # 事件队列
+    event_queue = multiprocessing.Queue()
 
-    print("All tasks completed")
+    # 共享任务
+    wait_task = share_ndarray_list('wait_task', (1,), 'int64', 20)
+    wait_task.reset()
+    # 共享结果
+    results = share_ndarray_list('results', (1,), 'int64', 20)
+    results.reset()
+
+    lock = multiprocessing.Lock()
+    p = multiprocessing.Process(target=cpu_bound_task, args=(lock,event_queue))
+    p.start()
+
+    for i in range(10):
+        with lock:
+            wait_task.append(i)
+            print(f"main 发送任务 {i}, 任务列表: {wait_task.size()}, 结果列表: {results.size()}")
+        await asyncio.sleep(1.5)
+
+    # 完成后结束
+    event_queue.put('stop')
+
+    final_result = []
+    _temp_result = results.get_blank_same_data_local()
+    _temp_result_idx = 0
+    while len(final_result) < 10:
+        with lock:
+            if results.size() == 0:
+                # 没有结果，等待
+                time.sleep(0.1)
+                continue
+            # 获取全部结果
+            _size = results.size()
+            results.all_copy_slice(_temp_result, _temp_result_idx)
+
+        _temp_result_idx += _size
+        print(f"main 获取结果 {_size} 个, 任务列表: {wait_task.size()}, 结果列表: {results.size()}")
+        # 合并结果
+        for i in range(_size):
+            final_result.append(_temp_result[i])
+
+    print(f"final_result: {final_result}")
+    p.join()  # 等待进程结束
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,4 +1,5 @@
 import torch, time
+import multiprocessing
 
 import numpy as np
 import pickle, requests
@@ -12,7 +13,7 @@ from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
 from ray.tune.registry import _global_registry, ENV_CREATOR
 
-from py_ext.tool import log
+from py_ext.tool import log, share_ndarray_list, Semaphore
 
 class AsyncRLParameterServer:
     def __init__(self,
@@ -75,8 +76,64 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
+        # 梯度缓存
+        # 获取梯度（参数）的shape
+        _p_dict = self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        # 共享梯度
+        self.gradients_cache_share = []
+        # 共享参数
+        self.params_cache_share = None
+
+        # 共享数据锁
+        self.share_gradients_lock = multiprocessing.Lock()
+        self.share_params_lock = multiprocessing.Lock()
+
+        # 共享数据新增通知
+        self.share_data_new_event = Semaphore('share_data_new_event')
+        self.share_data_new_event.clear()# 初始化
+
+        # 启动计算进程
+        self.p = multiprocessing.Process(target=self.cpu_most_task)
+        self.p.start()
+    
+    def __del__(self):
+        self.p.terminate()
+
+    def cpu_most_task(self):
+        """CPU密集型任务"""
+        log(f'{self.train_title} calculate most start')
+        _gradients_cache = []
+        while True:
+            self.share_data_new_event.wait()
+            self.share_data_new_event.clear()
+
+            with self.share_gradients_lock:
+                if len(self.gradients_cache_share) == 0:
+                    continue
+                # 拷贝梯度到临时梯度
+                _gradients_cache = self.gradients_cache_share
+                self.gradients_cache_share = []
+
+            # 计算梯度
+            for data in _gradients_cache:
+                # 解压梯度
+                g, compress_info, version = pickle.loads(data)
+                g = self.gradient_compressor.decompress(g, compress_info)
+                # 更新梯度
+                self.param_server.apply_gradients(g, version)
+
+                # 获取模型参数
+                weights, version = self.param_server.get_weights()
+                # 压缩参数
+                weights = self.param_compressor.compress_params_dict(weights)
+                res = pickle.dumps((weights, version))
+                # 更新到共享参数
+                with self.share_params_lock:
+                    self.params_cache_share = res
+
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
+        raise Exception('弃用，使用 async_handle_request 代替')
         try:
             if cmd == 'get':
                 # 返回模型参数
@@ -130,6 +187,27 @@ class ExperimentHandler:
         except ConnectionResetError:
             pass
 
+    async def async_handle_request(self, msg_header, cmd, data):
+        """异步处理客户端请求"""
+        if cmd == 'get':
+            # 返回 共享参数
+            with self.share_params_lock:
+                # 交换
+                res = self.params_cache_share
+                self.params_cache_share = None
+            return res
+
+        elif cmd == 'update_gradients':
+            with self.share_gradients_lock:
+                # 添加到共享梯度信息中
+                self.gradients_cache_share.append(data)
+
+            # 通知新梯度
+            self.share_data_new_event.set()
+            log(f'{msg_header} Received gradients')
+
+        elif cmd == 'client_id':
+            pass
 
 if __name__ == '__main__':
     pass
