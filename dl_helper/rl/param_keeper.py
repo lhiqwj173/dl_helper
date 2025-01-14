@@ -200,7 +200,6 @@ class ExperimentHandler:
             with self.share_params_lock:
                 # 交换
                 res = self.params_cache_share
-                self.params_cache_share = None
                 v = self.params_cache_share_version
             log(f'{msg_header} send params, version: {v}')
             return res
