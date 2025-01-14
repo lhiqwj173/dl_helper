@@ -280,14 +280,18 @@ class ExperimentHandler:
             gradients_cache_share_length = 0
             g, compress_info, version = pickle.loads(data)
             # 提交到共享梯度信息队列
+            log(f'put gradients info')
             self.gradients_info_share_q.put((compress_info, version))
             # 提交到共享梯度
+            log(f'put gradients')
             with self.share_gradients_lock:
                 for idx, _g in enumerate(g):
+                    log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
                     self.gradients_cache_share[idx].append(_g)
                 gradients_cache_share_length = self.gradients_cache_share[0].size()
 
             # 通知新梯度
+            log(f'set share data new event')
             self.share_data_new_event.set()
             log(f'{msg_header} Received gradients, gradients_cache_share length: {gradients_cache_share_length}')
 
