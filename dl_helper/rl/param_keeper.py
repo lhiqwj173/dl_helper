@@ -151,7 +151,7 @@ class ExperimentHandler:
         temp_length = 0
         for idx, (k, v) in enumerate(_params_dict.items()):
             gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', v.shape, 'int8', 30))
-            gradients_cache_temp.append(gradients_cache_share.get_blank_same_data_local())
+            gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             params_cache_share.append(share_ndarray(f'{train_title}_pcs_{idx}', v.shape, 'int8'))
 
         # 初始化一个最新的参数/info
