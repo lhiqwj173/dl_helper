@@ -102,6 +102,7 @@ class ExperimentHandler:
         """CPU密集型任务"""
         def produce_params_cache(param_server, param_compressor): 
             """生成发送次数缓存"""
+            log(f'produce params cache')
             # 获取模型参数
             weights, version = param_server.get_weights()
             # 压缩参数
@@ -110,6 +111,7 @@ class ExperimentHandler:
         
         def update_params(lock, q, params_list, info, version, params_cache_share):
             """更新参数信息"""
+            log(f'update params')
             with lock:
                 # 清空q
                 while not q.empty():
@@ -186,13 +188,17 @@ class ExperimentHandler:
             # 计算梯度
             for idx in range(temp_length):
                 # 获取梯度列表
+                log(f'get gradients')
                 gs = [i.get(idx) for i in gradients_cache_temp]
                 # 解压梯度
+                log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
                 gs = gradient_compressor.decompress(gs, info)
                 # 更新梯度
+                log(f'update gradients')
                 param_server.apply_gradients(gs, version)
                 # 生成参数缓存
+                log(f'produce params cache')
                 weights, info, version = produce_params_cache(param_server, param_compressor)
                 update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
                 log(f'{train_title} update params, version: {version}')
