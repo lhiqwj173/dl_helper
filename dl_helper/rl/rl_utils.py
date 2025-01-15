@@ -283,10 +283,11 @@ class GradientAccumulator:
     def merge_gradients(self):
         """合并所有累积的梯度列表"""
         if not self.gradient_buffer:
+            log('gradient_buffer is empty')
             return None
         
-        for idx, (k, v) in enumerate(self.gradient_buffer[0].items()):
-            printprint(idx, k, v.shape)
+        for idx, v in enumerate(self.gradient_buffer[0]):
+            log(f'{idx} {v.shape}')
 
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:
