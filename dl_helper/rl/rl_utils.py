@@ -192,6 +192,7 @@ class GradientCompressor:
                     'valid_size': min(values.size, target_size)
                 })
             
+            log(len(compress_info)-1, compress_info[-1])
             compressed_grads.append(quantized_values)
             
         return compressed_grads, compress_info
@@ -283,7 +284,10 @@ class GradientAccumulator:
         """合并所有累积的梯度列表"""
         if not self.gradient_buffer:
             return None
-            
+        
+        for idx, (k, v) in enumerate(self.gradient_buffer[0].items()):
+            log(idx, k, v.shape)
+
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:
             self.accumulated_grads = [
@@ -1617,8 +1621,8 @@ class PrioritizedReplayBuffer:
                     n_rewards, n_next_states, n_dones)
 
         except Exception as e:
-            print(f"Error converting batch to numpy arrays: {str(e)}")
-            print(f"Batch content: {batch}")
+            log(f"Error converting batch to numpy arrays: {str(e)}")
+            log(f"Batch content: {batch}")
             pickle.dump(batch, open("error_batch.pkl", "wb"))
             raise e
 
