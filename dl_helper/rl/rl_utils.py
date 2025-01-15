@@ -46,7 +46,7 @@ def plot_training_curve(train_folder, total_time=None):
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
 class GradientCompressor:
-    def __init__(self, sparsity_ratio=0.1, quantize_bits=8, pad_value=None):
+    def __init__(self, sparsity_ratio=0.1, quantize_bits=8, pad_value=None, min_elements=0):
         """
         初始化梯度压缩器
         
@@ -54,10 +54,14 @@ class GradientCompressor:
         sparsity_ratio: float - 要保留的梯度比例，默认0.1表示保留10%的梯度
         quantize_bits: int - 量化位数，默认8位
         pad_value: int - 填充值，默认为(2**quantize_bits - 1)
+        min_elements: int - 压缩后最小元素数量，默认为使 int(n * sparsity_ratio)>=1 的最小n
         """
         self.sparsity_ratio = sparsity_ratio
         self.quantize_bits = quantize_bits
         self.pad_value = pad_value if pad_value is not None else (2**quantize_bits - 1)
+
+        # 默认为 int(n * sparsity_ratio)>=1 的最小n
+        self.min_elements = min_elements if min_elements > 0 else int(math.ceil(1 / sparsity_ratio))
         
     def _pad_to_size(self, arr, target_size):
         """
@@ -78,11 +82,15 @@ class GradientCompressor:
             return padded
             
     def compress_shape(self, original_shape):
-        return (int(math.prod(original_shape) * self.sparsity_ratio),)
+        """
+        计算压缩后的形状，确保最小元素数量
+        """
+        compressed_size = max(int(math.prod(original_shape) * self.sparsity_ratio), self.min_elements)
+        return (compressed_size,)
 
     def compress(self, gradients):
         """
-        压缩梯度，确保输出大小固定
+        压缩梯度，确保输出大小固定且不小于最小元素数量
         
         参数:
         gradients: List[torch.Tensor] - 梯度列表
@@ -96,14 +104,41 @@ class GradientCompressor:
         for grad in gradients:
             grad_np = grad.numpy()
             
-            # 计算目标压缩大小（10%）
-            target_size = int(grad_np.size * self.sparsity_ratio)
+            # 计算目标压缩大小，确保不小于最小元素数量
+            target_size = max(int(grad_np.size * self.sparsity_ratio), self.min_elements)
             
-            # 1. 计算唯一值及其频率
+            # 如果原始梯度大小小于或等于目标大小，直接保存完整梯度
+            if grad_np.size <= target_size:
+                quantized_values = np.zeros(target_size, dtype=np.uint8)
+                if grad_np.size > 0:  # 确保梯度不是空的
+                    min_val = grad_np.min()
+                    max_val = grad_np.max()
+                    if min_val == max_val:
+                        scale = 1.0
+                        quantized_values[:grad_np.size] = 0
+                    else:
+                        scale = (max_val - min_val) / (2**self.quantize_bits - 1)
+                        quantized_values[:grad_np.size] = np.round((grad_np.flatten() - min_val) / scale).astype(np.uint8)
+                else:
+                    min_val = 0
+                    scale = 1.0
+                
+                compress_info.append({
+                    'shape': grad_np.shape,
+                    'indices': np.arange(grad_np.size),
+                    'min_val': min_val,
+                    'scale': scale,
+                    'is_dominant_compressed': False,
+                    'is_small_gradient': True,
+                    'valid_size': grad_np.size
+                })
+                compressed_grads.append(quantized_values)
+                continue
+            
+            # 以下是原有的压缩逻辑
             unique_vals, counts = np.unique(grad_np, return_counts=True)
             total_elements = grad_np.size
             
-            # 如果存在占比超过 (1-sparsity_ratio) 的单一值，单独处理
             dominant_val_mask = counts / total_elements > (1 - self.sparsity_ratio)
             if np.any(dominant_val_mask):
                 dominant_val = unique_vals[dominant_val_mask][0]
@@ -121,7 +156,6 @@ class GradientCompressor:
                     min_val = dominant_val
                     scale = 1.0
                     
-                # 填充到固定大小
                 quantized_values = self._pad_to_size(quantized_values, target_size)
                 
                 compress_info.append({
@@ -131,7 +165,8 @@ class GradientCompressor:
                     'scale': scale,
                     'dominant_val': dominant_val,
                     'is_dominant_compressed': True,
-                    'valid_size': min(values.size, target_size)  # 记录有效数据大小
+                    'is_small_gradient': False,
+                    'valid_size': min(values.size, target_size)
                 })
             else:
                 threshold = np.percentile(np.abs(grad_np), 
@@ -145,7 +180,6 @@ class GradientCompressor:
                 scale = (max_val - min_val) / (2**self.quantize_bits - 1)
                 quantized_values = np.round((values - min_val) / scale).astype(np.uint8)
                 
-                # 填充到固定大小
                 quantized_values = self._pad_to_size(quantized_values, target_size)
                 
                 compress_info.append({
@@ -154,7 +188,8 @@ class GradientCompressor:
                     'min_val': min_val,
                     'scale': scale,
                     'is_dominant_compressed': False,
-                    'valid_size': min(values.size, target_size)  # 记录有效数据大小
+                    'is_small_gradient': False,
+                    'valid_size': min(values.size, target_size)
                 })
             
             compressed_grads.append(quantized_values)
@@ -175,18 +210,17 @@ class GradientCompressor:
         decompressed_grads = []
         
         for quantized_values, info in zip(compressed_grads, compress_info):
-            # 只使用有效的数据部分
             valid_values = quantized_values[:info['valid_size']]
-            
-            # 创建全零数组
             grad = np.zeros(info['shape'], dtype=np.float32)
             
-            if info['is_dominant_compressed']:
+            if info.get('is_small_gradient', False):
                 if valid_values.size > 0:
                     values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
-                    grad.fill(info['dominant_val'])  # 填充主导值
-                    
-                    # 只使用有效的索引
+                    grad.flat[:info['valid_size']] = values
+            elif info['is_dominant_compressed']:
+                if valid_values.size > 0:
+                    values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
+                    grad.fill(info['dominant_val'])
                     valid_indices = tuple(idx[:info['valid_size']] for idx in info['indices'])
                     grad[valid_indices] = values
                 else:
@@ -194,8 +228,6 @@ class GradientCompressor:
             else:
                 if valid_values.size > 0:
                     values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
-                    
-                    # 只使用有效的索引
                     valid_indices = tuple(idx[:info['valid_size']] for idx in info['indices'])
                     grad[valid_indices] = values
             
@@ -205,22 +237,14 @@ class GradientCompressor:
 
     def get_compression_stats(self, original_grads, compressed_grads, compress_info):
         """
-        计算压缩统计信息
-        
-        参数:
-        original_grads: List[torch.Tensor] - 原始梯度列表
-        compressed_grads: List[np.ndarray] - 压缩后的梯度列表
-        compress_info: List[dict] - 压缩信息列表
-        
-        返回:
-        dict: 包含压缩率和其他统计信息的字典
+        计算压缩统计信息（保持不变）
         """
         original_size = sum(grad.numel() * grad.element_size() for grad in original_grads)
         
         compressed_size = sum(grad.size * grad.itemsize for grad in compressed_grads)
         compressed_size += sum(
             sum(arr.size * arr.itemsize for arr in info['indices']) +
-            len(str(info)) # 近似估计metadata大小
+            len(str(info))
             for info in compress_info
         )
         
