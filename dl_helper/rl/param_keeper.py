@@ -281,6 +281,7 @@ class ExperimentHandler:
             return pickle.dumps((params, info, v))
 
         elif cmd == 'update_gradients':
+            log(f'{msg_header} update gradients')
             gradients_cache_share_length = 0
             g, compress_info, version = pickle.loads(data)
             # 提交到共享梯度信息队列
