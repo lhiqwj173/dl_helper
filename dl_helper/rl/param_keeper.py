@@ -91,7 +91,7 @@ class ExperimentHandler:
         # 用于获取压缩后梯度形状
         gradient_compressor = GradientCompressor()
         for idx, (k, v) in enumerate(_params_dict.items()):
-            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape), 'int8', 30))
+            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape)[0], 'int8', 30))
             self.params_cache_share.append(share_ndarray(f'{self.train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
     
     def __del__(self):
@@ -155,7 +155,7 @@ class ExperimentHandler:
         gradients_cache_info_temp = []
         temp_length = 0
         for idx, (k, v) in enumerate(_params_dict.items()):
-            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape), 'int8', 30))
+            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape)[0], 'int8', 30))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             params_cache_share.append(share_ndarray(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
 
