@@ -15,7 +15,7 @@ import copy, pickle
 from typing import Dict, Any
 import requests
 
-from py_ext.tool import safe_share_memory
+from py_ext.tool import safe_share_memory, log
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -82,7 +82,7 @@ class SharedParam:
             _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
             self.params[1][k] = _v
             self.ssms.append(ssm)
-
+        
     def update_count(self):
         return self.params[0][0]
     
@@ -115,16 +115,16 @@ class ClientLearnerGroup(LearnerGroup):
         # 参数压缩器
         self.param_compressor = ParamCompressor()
 
-        # 初始化客户端learner
-        self._init_client_learner()
-
         # 共享参数
         self.shared_param = None
+
+        # 初始化客户端learner
+        self._init_client_learner()
 
     def _init_client_learner(self):
         """初始化客户端learner"""
         # 设置每个learner的train_title
-        print(f"init_client_learner")
+        log(f"init_client_learner")
         # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
         # res = self.foreach_learner(lambda learner: learner.set_train_title(1))
@@ -132,7 +132,7 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
-        print(f"set train_title to all learners, res: {res}")
+        log(f"set train_title to all learners, res: {res}")
 
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
         remote_actor_ids = self._worker_manager.actor_ids()[1:]
@@ -140,28 +140,30 @@ class ClientLearnerGroup(LearnerGroup):
 
         # # 或 请求client_id
         # res = self.foreach_learner(lambda learner: learner.request_client_id())
-        print(f"set client_id to all learners, res: {res}")
+        log(f"set client_id to all learners, res: {res}")
 
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
 
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
-        print('request server weights')
+        log('request server weights')
         params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
         params_dict = self.param_compressor.decompress_params_dict(params_list, info)
         weights = {'default_policy': params_dict}
         # 更新到所有learner
         self.set_weights(weights)
-        print(f"set weights to all learners, version: {version}")
+        log(f"set weights to all learners, version: {version}")
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        print(f"set weights to all learners, res: {res}")
+        log(f"set weights to all learners, res: {res}")
 
         # 创建共享参数
         self.shared_param = SharedParam(params_dict, create=True)
+        log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
+        log(f"foreach_learner: init shared param")
         self.foreach_learner(lambda learner: learner.init_shared_param())
 
 class ClientPPOTorchLearner(PPOTorchLearner):
@@ -197,7 +199,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count = 0
 
     def init_shared_param(self):
-        print(f"[{self.client_id}] init_shared_param")
+        log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
         # 获取共享参数
@@ -234,18 +236,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
             self.gradient_accumulator.add_gradients(cpu_gradients)
-            print(f'add gradients to gradient_accumulator')
+            log(f'add gradients to gradient_accumulator')
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
-                print(f'merge gradients')
+                log(f'merge gradients')
                 # pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
                 merged_gradients = self.gradient_accumulator.merge_gradients()
                 # 压缩梯度
-                print(f'compress gradients')
+                log(f'compress gradients')
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
                 # 发送梯度
-                # print(f'send gradients')
+                # log(f'send gradients')
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
                 # nouse2
         # nouse3
@@ -295,22 +297,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse5
 
     def set_client_id(self, client_id):
-        print(f"[{id(self)}] set_client_id: {client_id}")
+        log(f"[{id(self)}] set_client_id: {client_id}")
         self.client_id = client_id
 
     def set_train_title(self, train_title):
-        print(f"[{id(self)}] set_train_title: {train_title}")
+        log(f"[{id(self)}] set_train_title: {train_title}")
         self.train_title = train_title
 
     def request_client_id(self):
         # 获取客户端 id
-        print(f"[{id(self)}] request_client_id")
+        log(f"[{id(self)}] request_client_id")
         self.client_id = request_client_id(self.train_title)
-        print(f"[{id(self)}] client_id: {self.client_id}")
+        log(f"[{id(self)}] client_id: {self.client_id}")
         return self.client_id
 
     def set_weights_version(self, version):
-        print(f"[{id(self)}] set_version: {version}")
+        log(f"[{id(self)}] set_version: {version}")
         self.version = version
         return self.version
 
@@ -318,7 +320,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 if __name__ == '__main__':
     gradient_buffer_file = r"C:\Users\lh\Downloads\gradient_buffer_0.pkl"
     gradient_buffer = pickle.load(open(gradient_buffer_file, 'rb'))
-    print(gradient_buffer)
+    log(gradient_buffer)
 
     merged_gradients = ClientPPOTorchLearner.merge_gradients(gradient_buffer)
-    print(merged_gradients)
+    log(merged_gradients)
