@@ -60,8 +60,9 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
-        # 共享梯度信息队列
-        self.gradients_info_share_q = multiprocessing.Queue()
+        # 共享梯度队列
+        # 梯度数据经过稀疏化，形状
+        self.gradients_share_q = multiprocessing.Queue()
         # 共享参数信息队列
         self.params_info_share_q = multiprocessing.Queue()
 
