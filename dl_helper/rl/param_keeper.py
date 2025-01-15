@@ -155,7 +155,7 @@ class ExperimentHandler:
         gradients_cache_info_temp = []
         temp_length = 0
         for idx, (k, v) in enumerate(_params_dict.items()):
-            log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {gradient_compressor.compress_shape(v.shape)}')
+            log(f'{train_title} init gradients share, idx: {idx}, name: {k}, shape: {v.shape}, compress shape: {gradient_compressor.compress_shape(v.shape)}')
             gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape), 'int8', 30))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             params_cache_share.append(share_ndarray(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
