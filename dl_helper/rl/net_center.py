@@ -3,7 +3,7 @@ import asyncio
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from py_ext.tool import log, init_logger
+from py_ext.tool import log, init_logger, get_exception_msg
 from py_ext.wechat import send_wx
 
 from datetime import datetime, timezone, timedelta
@@ -257,7 +257,7 @@ class AsyncSocketServer:
                 break
                 
         except Exception as e:
-            log(f"Error handling client {peer}: {e}")
+            log(f"Error handling client {peer}\n{get_exception_msg()}")
         finally:
             self.clients.remove(writer)
             writer.close()
