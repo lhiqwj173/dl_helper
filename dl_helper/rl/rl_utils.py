@@ -286,7 +286,7 @@ class GradientAccumulator:
             return None
         
         for idx, (k, v) in enumerate(self.gradient_buffer[0].items()):
-            log(idx, k, v.shape)
+            printprint(idx, k, v.shape)
 
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:

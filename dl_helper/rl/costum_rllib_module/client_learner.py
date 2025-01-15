@@ -238,7 +238,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
                 print(f'merge gradients')
-                pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
+                # pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
                 merged_gradients = self.gradient_accumulator.merge_gradients()
                 # 压缩梯度
                 print(f'compress gradients')
