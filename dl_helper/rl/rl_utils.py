@@ -1,5 +1,6 @@
 from tqdm import tqdm
 import numpy as np
+import math
 import pandas as pd
 import torch
 import collections
@@ -76,6 +77,9 @@ class GradientCompressor:
             padded[:arr.size] = arr
             return padded
             
+    def compress_shape(self, original_shape):
+        return (int(math.prod(original_shape) * self.sparsity_ratio),)
+
     def compress(self, gradients):
         """
         压缩梯度，确保输出大小固定
