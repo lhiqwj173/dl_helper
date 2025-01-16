@@ -40,6 +40,10 @@ class AsyncRLParameterServer:
         self.ver += 1
         return self.get_weights()
     
+    def get_gradients_params(self):
+        """获取计算梯度的参数"""
+        return self.learner._params
+    
     def get_weights(self):
         """获取参数"""
         return (self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy'], self.ver)
@@ -81,18 +85,19 @@ class ExperimentHandler:
         ))
         self.p.start()
 
-        # 等待接受一个参数字典数据
+        # 等待接受 参数的形状列表
         # 用于初始化共享数据
-        _params_dict = self.gradients_info_share_q.get()
+        _simple_params, _simple_grad_params = self.gradients_info_share_q.get()
         # 共享梯度列表
         self.gradients_cache_share = []
         # 共享参数, 只需要维护一份最新的数据
         self.params_cache_share = []
-        # 用于获取压缩后梯度形状
-        gradient_compressor = GradientCompressor()
-        for idx, (k, v) in enumerate(_params_dict.items()):
-            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape), 'int8', 30, debug=True))
-            self.params_cache_share.append(share_ndarray(f'{self.train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+        # 初始化共享梯度
+        for idx, _shape in enumerate(_simple_grad_params):
+            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=True))
+        # 初始化共享参数
+        for idx, _shape in enumerate(_simple_params):
+            self.params_cache_share.append(share_ndarray(f'{self.train_title}_pcs_{idx}', _shape, 'int8'))
     
     def __del__(self):
         self.p.terminate()
@@ -137,6 +142,7 @@ class ExperimentHandler:
         env = env_creater()
         param_server = AsyncRLParameterServer(config, env)
         _params_dict = param_server.get_weights()[0] 
+        _grad_params_dict = param_server.get_gradients_params()
 
         # 梯度压缩器
         gradient_compressor = GradientCompressor()
@@ -144,86 +150,41 @@ class ExperimentHandler:
         # 参数压缩器
         param_compressor = ParamCompressor()
 
-        # 初始化共享数据
         # 共享梯度
         gradients_cache_share = []
-        # 共享参数
-        params_cache_share = []
         # 计算用临时梯度
         gradients_cache_temp = []
         # 计算用临时梯度信息
         gradients_cache_info_temp = []
+        # 临时梯度的数量(待应用)
         temp_length = 0
+
+        # 共享参数
+        params_cache_share = []
+        # 初始化共享参数
+        _simple_params = []
         for idx, (k, v) in enumerate(_params_dict.items()):
-            """
-            idx: 0, name: encoder.actor_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
-            idx: 1, name: encoder.actor_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
-            idx: 2, name: encoder.actor_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
-            idx: 3, name: encoder.actor_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
-            idx: 4, name: encoder.actor_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
-            idx: 5, name: encoder.actor_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
-            idx: 6, name: encoder.critic_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
-            idx: 7, name: encoder.critic_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
-            idx: 8, name: encoder.critic_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
-            idx: 9, name: encoder.critic_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
-            idx: 10, name: encoder.critic_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
-            idx: 11, name: encoder.critic_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
-            idx: 12, name: pi.log_std_clip_param_const, shape: (1,), compress shape: (10,)
-            idx: 13, name: pi.net.mlp.0.weight, shape: (4, 1344), compress shape: (537,)
-            idx: 14, name: pi.net.mlp.0.bias, shape: (4,), compress shape: (10,)
-            idx: 15, name: vf.log_std_clip_param_const, shape: (1,), compress shape: (10,)
-            idx: 16, name: vf.net.mlp.0.weight, shape: (1, 1344), compress shape: (134,)
-            idx: 17, name: vf.net.mlp.0.bias, shape: (1,), compress shape: (10,)
+            log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
+            _shape = (math.prod(v.shape),)
+            params_cache_share.append(share_ndarray(f'{train_title}_pcs_{idx}', _shape, 'int8'))
+            _simple_params.append(_shape)
 
-             - 0 torch.Size([32, 144, 8, 8])
-             - 1 torch.Size([32])
-             - 2 torch.Size([64, 32, 4, 4])
-             - 3 torch.Size([64])
-             - 4 torch.Size([64, 64, 3, 3])
-             - 5 torch.Size([64])
-             - 6 torch.Size([32, 144, 8, 8])
-             - 7 torch.Size([32])
-             - 8 torch.Size([64, 32, 4, 4])
-             - 9 torch.Size([64])
-             - 10 torch.Size([64, 64, 3, 3])
-             - 11 torch.Size([64])
-             - 12 torch.Size([4, 1344])
-             - 13 torch.Size([4])
-             - 14 torch.Size([1, 1344])
-             - 15 torch.Size([1])
-
-            133859309843168 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.1.weight success
-            133859309843024 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.1.bias success
-            133859309831840 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.4.weight success
-            133859309837024 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.4.bias success
-            133859309845184 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.7.weight success
-            133859309844416 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.7.bias success
-            133859309844848 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.1.weight success
-            133859309845088 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.1.bias success
-            133859309845232 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.4.weight success
-            133859309845520 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.4.bias success
-            133859309845664 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.7.weight success
-            133859309845808 create shared memory _SharedParam_encoder.critic_encoder.net.0.cnn.7.bias success
-            133859309845952 create shared memory _SharedParam_pi.log_std_clip_param_const success
-            133859309846096 create shared memory _SharedParam_pi.net.mlp.0.weight success
-            133859309846240 create shared memory _SharedParam_pi.net.mlp.0.bias success
-            133859309846384 create shared memory _SharedParam_vf.log_std_clip_param_const success
-            133859309781104 create shared memory _SharedParam_vf.net.mlp.0.weight success
-            133859309781200 create shared memory _SharedParam_vf.net.mlp.0.bias success
-
-            """
-            log(f'{train_title} init gradients share, idx: {idx}, name: {k}, shape: {v.shape}, compress shape: {gradient_compressor.compress_shape(v.shape)}')
-            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', gradient_compressor.compress_shape(v.shape), 'int8', 30, debug=True))
+        # 初始化共享梯度
+        _simple_grad_params = []
+        for idx, (k, v) in enumerate(_grad_params_dict.items()):
+            _compress_shape = gradient_compressor.compress_shape(v.shape)
+            log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
+            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=True))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
-            params_cache_share.append(share_ndarray(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+            _simple_grad_params.append(_compress_shape)
 
         # 初始化一个最新的参数/info
         weights, info, version = produce_params_cache(param_server, param_compressor)
         update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
         
-        # 回传 _params_dict 
+        # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
-        gradients_info_share_q.put(_params_dict)
+        gradients_info_share_q.put((_simple_params, _simple_grad_params))
 
         log(f'{train_title} calculate most start')
         while True:
