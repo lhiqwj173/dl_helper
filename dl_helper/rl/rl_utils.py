@@ -205,7 +205,7 @@ class GradientCompressor:
         log('compressed gradients size:')
         compressed_dump = pickle.dumps((compressed_grads, compress_info))
         compressed_size = sys.getsizeof(compressed_dump)
-        log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(100*original_size / compressed_size):.2f}%')
+        log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
 
         return compressed_grads, compress_info
     
