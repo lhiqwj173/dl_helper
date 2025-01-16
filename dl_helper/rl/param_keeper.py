@@ -316,7 +316,7 @@ class ExperimentHandler:
                     params.append(i.data.copy())
                 # 取出再放回， 保证队列中仍有数据
                 info, v = self.params_info_share_q.get()
-                self.params_info_share_q.put(info, v)
+                self.params_info_share_q.put((info, v))
             log(f'{msg_header} send params, version: {v}')
             return pickle.dumps((params, info, v))
 
