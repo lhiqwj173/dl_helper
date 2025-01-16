@@ -211,7 +211,7 @@ class ExperimentHandler:
             for idx in range(temp_length):
                 # 获取梯度列表
                 log(f'get gradients')
-                gs = [i.get(idx) for i in gradients_cache_temp]
+                gs = [i[idx] for i in gradients_cache_temp]
                 # 解压梯度
                 log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
