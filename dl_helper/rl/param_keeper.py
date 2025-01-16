@@ -156,24 +156,41 @@ class ExperimentHandler:
         temp_length = 0
         for idx, (k, v) in enumerate(_params_dict.items()):
             """
-            20250110_breakout init gradients share, idx: 0, name: encoder.actor_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
-            20250110_breakout init gradients share, idx: 1, name: encoder.actor_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 2, name: encoder.actor_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
-            20250110_breakout init gradients share, idx: 3, name: encoder.actor_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 4, name: encoder.actor_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
-            20250110_breakout init gradients share, idx: 5, name: encoder.actor_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 6, name: encoder.critic_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
-            20250110_breakout init gradients share, idx: 7, name: encoder.critic_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 8, name: encoder.critic_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
-            20250110_breakout init gradients share, idx: 9, name: encoder.critic_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 10, name: encoder.critic_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
-            20250110_breakout init gradients share, idx: 11, name: encoder.critic_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 12, name: pi.log_std_clip_param_const, shape: (1,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 13, name: pi.net.mlp.0.weight, shape: (4, 1344), compress shape: (537,)
-            20250110_breakout init gradients share, idx: 14, name: pi.net.mlp.0.bias, shape: (4,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 15, name: vf.log_std_clip_param_const, shape: (1,), compress shape: (10,)
-            20250110_breakout init gradients share, idx: 16, name: vf.net.mlp.0.weight, shape: (1, 1344), compress shape: (134,)
-            20250110_breakout init gradients share, idx: 17, name: vf.net.mlp.0.bias, shape: (1,), compress shape: (10,)
+            idx: 0, name: encoder.actor_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
+            idx: 1, name: encoder.actor_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
+            idx: 2, name: encoder.actor_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
+            idx: 3, name: encoder.actor_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
+            idx: 4, name: encoder.actor_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
+            idx: 5, name: encoder.actor_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
+            idx: 6, name: encoder.critic_encoder.net.0.cnn.1.weight, shape: (32, 144, 8, 8), compress shape: (29491,)
+            idx: 7, name: encoder.critic_encoder.net.0.cnn.1.bias, shape: (32,), compress shape: (10,)
+            idx: 8, name: encoder.critic_encoder.net.0.cnn.4.weight, shape: (64, 32, 4, 4), compress shape: (3276,)
+            idx: 9, name: encoder.critic_encoder.net.0.cnn.4.bias, shape: (64,), compress shape: (10,)
+            idx: 10, name: encoder.critic_encoder.net.0.cnn.7.weight, shape: (64, 64, 3, 3), compress shape: (3686,)
+            idx: 11, name: encoder.critic_encoder.net.0.cnn.7.bias, shape: (64,), compress shape: (10,)
+            idx: 12, name: pi.log_std_clip_param_const, shape: (1,), compress shape: (10,)
+            idx: 13, name: pi.net.mlp.0.weight, shape: (4, 1344), compress shape: (537,)
+            idx: 14, name: pi.net.mlp.0.bias, shape: (4,), compress shape: (10,)
+            idx: 15, name: vf.log_std_clip_param_const, shape: (1,), compress shape: (10,)
+            idx: 16, name: vf.net.mlp.0.weight, shape: (1, 1344), compress shape: (134,)
+            idx: 17, name: vf.net.mlp.0.bias, shape: (1,), compress shape: (10,)
+
+             - 0 torch.Size([32, 144, 8, 8])
+             - 1 torch.Size([32])
+             - 2 torch.Size([64, 32, 4, 4])
+             - 3 torch.Size([64])
+             - 4 torch.Size([64, 64, 3, 3])
+             - 5 torch.Size([64])
+             - 6 torch.Size([32, 144, 8, 8])
+             - 7 torch.Size([32])
+             - 8 torch.Size([64, 32, 4, 4])
+             - 9 torch.Size([64])
+             - 10 torch.Size([64, 64, 3, 3])
+             - 11 torch.Size([64])
+             - 12 torch.Size([4, 1344])
+             - 13 torch.Size([4])
+             - 14 torch.Size([1, 1344])
+             - 15 torch.Size([1])
 
             133859309843168 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.1.weight success
             133859309843024 create shared memory _SharedParam_encoder.actor_encoder.net.0.cnn.1.bias success
@@ -192,7 +209,7 @@ class ExperimentHandler:
             133859309846240 create shared memory _SharedParam_pi.net.mlp.0.bias success
             133859309846384 create shared memory _SharedParam_vf.log_std_clip_param_const success
             133859309781104 create shared memory _SharedParam_vf.net.mlp.0.weight success
-            133859309781200 create shared memory _SharedParam_vf.net.mlp.0.bias su
+            133859309781200 create shared memory _SharedParam_vf.net.mlp.0.bias success
 
             """
             log(f'{train_title} init gradients share, idx: {idx}, name: {k}, shape: {v.shape}, compress shape: {gradient_compressor.compress_shape(v.shape)}')

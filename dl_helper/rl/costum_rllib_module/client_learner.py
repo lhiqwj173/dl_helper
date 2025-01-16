@@ -227,7 +227,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.params_update_count = self.shared_param.update_count()
 
         # 计算梯度
+        log(f'compute gradients')
         gradients_dict = super().compute_gradients(*args, **kwargs)
+        for idx, (k, v) in enumerate(gradients_dict.items()):
+            log(f'{idx} {k} {v.shape}')
+        log(f'compute gradients done')
         
         self.update_count += 1
 
