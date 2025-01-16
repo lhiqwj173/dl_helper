@@ -103,7 +103,8 @@ class GradientCompressor:
         
         # 输出原始梯度数据的占用大小
         log('original gradients size:')
-        original_size = pickle.dumps(gradients).nbytes
+        original_dump = pickle.dumps(gradients)
+        original_size = sys.getsizeof(original_dump)
         log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
 
         for grad in gradients:
@@ -202,7 +203,8 @@ class GradientCompressor:
             
         # 输出压缩后的 梯度+info 的占用大小
         log('compressed gradients size:')
-        compressed_size = pickle.dumps((compressed_grads, compress_info)).nbytes
+        compressed_dump = pickle.dumps((compressed_grads, compress_info))
+        compressed_size = sys.getsizeof(compressed_dump)
         log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(100*original_size / compressed_size):.2f}%')
 
         return compressed_grads, compress_info
