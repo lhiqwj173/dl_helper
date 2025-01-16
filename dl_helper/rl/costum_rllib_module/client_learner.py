@@ -227,14 +227,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.params_update_count = self.shared_param.update_count()
 
         # 计算梯度
-        log('self._params:')
-        for idx, (k, v) in enumerate(self._params.items()):
-            log(f'{idx} {k.shape} {v.shape}')
-        log('compute gradients:')
+        # log('self._params:')
+        # for idx, (k, v) in enumerate(self._params.items()):
+        #     log(f'{idx} {k.shape} {v.shape}')
+        # log('compute gradients:')
         gradients_dict = super().compute_gradients(*args, **kwargs)
-        for idx, (k, v) in enumerate(gradients_dict.items()):
-            log(f'{idx} {k.shape} {v.shape}')
-        log(f'compute gradients done')
+        # for idx, (k, v) in enumerate(gradients_dict.items()):
+        #     log(f'{idx} {k.shape} {v.shape}')
+        # log(f'compute gradients done')
 
         self.update_count += 1
 
@@ -243,7 +243,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
             self.gradient_accumulator.add_gradients(cpu_gradients)
-            log(f'add gradients to gradient_accumulator')
+            # log(f'add gradients to gradient_accumulator')
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
                 log(f'merge gradients')
