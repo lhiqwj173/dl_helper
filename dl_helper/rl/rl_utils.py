@@ -390,12 +390,23 @@ class ParamCompressor:
         """
         compressed_list = []
         info_dict = OrderedDict()
+
+        log('original params dict size:')
+        original_dump = pickle.dumps(params_dict)
+        original_size = sys.getsizeof(original_dump)
+        log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
         
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
             compressed_list.append(quantized)
             info_dict[key] = compress_info
             
+        # 输出压缩后的 梯度+info 的占用大小
+        log('compressed params dict size:')
+        compressed_dump = pickle.dumps((compressed_list, info_dict))
+        compressed_size = sys.getsizeof(compressed_dump)
+        log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
+
         return compressed_list, info_dict
     
     def decompress_params_dict(self, compressed_list, info_dict):
