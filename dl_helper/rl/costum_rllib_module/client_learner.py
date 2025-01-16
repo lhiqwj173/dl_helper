@@ -235,7 +235,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         for idx, (k, v) in enumerate(gradients_dict.items()):
             log(f'{idx} {k} {v.shape}')
         log(f'compute gradients done')
-        
+
         self.update_count += 1
 
         # nouse3 100 iter about 0.695H -89.66%
@@ -254,8 +254,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
                 # 发送梯度
-                # log(f'send gradients')
+                log(f'send gradients')
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
+                        
+                import sys
+                sys.exit()
+
                 # nouse2
         # nouse3
 
