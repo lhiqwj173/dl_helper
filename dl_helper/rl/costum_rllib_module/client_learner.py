@@ -229,11 +229,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 计算梯度
         log('self._params:')
         for idx, (k, v) in enumerate(self._params.items()):
-            log(f'{idx} {k} {v.shape}')
+            log(f'{idx} {k.shape} {v.shape}')
         log('compute gradients:')
         gradients_dict = super().compute_gradients(*args, **kwargs)
         for idx, (k, v) in enumerate(gradients_dict.items()):
-            log(f'{idx} {k} {v.shape}')
+            log(f'{idx} {k.shape} {v.shape}')
         log(f'compute gradients done')
 
         self.update_count += 1
