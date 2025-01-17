@@ -177,7 +177,7 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=self.debug))
+            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             _simple_grad_params.append(_compress_shape)
 
