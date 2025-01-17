@@ -15,7 +15,7 @@ import copy, pickle
 from typing import Dict, Any
 import requests
 
-from py_ext.tool import safe_share_memory, log
+from py_ext.tool import safe_share_memory, log, Semaphore
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -61,42 +61,29 @@ class SharedParam:
         create: 是否创建共享内存
         """
         self.create = create
-        self.params = []
+        self.params = {}
         self.ssms = []
 
-        # 更新计数 safe_share_memory
-        _ssm_update_count = safe_share_memory(name=f'_SharedParam_update_count', size=8)
-        _shm_update_count = _ssm_update_count.get()
-        _update_count = np.ndarray(1, dtype=np.int64, buffer=_shm_update_count.buf)
-        self.params.append(_update_count)
+        # 共享事件
+        self.event = Semaphore(name=f'_SharedParam_event')
         if create:
-            self.params[0][0] = 0
-        self.ssms.append(_ssm_update_count)
+            self.event.clear()
 
         # 共享内存
-        self.params.append({})
         for k, v in params_dict.items():
             # v 是numpy.ndarray
             ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.nbytes)
             shm = ssm.get()
             _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
-            self.params[1][k] = _v
+            self.params[k] = _v
             self.ssms.append(ssm)
-        
-    def update_count(self):
-        return self.params[0][0]
-    
-    def reset_update_count(self):
-        self.params[0][0] = 0
 
     def get_param_dict(self):
-        return self.params[1]
+        return self.params
 
     def set_param(self, params_dict):
         for k, v in params_dict.items():
-            self.params[1][k][:] = v[:]
-        # 更新计数
-        self.params[0][0] += 1
+            self.params[k][:] = v[:]
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -187,7 +174,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享参数
         self.shared_param = None
-        self.params_update_count = 0# shared_param 的更新计数
 
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
@@ -204,9 +190,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, create=False)
-        if self.client_id == 0:
-            # 重置更新计数
-            self.shared_param.reset_update_count()
 
     @staticmethod
     def merge_gradients(gradient_list):
@@ -223,9 +206,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse5 100 iter about H
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
-        # 记录更新计数
-        self.params_update_count = self.shared_param.update_count()
-
         # 计算梯度
         # log('self._params:')
         # for idx, (k, v) in enumerate(self._params.items()):
@@ -281,6 +261,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 params_dict = self.param_compressor.decompress_params_dict(params_list, info)
                 # 更新共享参数
                 self.shared_param.set_param(params_dict)
+                # 触发共享参数更新事件 TODO
+                self.shared_param.event.set()
                 # 应用到learner
                 weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
                 self.set_state(weights)
