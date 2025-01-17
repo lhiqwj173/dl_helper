@@ -31,7 +31,7 @@ class AsyncRLParameterServer:
         
     def apply_gradients(self, gradients_list, client_version):
         """更新参数"""
-        log(f'gradients_list length: {len(gradients_list)}')
+        # log(f'gradients_list length: {len(gradients_list)}')
         params = self.learner._params
         for idx, k in enumerate(params.keys()):
             params[k].grad = gradients_list[idx].to(self.learner._device)
@@ -50,13 +50,14 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config):
+    def __init__(self, train_title, config, debug=False):
         """
         train_title: 训练标题
         config: RLlib 配置
         """
         # 训练标题
         self.train_title = train_title
+        self.debug = debug
 
         # 客户端 IP/id
         self.client_ip_ids = {}
@@ -81,7 +82,8 @@ class ExperimentHandler:
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.cpu_most_task, args=(
             train_title, self.gradients_info_share_q, self.params_info_share_q, self.share_data_new_event, self.share_gradients_lock, self.share_params_lock,
-            config
+            config,
+            self.debug,
         ))
         self.p.start()
 
@@ -94,7 +96,7 @@ class ExperimentHandler:
         self.params_cache_share = []
         # 初始化共享梯度
         for idx, _shape in enumerate(_simple_grad_params):
-            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=True))
+            self.gradients_cache_share.append(share_ndarray_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
             self.params_cache_share.append(share_ndarray(f'{self.train_title}_pcs_{idx}', _shape, 'int8'))
@@ -105,7 +107,8 @@ class ExperimentHandler:
     @staticmethod
     def cpu_most_task(
         train_title, gradients_info_share_q, params_info_share_q, share_data_new_event, share_gradients_lock, share_params_lock, 
-        config
+        config, 
+        debug,
     ):
         """CPU密集型任务"""
         def produce_params_cache(param_server, param_compressor): 
@@ -174,7 +177,7 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=True))
+            gradients_cache_share.append(share_ndarray_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=self.debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             _simple_grad_params.append(_compress_shape)
 
@@ -210,17 +213,17 @@ class ExperimentHandler:
             # 计算梯度
             for idx in range(temp_length):
                 # 获取梯度列表
-                log(f'get gradients')
+                # log(f'get gradients')
                 gs = [i[idx] for i in gradients_cache_temp]
                 # 解压梯度
-                log(f'decompress gradients')
+                # log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
                 gs = gradient_compressor.decompress(gs, info)
                 # 更新梯度
-                log(f'update gradients')
+                # log(f'update gradients')
                 param_server.apply_gradients(gs, version)
                 # 生成参数缓存
-                log(f'produce params cache')
+                # log(f'produce params cache')
                 weights, info, version = produce_params_cache(param_server, param_compressor)
                 update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
                 log(f'{train_title} update params, version: {version}')
@@ -303,20 +306,20 @@ class ExperimentHandler:
             gradients_cache_share_length = 0
             g, compress_info, version = pickle.loads(data)
             # 提交到共享梯度信息队列
-            log(f'put gradients info')
+            # log(f'put gradients info')
             self.gradients_info_share_q.put((compress_info, version))
             # 提交到共享梯度
-            log(f'put gradients')
+            # log(f'put gradients')
             with self.share_gradients_lock:
                 for idx, _g in enumerate(g):
-                    log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
+                    # log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
                     self.gradients_cache_share[idx].append(_g)
-                gradients_cache_share_length = self.gradients_cache_share[0].size()
+                # gradients_cache_share_length = self.gradients_cache_share[0].size()
 
             # 通知新梯度
-            log(f'set share data new event')
+            # log(f'set share data new event')
             self.share_data_new_event.set()
-            log(f'{msg_header} Received gradients, gradients_cache_share length: {gradients_cache_share_length}')
+            # log(f'{msg_header} Received gradients, gradients_cache_share length: {gradients_cache_share_length}')
 
         elif cmd == 'client_id':
             pass
