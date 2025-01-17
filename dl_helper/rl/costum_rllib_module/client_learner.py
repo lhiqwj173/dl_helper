@@ -15,7 +15,7 @@ import copy, pickle
 from typing import Dict, Any
 import requests
 
-from py_ext.tool import safe_share_memory, log, Semaphore
+from py_ext.tool import safe_share_memory, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -61,11 +61,12 @@ class SharedParam:
         create: 是否创建共享内存
         """
         self.create = create
-        self.params = {}
+        self._params_dict = {}
+        self.weights = {COMPONENT_RL_MODULE: {'default_policy': self._params_dict}}
         self.ssms = []
 
         # 共享事件
-        self.event = Semaphore(name=f'_SharedParam_event')
+        self.event = Event(name=f'_SharedParam_event')
         if create:
             self.event.clear()
 
@@ -75,15 +76,15 @@ class SharedParam:
             ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.nbytes)
             shm = ssm.get()
             _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
-            self.params[k] = _v
+            self._params_dict[k] = _v
             self.ssms.append(ssm)
 
-    def get_param_dict(self):
-        return self.params
+    def get_weights(self):
+        return self.weights
 
     def set_param(self, params_dict):
         for k, v in params_dict.items():
-            self.params[k][:] = v[:]
+            self._params_dict[k][:] = v[:]
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -226,20 +227,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'add gradients to gradient_accumulator')
             if self.update_count % self.gradient_sync_frequency == 0:
                 # 汇总梯度
-                log(f'merge gradients')
+                # log(f'merge gradients')
                 # pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
                 merged_gradients = self.gradient_accumulator.merge_gradients()
                 # 压缩梯度
-                log(f'compress gradients')
+                # log(f'compress gradients')
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
                 # nouse2 100 iter about 0.706H -89.51%
                 # 发送梯度
-                log(f'send gradients')
+                # log(f'send gradients')
                 send_gradients(self.train_title, compressed_grads, compress_info, self.version)
-                        
-                import sys
-                sys.exit()
-
                 # nouse2
         # nouse3
 
@@ -261,7 +258,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 params_dict = self.param_compressor.decompress_params_dict(params_list, info)
                 # 更新共享参数
                 self.shared_param.set_param(params_dict)
-                # 触发共享参数更新事件 TODO
+                # 触发共享参数更新事件
                 self.shared_param.event.set()
                 # 应用到learner
                 weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
@@ -270,11 +267,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             else:
                 # 其他learner
                 # 等待参数更新
-                while self.shared_param.update_count() == self.params_update_count:
-                    time.sleep(0.001)
-                params_dict = self.shared_param.get_param_dict()
+                self.shared_param.event.wait()
+                self.shared_param.event.clear()
+                # 获取参数
+                weights = self.shared_param.get_weights()
                 # 应用到learner
-                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
                 self.set_state(weights)
             # nouse0
         # nouse1
