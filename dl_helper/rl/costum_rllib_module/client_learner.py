@@ -143,6 +143,9 @@ class ClientLearnerGroup(LearnerGroup):
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
 
+        # 初始化
+        self.foreach_learner(lambda learner: learner.init_net_thread())
+
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
         log('request server weights')
