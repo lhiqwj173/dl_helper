@@ -14,6 +14,7 @@ import time
 import copy, pickle
 from typing import Dict, Any
 import requests
+import threading
 
 from py_ext.tool import safe_share_memory, log, Event
 
@@ -22,8 +23,15 @@ from dl_helper.rl.socket_base import get_server_weights, send_gradients, request
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 
 """
-# 分布式训练流程
+# 原始PPO训练流程
 
+_update_from_batch_or_episodes()
+    for tensor_minibatch in batch_iter:
+        # tensor_minibatch 的迭代
+        fwd_out, loss_per_module, tensor_metrics = self._update(tensor_minibatch.policy_batches)
+
+
+# 分布式训练流程
 
 # 0. 训练前
 # 从参数服务器拉取最新参数，确保所有训练者从相同的起点开始
@@ -49,6 +57,8 @@ for epoch in range(num_epochs):
         # 4. 定期从服务器拉取最新参数（异步方式）
         if steps % param_sync_frequency == 0:
             async_pull_params_from_server()
+
+
 """
 
 class SharedParam:
@@ -171,7 +181,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_accumulator = GradientAccumulator()
         
         # 梯度同步频率 8
-        self.gradient_sync_frequency = 30
+        self.gradient_sync_frequency = 1
 
         # 共享参数
         self.shared_param = None
@@ -179,11 +189,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
 
-        # 版本号
-        self.version = 0
-
         # 更新计数
         self.update_count = 0
+
+        # 网络传输线程， 只有主 learner 需要
+        self.thread1 = None
+        self.net_event = None
 
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
@@ -191,6 +202,29 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, create=False)
+
+    def init_net_thread(self):
+        if self.client_id == 0:
+            # 主learner
+            self.net_event = threading.Event()
+            self.thread1 = threading.Thread(target=self.net_thread)
+            self.thread1.start()
+
+    def net_thread(self):
+        log(f"[{self.client_id}] net_thread start")
+        while True:
+            self.net_event.wait()
+            self.net_event.clear()
+
+            log(f"[{self.client_id}] request server weights")
+            params_list, info, self.version = get_server_weights(self.train_title)
+            # 解压参数
+            params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+            # 更新共享参数
+            self.shared_param.set_param(params_dict)
+            # 触发共享参数更新事件
+            self.shared_param.event.set()
+            log(f"[{self.client_id}] update latest server weights done")
 
     @staticmethod
     def merge_gradients(gradient_list):
@@ -207,6 +241,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse5 100 iter about H
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
+        if self.client_id == 0:
+            # 主learner 触发请求服务器参数事件
+            self.net_event.set()
+
         # 计算梯度
         # log('self._params:')
         # for idx, (k, v) in enumerate(self._params.items()):
@@ -244,39 +282,24 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse4
     
     def apply_gradients(self, *args, **kwargs):
-        # 不要影响原apply_gradients更新
-        res = super().apply_gradients(*args, **kwargs)
-
         # compress nouse1 100 iter about 3.39H -49%
         # nouse1 100 iter about 3.63H -46%
         # 拉取模型 并同步到所有learner上
         if self.update_count % self.gradient_sync_frequency == 0:
-            if self.client_id == 0:
-                # 主learner
-                params_list, info, self.version = get_server_weights(self.train_title)
-                # 解压参数
-                params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-                # 更新共享参数
-                self.shared_param.set_param(params_dict)
-                # 触发共享参数更新事件
-                self.shared_param.event.set()
-                # 应用到learner
-                weights = {COMPONENT_RL_MODULE: {'default_policy': params_dict}}
-                self.set_state(weights)
-            # nouse0 100 iter about 6.36H -5.5%
-            else:
-                # 其他learner
-                # 等待参数更新
-                self.shared_param.event.wait()
-                self.shared_param.event.clear()
-                # 获取参数
-                weights = self.shared_param.get_weights()
-                # 应用到learner
-                self.set_state(weights)
+            # 等待参数更新
+            self.shared_param.event.wait()
+            self.shared_param.event.clear()
+            # 获取参数
+            weights = self.shared_param.get_weights()
+            # 应用到learner
+            self.set_state(weights)
             # nouse0
         # nouse1
 
-        return res
+        # 修改梯度 TODO
+
+        # 不要影响原apply_gradients更新
+        return super().apply_gradients(*args, **kwargs)
 
     def after_gradient_based_update(self, *args, **kwargs):
         self.update_count = 0
