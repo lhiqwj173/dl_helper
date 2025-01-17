@@ -198,7 +198,7 @@ class GradientCompressor:
                     'valid_size': min(values.size, target_size)
                 })
             
-            log(len(compress_info)-1, compress_info[-1])
+            # log(len(compress_info)-1, compress_info[-1])
             compressed_grads.append(quantized_values)
             
         # 输出压缩后的 梯度+info 的占用大小

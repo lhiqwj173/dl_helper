@@ -280,9 +280,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
     def after_gradient_based_update(self, *args, **kwargs):
         self.update_count = 0
-        if self.client_id == 0:
-            # 重置更新计数
-            self.shared_param.reset_update_count()
         return super().after_gradient_based_update(*args, **kwargs)
     # nouse5
 
