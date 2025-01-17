@@ -102,10 +102,10 @@ class GradientCompressor:
         compress_info = []
         
         # 输出原始梯度数据的占用大小
-        log('original gradients size:')
-        original_dump = pickle.dumps(gradients)
-        original_size = sys.getsizeof(original_dump)
-        log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
+        # log('original gradients size:')
+        # original_dump = pickle.dumps(gradients)
+        # original_size = sys.getsizeof(original_dump)
+        # log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
 
         for grad in gradients:
             grad_np = grad.numpy()
@@ -202,10 +202,10 @@ class GradientCompressor:
             compressed_grads.append(quantized_values)
             
         # 输出压缩后的 梯度+info 的占用大小
-        log('compressed gradients size:')
-        compressed_dump = pickle.dumps((compressed_grads, compress_info))
-        compressed_size = sys.getsizeof(compressed_dump)
-        log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
+        # log('compressed gradients size:')
+        # compressed_dump = pickle.dumps((compressed_grads, compress_info))
+        # compressed_size = sys.getsizeof(compressed_dump)
+        # log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
 
         return compressed_grads, compress_info
     
@@ -298,8 +298,8 @@ class GradientAccumulator:
             log('gradient_buffer is empty')
             return None
         
-        for idx, v in enumerate(self.gradient_buffer[0]):
-            log(f'{idx} {v.shape}')
+        # for idx, v in enumerate(self.gradient_buffer[0]):
+        #     log(f'{idx} {v.shape}')
 
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:
@@ -391,10 +391,10 @@ class ParamCompressor:
         compressed_list = []
         info_dict = OrderedDict()
 
-        log('original params dict size:')
-        original_dump = pickle.dumps(params_dict)
-        original_size = sys.getsizeof(original_dump)
-        log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
+        # log('original params dict size:')
+        # original_dump = pickle.dumps(params_dict)
+        # original_size = sys.getsizeof(original_dump)
+        # log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
         
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
@@ -402,10 +402,10 @@ class ParamCompressor:
             info_dict[key] = compress_info
             
         # 输出压缩后的 梯度+info 的占用大小
-        log('compressed params dict size:')
-        compressed_dump = pickle.dumps((compressed_list, info_dict))
-        compressed_size = sys.getsizeof(compressed_dump)
-        log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
+        # log('compressed params dict size:')
+        # compressed_dump = pickle.dumps((compressed_list, info_dict))
+        # compressed_size = sys.getsizeof(compressed_dump)
+        # log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
 
         return compressed_list, info_dict
     
