@@ -52,14 +52,14 @@ def _connect_server_apply(func, *args, **kwargs):
     finally:
         _socket.close()
 
-def get_server_weights(train_title):
+def get_server_weights(train_title, version=-1):
     """
     获取参数服务器权重
     server返回: (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
     """
     def _get_server_weights(_socket):
         # 发送获取参数请求
-        message = f'{CODE}_{train_title}:get'
+        message = f'{CODE}_{train_title}:get@{version}'
         send_msg(_socket, message.encode())
         
         # 接收参数数据

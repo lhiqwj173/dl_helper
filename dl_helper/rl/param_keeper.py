@@ -5,7 +5,7 @@ import numpy as np
 import pickle, requests
 from typing import Dict, Any
 from collections import deque
-
+import copy
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor
 
@@ -30,7 +30,10 @@ class AsyncRLParameterServer:
         self.ver = 0
         
     def apply_gradients(self, gradients_list, client_version):
-        """更新参数"""
+        """
+        更新参数
+        gradients_list: 梯度列表, 键为参数名, 值为torch.Tensor
+        """
         # log(f'gradients_list length: {len(gradients_list)}')
         params = self.learner._params
         for idx, k in enumerate(params.keys()):
@@ -42,7 +45,7 @@ class AsyncRLParameterServer:
     
     def get_gradients_params(self):
         """获取计算梯度的参数"""
-        return self.learner._params
+        return copy.deepcopy(self.learner._params)
     
     def get_weights(self):
         """获取参数"""
@@ -115,6 +118,7 @@ class ExperimentHandler:
             """生成发送次数缓存"""
             log(f'produce params cache')
             # 获取模型参数
+            # weights： 参数字典[torch.Tensor]
             weights, version = param_server.get_weights()
             # 压缩参数
             weights, info = param_compressor.compress_params_dict(weights)
@@ -286,7 +290,9 @@ class ExperimentHandler:
 
     async def async_handle_request(self, msg_header, cmd, data):
         """异步处理客户端请求"""
-        if cmd == 'get':
+        if cmd.startswith('get@'):
+            _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
+
             # 返回 共享参数
             params = []
             info = None

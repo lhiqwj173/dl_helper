@@ -46,6 +46,12 @@ def plot_training_curve(train_folder, total_time=None):
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
 class GradientCompressor:
+    """
+    梯度压缩器
+    
+    原始数据是 torch.Tensor
+    压缩数据是 torch.Tensor
+    """
     def __init__(self, sparsity_ratio=0.1, quantize_bits=8, pad_value=None, min_elements=0):
         """
         初始化梯度压缩器
@@ -65,22 +71,22 @@ class GradientCompressor:
         
     def _pad_to_size(self, arr, target_size):
         """
-        将数组填充或截断到目标大小
-        
+        将张量填充或截断到目标大小
+
         参数:
-        arr: np.ndarray - 输入数组
+        arr: torch.Tensor - 输入张量
         target_size: int - 目标大小
         
         返回:
-        np.ndarray - 填充或截断后的数组
+        torch.Tensor - 填充或截断后的张量
         """
-        if arr.size >= target_size:
+        if arr.numel() >= target_size:
             return arr[:target_size]
         else:
-            padded = np.full(target_size, self.pad_value, dtype=arr.dtype)
-            padded[:arr.size] = arr
+            padded = torch.full((target_size,), self.pad_value, dtype=arr.dtype, device=arr.device)
+            padded[:arr.numel()] = arr
             return padded
-            
+                
     def compress_shape(self, original_shape):
         """
         计算压缩后的形状，确保最小元素数量
@@ -91,179 +97,174 @@ class GradientCompressor:
     def compress(self, gradients):
         """
         压缩梯度，确保输出大小固定且不小于最小元素数量
-        
+
         参数:
         gradients: List[torch.Tensor] - 梯度列表
-        
+
         返回:
-        tuple: (压缩后的梯度列表, 压缩信息列表)
+        tuple: (压缩后的梯度列表List[torch.Tensor], 压缩信息列表)
         """
         compressed_grads = []
         compress_info = []
-        
-        # 输出原始梯度数据的占用大小
-        # log('original gradients size:')
-        # original_dump = pickle.dumps(gradients)
-        # original_size = sys.getsizeof(original_dump)
-        # log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
 
         for grad in gradients:
-            grad_np = grad.numpy()
-            
+            grad_flat = grad.flatten()
+            grad_size = grad.numel()
+
             # 计算目标压缩大小，确保不小于最小元素数量
-            target_size = max(int(grad_np.size * self.sparsity_ratio), self.min_elements)
-            
+            target_size = max(int(grad_size * self.sparsity_ratio), self.min_elements)
+
             # 如果原始梯度大小小于或等于目标大小，直接保存完整梯度
-            if grad_np.size <= target_size:
-                quantized_values = np.zeros(target_size, dtype=np.uint8)
-                if grad_np.size > 0:  # 确保梯度不是空的
-                    min_val = grad_np.min()
-                    max_val = grad_np.max()
+            if grad_size <= target_size:
+                quantized_values = torch.zeros(target_size, dtype=torch.uint8)
+                if grad_size > 0:  # 确保梯度不是空的
+                    min_val = grad_flat.min().item()
+                    max_val = grad_flat.max().item()
                     if min_val == max_val:
                         scale = 1.0
-                        quantized_values[:grad_np.size] = 0
+                        quantized_values[:grad_size] = 0
                     else:
-                        scale = (max_val - min_val) / (2**self.quantize_bits - 1)
-                        quantized_values[:grad_np.size] = np.round((grad_np.flatten() - min_val) / scale).astype(np.uint8)
+                        scale = (max_val - min_val) / (2 ** self.quantize_bits - 1)
+                        quantized_values[:grad_size] = torch.round((grad_flat - min_val) / scale).to(torch.uint8)
                 else:
                     min_val = 0
                     scale = 1.0
-                
+
                 compress_info.append({
-                    'shape': grad_np.shape,
-                    'indices': np.arange(grad_np.size),
+                    'shape': grad.shape,
+                    'indices': list(range(grad_size)),
                     'min_val': min_val,
                     'scale': scale,
                     'is_dominant_compressed': False,
                     'is_small_gradient': True,
-                    'valid_size': grad_np.size
+                    'valid_size': grad_size
                 })
                 compressed_grads.append(quantized_values)
                 continue
-            
+
             # 以下是原有的压缩逻辑
-            unique_vals, counts = np.unique(grad_np, return_counts=True)
-            total_elements = grad_np.size
-            
+            unique_vals, counts = torch.unique(grad_flat, return_counts=True)
+            total_elements = grad_size
+
             dominant_val_mask = counts / total_elements > (1 - self.sparsity_ratio)
-            if np.any(dominant_val_mask):
-                dominant_val = unique_vals[dominant_val_mask][0]
-                mask = grad_np != dominant_val
-                indices = np.nonzero(mask)
-                values = grad_np[indices]
-                
-                if values.size > 0:
-                    min_val = values.min()
-                    max_val = values.max()
-                    scale = (max_val - min_val) / (2**self.quantize_bits - 1)
-                    quantized_values = np.round((values - min_val) / scale).astype(np.uint8)
+            if dominant_val_mask.any():
+                dominant_val = unique_vals[dominant_val_mask][0].item()
+                mask = grad_flat != dominant_val
+                indices = mask.nonzero(as_tuple=False).squeeze()
+                values = grad_flat[indices]
+
+                if values.numel() > 0:
+                    min_val = values.min().item()
+                    max_val = values.max().item()
+                    scale = (max_val - min_val) / (2 ** self.quantize_bits - 1)
+                    quantized_values = torch.round((values - min_val) / scale).to(torch.uint8)
                 else:
-                    quantized_values = np.array([], dtype=np.uint8)
+                    quantized_values = torch.tensor([], dtype=torch.uint8)
                     min_val = dominant_val
                     scale = 1.0
-                    
+
                 quantized_values = self._pad_to_size(quantized_values, target_size)
-                
+
                 compress_info.append({
-                    'shape': grad_np.shape,
-                    'indices': indices,
+                    'shape': grad.shape,
+                    'indices': indices.tolist(),
                     'min_val': min_val,
                     'scale': scale,
                     'dominant_val': dominant_val,
                     'is_dominant_compressed': True,
                     'is_small_gradient': False,
-                    'valid_size': min(values.size, target_size)
+                    'valid_size': min(values.numel(), target_size)
                 })
             else:
-                threshold = np.percentile(np.abs(grad_np), 
-                                       (1 - self.sparsity_ratio) * 100)
-                mask = np.abs(grad_np) >= threshold
-                indices = np.nonzero(mask)
-                values = grad_np[indices]
-                
-                min_val = values.min()
-                max_val = values.max()
-                scale = (max_val - min_val) / (2**self.quantize_bits - 1)
-                quantized_values = np.round((values - min_val) / scale).astype(np.uint8)
-                
+                threshold = torch.quantile(torch.abs(grad_flat), 1 - self.sparsity_ratio)
+                mask = torch.abs(grad_flat) >= threshold
+                indices = mask.nonzero(as_tuple=False).squeeze()
+                values = grad_flat[indices]
+
+                min_val = values.min().item()
+                max_val = values.max().item()
+                scale = (max_val - min_val) / (2 ** self.quantize_bits - 1)
+                quantized_values = torch.round((values - min_val) / scale).to(torch.uint8)
+
                 quantized_values = self._pad_to_size(quantized_values, target_size)
-                
+
                 compress_info.append({
-                    'shape': grad_np.shape,
-                    'indices': indices,
+                    'shape': grad.shape,
+                    'indices': indices.tolist(),
                     'min_val': min_val,
                     'scale': scale,
                     'is_dominant_compressed': False,
                     'is_small_gradient': False,
-                    'valid_size': min(values.size, target_size)
+                    'valid_size': min(values.numel(), target_size)
                 })
-            
-            # log(len(compress_info)-1, compress_info[-1])
+
             compressed_grads.append(quantized_values)
-            
-        # 输出压缩后的 梯度+info 的占用大小
-        # log('compressed gradients size:')
-        # compressed_dump = pickle.dumps((compressed_grads, compress_info))
-        # compressed_size = sys.getsizeof(compressed_dump)
-        # log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
 
         return compressed_grads, compress_info
-    
+
     def decompress(self, compressed_grads, compress_info):
         """
         解压梯度
-        
+
         参数:
-        compressed_grads: List[np.ndarray] - 压缩后的梯度值列表
+        compressed_grads: List[torch.Tensor] - 压缩后的梯度值列表
         compress_info: List[dict] - 压缩信息列表
-        
+
         返回:
         List[torch.Tensor] - 解压后的梯度列表
         """
         decompressed_grads = []
-        
+
         for quantized_values, info in zip(compressed_grads, compress_info):
-            valid_values = quantized_values[:info['valid_size']]
-            grad = np.zeros(info['shape'], dtype=np.float32)
-            
+            valid_values = quantized_values[:info['valid_size']].to(torch.float32)
+            grad = torch.zeros(info['shape'], dtype=torch.float32, device=quantized_values.device)
+
             if info.get('is_small_gradient', False):
-                if valid_values.size > 0:
-                    values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
-                    grad.flat[:info['valid_size']] = values
+                if valid_values.numel() > 0:
+                    values = valid_values * info['scale'] + info['min_val']
+                    grad.view(-1)[:info['valid_size']] = values
             elif info['is_dominant_compressed']:
-                if valid_values.size > 0:
-                    values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
-                    grad.fill(info['dominant_val'])
-                    valid_indices = tuple(idx[:info['valid_size']] for idx in info['indices'])
+                if valid_values.numel() > 0:
+                    values = valid_values * info['scale'] + info['min_val']
+                    grad.fill_(info['dominant_val'])
+                    valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in info['indices'])
                     grad[valid_indices] = values
                 else:
-                    grad.fill(info['dominant_val'])
+                    grad.fill_(info['dominant_val'])
             else:
-                if valid_values.size > 0:
-                    values = valid_values.astype(np.float32) * info['scale'] + info['min_val']
-                    valid_indices = tuple(idx[:info['valid_size']] for idx in info['indices'])
+                if valid_values.numel() > 0:
+                    values = valid_values * info['scale'] + info['min_val']
+                    valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in info['indices'])
                     grad[valid_indices] = values
-            
-            decompressed_grads.append(torch.from_numpy(grad))
-        
+
+            decompressed_grads.append(grad)
+
         return decompressed_grads
 
     def get_compression_stats(self, original_grads, compressed_grads, compress_info):
         """
-        计算压缩统计信息（保持不变）
+        计算压缩统计信息
+
+        参数:
+        original_grads: List[torch.Tensor] - 原始梯度列表
+        compressed_grads: List[torch.Tensor] - 压缩后的梯度值列表
+        compress_info: List[dict] - 压缩信息列表
+
+        返回:
+        dict - 压缩统计信息
         """
         original_size = sum(grad.numel() * grad.element_size() for grad in original_grads)
-        
-        compressed_size = sum(grad.size * grad.itemsize for grad in compressed_grads)
+
+        compressed_size = sum(grad.numel() * grad.element_size() for grad in compressed_grads)
         compressed_size += sum(
-            sum(arr.size * arr.itemsize for arr in info['indices']) +
+            sum(torch.tensor(arr).numel() * torch.tensor(arr).element_size() for arr in info['indices']) +
             len(str(info))
             for info in compress_info
         )
-        
+
         valid_elements = sum(info['valid_size'] for info in compress_info)
-        total_elements = sum(grad.size for grad in compressed_grads)
-        
+        total_elements = sum(grad.numel() for grad in compressed_grads)
+
         stats = {
             'original_size_bytes': original_size,
             'compressed_size_bytes': compressed_size,
@@ -273,7 +274,7 @@ class GradientCompressor:
             'total_elements': total_elements,
             'padding_percentage': (total_elements - valid_elements) / total_elements * 100 if total_elements > 0 else 0
         }
-        
+
         return stats
 
 class GradientAccumulator:
@@ -297,9 +298,6 @@ class GradientAccumulator:
         if not self.gradient_buffer:
             log('gradient_buffer is empty')
             return None
-        
-        # for idx, v in enumerate(self.gradient_buffer[0]):
-        #     log(f'{idx} {v.shape}')
 
         # 第一次累积，初始化accumulated_grads
         if self.accumulated_grads is None:
@@ -336,34 +334,44 @@ class GradientAccumulator:
         self.count = 0
 
 class ParamCompressor:
+    """
+    参数压缩器
+    输入输出都是 torch.Tensor
+    """
     def __init__(self, quantize_bits=8):
         self.quantize_bits = quantize_bits
     
     def compress_param(self, param):
-        """压缩单个参数张量"""
+        """压缩单个参数张量
+        参数:
+            param: torch.Tensor
+
+        返回:
+            压缩后的参数[torch.Tensor]，以及压缩信息字典
+        """
         # 记录原始形状
         original_shape = param.shape
         
         # 展平数组以便处理
-        flat_param = param.reshape(-1)
+        flat_param = param.view(-1)
         
         # 计算量化参数
-        min_val = flat_param.min().astype(np.float32)
-        max_val = flat_param.max().astype(np.float32)
+        min_val = flat_param.min().float()
+        max_val = flat_param.max().float()
         
         # 避免零除错误
         if max_val == min_val:
-            scale = np.array(1.0, dtype=np.float32)  # 使用一个默认值，确保除法有效
+            scale = torch.tensor(1.0, dtype=torch.float32)
         else:
-            scale = ((max_val - min_val) / (2**self.quantize_bits - 1)).astype(np.float32)
+            scale = ((max_val - min_val) / (2**self.quantize_bits - 1)).float()
         
         # 确保 scale 有一个最小值，以避免数值溢出
         min_scale = 1e-8  # 你可以根据需要调整这个值
-        scale = np.maximum(scale, min_scale)
+        scale = torch.max(scale, torch.tensor(min_scale, dtype=torch.float32))
         
-        # 量化并使用 np.clip 确保结果在 uint8 范围内
-        quantized = np.round((flat_param - min_val) / scale)
-        quantized = np.clip(quantized, 0, 2**self.quantize_bits - 1).astype(np.uint8)
+        # 量化并使用 torch.clamp 确保结果在 uint8 范围内
+        quantized = torch.round((flat_param - min_val) / scale)
+        quantized = torch.clamp(quantized, 0, 2**self.quantize_bits - 1).byte()
         
         compress_info = {
             'shape': original_shape,
@@ -376,50 +384,46 @@ class ParamCompressor:
     def decompress_param(self, quantized, compress_info):
         """解压单个参数张量"""
         # 反量化
-        decompressed = (quantized.astype(np.float32) * compress_info['scale'] + 
+        decompressed = (quantized.float() * compress_info['scale'] + 
                        compress_info['min_val'])
         
         # 恢复原始形状
-        decompressed = decompressed.reshape(compress_info['shape'])
+        decompressed = decompressed.view(compress_info['shape'])
         
         return decompressed
     
     def compress_params_dict(self, params_dict):
-        """压缩整个参数字典
-        返回是 压缩后的参数列表，以及压缩信息字典
+        """压缩整个参数字典 
+        参数:
+            params_dict: 参数字典[torch.Tensor]
+
+        返回是 
+            压缩后的参数列表[torch.Tensor]，以及压缩信息字典
         """
         compressed_list = []
         info_dict = OrderedDict()
 
-        # log('original params dict size:')
-        # original_dump = pickle.dumps(params_dict)
-        # original_size = sys.getsizeof(original_dump)
-        # log(f'{original_size} bytes -> {original_size / 1024 / 1024:.2f} MB')
-        
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
             compressed_list.append(quantized)
             info_dict[key] = compress_info
             
-        # 输出压缩后的 梯度+info 的占用大小
-        # log('compressed params dict size:')
-        # compressed_dump = pickle.dumps((compressed_list, info_dict))
-        # compressed_size = sys.getsizeof(compressed_dump)
-        # log(f'{compressed_size} bytes -> {compressed_size / 1024 / 1024:.2f} MB, compression ratio: {(original_size / compressed_size):.2f}x')
-
         return compressed_list, info_dict
     
     def decompress_params_dict(self, compressed_list, info_dict):
         """
         根据 解压参数列表，压缩信息字典
-        解压整个参数"""
+        解压整个参数
+        
+        返回的是 解压后的参数字典[torch.Tensor]
+        """
         decompressed_dict = OrderedDict()
         
         for idx, (k, v) in enumerate(info_dict.items()):
             decompressed_dict[k] = self.decompress_param(compressed_list[idx], v)
             
         return decompressed_dict
-
+    
 class ExperimentHandler:
     """弃用 处理单个实验的类"""
     def __init__(self, train_title, agent_class_name=None, agent_kwargs=None, simple_test=False, period_day=True):

@@ -10,6 +10,8 @@ from ray.rllib.core import (
 )
 
 import numpy as np
+import torch
+import queue
 import time
 import copy, pickle
 from typing import Dict, Any
@@ -23,15 +25,8 @@ from dl_helper.rl.socket_base import get_server_weights, send_gradients, request
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 
 """
-# 原始PPO训练流程
-
-_update_from_batch_or_episodes()
-    for tensor_minibatch in batch_iter:
-        # tensor_minibatch 的迭代
-        fwd_out, loss_per_module, tensor_metrics = self._update(tensor_minibatch.policy_batches)
-
-
 # 分布式训练流程
+# n step(minibatch) 同步
 
 # 0. 训练前
 # 从参数服务器拉取最新参数，确保所有训练者从相同的起点开始
@@ -43,58 +38,119 @@ train_batch = synchronous_parallel_sample(max_agent_steps=batch_size)
 
 # 2. 训练循环
 for epoch in range(num_epochs):
+    step_count = 0
     for minibatch in minibatches:
+        step_count += 1
+
+        # 正向传播
+
+        # 网络线程 开始拉取服务器参数, 完成后会更新到共享参数中，等待使用
+        if step_count % n == 0:
+            async_pull_params_from_server_to_shared_param()
+
         # 计算梯度
         gradients = compute_gradients(minibatch)
-        
-        # 3. 梯度同步（异步方式）
-        # 方案A: 直接将梯度发送给参数服务器
-        async_push_gradients_to_server(gradients)
-        # 方案B: 累积一定步数的梯度后再同步
-        if steps % gradient_sync_frequency == 0:
+        if step_count % n == 0:
+            # 汇总梯度并推送
             async_push_gradients_to_server(accumulated_gradients)
+            # 拷贝汇总梯度到共享梯度
+            copy_to_shared_memory(accumulated_gradients)
         
-        # 4. 定期从服务器拉取最新参数（异步方式）
-        if steps % param_sync_frequency == 0:
-            async_pull_params_from_server()
-
-
+        # 参数/梯度应用
+        if step_count % n == 0:
+            # 应用共享梯度
+            apply_shared_gradients()
+            # 应用共享参数
+            apply_shared_params()
+            # 梯度更新, 更新完成后参数与服务器参数一致
+            self.apply_gradients(postprocessed_gradients)
 """
 
 class SharedParam:
     """
     共享参数类，用于多进程间的同步
     """
-    def __init__(self, params_dict, create=True):
+    def __init__(self, params_dict, grad_params_dict, create=True):
         """
-        params_dict: 参数字典, 键为参数名, 值为numpy.ndarray
+        params_dict: 参数字典, 键为参数名, 值为 torch.Tensor
+        grad_params_dict: 梯度参数字典, 键为参数名, 值为 torch.Tensor
         create: 是否创建共享内存
         """
         self.create = create
+        self._params_dict_np = {}
         self._params_dict = {}
-        self.weights = {COMPONENT_RL_MODULE: {'default_policy': self._params_dict}}
+        self._grad_params_list_np = []
+        self._grad_params_list = []
         self.ssms = []
 
-        # 共享事件
-        self.event = Event(name=f'_SharedParam_event')
+        # 共享事件 - 参数更新完毕
+        self.param_event = Event(name=f'_SharedParam_event')
         if create:
-            self.event.clear()
+            self.param_event.clear()
+        
+        # 共享事件 - 汇聚梯度准备完毕
+        self.grad_event = Event(name=f'_SharedParam_grad_event')
+        if create:
+            self.grad_event.clear()
 
-        # 共享内存
+        # 共享参数内存 储存解压后的服务器参数 float32
         for k, v in params_dict.items():
-            # v 是numpy.ndarray
-            ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.nbytes)
+            # v 是 torch.Tensor
+            ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.numel() * v.element_size())
             shm = ssm.get()
-            _v = np.ndarray(v.shape, dtype=v.dtype, buffer=shm.buf)
-            self._params_dict[k] = _v
+            _v = np.ndarray(v.shape, dtype=np.float32, buffer=shm.buf)
+            self._params_dict_np[k] = _v
+            self._params_dict[k] = torch.from_numpy(_v)
+            self.ssms.append(ssm)
+
+        # 共享梯度内存 储存主learner的聚合梯度 float32
+        for idx, v in enumerate(grad_params_dict.values()):
+            # v 是torch.Tensor
+            ssm = safe_share_memory(name=f'_SharedParam_grad_{idx}', size=v.numel() * v.element_size())
+            shm = ssm.get()
+            _v = np.ndarray(v.shape, dtype=np.float32, buffer=shm.buf)
+            self._grad_params_list_np.append(_v)
+            self._grad_params_list.append(torch.from_numpy(_v))
             self.ssms.append(ssm)
 
     def get_weights(self):
-        return self.weights
+        """
+        返回共享参数字典
+        {
+            'fc1.weight': torch.Tensor,
+            'fc1.bias': torch.Tensor,
+            ...
+        }
+        """
+        # 不需要拷贝数据，只读
+        return self._params_dict
 
     def set_param(self, params_dict):
+        """
+        参数:
+        params_dict: 参数字典, 键为参数名, 值为torch.Tensor
+        """
         for k, v in params_dict.items():
             self._params_dict[k][:] = v[:]
+
+    def set_grad(self, grad_params_list):
+        """
+        参数:
+        grad_params_list: 梯度参数字典, 键为参数名, 值为torch.Tensor
+        """
+        for i, v in enumerate(grad_params_list):
+            self._grad_params_list[i][:] = v[:]
+
+    def apply_grad_to_local(self, learner):
+        """
+        将共享梯度应用到本地learner
+        参数:
+        learner: 本地learner
+        """
+        # 不需要拷贝数据，只读
+        params = learner._params
+        for idx, k in enumerate(params.keys()):
+            params[k].grad = self._grad_params_list[idx].to(learner._device)
 
 class ClientLearnerGroup(LearnerGroup):
     """
@@ -144,7 +200,7 @@ class ClientLearnerGroup(LearnerGroup):
         self._sync_learner_weights()
 
         # 初始化
-        self.foreach_learner(lambda learner: learner.init_net_thread())
+        self.foreach_learner(lambda learner: learner.init_param_thread())
 
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
@@ -152,15 +208,31 @@ class ClientLearnerGroup(LearnerGroup):
         params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
         params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        weights = {'default_policy': params_dict}
-        # 更新到所有learner
-        self.set_weights(weights)
+        # 更新参数到所有learner
+        if self.is_local:
+            self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
+        else:
+            state_ref = ray.put(params_dict)
+            self.foreach_learner(
+                lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
+            )
         log(f"set weights to all learners, version: {version}")
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        log(f"set weights to all learners, res: {res}")
+        # log(f"set weights to all learners, res: {res}")
+
+        # 获取一个learner的梯度字典
+        if self.is_local:
+            grad_params_dict = self._learner._params
+        else:
+            worker = self._worker_manager.healthy_actor_ids()[0]
+            results = self._worker_manager.foreach_actor(
+                lambda w: w._params,
+                remote_actor_ids=[worker],
+            )
+            grad_params_dict = self._get_results(results)[0]
 
         # 创建共享参数
-        self.shared_param = SharedParam(params_dict, create=True)
+        self.shared_param = SharedParam(params_dict, grad_params_dict, create=True)
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
@@ -183,8 +255,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 梯度累积器
         self.gradient_accumulator = GradientAccumulator()
         
-        # 梯度同步频率 8
+        # 梯度推送频率
         self.gradient_sync_frequency = 1
+
+        # 参数同步频率
+        self.param_sync_frequency = 4 
 
         # 共享参数
         self.shared_param = None
@@ -195,58 +270,83 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 更新计数
         self.update_count = 0
 
-        # 网络传输线程， 只有主 learner 需要
+        # 参数传输线程， 只有主 learner 需要
+        self.thread0 = None
+        self.param_event = None
+
+        # 梯度传输线程， 只有主 learner 需要
         self.thread1 = None
-        self.net_event = None
+        self.grad_q = None
 
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        # 获取梯度字典
+        grad_params_dict = self._params
         # 获取共享参数
-        self.shared_param = SharedParam(params_dict, create=False)
+        self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
-    def init_net_thread(self):
+    def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.net_event = threading.Event()
-            self.thread1 = threading.Thread(target=self.net_thread)
+            self.param_event = threading.Event()
+            self.thread0 = threading.Thread(target=self.param_thread)
+            self.thread0.start()
+            self.grad_q = queue.Queue()
+            self.thread1 = threading.Thread(target=self.grad_thread)
             self.thread1.start()
 
-    def net_thread(self):
-        log(f"[{self.client_id}] net_thread start")
+    def param_thread(self):
+        """
+        获取服务器参数
+        """
+        log(f"[{self.client_id}] param_thread start")
         while True:
-            self.net_event.wait()
-            self.net_event.clear()
+            self.param_event.wait()
+            self.param_event.clear()
 
             log(f"[{self.client_id}] request server weights")
-            params_list, info, self.version = get_server_weights(self.train_title)
+            # 获取参数
+            params_list, info, self.version = get_server_weights(self.train_title, self.version)
             # 解压参数
             params_dict = self.param_compressor.decompress_params_dict(params_list, info)
             # 更新共享参数
             self.shared_param.set_param(params_dict)
             # 触发共享参数更新事件
-            self.shared_param.event.set()
+            self.shared_param.param_event.set()
             log(f"[{self.client_id}] update latest server weights done")
 
-    @staticmethod
-    def merge_gradients(gradient_list):
-        # 简单平均多个batch的梯度
-        merged = []
-        length = len(gradient_list)
-        for i in range(len(gradient_list[0])):
-            merged.append(sum(g[i] for g in gradient_list) / length)
-        return merged
-    
+    def grad_thread(self):
+        """
+        推送本地梯度
+        """
+        log(f"[{self.client_id}] grad_thread start")
+        while True:
+            # 获取汇总梯度
+            merged_gradients = self.grad_q.get()
+
+            # 压缩梯度
+            compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+
+            # 发送梯度
+            send_gradients(self.train_title, compressed_grads, compress_info, self.version)
+
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
     # all use 100 iter about 6.73H 
     # nouse5 100 iter about H
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
-        if self.client_id == 0:
+        self.update_count += 1
+
+        if self.client_id == 0 and self.update_count % self.param_sync_frequency == 0:
             # 主learner 触发请求服务器参数事件
-            self.net_event.set()
+            # 参数线程开始获取服务器参数 》 暂时默认本次update应用拉取的参数  TODO
+            #    本次update应用:    拉取的参数少了本次推送的梯度, apply_gradients函数中覆盖本地参数后需要应用本次的推送梯度
+            #    n次update后应用:   已默认允许延迟，故不再应用梯度
+            log(f'[{self.client_id}] param_event set')
+            self.param_event.set()
 
         # 计算梯度
         # log('self._params:')
@@ -258,53 +358,74 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         #     log(f'{idx} {k.shape} {v.shape}')
         # log(f'compute gradients done')
 
-        self.update_count += 1
-
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            self.gradient_accumulator.add_gradients(cpu_gradients)
-            # log(f'add gradients to gradient_accumulator')
-            if self.update_count % self.gradient_sync_frequency == 0:
-                # 汇总梯度
-                # log(f'merge gradients')
-                # pickle.dump(self.gradient_accumulator, open(f'gradient_accumulator.pkl', 'wb'))
-                merged_gradients = self.gradient_accumulator.merge_gradients()
-                # 压缩梯度
-                # log(f'compress gradients')
-                compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
-                # nouse2 100 iter about 0.706H -89.51%
-                # 发送梯度
-                # log(f'send gradients')
-                send_gradients(self.train_title, compressed_grads, compress_info, self.version)
-                # nouse2
-        # nouse3
 
-        return gradients_dict
+            if self.gradient_sync_frequency > 1:
+                # 累积梯度
+                self.gradient_accumulator.add_gradients(cpu_gradients)
+                log(f'add gradients to gradient_accumulator')
+                if self.update_count % self.gradient_sync_frequency == 0:
+                    # 汇总梯度
+                    log(f'merge gradients')
+                    gradients_to_send = self.gradient_accumulator.merge_gradients()
+                    # 加入推送队列
+                    self.grad_q.put(gradients_to_send)
+                    # 需要替换梯度
+                    # 1. 拷贝到共享梯度
+                    self.shared_param.set_grad(gradients_to_send)
+                    # 2. 触发梯度更新事件
+                    self.shared_param.grad_event.set()
+            else:
+                # 加入推送队列
+                self.grad_q.put(cpu_gradients)
+
+        # nouse3
+        # 返回空
+        return {}
     # nouse4
+
+    def postprocess_gradients(self, gradients_dict):
+        # 优化: 做一次过滤
+        if not gradients_dict:
+            return {}
+        return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
         # compress nouse1 100 iter about 3.39H -49%
         # nouse1 100 iter about 3.63H -46%
         # 拉取模型 并同步到所有learner上
-        if self.update_count % self.gradient_sync_frequency == 0:
+        if self.update_count % self.param_sync_frequency == 0:
+            if self.gradient_sync_frequency > 1:
+                # 将共享梯度应用到本地参数
+                log(f'[{self.client_id}] wait shared grad set')
+                self.shared_param.grad_event.wait()
+                self.shared_param.grad_event.clear()
+                # 替换应用梯度
+                self.shared_param.apply_grad_to_local(self)
+            else:
+                # 已经存在正确的梯度
+                pass
+
             # 等待参数更新
-            self.shared_param.event.wait()
-            self.shared_param.event.clear()
-            # 获取参数
-            weights = self.shared_param.get_weights()
-            # 应用到learner
-            self.set_state(weights)
+            log(f'[{self.client_id}] wait shared param update')
+            self.shared_param.param_event.wait()
+            self.shared_param.param_event.clear()
+            # 获取参数覆盖本地参数
+            log(f'[{self.client_id}] apply shared param')
+            p = self.shared_param.get_weights()
+            self.module._rl_modules['default_policy'].load_state_dict(p)
+
+            # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
+            super().apply_gradients(*args, **kwargs)
             # nouse0
         # nouse1
-
-        # 修改梯度 TODO
-
-        # 不要影响原apply_gradients更新
-        return super().apply_gradients(*args, **kwargs)
+        # 非同步模型，则不需要应用梯度
 
     def after_gradient_based_update(self, *args, **kwargs):
+        # 重置
         self.update_count = 0
         return super().after_gradient_based_update(*args, **kwargs)
     # nouse5
