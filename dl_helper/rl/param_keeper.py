@@ -49,7 +49,9 @@ class AsyncRLParameterServer:
     
     def get_weights(self):
         """获取参数"""
-        return (self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy'], self.ver)
+        # return (self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy'], self.ver)
+        weights = self.learner.module._rl_modules['default_policy'].state_dict()
+        return weights, self.ver
 
 class ExperimentHandler:
     """处理单个实验的类"""
