@@ -353,7 +353,7 @@ class ParamCompressor:
         original_shape = param.shape
         
         # 展平数组以便处理
-        flat_param = param.view(-1)
+        flat_param = param.reshape(-1)
         
         # 计算量化参数
         min_val = flat_param.min().float()
