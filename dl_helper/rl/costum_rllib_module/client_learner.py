@@ -258,8 +258,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 梯度推送频率
         self.gradient_sync_frequency = 1
 
-        # 参数同步频率
-        self.param_sync_frequency = 4 
+        # 限制最小参数同步间隔
+        # 若频率更高, 会增加服务器压力
+        self.min_param_sync_interval = 4 
+
+        # 拉取应用参数后，是否需要应用最后的梯度
+        self.apply_last_grad = False
 
         # 共享参数
         self.shared_param = None
@@ -272,12 +276,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 参数传输线程， 只有主 learner 需要
         self.thread0 = None
-        self.param_event = None
+        self.param_q = None
+        self.param_done_q = None
 
         # 梯度传输线程， 只有主 learner 需要
         self.thread1 = None
         self.grad_q = None
 
+        # learner 之间的同步 
+        self.load_param_event = Event(name=f'load_param_event')# 等待主learner同步
+        self.main_learner_ready_event = Event(name=f'main_learner_ready_event')# 被设置，说明需要更新参数
+        
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
@@ -287,12 +296,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
+
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.param_event = threading.Event()
+            self.param_q = queue.Queue()
+            self.param_done_q = queue.Queue()
             self.thread0 = threading.Thread(target=self.param_thread)
             self.thread0.start()
+
             self.grad_q = queue.Queue()
             self.thread1 = threading.Thread(target=self.grad_thread)
             self.thread1.start()
@@ -302,9 +314,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         获取服务器参数
         """
         log(f"[{self.client_id}] param_thread start")
+        last_ask_update_count = 0
         while True:
-            self.param_event.wait()
-            self.param_event.clear()
+            # 请求参数的轮次
+            ask_update_count = self.param_q.get()
+            if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
+                # 等待最小同步间隔
+                continue
+
+            last_ask_update_count = ask_update_count
 
             log(f"[{self.client_id}] request server weights")
             # 获取参数
@@ -340,13 +358,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
 
-        if self.client_id == 0 and self.update_count % self.param_sync_frequency == 0:
+        if self.client_id == 0:
+            # 每次都请求，使用最大同步间隔(与每次同步耗时共同影响)来控制同步频率
             # 主learner 触发请求服务器参数事件
             # 参数线程开始获取服务器参数 》 暂时默认本次update应用拉取的参数  TODO
             #    本次update应用:    拉取的参数少了本次推送的梯度, apply_gradients函数中覆盖本地参数后需要应用本次的推送梯度
             #    n次update后应用:   已默认允许延迟，故不再应用梯度
-            log(f'[{self.client_id}] param_event set')
-            self.param_event.set()
+            self.param_q.put(self.update_count)
+
+            # 清空learner之间同步的事件
+            self.main_learner_ready_event.clear()
+            self.load_param_event.clear()
 
         # 计算梯度
         # log('self._params:')
@@ -373,11 +395,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     gradients_to_send = self.gradient_accumulator.merge_gradients()
                     # 加入推送队列
                     self.grad_q.put(gradients_to_send)
-                    # 需要替换梯度
-                    # 1. 拷贝到共享梯度
-                    self.shared_param.set_grad(gradients_to_send)
-                    # 2. 触发梯度更新事件
-                    self.shared_param.grad_event.set()
+
+                    if self.apply_last_grad:
+                        # 需要替换梯度
+                        # 1. 拷贝到共享梯度
+                        self.shared_param.set_grad(gradients_to_send)
+                        # 2. 触发梯度更新事件
+                        self.shared_param.grad_event.set()
             else:
                 # 加入推送队列
                 self.grad_q.put(cpu_gradients)
@@ -397,8 +421,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # compress nouse1 100 iter about 3.39H -49%
         # nouse1 100 iter about 3.63H -46%
         # 拉取模型 并同步到所有learner上
-        if self.update_count % self.param_sync_frequency == 0:
-            if self.gradient_sync_frequency > 1:
+        # 检查参数是否拉取完毕
+        if self.client_id != 0:
+            # 等待主learner同步
+            log(f'[not main learner] wait main learner')
+            self.main_learner_ready_event.wait()
+        else:
+            # 主learner检查是否是否有参数准备好
+            if self.shared_param.param_event.is_set():
+                # 其他learner需要load参数
+                log(f'[main learner] set load param event')
+                self.load_param_event.set()
+            # 触发其他learner继续向后执行
+            log(f'[main learner] all go on')
+            self.main_learner_ready_event.set()
+
+        if self.load_param_event.is_set():
+            if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
                 log(f'[{self.client_id}] wait shared grad set')
                 self.shared_param.grad_event.wait()
@@ -409,17 +448,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 已经存在正确的梯度
                 pass
 
-            # 等待参数更新
-            log(f'[{self.client_id}] wait shared param update')
-            self.shared_param.param_event.wait()
-            self.shared_param.param_event.clear()
             # 获取参数覆盖本地参数
             log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
-            # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
-            super().apply_gradients(*args, **kwargs)
+            if self.apply_last_grad:
+                # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
+                super().apply_gradients(*args, **kwargs)
             # nouse0
         # nouse1
         # 非同步模型，则不需要应用梯度
