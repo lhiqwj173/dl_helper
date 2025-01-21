@@ -57,7 +57,7 @@ def get_server_weights(train_title, version=-1):
     获取参数服务器权重
     server返回: (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
     """
-    def _get_server_weights(_socket):
+    def _get_server_weights(_socket, version):
         # 发送获取参数请求
         message = f'{CODE}_{train_title}:get@{version}'
         send_msg(_socket, message.encode())
@@ -78,7 +78,7 @@ def get_server_weights(train_title, version=-1):
             raise e
         return weights, info, version
 
-    return _connect_server_apply(_get_server_weights)
+    return _connect_server_apply(_get_server_weights, version)
 
 def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""
