@@ -332,17 +332,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 continue
 
             last_ask_update_count = ask_update_count
+            log(f"[{last_ask_update_count}] request server weights")
 
-            log(f"[{self.client_id}] request server weights")
-            # 获取参数
-            params_list, info, self.version = get_server_weights(self.train_title, self.version)
-            # 解压参数
-            params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-            # 更新共享参数
-            self.shared_param.set_param(params_dict)
-            # 触发共享参数更新事件
-            self.shared_param.param_event.set()
-            log(f"[{self.client_id}] update latest server weights done")
+            # # 获取参数
+            # params_list, info, self.version = get_server_weights(self.train_title, self.version)
+            # # 解压参数
+            # params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+            # # 更新共享参数
+            # self.shared_param.set_param(params_dict)
+            # # 触发共享参数更新事件
+            # self.shared_param.param_event.set()
+            # log(f"[{self.client_id}] update latest server weights done")
 
     def grad_thread(self):
         """
