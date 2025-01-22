@@ -18,7 +18,7 @@ from typing import Dict, Any
 import requests
 import threading
 
-from py_ext.tool import safe_share_memory, log, Event
+from py_ext.tool import safe_share_memory, share_tensor, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
