@@ -297,7 +297,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
-        params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        params_dict = self.module._rl_modules['default_policy'].state_dict()
         params_keys = list(params_dict.keys())
         log(f"[{self.client_id}] params_keys: {params_keys}")
         self.param_compressor = ParamCompressor(params_keys)
