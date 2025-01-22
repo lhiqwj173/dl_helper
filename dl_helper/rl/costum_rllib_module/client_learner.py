@@ -334,21 +334,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             last_ask_update_count = ask_update_count
             log(f"[{last_ask_update_count}] request server weights")
 
-            # # 获取参数
-            # params_list, info, self.version = get_server_weights(self.train_title, self.version)
-            # # 解压参数
-            # params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-            # # 更新共享参数
-            # self.shared_param.set_param(params_dict)
-            # # 触发共享参数更新事件
-            # self.shared_param.param_event.set()
-            # log(f"[{self.client_id}] update latest server weights done")
+            # 获取参数
+            params_list, info, self.version = get_server_weights(self.train_title, self.version)
+            # 解压参数
+            params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+            # 更新共享参数
+            self.shared_param.set_param(params_dict)
+            # 触发共享参数更新事件
+            self.shared_param.param_event.set()
+            log(f"[{self.client_id}] update latest server weights done")
 
     def grad_thread(self):
         """
         推送本地梯度
         """
         log(f"[{self.client_id}] grad_thread start")
+        send_count = 0
         while True:
             # 获取汇总梯度
             merged_gradients = self.grad_q.get()
@@ -358,6 +359,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 发送梯度
             send_gradients(self.train_title, compressed_grads, compress_info, self.version)
+            log(f"[{send_count}] send gradients done")
+            send_count += 1
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
