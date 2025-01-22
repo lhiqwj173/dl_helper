@@ -167,7 +167,8 @@ class ClientLearnerGroup(LearnerGroup):
         self.train_title = train_title
         
         # 参数压缩器
-        self.param_compressor = ParamCompressor()
+        param_keys = list(self.get_weights()['default_policy'].keys())
+        self.param_compressor = ParamCompressor(param_keys)
 
         # 共享参数
         self.shared_param = None
@@ -250,7 +251,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_compressor = GradientCompressor()
 
         # 参数压缩器
-        self.param_compressor = ParamCompressor()
+        self.param_compressor = None
 
         # 梯度累积器
         self.gradient_accumulator = GradientAccumulator()
@@ -291,6 +292,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        self.param_compressor = ParamCompressor(list(params_dict.keys()))
         # 获取梯度字典
         grad_params_dict = self._params
         # 获取共享参数

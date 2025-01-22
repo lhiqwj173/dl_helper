@@ -338,9 +338,10 @@ class ParamCompressor:
     参数压缩器
     输入输出都是 torch.Tensor
     """
-    def __init__(self, quantize_bits=8):
+    def __init__(self, param_keys, quantize_bits=8):
         self.quantize_bits = quantize_bits
-    
+        self.param_keys = param_keys
+
     def compress_param(self, param):
         """压缩单个参数张量
         参数:
@@ -401,16 +402,16 @@ class ParamCompressor:
             压缩后的参数列表[torch.Tensor]，以及压缩信息字典
         """
         compressed_list = []
-        info_dict = OrderedDict()
+        info_list = OrderedDict()
 
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
             compressed_list.append(quantized)
-            info_dict[key] = compress_info
+            info_list.append(compress_info)
             
-        return compressed_list, info_dict
+        return compressed_list, info_list
     
-    def decompress_params_dict(self, compressed_list, info_dict):
+    def decompress_params_dict(self, compressed_list, info_list):
         """
         根据 解压参数列表，压缩信息字典
         解压整个参数
@@ -419,8 +420,8 @@ class ParamCompressor:
         """
         decompressed_dict = OrderedDict()
         
-        for idx, (k, v) in enumerate(info_dict.items()):
-            decompressed_dict[k] = self.decompress_param(compressed_list[idx], v)
+        for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
+            decompressed_dict[k] = self.decompress_param(compressed_list[idx], info)
             
         return decompressed_dict
     

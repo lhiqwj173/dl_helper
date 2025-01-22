@@ -41,7 +41,6 @@ class AsyncRLParameterServer:
         
         self.learner.apply_gradients({})
         self.ver += 1
-        return self.get_weights()
     
     def get_gradients_params(self):
         """获取计算梯度的参数"""
@@ -157,7 +156,7 @@ class ExperimentHandler:
         gradient_compressor = GradientCompressor()
 
         # 参数压缩器
-        param_compressor = ParamCompressor()
+        param_compressor = ParamCompressor(list(_params_dict.keys()))
 
         # 共享梯度
         gradients_cache_share = []
