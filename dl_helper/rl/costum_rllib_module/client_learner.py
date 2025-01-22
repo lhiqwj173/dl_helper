@@ -298,8 +298,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
-        log(f"[{self.client_id}] params_dict: {params_dict}")
-        self.param_compressor = ParamCompressor(list(params_dict.keys()))
+        params_keys = list(params_dict.keys())
+        log(f"[{self.client_id}] params_keys: {params_keys}")
+        self.param_compressor = ParamCompressor(params_keys)
         # 获取梯度字典
         grad_params_dict = self._params
         # 获取共享参数
