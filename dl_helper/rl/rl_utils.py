@@ -402,7 +402,7 @@ class ParamCompressor:
             压缩后的参数列表[torch.Tensor]，以及压缩信息字典
         """
         compressed_list = []
-        info_list = OrderedDict()
+        info_list = []
 
         for key, param in params_dict.items():
             quantized, compress_info = self.compress_param(param)
