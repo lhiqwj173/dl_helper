@@ -168,6 +168,7 @@ class ClientLearnerGroup(LearnerGroup):
         
         # 参数压缩器
         param_keys = list(self.get_weights()['default_policy'].keys())
+        log(f"LearnerGroup param_keys: {param_keys}")
         self.param_compressor = ParamCompressor(param_keys)
 
         # 共享参数
@@ -209,6 +210,7 @@ class ClientLearnerGroup(LearnerGroup):
         params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
         params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+        log(f"LearnerGroup decompress_params_dict param_keys: {list(params_dict.keys())}")
         # 更新参数到所有learner
         if self.is_local:
             self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
@@ -292,12 +294,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy']
+        log(f"[{self.client_id}] params_dict: {params_dict}")
         self.param_compressor = ParamCompressor(list(params_dict.keys()))
         # 获取梯度字典
         grad_params_dict = self._params
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
-
 
     def init_param_thread(self):
         if self.client_id == 0:
