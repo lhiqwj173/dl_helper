@@ -216,6 +216,11 @@ class ClientLearnerGroup(LearnerGroup):
             self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
         else:
             state_ref = ray.put(params_dict)
+            log(f'foreach_learner print state_dict')
+            self.foreach_learner(
+                lambda _learner: print(_learner.module._rl_modules['default_policy'].state_dict())
+            )
+            log(f'foreach_learner load_state_dict')
             self.foreach_learner(
                 lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
             )
