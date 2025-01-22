@@ -302,7 +302,7 @@ class ExperimentHandler:
             with self.share_params_lock:
                 # 交换
                 for i in self.params_cache_share:
-                    params.append(i.data.copy())
+                    params.append(i.data.clone())
                 # 取出再放回， 保证队列中仍有数据
                 info, v = self.params_info_share_q.get()
                 self.params_info_share_q.put((info, v))
