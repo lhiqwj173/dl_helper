@@ -24,6 +24,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
+from dl_helper.tool import report_memory_usage
 
 """
 # 分布式训练流程
@@ -381,6 +382,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 清空learner之间同步的事件
             self.main_learner_ready_event.clear()
             self.load_param_event.clear()
+
+            report_memory_usage(f'[{self.update_count}]')
 
         # 计算梯度
         # log('self._params:')
