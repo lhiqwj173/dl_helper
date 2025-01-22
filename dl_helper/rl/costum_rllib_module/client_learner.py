@@ -9,6 +9,7 @@ from ray.rllib.core import (
     COMPONENT_RL_MODULE,
 )
 
+from collections import OrderedDict
 import numpy as np
 import torch
 import queue
@@ -168,7 +169,7 @@ class ClientLearnerGroup(LearnerGroup):
         
         # 参数压缩器
         param_keys = list(self.get_weights()['default_policy'].keys())
-        log(f"LearnerGroup param_keys: {param_keys}")
+        # log(f"LearnerGroup param_keys: {param_keys}")
         self.param_compressor = ParamCompressor(param_keys)
 
         # 共享参数
@@ -209,18 +210,16 @@ class ClientLearnerGroup(LearnerGroup):
         log('request server weights')
         params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
-        params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        log(f"LearnerGroup decompress_params_dict param_keys: {list(params_dict.keys())}")
+        _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+        # log(f"LearnerGroup decompress_params_dict param_keys: {list(params_dict.keys())}")
         # 更新参数到所有learner
+        params_dict = OrderedDict()
+        for k, v in _params_dict.items():
+            params_dict[f'module.{k}'] = v
         if self.is_local:
             self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
         else:
             state_ref = ray.put(params_dict)
-            log(f'foreach_learner print state_dict')
-            self.foreach_learner(
-                lambda _learner: print(_learner.module._rl_modules['default_policy'].state_dict())
-            )
-            log(f'foreach_learner load_state_dict')
             self.foreach_learner(
                 lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
             )
