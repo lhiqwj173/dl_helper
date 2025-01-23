@@ -52,65 +52,65 @@ def _connect_server_apply(func, *args, **kwargs):
     finally:
         _socket.close()
 
+def _get_server_weights(_socket, train_title, version):
+    # 发送获取参数请求
+    message = f'{CODE}_{train_title}:get@{version}'
+    send_msg(_socket, message.encode())
+    
+    # 接收参数数据
+    response = recv_msg(_socket)
+    if response is None:
+        raise Exception('Failed to receive parameters')
+        
+    # 反序列化参数
+    try:
+        weights, info, version = pickle.loads(response)
+    except Exception as e:
+        print(f"反序列化失败: {e}")
+        with open('debug_pickle.pkl', 'wb') as f:
+            f.write(response)
+        print(f'已保存到 debug_pickle.pkl')
+        raise e
+    return weights, info, version
+
 def get_server_weights(train_title, version=-1):
     """
     获取参数服务器权重
     server返回: (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
     """
-    def _get_server_weights(_socket, version):
-        # 发送获取参数请求
-        message = f'{CODE}_{train_title}:get@{version}'
-        send_msg(_socket, message.encode())
-        
-        # 接收参数数据
-        response = recv_msg(_socket)
-        if response is None:
-            raise Exception('Failed to receive parameters')
-            
-        # 反序列化参数
-        try:
-            weights, info, version = pickle.loads(response)
-        except Exception as e:
-            print(f"反序列化失败: {e}")
-            with open('debug_pickle.pkl', 'wb') as f:
-                f.write(response)
-            print(f'已保存到 debug_pickle.pkl')
-            raise e
-        return weights, info, version
+    return _connect_server_apply(_get_server_weights, train_title, version)
 
-    return _connect_server_apply(_get_server_weights, version)
+def _send_gradients(_socket, train_title, grads, compress_info, version):
+    # 发送梯度请求
+    message = f'{CODE}_{train_title}:update_gradients'
+    send_msg(_socket, message.encode())
+    
+    # 发送累积梯度
+    data = pickle.dumps((grads, compress_info, version))
+    send_msg(_socket, data)
+    
+    # 等待确认
+    response = recv_msg(_socket)
+    return response == b'ok'
 
 def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""
-    def _send_gradients(_socket):
-        # 发送梯度请求
-        message = f'{CODE}_{train_title}:update_gradients'
-        send_msg(_socket, message.encode())
-        
-        # 发送累积梯度
-        data = pickle.dumps((grads, compress_info, version))
-        send_msg(_socket, data)
-        
-        # 等待确认
-        response = recv_msg(_socket)
-        return response == b'ok'
+    return _connect_server_apply(_send_gradients, train_title, grads, compress_info, version)
 
-    return _connect_server_apply(_send_gradients)
+def _request_client_id(_socket, train_title):
+    # 发送请求分配id
+    message = f'{CODE}_{train_title}:client_id'
+    send_msg(_socket, message.encode())
+
+    # 接收分配的id
+    response = recv_msg(_socket)
+    if response:
+        return int(response.decode())
+    return -1
 
 def request_client_id(train_title):
     """请求分配客户端id"""
-    def _request_client_id(_socket):
-        # 发送请求分配id
-        message = f'{CODE}_{train_title}:client_id'
-        send_msg(_socket, message.encode())
-        
-        # 接收分配的id
-        response = recv_msg(_socket)
-        if response:
-            return int(response.decode())
-        return -1
-
-    return _connect_server_apply(_request_client_id)
+    return _connect_server_apply(_request_client_id, train_title)
 
 
 def test_pickle_numpy():

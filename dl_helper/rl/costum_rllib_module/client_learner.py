@@ -18,11 +18,14 @@ import copy, pickle
 from typing import Dict, Any
 import requests
 import threading
+import socket
 
 from py_ext.tool import safe_share_memory, share_tensor, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
+from dl_helper.rl.socket_base import HOST, PORT, _get_server_weights, _send_gradients
+
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
 
@@ -325,25 +328,38 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         log(f"[{self.client_id}] param_thread start")
         last_ask_update_count = 0
-        while True:
-            # 请求参数的轮次
-            ask_update_count = self.param_q.get()
-            if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
-                # 等待最小同步间隔
-                continue
 
-            last_ask_update_count = ask_update_count
-            log(f"[{last_ask_update_count}] request server weights")
+        _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            _socket.connect((HOST, PORT))
 
-            # 获取参数
-            params_list, info, self.version = get_server_weights(self.train_title, self.version)
-            # 解压参数
-            params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-            # 更新共享参数
-            self.shared_param.set_param(params_dict)
-            # 触发共享参数更新事件
-            self.shared_param.param_event.set()
-            log(f"[{self.client_id}] update latest server weights done")
+            while True:
+                # 请求参数的轮次
+                ask_update_count = self.param_q.get()
+                if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
+                    # 等待最小同步间隔
+                    continue
+
+                last_ask_update_count = ask_update_count
+                log(f"[{last_ask_update_count}] request server weights")
+
+                # 获取参数
+                params_list, info, self.version = _get_server_weights(_socket, self.train_title, self.version)
+                # 解压参数
+                params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+                # 更新共享参数
+                self.shared_param.set_param(params_dict)
+                # 触发共享参数更新事件
+                self.shared_param.param_event.set()
+                log(f"[{self.client_id}] update latest server weights done")
+
+        except Exception as e:
+            log(f"连接服务器失败")
+            raise e
+        finally:
+            _socket.close()
+
+
 
     def grad_thread(self):
         """
@@ -351,17 +367,29 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         log(f"[{self.client_id}] grad_thread start")
         send_count = 0
-        while True:
-            # 获取汇总梯度
-            merged_gradients = self.grad_q.get()
 
-            # 压缩梯度
-            compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+        _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            _socket.connect((HOST, PORT))
 
-            # 发送梯度
-            send_gradients(self.train_title, compressed_grads, compress_info, self.version)
-            log(f"[{send_count}] send gradients done")
-            send_count += 1
+            while True:
+                # 获取汇总梯度
+                merged_gradients = self.grad_q.get()
+
+                # 压缩梯度
+                compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+
+                # 发送梯度
+                _send_gradients(_socket, self.train_title, compressed_grads, compress_info, self.version)
+                log(f"[{send_count}] send gradients done")
+                send_count += 1
+
+        except Exception as e:
+            log(f"连接服务器失败")
+            raise e
+        finally:
+            _socket.close()
+
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
@@ -372,6 +400,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count += 1
 
         if self.client_id == 0:
+            report_memory_usage(f'[{self.update_count}][0]')
+
             # 每次都请求，使用最大同步间隔(与每次同步耗时共同影响)来控制同步频率
             # 主learner 触发请求服务器参数事件
             # 参数线程开始获取服务器参数 》 暂时默认本次update应用拉取的参数  TODO
@@ -383,7 +413,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.main_learner_ready_event.clear()
             self.load_param_event.clear()
 
-            report_memory_usage(f'[{self.update_count}]')
+            report_memory_usage(f'[{self.update_count}][1]')
 
         # 计算梯度
         # log('self._params:')
@@ -397,6 +427,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
+            report_memory_usage(f'[{self.update_count}][2]')
+
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
 
@@ -421,6 +453,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.grad_q.put(cpu_gradients)
 
+            report_memory_usage(f'[{self.update_count}][3]')
+
         # nouse3
         # 返回空
         return {}
@@ -442,6 +476,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             log(f'[not main learner] wait main learner')
             self.main_learner_ready_event.wait()
         else:
+            report_memory_usage(f'[{self.update_count}][4]')
+
             # 主learner检查是否是否有参数准备好
             if self.shared_param.param_event.is_set():
                 # 其他learner需要load参数
@@ -450,6 +486,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 触发其他learner继续向后执行
             log(f'[main learner] all go on')
             self.main_learner_ready_event.set()
+
+            report_memory_usage(f'[{self.update_count}][5]')
 
         if self.load_param_event.is_set():
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
@@ -463,10 +501,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 已经存在正确的梯度
                 pass
 
+            if self.client_id == 0:
+                report_memory_usage(f'[{self.update_count}][6]')
+
             # 获取参数覆盖本地参数
             log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
+
+            if self.client_id == 0:
+                report_memory_usage(f'[{self.update_count}][7]')
 
             if self.apply_last_grad:
                 # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致

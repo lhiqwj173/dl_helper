@@ -210,8 +210,9 @@ class AsyncSocketServer:
             return
 
         self.clients.add(writer)
-        # log(f"Client connected from {peer}")
+        log(f"Client connected from {peer}")
         
+        handler = None
         try:
             while True:
                 # 1. 接收指令数据
@@ -239,13 +240,14 @@ class AsyncSocketServer:
                         
                 # 2. 处理指令
                 # 2.1 获取处理器
-                if train_title == 'test':
-                    handler = list(self.handlers.values())[0]
-                else:
-                    if train_title not in self.handlers:
-                        log(f'{train_title} not found')
-                        break
-                    handler = self.handlers[train_title]
+                if None is handler:
+                    if train_title == 'test':
+                        handler = list(self.handlers.values())[0]
+                    else:
+                        if train_title not in self.handlers:
+                            log(f'{train_title} not found')
+                            break
+                        handler = self.handlers[train_title]
 
                 # 2.2 处理指令
                 msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}]'
@@ -254,7 +256,8 @@ class AsyncSocketServer:
                     await async_send_msg(writer, res)
                 
                 # 2.3 关闭连接
-                break
+                # 维持长连接，不主动关闭
+                # break
                 
         except Exception as e:
             log(f"Error handling client {peer}\n{get_exception_msg()}")
