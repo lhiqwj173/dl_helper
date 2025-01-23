@@ -218,15 +218,18 @@ class AsyncSocketServer:
                 # 1. 接收指令数据
                 data = await async_recv_msg(reader)
                 if not data:
+                    log(f'no data')
                     self.block_ips.add(client_ip)
                     break
                 data_str = data.decode()
                 # 1.1 验证CODE  
                 if ':' not in data_str or '_' not in data_str:
+                    log(f'no code')
                     self.block_ips.add(client_ip)
                     break
                 _code, a = data_str.split('_', maxsplit=1)
                 if _code != CODE:
+                    log(f'code error: {_code}')
                     self.block_ips.add(client_ip)
                     break
 
