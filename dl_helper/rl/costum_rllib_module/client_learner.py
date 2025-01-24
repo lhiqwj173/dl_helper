@@ -452,7 +452,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             else:
                 # 加入推送队列
                 self.grad_q.put(cpu_gradients)
-
+            
+            log(f'grad_q: {self.grad_q.qsize()}')
             report_memory_usage(f'[{self.update_count}][3]')
 
         # nouse3
