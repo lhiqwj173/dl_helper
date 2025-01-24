@@ -330,9 +330,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         last_ask_update_count = 0
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connected = False
         try:
-            _socket.connect((HOST, PORT))
-
             while True:
                 # 请求参数的轮次
                 ask_update_count = self.param_q.get()
@@ -342,6 +341,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 last_ask_update_count = ask_update_count
                 log(f"[{last_ask_update_count}] request server weights")
+
+                if not connected:
+                    _socket.connect((HOST, PORT))
+                    connected = True
 
                 # 获取参数
                 params_list, info, self.version = _get_server_weights(_socket, self.train_title, self.version)
@@ -370,14 +373,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            _socket.connect((HOST, PORT))
-
             while True:
                 # 获取汇总梯度
                 merged_gradients = self.grad_q.get()
 
                 # 压缩梯度
                 compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+
+                if not connected:
+                    _socket.connect((HOST, PORT))
+                    connected = True
 
                 # 发送梯度
                 _send_gradients(_socket, self.train_title, compressed_grads, compress_info, self.version)
