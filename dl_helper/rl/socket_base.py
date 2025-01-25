@@ -36,7 +36,8 @@ def recv_msg(sock):
 def send_msg(sock, msg):
     """发送带长度前缀的消息"""
     # 添加4字节的长度前缀
-    msg = struct.pack('>I', len(msg)) + msg if isinstance(msg, bytes) else msg.encode()
+    msg = msg.encode() if isinstance(msg, str) else msg
+    msg = struct.pack('>I', len(msg)) + msg
     sock.sendall(msg)
 
 def _connect_server_apply(func, *args, **kwargs):
