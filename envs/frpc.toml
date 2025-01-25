@@ -5,6 +5,6 @@ auth.token = "LHss6632673"
 [[proxies]]
 name = "ps"
 type = "tcp"
-localIP = "132.226.234.60"
+localIP = "127.0.0.1"
 localPort = 12346
 remotePort = 12346
