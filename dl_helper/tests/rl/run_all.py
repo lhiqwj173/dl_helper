@@ -4,19 +4,20 @@ import shutil
 import subprocess 
 
 from dl_helper.rl.rl_utils import rl_folder
+from dl_helper.train_param import is_kaggle
 
 def run(need_clear):
     if need_clear:
         print('需要清理...')
         if os.path.exists(rl_folder):
-            print('清理 /root/rl_learning 目录下的所有文件')
+            print('清理 rl_learning 目录下的所有文件')
             shutil.rmtree(rl_folder)
             os.makedirs(rl_folder)
         else:
             # 创建目录
             os.makedirs(rl_folder)
 
-    code_folder = r'/root/code/dl_helper'
+    code_folder = r'/root/code/dl_helper' if not is_kaggle() else r'/kaggle/working/3rd/dl_helper'
 
     # 训练服务
     print('注册训练服务')
@@ -28,7 +29,7 @@ def run(need_clear):
     # 运行服务端
     print('运行服务端')
     # D:\code\dl_helper\dl_helper\rl\net_center.py
-    subprocess.run(['python3', '/root/code/dl_helper/dl_helper/rl/net_center.py'], check=True)
+    subprocess.run(['python3', f'{code_folder}/dl_helper/rl/net_center.py'], check=True)
 
 if __name__ == '__main__':
     need_clear = False

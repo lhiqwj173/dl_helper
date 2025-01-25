@@ -18,8 +18,9 @@ from collections import OrderedDict
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
 from py_ext.tool import log, get_log_file
+from dl_helper.train_param import is_kaggle
 
-rl_folder = r'/root/rl_learning'
+rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
 def plot_training_curve(train_folder, total_time=None):
