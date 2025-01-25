@@ -46,6 +46,7 @@ class BlockIPs:
     def add(self, ip):
         """添加ip到block ip列表"""
         if ip not in self.ips: # 避免重复添加
+            log(f'add block ip: {ip}')
             self.ips.append(ip)
             self._update(self.ips)
 
