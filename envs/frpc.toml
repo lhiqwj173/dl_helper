@@ -1,5 +1,6 @@
 serverAddr = "132.226.234.60"
 serverPort = 7000
+auth.token = "LHss6632673"
 
 [[proxies]]
 name = "ps"
