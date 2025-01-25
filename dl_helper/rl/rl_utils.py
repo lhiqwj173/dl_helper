@@ -227,8 +227,12 @@ class GradientCompressor:
             elif info['is_dominant_compressed']:
                 if valid_values.numel() > 0:
                     values = valid_values * info['scale'] + info['min_val']
+                    # 确保 indices 是列表形式
+                    indices = info['indices']
+                    if isinstance(indices, (int, np.integer)):
+                        indices = [indices]
                     grad.fill_(info['dominant_val'])
-                    valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in info['indices'])
+                    valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in indices)
                     grad[valid_indices] = values
                 else:
                     grad.fill_(info['dominant_val'])
