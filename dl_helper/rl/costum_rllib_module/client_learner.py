@@ -419,6 +419,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 清空learner之间同步的事件
             self.main_learner_ready_event.clear()
             self.load_param_event.clear()
+            self.shared_param.grad_event.clear()
 
             report_memory_usage(f'[{self.update_count}][1]')
 
