@@ -227,12 +227,14 @@ class ExperimentHandler:
                 # 更新梯度
                 # log(f'update gradients')
                 param_server.apply_gradients(gs, version)
-                # 生成参数缓存
-                # log(f'produce params cache')
-
-            weights, info, version = produce_params_cache(param_server, param_compressor)
-            update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
-            log(f'{train_title} update params, version: {version}')
+                
+                # 每4次更新生成一次参数缓存
+                if (idx + 1) % 4 == 0 or idx == temp_length - 1:
+                    # 生成参数缓存
+                    # log(f'produce params cache')
+                    weights, info, version = produce_params_cache(param_server, param_compressor)
+                    update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
+                    log(f'{train_title} update params, version: {version}')
 
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
