@@ -321,7 +321,12 @@ class ExperimentHandler:
                 for idx, _g in enumerate(g):
                     # log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
                     self.gradients_cache_share[idx].append(_g)
-                # gradients_cache_share_length = self.gradients_cache_share[0].size()
+                gradients_cache_share_length = self.gradients_cache_share[0].size()
+
+            if gradients_cache_share_length > 15:
+                raise Exception(f'{msg_header} gradients_cache_share_length > 15')
+                import sys
+                sys.exit()
 
             # 通知新梯度
             # log(f'set share data new event')
