@@ -142,16 +142,21 @@ def run_param_center():
         finally:
             client_socket.close()
 
-async def async_recvall(reader, n):
-    """异步地从流中读取指定字节数的数据"""
+async def async_recvall(reader, n, timeout=10.0):
+    """异步地从流中读取指定字节数的数据
+    timeout: 超时时间，-1表示不设置超时
+    """
     # log(f"开始接收 {n} 字节数据...")  # 添加日志
     data = bytearray()
     while len(data) < n:
         try:
-            packet = await asyncio.wait_for(
-                reader.read(n - len(data)),
-                timeout=10.0  # 添加超时设置
-            )
+            if timeout == -1:
+                packet = await reader.read(n - len(data))
+            else:
+                packet = await asyncio.wait_for(
+                    reader.read(n - len(data)),
+                    timeout=timeout  # 添加超时设置
+                )
             if not packet:
                 # log("连接已关闭，接收到空数据包")
                 return None
@@ -166,11 +171,13 @@ async def async_recvall(reader, n):
     # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
     return data
 
-async def async_recv_msg(reader):
-    """异步地接收带长度前缀的消息"""
+async def async_recv_msg(reader, timeout=-1):
+    """异步地接收带长度前缀的消息
+    timeout: 超时时间，-1表示不设置超时
+    """
     # log("开始接收消息长度前缀...")  # 添加日志
     # 接收4字节的长度前缀
-    raw_msglen = await async_recvall(reader, 4)
+    raw_msglen = await async_recvall(reader, 4, timeout)
     if not raw_msglen:
         # log("未能接收到消息长度前缀")
         return None
@@ -178,7 +185,7 @@ async def async_recv_msg(reader):
     msglen = struct.unpack('>I', raw_msglen)[0]
     # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
     # 接收消息内容
-    return await async_recvall(reader, msglen)
+    return await async_recvall(reader, msglen, timeout)
 
 async def async_send_msg(writer, msg):
     """异步地发送带长度前缀的消息"""
@@ -231,7 +238,7 @@ class AsyncSocketServer:
 
         try:
             # 接收 CODE_one/long
-            data = await async_recv_msg(reader)
+            data = await async_recv_msg(reader, timeout=3)
             data_str = data.decode()
             log(f'data_str: {data_str}')
             # 验证CODE
@@ -250,7 +257,7 @@ class AsyncSocketServer:
                 count += 1
 
                 # 1. 接收指令数据
-                data = await async_recv_msg(reader)
+                data = await async_recv_msg(reader, timeout=3 if con_times == 1 else -1)
                 a = data.decode()
 
                 # 1.2 分解指令
@@ -259,7 +266,7 @@ class AsyncSocketServer:
                 # 1.3 获取数据
                 data = None
                 if cmd == 'update_gradients':
-                    data = await async_recv_msg(reader)
+                    data = await async_recv_msg(reader, timeout=3 if con_times == 1 else -1)
                         
                 # 2. 处理指令
                 # 2.1 获取处理器
