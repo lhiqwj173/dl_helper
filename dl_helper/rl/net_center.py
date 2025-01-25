@@ -216,6 +216,7 @@ class AsyncSocketServer:
             # 接收 CODE_one/long
             data = await async_recv_msg(reader)
             data_str = data.decode()
+            log(f'data_str: {data_str}')
             # 验证CODE
             _code, _type = data_str.split('_', maxsplit=1)
             log(f'code: {_code}, type: {_type}')
