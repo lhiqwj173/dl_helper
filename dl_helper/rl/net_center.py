@@ -201,12 +201,11 @@ class AsyncSocketServer:
     async def handle_client(self, reader: asyncio.StreamReader, 
                           writer: asyncio.StreamWriter):
         peer = writer.get_extra_info('peername')
-        # 0. 检查是否被block
         client_ip, client_port = peer
+        # 0. 检查是否被block
         if self.block_ips.is_blocked(client_ip):
             log(f"Blocked connection from {client_ip}")
-            writer.close()
-            await writer.wait_closed()
+            writer.close()  # 对于被block的连接，直接关闭即可
             return
 
         self.clients.add(writer)
@@ -220,10 +219,7 @@ class AsyncSocketServer:
             _code, _type = data_str.split('_', maxsplit=1)
             if _code != CODE and _type not in ['one', 'long']:
                 log(f'code error: {_code}')
-                self.block_ips.add(client_ip)
-                writer.close()
-                await writer.wait_closed()
-                return
+                raise Exception(f'code error: {_code}')
 
             # 连接类型 1次/长连接
             con_times = 1 if _type == 'one' else 0
@@ -261,10 +257,6 @@ class AsyncSocketServer:
                 res = await handler.async_handle_request(msg_header, cmd, data)
                 if res:
                     await async_send_msg(writer, res)
-                
-                # 2.3 关闭连接
-                # 维持长连接，不主动关闭
-                # break
 
             # 3. 关闭连接
             return
@@ -276,8 +268,8 @@ class AsyncSocketServer:
             self.block_ips.add(client_ip)
         finally:
             self.clients.remove(writer)
-            writer.close()
-            await writer.wait_closed()
+            if not writer.is_closing():
+                writer.close()  # 如果连接还未关闭，则关闭它
             log(f"Client disconnected from {peer}")
 
     async def start(self):
