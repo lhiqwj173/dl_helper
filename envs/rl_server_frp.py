@@ -14,4 +14,4 @@ if '__main__' == __name__:
         subprocess.call(cmd, shell=True)
 
     # frpc -c frpc.toml
-    subprocess.Popen(["frpc", "-c", "frpc.toml"], shell=True, creationflags=subprocess.DETACHED_PROCESS, close_fds=True)
+    subprocess.Popen(["frpc", "-c", "frpc.toml"], start_new_session=True)
