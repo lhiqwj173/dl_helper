@@ -216,13 +216,6 @@ class AsyncSocketServer:
             # 接收 CODE_one/long
             data = await async_recv_msg(reader)
             data_str = data.decode()
-            if not data_str or '_' not in data_str:
-                log(f'no data')
-                self.block_ips.add(client_ip)
-                writer.close()
-                await writer.wait_closed()
-                return
-        
             # 验证CODE
             _code, _type = data_str.split('_', maxsplit=1)
             if _code != CODE and _type not in ['one', 'long']:
@@ -242,10 +235,6 @@ class AsyncSocketServer:
 
                 # 1. 接收指令数据
                 data = await async_recv_msg(reader)
-                if not data:
-                    log(f'no data')
-                    self.block_ips.add(client_ip)
-                    break
                 a = data.decode()
 
                 # 1.2 分解指令
@@ -280,8 +269,11 @@ class AsyncSocketServer:
             # 3. 关闭连接
             return
                
+        except ConnectionError as e:
+            log(f"Connection error from client {peer}\n{get_exception_msg()}")
         except Exception as e:
             log(f"Error handling client {peer}\n{get_exception_msg()}")
+            self.block_ips.add(client_ip)
         finally:
             self.clients.remove(writer)
             writer.close()
