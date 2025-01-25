@@ -212,31 +212,31 @@ class AsyncSocketServer:
         self.clients.add(writer)
         log(f"Client connected from {peer}")
 
-        # 接收 CODE_one/long
-        data = await async_recv_msg(reader)
-        data_str = data.decode()
-        if not data_str or '_' not in data_str:
-            log(f'no data')
-            self.block_ips.add(client_ip)
-            writer.close()
-            await writer.wait_closed()
-            return
-    
-        # 验证CODE
-        _code, _type = data_str.split('_', maxsplit=1)
-        if _code != CODE and _type not in ['one', 'long']:
-            log(f'code error: {_code}')
-            self.block_ips.add(client_ip)
-            writer.close()
-            await writer.wait_closed()
-            return
-
-        # 连接类型 1次/长连接
-        con_times = 1 if _type == 'one' else 0
-        
-        handler = None
-        count = 0
         try:
+            # 接收 CODE_one/long
+            data = await async_recv_msg(reader)
+            data_str = data.decode()
+            if not data_str or '_' not in data_str:
+                log(f'no data')
+                self.block_ips.add(client_ip)
+                writer.close()
+                await writer.wait_closed()
+                return
+        
+            # 验证CODE
+            _code, _type = data_str.split('_', maxsplit=1)
+            if _code != CODE and _type not in ['one', 'long']:
+                log(f'code error: {_code}')
+                self.block_ips.add(client_ip)
+                writer.close()
+                await writer.wait_closed()
+                return
+
+            # 连接类型 1次/长连接
+            con_times = 1 if _type == 'one' else 0
+            
+            handler = None
+            count = 0
             while con_times == 0 or count < con_times:
                 count += 1
 
