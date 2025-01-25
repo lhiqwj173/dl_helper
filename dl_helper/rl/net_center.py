@@ -236,6 +236,7 @@ class AsyncSocketServer:
         self.clients.add(writer)
         log(f"Client connected from {peer}")
 
+        safe_connect = False
         try:
             # 接收 CODE_one/long
             data = await async_recv_msg(reader, timeout=3)
@@ -285,6 +286,9 @@ class AsyncSocketServer:
                 if res:
                     await async_send_msg(writer, res)
 
+                #完整的一次数据交互 
+                safe_connect = True
+
             # 3. 关闭连接
             return
                
@@ -292,7 +296,8 @@ class AsyncSocketServer:
             log(f"Connection error from client {peer}\n{get_exception_msg()}")
         except Exception as e:
             log(f"Error handling client {peer}\n{get_exception_msg()}")
-            self.block_ips.add(client_ip)
+            if not safe_connect:
+                self.block_ips.add(client_ip)
         finally:
             self.clients.remove(writer)
             if not writer.is_closing():

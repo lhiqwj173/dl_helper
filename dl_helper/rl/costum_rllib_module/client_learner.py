@@ -372,6 +372,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         send_count = 0
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connected = False
         try:
             while True:
                 # 获取汇总梯度
