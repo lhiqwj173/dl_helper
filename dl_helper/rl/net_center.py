@@ -218,6 +218,7 @@ class AsyncSocketServer:
             data_str = data.decode()
             # 验证CODE
             _code, _type = data_str.split('_', maxsplit=1)
+            log(f'code: {_code}, type: {_type}')
             if _code != CODE and _type not in ['one', 'long']:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')
