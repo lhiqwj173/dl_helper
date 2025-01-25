@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-from py_ext.tool import log
+try:
+    from py_ext.tool import log
+except:
+    log = print
 
 import socket, time, os, re
 import pickle
@@ -41,10 +44,15 @@ def _connect_server_apply(func, *args, **kwargs):
     func: 函数名, 第一个参数为socket连接
     *args: 函数其他参数
     **kwargs: 函数其他参数
+    _type: 连接类型 1次/长连接
     """
     _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         _socket.connect((HOST, PORT))
+
+        # 发送连接类型
+        send_msg(_socket, f'{CODE}_one')
+        
         return func(_socket, *args, **kwargs)
     except Exception as e:
         log(f"连接服务器失败")
@@ -54,7 +62,7 @@ def _connect_server_apply(func, *args, **kwargs):
 
 def _get_server_weights(_socket, train_title, version):
     # 发送获取参数请求
-    message = f'{CODE}_{train_title}:get@{version}'
+    message = f'{train_title}:get@{version}'
     send_msg(_socket, message.encode())
     
     # 接收参数数据
@@ -82,7 +90,7 @@ def get_server_weights(train_title, version=-1):
 
 def _send_gradients(_socket, train_title, grads, compress_info, version):
     # 发送梯度请求
-    message = f'{CODE}_{train_title}:update_gradients'
+    message = f'{train_title}:update_gradients'
     send_msg(_socket, message.encode())
     
     # 发送累积梯度

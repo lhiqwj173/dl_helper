@@ -211,27 +211,42 @@ class AsyncSocketServer:
 
         self.clients.add(writer)
         log(f"Client connected from {peer}")
+
+        # 接收 CODE_one/long
+        data = await async_recv_msg(reader)
+        data_str = data.decode()
+        if not data_str or '_' not in data_str:
+            log(f'no data')
+            self.block_ips.add(client_ip)
+            writer.close()
+            await writer.wait_closed()
+            return
+    
+        # 验证CODE
+        _code, _type = data_str.split('_', maxsplit=1)
+        if _code != CODE and _type not in ['one', 'long']:
+            log(f'code error: {_code}')
+            self.block_ips.add(client_ip)
+            writer.close()
+            await writer.wait_closed()
+            return
+
+        # 连接类型 1次/长连接
+        con_times = 1 if _type == 'one' else 0
         
         handler = None
+        count = 0
         try:
-            while True:
+            while con_times == 0 or count < con_times:
+                count += 1
+
                 # 1. 接收指令数据
                 data = await async_recv_msg(reader)
                 if not data:
                     log(f'no data')
                     self.block_ips.add(client_ip)
                     break
-                data_str = data.decode()
-                # 1.1 验证CODE  
-                if ':' not in data_str or '_' not in data_str:
-                    log(f'no code')
-                    self.block_ips.add(client_ip)
-                    break
-                _code, a = data_str.split('_', maxsplit=1)
-                if _code != CODE:
-                    log(f'code error: {_code}')
-                    self.block_ips.add(client_ip)
-                    break
+                a = data.decode()
 
                 # 1.2 分解指令
                 train_title, cmd = a.split(':', maxsplit=1)
@@ -261,14 +276,17 @@ class AsyncSocketServer:
                 # 2.3 关闭连接
                 # 维持长连接，不主动关闭
                 # break
-                
+
+            # 3. 关闭连接
+            return
+               
         except Exception as e:
             log(f"Error handling client {peer}\n{get_exception_msg()}")
         finally:
             self.clients.remove(writer)
             writer.close()
             await writer.wait_closed()
-            # log(f"Client disconnected from {peer}")
+            log(f"Client disconnected from {peer}")
 
     async def start(self):
         self.sock.bind((self.host, self.port))

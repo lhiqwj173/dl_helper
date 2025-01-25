@@ -24,7 +24,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
-from dl_helper.rl.socket_base import HOST, PORT, _get_server_weights, _send_gradients
+from dl_helper.rl.socket_base import HOST, PORT, send_msg, CODE, _get_server_weights, _send_gradients
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
@@ -344,6 +344,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 if not connected:
                     _socket.connect((HOST, PORT))
+                    # 发送连接类型: 长连接
+                    send_msg(_socket, f'{CODE}_long')
                     connected = True
 
                 # 获取参数
@@ -361,8 +363,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             raise e
         finally:
             _socket.close()
-
-
 
     def grad_thread(self):
         """
@@ -382,6 +382,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 if not connected:
                     _socket.connect((HOST, PORT))
+                    # 发送连接类型: 长连接
+                    send_msg(_socket, f'{CODE}_long')
                     connected = True
 
                 # 发送梯度
