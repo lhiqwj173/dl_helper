@@ -324,7 +324,7 @@ class ExperimentHandler:
                 gradients_cache_share_length = self.gradients_cache_share[0].size()
 
             if gradients_cache_share_length > 15:
-                raise Exception(f'{msg_header} gradients_cache_share_length > 15')
+                log(f'{msg_header} gradients_cache_share_length > 15')
                 import sys
                 sys.exit()
 

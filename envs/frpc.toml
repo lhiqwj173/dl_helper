@@ -1,0 +1,9 @@
+serverAddr = "132.226.234.60"
+serverPort = 7000
+
+[[proxies]]
+name = "ps"
+type = "tcp"
+localIP = "132.226.234.60"
+localPort = 12346
+remotePort = 12346
