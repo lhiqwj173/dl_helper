@@ -14,4 +14,4 @@ if '__main__' == __name__:
         subprocess.call(cmd, shell=True)
 
     # frpc -c frpc.toml
-    subprocess.Popen(["frpc", "-c", "frpc.toml"], start_new_session=True)
+    subprocess.Popen(["/kaggle/working/frpc", "-c", "/kaggle/working/frpc.toml"], start_new_session=True)
