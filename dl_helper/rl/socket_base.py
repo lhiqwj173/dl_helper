@@ -97,10 +97,6 @@ def _send_gradients(_socket, train_title, grads, compress_info, version):
     # 发送累积梯度
     data = pickle.dumps((grads, compress_info, version))
     send_msg(_socket, data)
-    
-    # 等待确认
-    response = recv_msg(_socket)
-    return response == b'ok'
 
 def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""
