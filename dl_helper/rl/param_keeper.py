@@ -320,6 +320,7 @@ class ExperimentHandler:
             weights, version = param_server.get_weights()
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
+                    log(f'copy params, idx: {idx}, cache shape: {params_cache_share_float32[idx].data.shape} < {v.shape}')
                     params_cache_share_float32[idx].data[:] = v[:]
                 params_float32_ver_share_q.put(version)
 
