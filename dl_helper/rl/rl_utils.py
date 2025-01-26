@@ -231,8 +231,10 @@ class GradientCompressor:
                     indices = info['indices']
                     if isinstance(indices, (int, np.integer)):
                         indices = [indices]
+                        valid_indices = (torch.tensor([indices[0]], device=quantized_values.device),)
+                    else:
+                        valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in [indices])
                     grad.fill_(info['dominant_val'])
-                    valid_indices = tuple(torch.tensor(idx[:info['valid_size']], device=quantized_values.device) for idx in indices)
                     grad[valid_indices] = values
                 else:
                     grad.fill_(info['dominant_val'])
