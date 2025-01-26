@@ -315,13 +315,13 @@ class ExperimentHandler:
         """
         def copy_params(param_server, lock, params_cache_share_float32, params_float32_ver_share_q): 
             """获取参数copy到共享参数中"""
-            log(f'copy params')
+            # log(f'copy params')
             # 获取模型参数
             # weights： 参数字典[torch.Tensor]
             weights, version = param_server.get_weights()
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
-                    log(f'copy params, idx: {idx}, cache shape: {params_cache_share_float32[idx].data.shape} < {v.shape}')
+                    # log(f'copy params, idx: {idx}, cache shape: {params_cache_share_float32[idx].data.shape} < {v.shape}')
                     params_cache_share_float32[idx].data[:] = v[:]
                 params_float32_ver_share_q.put(version)
 
