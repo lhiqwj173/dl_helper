@@ -188,7 +188,7 @@ class ExperimentHandler:
         _simple_params = []
         for idx, (k, v) in enumerate(_params_dict.items()):
             log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
-            _shape = (math.prod(v.shape),)
+            _shape = v.shape
             params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'int8'))
             _simple_params.append(_shape)
 
