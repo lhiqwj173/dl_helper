@@ -290,6 +290,7 @@ class ExperimentHandler:
 
         while True:
             # 获取一份待压缩数据
+            version = params_float32_ver_share_q.get()
             with share_params_float32_lock:
                 for idx, _data in enumerate(params_cache_share_float32):
                     _params_cache_share_float32[idx][:] = _data.data[:]
