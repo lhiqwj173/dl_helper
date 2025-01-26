@@ -286,7 +286,7 @@ class ExperimentHandler:
         for idx, _shape in enumerate(_simple_params):
             params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'int8'))
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
-            _params_cache_share_float32.append(torch.zeros(_shape, dtype='float32'))
+            _params_cache_share_float32.append(torch.zeros(_shape, dtype=torch.float32))
 
         while True:
             # 获取一份待压缩数据
