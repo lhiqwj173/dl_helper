@@ -330,8 +330,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 创建异步队列
             self.grad_q = AsyncQueue(maxsize=30)
             
-            # 启动3个协程任务
-            for _idx in range(3):
+            # 启动10个协程任务
+            for _idx in range(10):
                 task = self.loop.create_task(self.grad_coroutine(_idx))
                 self.grad_tasks.append(task)
             
