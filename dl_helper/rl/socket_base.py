@@ -88,6 +88,7 @@ async def async_recv_msg(reader, timeout=-1):
 
 async def async_send_msg(writer, msg):
     """异步地发送带长度前缀的消息"""
+    msg = msg.encode() if isinstance(msg, str) else msg
     msg = struct.pack('>I', len(msg)) + msg
     writer.write(msg)
     await writer.drain()
