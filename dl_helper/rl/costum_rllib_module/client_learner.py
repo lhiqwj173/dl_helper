@@ -27,7 +27,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
-from dl_helper.rl.socket_base import async_recv_msg, _async_send_gradients
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
@@ -445,8 +445,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
                 # 发送连接类型
-                writer.write(send_msg(None, f'{CODE}_long', return_bytes=True))
-                await writer.drain()
+                await async_send_msg(writer, f'{CODE}_long')
 
                 send_count = 0
                 while True:
