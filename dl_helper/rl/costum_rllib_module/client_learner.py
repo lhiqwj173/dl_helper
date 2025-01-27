@@ -286,12 +286,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count = 0
 
         # 参数传输线程， 只有主 learner 需要
-        self.thread0 = None
+        self.thread_list = []
         self.param_q = None
         self.param_done_q = None
 
         # 梯度传输线程， 只有主 learner 需要
-        self.thread1 = None
         self.grad_q = None
 
         # learner 之间的同步 
@@ -315,12 +314,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
-            self.thread0 = threading.Thread(target=self.param_thread)
-            self.thread0.start()
+            self.thread_list.append(threading.Thread(target=self.param_thread))
+            self.thread_list[-1].start()
 
             self.grad_q = queue.Queue()
-            self.thread1 = threading.Thread(target=self.grad_thread)
-            self.thread1.start()
+            for _idx in range(3):
+                self.thread_list.append(threading.Thread(target=self.grad_thread, args=(_idx,)))
+                self.thread_list[-1].start()
 
     def param_thread(self):
         """
@@ -372,11 +372,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         finally:
             _socket.close()
 
-    def grad_thread(self):
+    def grad_thread(self, idx):
         """
         推送本地梯度
         """
-        log(f"[{self.client_id}] grad_thread start")
+        log(f"[{self.client_id}] grad_thread {idx} start")
         send_count = 0
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -412,7 +412,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             raise e
         finally:
             _socket.close()
-
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
