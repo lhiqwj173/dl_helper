@@ -4,6 +4,7 @@ try:
 except:
     log = print
 
+import asyncio
 import socket, time, os, re
 import pickle
 import struct
@@ -39,6 +40,57 @@ def send_msg(sock, msg):
     msg = msg.encode() if isinstance(msg, str) else msg
     msg = struct.pack('>I', len(msg)) + msg
     sock.sendall(msg)
+
+async def async_recvall(reader, n, timeout=10.0):
+    """异步地从流中读取指定字节数的数据
+    timeout: 超时时间，-1表示不设置超时
+    """
+    # log(f"开始接收 {n} 字节数据...")  # 添加日志
+    data = bytearray()
+    while len(data) < n:
+        try:
+            if timeout == -1:
+                packet = await reader.read(n - len(data))
+            else:
+                packet = await asyncio.wait_for(
+                    reader.read(n - len(data)),
+                    timeout=timeout  # 添加超时设置
+                )
+            if not packet:
+                # log("连接已关闭，接收到空数据包")
+                return None
+            # log(f"接收到数据包，大小: {len(packet)} 字节")  # 添加日志
+            data.extend(packet)
+        except asyncio.TimeoutError:
+            # log("接收数据超时")
+            return None
+        except Exception as e:
+            # log(f"接收数据时发生错误: {str(e)}")
+            return None
+    # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
+    return data
+
+async def async_recv_msg(reader, timeout=-1):
+    """异步地接收带长度前缀的消息
+    timeout: 超时时间，-1表示不设置超时
+    """
+    # log("开始接收消息长度前缀...")  # 添加日志
+    # 接收4字节的长度前缀
+    raw_msglen = await async_recvall(reader, 4, timeout)
+    if not raw_msglen:
+        # log("未能接收到消息长度前缀")
+        return None
+    # 解析消息长度
+    msglen = struct.unpack('>I', raw_msglen)[0]
+    # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
+    # 接收消息内容
+    return await async_recvall(reader, msglen, timeout)
+
+async def async_send_msg(writer, msg):
+    """异步地发送带长度前缀的消息"""
+    msg = struct.pack('>I', len(msg)) + msg
+    writer.write(msg)
+    await writer.drain()
 
 def _connect_server_apply(func, *args, **kwargs):
     """连接到参数中心服务器, 并应用函数
@@ -97,6 +149,15 @@ def _send_gradients(_socket, train_title, grads, compress_info, version):
     # 发送累积梯度
     data = pickle.dumps((grads, compress_info, version))
     send_msg(_socket, data)
+
+async def _async_send_gradients(writer, train_title, grads, compress_info, version):
+    # 发送梯度请求
+    message = f'{train_title}:update_gradients'
+    await async_send_msg(writer, message.encode())
+    
+    # 发送累积梯度
+    data = pickle.dumps((grads, compress_info, version))
+    await async_send_msg(writer, data)
 
 def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""

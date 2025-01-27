@@ -14,6 +14,8 @@ import numpy as np
 import torch
 import queue
 import time
+import asyncio
+from asyncio import Queue as AsyncQueue
 import copy, pickle
 from typing import Dict, Any
 import requests
@@ -25,6 +27,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
+from dl_helper.rl.socket_base import async_recv_msg, _async_send_gradients
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
@@ -286,12 +289,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count = 0
 
         # 参数传输线程， 只有主 learner 需要
-        self.thread_list = []
+        self.thread_param = None
         self.param_q = None
         self.param_done_q = None
 
-        # 梯度传输线程， 只有主 learner 需要
+        # 修改队列为异步队列
         self.grad_q = None
+        # 添加事件循环
+        self.loop = None
+        self.grad_tasks = []
 
         # learner 之间的同步 
         self.load_param_event = Event(name=f'load_param_event')# 等待主learner同步
@@ -314,13 +320,28 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
-            self.thread_list.append(threading.Thread(target=self.param_thread))
+            self.thread_param = threading.Thread(target=self.param_thread)
+            self.thread_param.start()
+
+            # 创建事件循环
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            
+            # 创建异步队列
+            self.grad_q = AsyncQueue(maxsize=30)
+            
+            # 启动3个协程任务
+            for _idx in range(3):
+                task = self.loop.create_task(self.grad_coroutine(_idx))
+                self.grad_tasks.append(task)
+            
+            # 在新线程中运行事件循环
+            self.thread_list.append(threading.Thread(target=self._run_event_loop))
             self.thread_list[-1].start()
 
-            self.grad_q = queue.Queue()
-            for _idx in range(3):
-                self.thread_list.append(threading.Thread(target=self.grad_thread, args=(_idx,)))
-                self.thread_list[-1].start()
+    def _run_event_loop(self):
+        """运行事件循环"""
+        self.loop.run_forever()
 
     def param_thread(self):
         """
@@ -401,7 +422,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 # 发送梯度
                 _send_gradients(_socket, self.train_title, compressed_grads, compress_info, self.version)
-                log(f"[{send_count}] send gradients done")
+                log(f"[{idx}][{send_count}] send gradients done")
                 send_count += 1
 
                 if count % need_res_time == 0:
@@ -412,6 +433,50 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             raise e
         finally:
             _socket.close()
+
+    async def grad_coroutine(self, idx):
+        """
+        梯度协程
+        """
+        log(f"[{self.client_id}] grad_coroutine {idx} start")
+
+        while True:
+            try:
+                # 创建异步socket连接
+                reader, writer = await asyncio.open_connection(HOST, PORT)
+                # 发送连接类型
+                writer.write(send_msg(None, f'{CODE}_long', return_bytes=True))
+                await writer.drain()
+
+                send_count = 0
+                while True:
+                    # 获取汇总梯度
+                    merged_gradients = await self.grad_q.get()
+                    
+                    # 压缩梯度
+                    compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+
+                    # 发送梯度
+                    await _async_send_gradients(writer, self.train_title, compressed_grads, compress_info, self.version)
+                    log(f"[{idx}][{send_count}] send gradients done")
+                    send_count += 1
+
+                    # 每10次接收一次响应
+                    if send_count % 10 == 0:
+                        await async_recv_msg(reader)
+
+            except Exception as e:
+                log(f"[{idx}] 连接服务器失败: {str(e)}")
+                # 关闭连接
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except:
+                    pass
+                    
+                # 等待一段时间后重试
+                await asyncio.sleep(5)
+
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
@@ -463,8 +528,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 汇总梯度
                     log(f'merge gradients')
                     gradients_to_send = self.gradient_accumulator.merge_gradients()
-                    # 加入推送队列
-                    self.grad_q.put(gradients_to_send)
+                    # # 加入推送队列
+                    # self.grad_q.put(gradients_to_send)
+                    # 使用异步队列
+                    asyncio.run_coroutine_threadsafe(
+                        self.grad_q.put(cpu_gradients), 
+                        self.loop
+                    )
 
                     if self.apply_last_grad:
                         # 需要替换梯度
@@ -473,8 +543,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         # 2. 触发梯度更新事件
                         self.shared_param.grad_event.set()
             else:
-                # 加入推送队列
-                self.grad_q.put(cpu_gradients)
+                # # 加入推送队列
+                # self.grad_q.put(cpu_gradients)
+                # 使用异步队列
+                asyncio.run_coroutine_threadsafe(
+                    self.grad_q.put(cpu_gradients), 
+                    self.loop
+                )
             
             log(f'grad_q: {self.grad_q.qsize()}')
             report_memory_usage(f'[{self.update_count}][3]')
