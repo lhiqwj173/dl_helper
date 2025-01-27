@@ -289,7 +289,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count = 0
 
         # 参数传输线程， 只有主 learner 需要
-        self.thread_param = None
+        self.thread_list = []
         self.param_q = None
         self.param_done_q = None
 
@@ -320,8 +320,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
-            self.thread_param = threading.Thread(target=self.param_thread)
-            self.thread_param.start()
+            self.thread_list.append(threading.Thread(target=self.param_thread))
+            self.thread_list[-1].start()
 
             # 创建事件循环
             self.loop = asyncio.new_event_loop()
