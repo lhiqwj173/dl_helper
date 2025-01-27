@@ -24,7 +24,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
-from dl_helper.rl.socket_base import HOST, PORT, send_msg, CODE, _get_server_weights, _send_gradients
+from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
@@ -331,8 +331,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connected = False
+
+        count = 0
+        need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
         try:
             while True:
+                count += 1
+                
                 # 请求参数的轮次
                 ask_update_count = self.param_q.get()
                 if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
@@ -358,6 +363,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self.shared_param.param_event.set()
                 log(f"[{self.client_id}] update latest server weights done")
 
+                if count % need_res_time == 0:
+                    recv_msg(_socket)
+
         except Exception as e:
             log(f"连接服务器失败")
             raise e
@@ -373,8 +381,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connected = False
+        count = 0
+        need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
         try:
             while True:
+                count += 1
+
                 # 获取汇总梯度
                 merged_gradients = self.grad_q.get()
 
@@ -391,6 +403,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 _send_gradients(_socket, self.train_title, compressed_grads, compress_info, self.version)
                 log(f"[{send_count}] send gradients done")
                 send_count += 1
+
+                if count % need_res_time == 0:
+                    recv_msg(_socket)
 
         except Exception as e:
             log(f"连接服务器失败")

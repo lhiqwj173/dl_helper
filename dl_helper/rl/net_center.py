@@ -254,6 +254,7 @@ class AsyncSocketServer:
             
             handler = None
             count = 0
+            need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
             while con_times == 0 or count < con_times:
                 count += 1
 
@@ -288,6 +289,10 @@ class AsyncSocketServer:
 
                 #完整的一次数据交互 
                 safe_connect = True
+
+                # 3. 回复客户端
+                if count % need_res_time == 0:
+                    await async_send_msg(writer, b'ok')
 
             # 3. 关闭连接
             return

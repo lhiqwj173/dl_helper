@@ -1,5 +1,6 @@
 import torch, time, math
 import multiprocessing
+import asyncio
 
 import numpy as np
 import pickle, requests
@@ -214,7 +215,7 @@ class ExperimentHandler:
             share_data_new_event.wait()
             share_data_new_event.clear()
 
-            log(f'{train_title} calculate active')
+            # log(f'{train_title} calculate active')
 
             with share_gradients_lock:
                 temp_length = gradients_cache_share[0].size()
@@ -385,7 +386,7 @@ class ExperimentHandler:
             share_data_new_event.wait()
             share_data_new_event.clear()
 
-            log(f'{train_title} calculate active')
+            # log(f'{train_title} calculate active')
 
             with share_gradients_lock:
                 temp_length = gradients_cache_share[0].size()
@@ -414,10 +415,12 @@ class ExperimentHandler:
                 # log(f'update gradients')
                 param_server.apply_gradients(gs, version)
                 
-                # 每4次更新生成一次参数缓存
-                if (idx + 1) % 4 == 0 or idx == temp_length - 1:
-                    # 拷贝一份模型数据，交由cpu压缩生成缓存
-                    copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
+                # # 每4次更新生成一次参数缓存
+                # if (idx + 1) % 4 == 0 or idx == temp_length - 1:
+                #     # 拷贝一份模型数据，交由cpu压缩生成缓存
+                #     copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
+                # 拷贝一份模型数据，交由cpu压缩生成缓存
+                copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
 
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
@@ -503,16 +506,24 @@ class ExperimentHandler:
             self.gradients_info_share_q.put((compress_info, version))
             # 提交到共享梯度
             # log(f'put gradients')
-            with self.share_gradients_lock:
-                for idx, _g in enumerate(g):
-                    # log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
-                    self.gradients_cache_share[idx].append(_g)
-                gradients_cache_share_length = self.gradients_cache_share[0].size()
+            
+            while True:
+                with self.share_gradients_lock:
+                    gradients_cache_share_length = self.gradients_cache_share[0].size()
+                    if gradients_cache_share_length < 30:
+                        for idx, _g in enumerate(g):
+                            # log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
+                            self.gradients_cache_share[idx].append(_g)
+                        gradients_cache_share_length += 1
+                        break
+                # 释放锁并等待
+                log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
+                await asyncio.sleep(0.1)
 
-            if gradients_cache_share_length > 15:
-                log(f'{msg_header} gradients_cache_share_length > 15')
-                import sys
-                sys.exit()
+            # if gradients_cache_share_length > 30:
+            #     log(f'{msg_header} gradients_cache_share_length > 15')
+            #     import sys
+            #     sys.exit()
 
             # 通知新梯度
             # log(f'set share data new event')
