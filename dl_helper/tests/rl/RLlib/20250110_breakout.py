@@ -91,7 +91,7 @@ if __name__ == "__main__":
         # 训练循环
         # rounds = 2000
         rounds = 100
-        # rounds = 5
+        rounds = 5
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
