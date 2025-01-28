@@ -188,6 +188,7 @@ class AsyncSocketServer:
         self.clients.add(writer)
         msg_header = f'[{client_ip:<15} {client_port:<5}]'
         log(f"{msg_header} connected")
+        msg_header_add_title = False
 
         try:
             # 接收 CODE_one/long
@@ -203,8 +204,6 @@ class AsyncSocketServer:
 
             # 连接类型 1次/长连接
             con_times = 1 if _type == 'one' else 0
-            
-            msg_header_add_title = False
             
             handler = None
             count = 0
