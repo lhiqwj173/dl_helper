@@ -27,7 +27,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_get_server_weights
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
 from dl_helper.tool import report_memory_usage
@@ -297,7 +297,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.grad_q = None
         # 添加事件循环
         self.loop = None
-        self.grad_tasks = []
+        self.tasks = []
 
         # learner 之间的同步 
         self.load_param_event = Event(name=f'load_param_event')# 等待主learner同步
@@ -320,8 +320,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 主learner
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
-            self.thread_list.append(threading.Thread(target=self.param_thread))
-            self.thread_list[-1].start()
 
             # 创建事件循环
             self.loop = asyncio.new_event_loop()
@@ -333,7 +331,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 启动10个协程任务
             for _idx in range(10):
                 task = self.loop.create_task(self.grad_coroutine(_idx))
-                self.grad_tasks.append(task)
+                self.tasks.append(task)
+
+            # 启动参数协程
+            task = self.loop.create_task(self.param_coroutine())
+            self.tasks.append(task)
             
             # 在新线程中运行事件循环
             self.thread_list.append(threading.Thread(target=self._run_event_loop))
@@ -476,9 +478,56 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 except:
                     pass
                     
-                # 等待一段时间后重试
-                await asyncio.sleep(5)
+    async def param_coroutine(self):
+        """
+        获取服务器参数
+        """
+        log(f"[{self.client_id}] param_coroutine start")
+        last_ask_update_count = 0
 
+        while True:
+            try:
+                # 创建异步socket连接
+                reader, writer = await asyncio.open_connection(HOST, PORT)
+                # 发送连接类型
+                await async_send_msg(writer, f'{CODE}_long')
+
+                send_count = 0
+                while True:
+                    # 请求参数的轮次
+                    ask_update_count = self.param_q.get()
+                    if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
+                        # 等待最小同步间隔
+                        continue
+
+                    last_ask_update_count = ask_update_count
+                    log(f"[{last_ask_update_count}] request server weights")
+                    send_count += 1
+
+                    # 获取参数
+                    params_list, info, self.version = await _async_get_server_weights(writer, reader, self.train_title, self.version)
+                    # 解压参数
+                    params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+                    # 更新共享参数
+                    self.shared_param.set_param(params_dict)
+                    # 触发共享参数更新事件
+                    self.shared_param.param_event.set()
+                    log(f"[{self.client_id}] update latest server weights done")
+
+                    # 每10次接收一次响应
+                    if send_count % 10 == 0:
+                        log(f"wait response")
+                        await async_recv_msg(reader)
+                        log(f"recv response done")
+
+            except Exception as e:
+                log(f"连接服务器失败: {str(e)}")
+                # 关闭连接
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except:
+                    pass
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%

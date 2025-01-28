@@ -114,6 +114,17 @@ def _connect_server_apply(func, *args, **kwargs):
     finally:
         _socket.close()
 
+def _handle_response_params(response):
+    if response is None:
+        raise Exception('Failed to receive parameters')
+    # 反序列化参数
+    try:
+        weights, info, version = pickle.loads(response)
+    except Exception as e:
+        print(f"反序列化失败: {e}")
+        raise e
+    return weights, info, version
+
 def _get_server_weights(_socket, train_title, version):
     # 发送获取参数请求
     message = f'{train_title}:get@{version}'
@@ -125,15 +136,20 @@ def _get_server_weights(_socket, train_title, version):
         raise Exception('Failed to receive parameters')
         
     # 反序列化参数
-    try:
-        weights, info, version = pickle.loads(response)
-    except Exception as e:
-        print(f"反序列化失败: {e}")
-        with open('debug_pickle.pkl', 'wb') as f:
-            f.write(response)
-        print(f'已保存到 debug_pickle.pkl')
-        raise e
-    return weights, info, version
+    return _handle_response_params(response)
+
+async def _async_get_server_weights(writer, reader, train_title, version):
+    # 发送获取参数请求
+    message = f'{train_title}:get@{version}'
+    await async_send_msg(writer, message.encode())
+
+    # 接收参数数据
+    response = await async_recv_msg(reader)
+    if response is None:
+        raise Exception('Failed to receive parameters')
+    
+    # 反序列化参数
+    return _handle_response_params(response)
 
 def get_server_weights(train_title, version=-1):
     """
