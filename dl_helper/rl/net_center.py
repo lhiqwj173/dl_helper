@@ -188,7 +188,6 @@ class AsyncSocketServer:
         self.clients.add(writer)
         log(f"Client connected from {peer}")
 
-        safe_connect = False
         try:
             # 接收 CODE_one/long
             data = await async_recv_msg(reader, timeout=3)
@@ -238,13 +237,12 @@ class AsyncSocketServer:
                 res = await handler.async_handle_request(msg_header, cmd, data)
                 if res:
                     await async_send_msg(writer, res)
-
-                #完整的一次数据交互 
-                safe_connect = True
+                    log(f'{msg_header}  params sended')
 
                 # 3. 回复客户端
                 if count % need_res_time == 0:
                     await async_send_msg(writer, b'ok')
+                    log(f'{msg_header} response sended')
 
             # 3. 关闭连接
             return

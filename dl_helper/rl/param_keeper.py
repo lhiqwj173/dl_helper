@@ -410,7 +410,7 @@ class ExperimentHandler:
                 # 解压梯度
                 # log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
-                pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
+                # pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
                 gs = gradient_compressor.decompress(gs, info)
                 # 更新梯度
                 # log(f'update gradients')
@@ -484,6 +484,7 @@ class ExperimentHandler:
     async def async_handle_request(self, msg_header, cmd, data):
         """异步处理客户端请求"""
         if cmd.startswith('get@'):
+            log(f'{msg_header} recv get request')
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
 
             # 返回 共享参数
@@ -497,11 +498,11 @@ class ExperimentHandler:
                 # 取出再放回， 保证队列中仍有数据
                 info, v = self.params_info_share_q.get()
                 self.params_info_share_q.put((info, v))
-            log(f'{msg_header} send params, version: {v}')
+            log(f'{msg_header} prepare params, version: {v}')
             return pickle.dumps((params, info, v))
 
         elif cmd == 'update_gradients':
-            log(f'{msg_header} update gradients')
+            log(f'{msg_header} recv update_gradients request')
             gradients_cache_share_length = 0
             g, compress_info, version = pickle.loads(data)
             # 提交到共享梯度信息队列
