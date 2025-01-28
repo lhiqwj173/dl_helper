@@ -186,6 +186,7 @@ class AsyncSocketServer:
         #     return
 
         self.clients.add(writer)
+        msg_header = f'[{client_ip:<15} {client_port:<5}]'
         log(f"{msg_header} connected")
 
         try:
@@ -233,7 +234,7 @@ class AsyncSocketServer:
                         handler = self.handlers[train_title]
 
                 # 2.2 处理指令
-                msg_header = f'[{client_ip:<15} {client_port:<5}][{train_title}]'
+                msg_header += f'[{train_title}]'
                 res = await handler.async_handle_request(msg_header, cmd, data)
                 if res:
                     await async_send_msg(writer, res)
