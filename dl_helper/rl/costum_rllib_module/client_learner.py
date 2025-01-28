@@ -309,10 +309,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 只有主 learner 需要初始化
         ####################
 
-        # learner 之间的同步 
-        self.load_param_event = Event(name=f'load_param_event')# 等待主learner同步
-        self.main_learner_ready_event = Event(name=f'main_learner_ready_event')# 被设置，说明需要更新参数
-        
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
@@ -515,9 +511,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 请求参数的轮次
                     ask_update_count = self.param_q.get()
-                    if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
-                        # 等待最小同步间隔
-                        continue
 
                     last_ask_update_count = ask_update_count
                     log(f"[{last_ask_update_count}] request server weights")
@@ -569,16 +562,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             report_memory_usage(f'[{self.update_count}][0]')
 
-            # 每次都请求，使用最大同步间隔(与每次同步耗时共同影响)来控制同步频率
-            # 主learner 触发请求服务器参数事件
-            # 参数线程开始获取服务器参数 》 暂时默认本次update应用拉取的参数  TODO
-            #    本次update应用:    拉取的参数少了本次推送的梯度, apply_gradients函数中覆盖本地参数后需要应用本次的推送梯度
-            #    n次update后应用:   已默认允许延迟，故不再应用梯度
-            self.param_q.put(self.update_count)
+            # 按照梯度同步频率请求服务器参数
+            if self.update_count % self.gradient_sync_frequency == 0:
+                log(f'[{self.update_count}] request param and reset event')
+                self.param_q.put(self.update_count)
+                # 重置event
+                self.shared_param.param_event.clear()
 
-            # 清空learner之间同步的事件
-            self.main_learner_ready_event.clear()
-            self.load_param_event.clear()
+            # 清空梯度事件
             self.shared_param.grad_event.clear()
 
             report_memory_usage(f'[{self.update_count}][1]')
@@ -655,57 +646,31 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
-        # compress nouse1 100 iter about 3.39H -49%
-        # nouse1 100 iter about 3.63H -46%
-        # 拉取模型 并同步到所有learner上
-        # 检查参数是否拉取完毕
-        if self.client_id != 0:
-            # 等待主learner同步
-            log(f'[not main learner] wait main learner')
-            self.main_learner_ready_event.wait()
-        else:
-            report_memory_usage(f'[{self.update_count}][4]')
-
-            # 主learner检查是否是否有参数准备好
-            if self.shared_param.param_event.is_set():
-                # 其他learner需要load参数
-                log(f'[main learner] set load param event')
-                self.load_param_event.set()
-            # 触发其他learner继续向后执行
-            log(f'[main learner] all go on')
-            self.main_learner_ready_event.set()
-
-            report_memory_usage(f'[{self.update_count}][5]')
-
-        if self.load_param_event.is_set():
+        # 是否需要等待新参数就绪并应用, (可选是否应用最近的一次梯度)
+        if self.update_count % self.gradient_sync_frequency == 0:
+            # 正确处理最后一次的梯度
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
                 log(f'[{self.client_id}] wait shared grad set')
                 self.shared_param.grad_event.wait()
-                self.shared_param.grad_event.clear()
                 # 替换应用梯度
                 self.shared_param.apply_grad_to_local(self)
             else:
                 # 已经存在正确的梯度
                 pass
 
-            if self.client_id == 0:
-                report_memory_usage(f'[{self.update_count}][6]')
-
+            # 等待并应用新的参数
+            # 等待参数就绪
+            log(f'[{self.client_id}] wait param ready')
+            self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
             log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
-            if self.client_id == 0:
-                report_memory_usage(f'[{self.update_count}][7]')
-
+            # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
             if self.apply_last_grad:
-                # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
                 super().apply_gradients(*args, **kwargs)
-            # nouse0
-        # nouse1
-        # 非同步模型，则不需要应用梯度
 
     def after_gradient_based_update(self, *args, **kwargs):
         # 重置
