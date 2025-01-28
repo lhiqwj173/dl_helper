@@ -22,6 +22,9 @@ import requests
 import threading
 import socket
 
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+
 from py_ext.tool import safe_share_memory, share_tensor, log, Event
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
@@ -288,16 +291,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 更新计数
         self.update_count = 0
 
-        # 参数传输线程， 只有主 learner 需要
+        ####################
+        # 只有主 learner 需要初始化
+        ####################
+        # 参数传输线程， 
         self.thread_list = []
         self.param_q = None
         self.param_done_q = None
-
         # 修改队列为异步队列
         self.grad_q = None
         # 添加事件循环
         self.loop = None
         self.tasks = []
+        # 添加进程池
+        self.process_pool = None
+        ####################
+        # 只有主 learner 需要初始化
+        ####################
 
         # learner 之间的同步 
         self.load_param_event = Event(name=f'load_param_event')# 等待主learner同步
@@ -318,6 +328,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
+            self.process_pool = ProcessPoolExecutor(max_workers=2)  # 可以根据需要调整进程数
+
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
 
@@ -455,8 +467,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     merged_gradients = await self.grad_q.get()
                     log(f"[{idx}] queue size: {self.grad_q.qsize()}")
                     
-                    # 压缩梯度
-                    compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+                    # # 压缩梯度
+                    # compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+                    # 在进程池中执行压缩操作
+                    loop = asyncio.get_event_loop()
+                    compressed_result = await loop.run_in_executor(
+                        self.process_pool,
+                        partial(self.gradient_compressor.compress, merged_gradients)
+                    )
+                    compressed_grads, compress_info = compressed_result
 
                     # 发送梯度
                     await _async_send_gradients(writer, self.train_title, compressed_grads, compress_info, self.version)
@@ -507,7 +526,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 获取参数
                     params_list, info, self.version = await _async_get_server_weights(writer, reader, self.train_title, self.version)
                     # 解压参数
-                    params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+                    # params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+                    # 在进程池中执行解压操作
+                    loop = asyncio.get_event_loop()
+                    decompressed_result = await loop.run_in_executor(
+                        self.process_pool,
+                        partial(self.param_compressor.decompress_params_dict, params_list, info)
+                    )
+                    params_dict = decompressed_result
                     # 更新共享参数
                     self.shared_param.set_param(params_dict)
                     # 触发共享参数更新事件
