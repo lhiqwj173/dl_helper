@@ -328,7 +328,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.process_pool = ProcessPoolExecutor(max_workers=2)  # 可以根据需要调整进程数
+            self.process_pool = ProcessPoolExecutor(max_workers=3)  # 可以根据需要调整进程数
 
             self.param_q = queue.Queue()
             self.param_done_q = queue.Queue()
