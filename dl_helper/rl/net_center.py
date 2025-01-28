@@ -186,16 +186,16 @@ class AsyncSocketServer:
         #     return
 
         self.clients.add(writer)
-        log(f"Client connected from {peer}")
+        log(f"{msg_header} connected")
 
         try:
             # 接收 CODE_one/long
-            data = await async_recv_msg(reader, timeout=3)
-            data_str = data.decode()
-            log(f'data_str: {data_str}')
+            res = await async_recv_msg(reader, timeout=3)
+            data_str = res.decode()
+            # log(f'{msg_header} recv data_str: {data_str}')
             # 验证CODE
             _code, _type = data_str.split('_', maxsplit=1)
-            log(f'code: {_code}, type: {_type}')
+            log(f'{msg_header} code: {_code}, type: {_type}')
             if _code != CODE and _type not in ['one', 'long']:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')

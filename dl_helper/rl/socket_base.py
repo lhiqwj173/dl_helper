@@ -44,6 +44,7 @@ def send_msg(sock, msg):
 async def async_recvall(reader, n, timeout=10.0):
     """异步地从流中读取指定字节数的数据
     timeout: 超时时间，-1表示不设置超时
+    返回值: 读取到的数据
     """
     # log(f"开始接收 {n} 字节数据...")  # 添加日志
     data = bytearray()
@@ -57,34 +58,33 @@ async def async_recvall(reader, n, timeout=10.0):
                     timeout=timeout  # 添加超时设置
                 )
             if not packet:
-                # log("连接已关闭，接收到空数据包")
-                return None
+                log("连接已关闭，接收到空数据包")
+                raise Exception('connect closed unexpectedly')
+
             # log(f"接收到数据包，大小: {len(packet)} 字节")  # 添加日志
             data.extend(packet)
         except asyncio.TimeoutError:
-            # log("接收数据超时")
-            return None
+            log("接收数据超时")
+            raise Exception('recv timeout')
         except Exception as e:
-            # log(f"接收数据时发生错误: {str(e)}")
-            return None
+            raise e
     # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
     return data
 
 async def async_recv_msg(reader, timeout=-1):
     """异步地接收带长度前缀的消息
     timeout: 超时时间，-1表示不设置超时
+    返回值: 读取到的数据
     """
     # log("开始接收消息长度前缀...")  # 添加日志
     # 接收4字节的长度前缀
     raw_msglen = await async_recvall(reader, 4, timeout)
-    if not raw_msglen:
-        # log("未能接收到消息长度前缀")
-        return None
     # 解析消息长度
     msglen = struct.unpack('>I', raw_msglen)[0]
     # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
     # 接收消息内容
-    return await async_recvall(reader, msglen, timeout)
+    res = await async_recvall(reader, msglen, timeout)
+    return res
 
 async def async_send_msg(writer, msg):
     """异步地发送带长度前缀的消息"""
@@ -139,14 +139,20 @@ def _get_server_weights(_socket, train_title, version):
     return _handle_response_params(response)
 
 async def _async_get_server_weights(writer, reader, train_title, version):
+    """
+    获取服务器参数
+    返回: 
+        weights, info, version
+        None: 连接已关闭 / 0:超时
+    """
     # 发送获取参数请求
     message = f'{train_title}:get@{version}'
     await async_send_msg(writer, message.encode())
 
     # 接收参数数据
     response = await async_recv_msg(reader)
-    if response is None:
-        raise Exception('Failed to receive parameters')
+    if response in [-1, 0]:
+        return None
     
     # 反序列化参数
     return _handle_response_params(response)

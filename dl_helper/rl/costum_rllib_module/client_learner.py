@@ -502,7 +502,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         获取服务器参数
         """
         log(f"[{self.client_id}] param_coroutine start")
-        last_ask_update_count = 0
 
         while True:
             try:
@@ -511,6 +510,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 发送连接类型
                 await async_send_msg(writer, f'{CODE}_long')
 
+                last_ask_update_count = 0
                 send_count = 0
                 while True:
                     # 请求参数的轮次
