@@ -177,11 +177,13 @@ class AsyncSocketServer:
                           writer: asyncio.StreamWriter):
         peer = writer.get_extra_info('peername')
         client_ip, client_port = peer
-        # 0. 检查是否被block
-        if self.block_ips.is_blocked(client_ip):
-            log(f"Blocked connection from {client_ip}")
-            writer.close()  # 对于被block的连接，直接关闭即可
-            return
+
+        # 内网穿透后不需要block
+        # # 0. 检查是否被block
+        # if self.block_ips.is_blocked(client_ip):
+        #     log(f"Blocked connection from {client_ip}")
+        #     writer.close()  # 对于被block的连接，直接关闭即可
+        #     return
 
         self.clients.add(writer)
         log(f"Client connected from {peer}")
@@ -251,8 +253,9 @@ class AsyncSocketServer:
             log(f"Connection error from client {peer}\n{get_exception_msg()}")
         except Exception as e:
             log(f"Error handling client {peer}\n{get_exception_msg()}")
-            if not safe_connect:
-                self.block_ips.add(client_ip)
+            # 内网穿透后不需要block
+            # if not safe_connect:
+            #     self.block_ips.add(client_ip)
         finally:
             self.clients.remove(writer)
             if not writer.is_closing():

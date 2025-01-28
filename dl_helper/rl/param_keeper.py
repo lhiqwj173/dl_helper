@@ -410,6 +410,7 @@ class ExperimentHandler:
                 # 解压梯度
                 # log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
+                pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
                 gs = gradient_compressor.decompress(gs, info)
                 # 更新梯度
                 # log(f'update gradients')
