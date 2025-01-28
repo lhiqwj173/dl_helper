@@ -521,6 +521,7 @@ class ExperimentHandler:
                             self.gradients_cache_share[idx].append(_g)
                         gradients_cache_share_length += 1
                         break
+                    
                 # 释放锁并等待
                 log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
                 await asyncio.sleep(0.1)

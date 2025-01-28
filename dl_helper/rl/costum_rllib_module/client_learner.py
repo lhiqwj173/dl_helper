@@ -555,6 +555,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 except:
                     pass
 
+    async def log_size(self):
+        return self.grad_q.qsize()
+
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
     # all use 100 iter about 6.73H 
@@ -608,9 +611,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # # 加入推送队列
                     # self.grad_q.put(gradients_to_send)
                     # 使用异步队列
+                    await_put = self.grad_q.put(gradients_to_send)
+                    await_log = self.log_size()
+                    
                     asyncio.run_coroutine_threadsafe(
-                        self.grad_q.put(cpu_gradients), 
+                        asyncio.gather(await_put, await_log), 
                         self.loop
+                    ).add_done_callback(
+                        lambda fut: log(f"当前梯度队列大小: {fut.result()[1]}")
                     )
 
                     if self.apply_last_grad:
@@ -623,9 +631,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # # 加入推送队列
                 # self.grad_q.put(cpu_gradients)
                 # 使用异步队列
+                await_put = self.grad_q.put(cpu_gradients)
+                await_log = self.log_size()
+                
                 asyncio.run_coroutine_threadsafe(
-                    self.grad_q.put(cpu_gradients), 
+                    asyncio.gather(await_put, await_log), 
                     self.loop
+                ).add_done_callback(
+                    lambda fut: log(f"当前梯度队列大小: {fut.result()[1]}")
                 )
             
             report_memory_usage(f'[{self.update_count}][3]')
