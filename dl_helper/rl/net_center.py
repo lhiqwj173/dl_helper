@@ -191,7 +191,7 @@ class AsyncSocketServer:
 
         try:
             # 接收 CODE_one/long
-            res = await async_recv_msg(reader, timeout=3)
+            res = await async_recv_msg(reader, timeout=10)
             data_str = res.decode()
             # log(f'{msg_header} recv data_str: {data_str}')
             # 验证CODE
@@ -203,6 +203,8 @@ class AsyncSocketServer:
 
             # 连接类型 1次/长连接
             con_times = 1 if _type == 'one' else 0
+            
+            msg_header_add_title = False
             
             handler = None
             count = 0
@@ -216,6 +218,9 @@ class AsyncSocketServer:
 
                 # 1.2 分解指令
                 train_title, cmd = a.split(':', maxsplit=1)
+                if not msg_header_add_title:
+                    msg_header += f'[{train_title}]'
+                    msg_header_add_title = True
 
                 # 1.3 获取数据
                 data = None
@@ -234,7 +239,6 @@ class AsyncSocketServer:
                         handler = self.handlers[train_title]
 
                 # 2.2 处理指令
-                msg_header += f'[{train_title}]'
                 res = await handler.async_handle_request(msg_header, cmd, data)
                 if res:
                     await async_send_msg(writer, res)
