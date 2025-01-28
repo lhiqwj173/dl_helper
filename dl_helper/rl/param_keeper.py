@@ -274,7 +274,7 @@ class ExperimentHandler:
                 for idx, p in enumerate(params_list):
                     params_cache_share[idx].data[:] = p[:]
                     
-        log(f'{train_title} calculate cpu init')
+        log(f'[CC]{train_title} calculate cpu init')
 
         # 参数压缩器
         param_compressor = ParamCompressor()
@@ -326,7 +326,7 @@ class ExperimentHandler:
                     params_cache_share_float32[idx].data[:] = v[:]
                 params_float32_ver_share_q.put(version)
 
-        log(f'{train_title} calculate gpu init')
+        log(f'[CG]{train_title} calculate gpu init')
 
         # 参数服务器
         config = config.learners(    
@@ -400,7 +400,7 @@ class ExperimentHandler:
                 for idx in range(temp_length):
                     gradients_cache_info_temp.append(gradients_info_share_q.get())  
 
-            log(f'{train_title} wait gradients: {temp_length}')
+            log(f'[CG]{train_title} wait gradients: {temp_length}')
 
             # 计算梯度
             for idx in range(temp_length):
@@ -421,6 +421,8 @@ class ExperimentHandler:
                 #     copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
                 # 拷贝一份模型数据，交由cpu压缩生成缓存
                 copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
+            
+            log(f'[CG]{train_title} done')   
 
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
@@ -526,7 +528,7 @@ class ExperimentHandler:
                     log(f'{msg_header} wait gradients timeout')
                     import sys
                     sys.exit()
-                    
+
             # if gradients_cache_share_length > 30:
             #     log(f'{msg_header} gradients_cache_share_length > 15')
             #     import sys
