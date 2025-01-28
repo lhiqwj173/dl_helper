@@ -451,6 +451,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 获取汇总梯度
                     merged_gradients = await self.grad_q.get()
+                    log(f"[{idx}] queue size: {self.grad_q.qsize()}")
                     
                     # 压缩梯度
                     compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
@@ -462,7 +463,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
+                        log(f"[{idx}] wait response")
                         await async_recv_msg(reader)
+                        log(f"[{idx}] recv response done")
 
             except Exception as e:
                 log(f"[{idx}] 连接服务器失败: {str(e)}")
@@ -550,7 +553,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     self.loop
                 )
             
-            log(f'grad_q: {self.grad_q.qsize()}')
             report_memory_usage(f'[{self.update_count}][3]')
 
         # nouse3
