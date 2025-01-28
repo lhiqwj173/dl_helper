@@ -507,6 +507,7 @@ class ExperimentHandler:
             # 提交到共享梯度
             # log(f'put gradients')
             
+            wait_count = 0
             while True:
                 with self.share_gradients_lock:
                     gradients_cache_share_length = self.gradients_cache_share[0].size()
@@ -520,6 +521,12 @@ class ExperimentHandler:
                 log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
                 await asyncio.sleep(0.1)
 
+                wait_count += 1
+                if wait_count > 10:
+                    log(f'{msg_header} wait gradients timeout')
+                    import sys
+                    sys.exit()
+                    
             # if gradients_cache_share_length > 30:
             #     log(f'{msg_header} gradients_cache_share_length > 15')
             #     import sys
