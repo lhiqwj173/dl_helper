@@ -518,6 +518,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 获取参数
                     params_list, info, self.version = await _async_get_server_weights(writer, reader, self.train_title, self.version)
+                    log(f"[{last_ask_update_count}] recv params data")
                     # 解压参数
                     # params_dict = self.param_compressor.decompress_params_dict(params_list, info)
                     # 在进程池中执行解压操作
@@ -526,9 +527,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         self.process_pool,
                         partial(self.param_compressor.decompress_params_dict, params_list, info)
                     )
+                    log(f"[{last_ask_update_count}] decompress params data")
                     params_dict = decompressed_result
                     # 更新共享参数
                     self.shared_param.set_param(params_dict)
+                    log(f"[{last_ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
                     self.shared_param.param_event.set()
                     log(f"[{self.client_id}] update latest server weights done")
