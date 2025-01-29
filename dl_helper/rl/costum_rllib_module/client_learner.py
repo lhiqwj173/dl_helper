@@ -346,13 +346,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         ####################
         # 时间队列(与协程进程通讯)
         self.task_queue = None
-        # 修改队列为异步队列
-        self.grad_q = None
-        # 添加事件循环
-        self.loop = None
-        self.tasks = []
-        # 添加进程池
-        self.process_pool = None
         # 用于初始化共享参数
         self.params_dict = None
         self.grad_params_dict = None
@@ -452,8 +445,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     merged_gradients = await grad_q.get()
                     log(f"[{idx}] queue size: {grad_q.qsize()}")
                     
-                    # # 压缩梯度
-                    # compressed_grads, compress_info = gradient_compressor.compress(merged_gradients)
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
                     compressed_result = await loop.run_in_executor(
@@ -515,8 +506,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 获取参数
                     params_list, info, info_data.version = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{last_ask_update_count}] recv params data")
-                    # 解压参数
-                    # params_dict = param_compressor.decompress_params_dict(params_list, info)
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
                     decompressed_result = await loop.run_in_executor(
@@ -547,9 +536,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 except:
                     pass
 
-    async def log_size(self):
-        return self.grad_q.qsize()
-
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
     # all use 100 iter about 6.73H 
@@ -564,7 +550,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 按照梯度同步频率请求服务器参数
             if self.update_count % self.gradient_sync_frequency == 0:
                 log(f'[{self.update_count}] request param and reset event')
-                self.param_q.put(self.update_count)
+                self.task_queue.put(self.update_count)
                 # 重置event
                 self.shared_param.param_event.clear()
 
@@ -598,18 +584,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 汇总梯度
                     log(f'merge gradients')
                     gradients_to_send = self.gradient_accumulator.merge_gradients()
-                    # # 加入推送队列
-                    # self.grad_q.put(gradients_to_send)
-                    # 使用异步队列
-                    await_put = self.grad_q.put(gradients_to_send)
-                    await_log = self.log_size()
-                    
-                    asyncio.run_coroutine_threadsafe(
-                        asyncio.gather(await_put, await_log), 
-                        self.loop
-                    ).add_done_callback(
-                        lambda fut: log(f"当前梯度队列大小: {fut.result()[1]}")
-                    )
+                    # 加入推送队列
+                    self.task_queue.put(gradients_to_send)
 
                     if self.apply_last_grad:
                         # 需要替换梯度
@@ -618,18 +594,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         # 2. 触发梯度更新事件
                         self.shared_param.grad_event.set()
             else:
-                # # 加入推送队列
-                # self.grad_q.put(cpu_gradients)
-                # 使用异步队列
-                await_put = self.grad_q.put(cpu_gradients)
-                await_log = self.log_size()
-                
-                asyncio.run_coroutine_threadsafe(
-                    asyncio.gather(await_put, await_log), 
-                    self.loop
-                ).add_done_callback(
-                    lambda fut: log(f"当前梯度队列大小: {fut.result()[1]}")
-                )
+                # 加入推送队列
+                self.task_queue.put(cpu_gradients)
             
             report_memory_usage(f'[{self.update_count}][3]')
 
