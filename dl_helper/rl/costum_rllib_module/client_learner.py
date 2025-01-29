@@ -327,7 +327,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 限制最小参数同步间隔
         # 若频率更高, 会增加服务器压力
-        self.min_param_sync_interval = 10
+        self.min_param_sync_interval = 4
 
         # 拉取应用参数后，是否需要应用最后的梯度
         self.apply_last_grad = True
@@ -443,7 +443,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 获取汇总梯度 TODO 使用共享内存替代
                     merged_gradients = await grad_q.get()
-                    log(f"[{idx}] queue size: {grad_q.qsize()}")
+                    # log(f"[{idx}] queue size: {grad_q.qsize()}")
                     
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
@@ -455,14 +455,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
-                    log(f"[{idx}][{send_count}] send gradients done")
+                    # log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
-                        log(f"[{idx}] wait response")
+                        # log(f"[{idx}] wait response")
                         await async_recv_msg(reader)
-                        log(f"[{idx}] recv response done")
+                        # log(f"[{idx}] recv response done")
 
             except Exception as e:
                 log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")
@@ -504,39 +504,39 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     t0 = time.time()
 
-                    log(f"[{ask_update_count}] request server weights")
+                    # log(f"[{ask_update_count}] request server weights")
                     send_count += 1
 
                     # 获取参数
                     params_list, info, info_data.version = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
-                    log(f"[{ask_update_count}] recv params data")
+                    # log(f"[{ask_update_count}] recv params data")
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
                     decompressed_result = await loop.run_in_executor(
                         process_pool,
                         partial(param_compressor.decompress_params_dict, params_list, info)
                     )
-                    log(f"[{ask_update_count}] decompress params data")
+                    # log(f"[{ask_update_count}] decompress params data")
                     params_dict = decompressed_result
                     # 更新共享参数
                     shared_param.set_param(params_dict)
-                    log(f"[{ask_update_count}] set params to shared param")
+                    # log(f"[{ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
                     shared_param.param_event.set()
-                    log(f"[{ask_update_count}] update latest server weights done")
+                    # log(f"[{ask_update_count}] update latest server weights done")
 
-                    # 统计耗时
-                    total_cost_time += time.time() - t0
-                    total_count += 1
+                    # # 统计耗时
+                    # total_cost_time += time.time() - t0
+                    # total_count += 1
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
-                        log(f"wait response")
+                        # log(f"wait response")
                         await async_recv_msg(reader)
-                        log(f"recv response done")
+                        # log(f"recv response done")
 
-                    if total_count % 30 == 0:
-                        log(f"[{ask_update_count}] avg cost time: {int((total_cost_time / total_count) * 1000)}ms")
+                    # if total_count % 30 == 0:
+                    #     log(f"[{ask_update_count}] avg cost time: {int((total_cost_time / total_count) * 1000)}ms")
 
             except Exception as e:
                 log(f"连接服务器失败: \n{get_exception_msg()}")
@@ -559,7 +559,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 按照梯度同步频率请求服务器参数
             if self.update_count % self.min_param_sync_interval == 0:
-                log(f'[{self.update_count}] request param and reset event')
+                # log(f'[{self.update_count}] request param and reset event')
                 self.task_queue.put(self.update_count)
                 # 重置event
                 self.shared_param.param_event.clear()
@@ -568,7 +568,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.shared_param.grad_event.clear()
 
         # 计算梯度
+        # log('self._params:')
+        # for idx, (k, v) in enumerate(self._params.items()):
+        #     log(f'{idx} {k.shape} {v.shape}')
+        # log('compute gradients:')
         gradients_dict = super().compute_gradients(*args, **kwargs)
+        # for idx, (k, v) in enumerate(gradients_dict.items()):
+        #     log(f'{idx} {k.shape} {v.shape}')
+        # log(f'compute gradients done')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
@@ -578,10 +585,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.gradient_sync_frequency > 1:
                 # 累积梯度
                 self.gradient_accumulator.add_gradients(cpu_gradients)
-                log(f'add gradients to gradient_accumulator')
+                # log(f'add gradients to gradient_accumulator')
                 if self.update_count % self.gradient_sync_frequency == 0:
                     # 汇总梯度
-                    log(f'merge gradients')
+                    # log(f'merge gradients')
                     gradients_to_send = self.gradient_accumulator.merge_gradients()
                     # 加入推送队列
                     self.task_queue.put(gradients_to_send)
@@ -613,7 +620,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 正确处理最后一次的梯度
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
-                log(f'[{self.client_id}] wait shared grad set')
+                # log(f'[{self.client_id}] wait shared grad set')
                 self.shared_param.grad_event.wait()
                 # 替换应用梯度
                 self.shared_param.apply_grad_to_local(self)
@@ -623,10 +630,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 等待并应用新的参数
             # 等待参数就绪
-            log(f'[{self.client_id}] wait param ready')
+            # log(f'[{self.client_id}] wait param ready')
             self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
-            log(f'[{self.client_id}] apply shared param')
+            # log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
