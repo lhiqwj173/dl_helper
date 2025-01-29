@@ -20,6 +20,7 @@ import copy, pickle
 from typing import Dict, Any
 import requests
 import threading
+import multiprocessing
 import socket
 
 from concurrent.futures import ProcessPoolExecutor
@@ -33,7 +34,7 @@ from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_get_server_weights
 
 from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
-from dl_helper.tool import report_memory_usage
+from dl_helper.tool import report_memory_usage, AsyncProcessQueueReader, Empty
 
 """
 # 分布式训练流程
@@ -256,6 +257,57 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"foreach_learner: init shared param")
         self.foreach_learner(lambda learner: learner.init_shared_param())
 
+class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
+    """
+    异步进程队列读取器
+    用于转发 进程任务 到 事件循环
+    """
+    def __init__(self, queue, param_q, grad_q, start: bool = True):
+        self.queue = queue
+        self._loop = None
+        self._thread = None
+        self._running = False
+        self._stop = False
+
+        # 使用传入的队列
+        self.param_q = param_q
+        self.grad_q = grad_q
+
+        # 启动
+        if start:
+            self._start()
+
+    def _reader_thread(self):
+        """后台读取线程"""
+        while not self._stop:
+            try:
+                # 使用较短的超时以便能够响应停止信号
+                item = self.queue.get(timeout=0.1)
+
+                # 分发事件
+                # 使用线程安全的方式将任务加入事件循环
+                if isinstance(item, int):
+                    # 参数事件
+                    asyncio.run_coroutine_threadsafe(
+                        self.param_q.put(item), 
+                        self._loop
+                    )
+                
+                else:
+                    # 梯度事件
+                    asyncio.run_coroutine_threadsafe(
+                        self.grad_q.put(item), 
+                        self._loop
+                    )
+
+
+            except Empty:
+                continue
+            except Exception as e:
+                log(f"Reader thread error: {e}")
+                # 出错时短暂等待后继续
+                time.sleep(0.1)
+
 class ClientPPOTorchLearner(PPOTorchLearner):
     """
     每个客户端只需要有一个与参数服务器通信的learner
@@ -263,9 +315,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # 梯度压缩器
-        self.gradient_compressor = GradientCompressor()
-
+    
         # 参数压缩器
         self.param_compressor = None
 
@@ -294,10 +344,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         ####################
         # 只有主 learner 需要初始化
         ####################
-        # 参数传输线程， 
-        self.thread_list = []
-        self.param_q = None
-        self.param_done_q = None
+        # 时间队列(与协程进程通讯)
+        self.task_queue = None
         # 修改队列为异步队列
         self.grad_q = None
         # 添加事件循环
@@ -305,6 +353,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.tasks = []
         # 添加进程池
         self.process_pool = None
+        # 用于初始化共享参数
+        self.params_dict = None
+        self.grad_params_dict = None
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -313,142 +364,80 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.module._rl_modules['default_policy'].state_dict()
-        params_keys = list(params_dict.keys())
-        log(f"[{self.client_id}] params_keys: {params_keys}")
-        self.param_compressor = ParamCompressor(params_keys)
         # 获取梯度字典
         grad_params_dict = self._params
+        if self.client_id == 0:
+            self.params_dict = params_dict
+            self.grad_params_dict = grad_params_dict
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.process_pool = ProcessPoolExecutor(max_workers=3)  # 可以根据需要调整进程数
+            self.task_queue = multiprocessing.Queue()
 
-            self.param_q = queue.Queue()
-            self.param_done_q = queue.Queue()
+            # 在新进程中运行事件循环
+            self.event_loop_process = multiprocessing.Process(
+                target=self._run_event_loop_process, args=(self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_dict)
+            )
+            self.event_loop_process.start()
 
-            # 创建事件循环
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-            
-            # 创建异步队列
-            self.grad_q = AsyncQueue(maxsize=30)
-            
-            # 启动10个协程任务
-            for _idx in range(10):
-                task = self.loop.create_task(self.grad_coroutine(_idx))
-                self.tasks.append(task)
-
-            # 启动参数协程
-            task = self.loop.create_task(self.param_coroutine())
-            self.tasks.append(task)
-            
-            # 在新线程中运行事件循环
-            self.thread_list.append(threading.Thread(target=self._run_event_loop))
-            self.thread_list[-1].start()
-
-    def _run_event_loop(self):
-        """运行事件循环"""
-        self.loop.run_forever()
-
-    def param_thread(self):
-        """
-        获取服务器参数
-        """
-        log(f"[{self.client_id}] param_thread start")
-        last_ask_update_count = 0
-
-        _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        connected = False
-
-        count = 0
-        need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
+    @staticmethod
+    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_dict):
+        """在新进程中运行事件循环"""
+        # 事件循环
         try:
-            while True:
-                count += 1
-                
-                # 请求参数的轮次
-                ask_update_count = self.param_q.get()
-                if self.min_param_sync_interval > 1 and ask_update_count - last_ask_update_count < self.min_param_sync_interval:
-                    # 等待最小同步间隔
-                    continue
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # 如果当前线程没有事件循环，则创建一个新的
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-                last_ask_update_count = ask_update_count
-                log(f"[{last_ask_update_count}] request server weights")
+        class share_info:
+            """
+            共享信息类
+            """
+            def __init__(self, train_title, client_id):
+                self.train_title = train_title
+                self.client_id = client_id
+                self.version = 0
 
-                if not connected:
-                    _socket.connect((HOST, PORT))
-                    # 发送连接类型: 长连接
-                    send_msg(_socket, f'{CODE}_long')
-                    connected = True
+        info = share_info(train_title, client_id)
+        
+        # 梯度事件队列
+        grad_q = AsyncQueue(maxsize=30)
+        # 参数事件队列
+        param_q = AsyncQueue()
 
-                # 获取参数
-                params_list, info, self.version = _get_server_weights(_socket, self.train_title, self.version)
-                # 解压参数
-                params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-                # 更新共享参数
-                self.shared_param.set_param(params_dict)
-                # 触发共享参数更新事件
-                self.shared_param.param_event.set()
-                log(f"[{self.client_id}] update latest server weights done")
+        # 独立线程转发 进程任务
+        apqr = AsyncProcessQueueReader_grad_param(task_queue, param_q, grad_q)
 
-                if count % need_res_time == 0:
-                    recv_msg(_socket)
+        # 进程池,用于压缩/加压等计算密集任务计算
+        process_pool = ProcessPoolExecutor(max_workers=3)  # 可以根据需要调整进程数
+    
+        # 启动协程任务
+        tasks = []
+        for _idx in range(10):
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info, process_pool, grad_q))
+            tasks.append(task)
 
-        except Exception as e:
-            log(f"连接服务器失败")
-            raise e
-        finally:
-            _socket.close()
+        # 启动参数协程
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info, process_pool, param_q, params_dict, grad_params_dict)) 
+        tasks.append(task)
 
-    def grad_thread(self, idx):
-        """
-        推送本地梯度
-        """
-        log(f"[{self.client_id}] grad_thread {idx} start")
-        send_count = 0
+        # 运行事件循环
+        loop.run_forever()
 
-        _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        connected = False
-        count = 0
-        need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
-        try:
-            while True:
-                count += 1
-
-                # 获取汇总梯度
-                merged_gradients = self.grad_q.get()
-
-                # 压缩梯度
-                compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
-
-                if not connected:
-                    _socket.connect((HOST, PORT))
-                    # 发送连接类型: 长连接
-                    send_msg(_socket, f'{CODE}_long')
-                    connected = True
-
-                # 发送梯度
-                _send_gradients(_socket, self.train_title, compressed_grads, compress_info, self.version)
-                log(f"[{idx}][{send_count}] send gradients done")
-                send_count += 1
-
-                if count % need_res_time == 0:
-                    recv_msg(_socket)
-
-        except Exception as e:
-            log(f"连接服务器失败")
-            raise e
-        finally:
-            _socket.close()
-
-    async def grad_coroutine(self, idx):
+    @staticmethod
+    async def grad_coroutine(idx, info, process_pool, grad_q):
         """
         梯度协程
         """
-        log(f"[{self.client_id}] grad_coroutine {idx} start")
+        log(f"[{info.client_id}] grad_coroutine {idx} start")
+
+        # 梯度压缩器
+        gradient_compressor = GradientCompressor()
 
         while True:
             try:
@@ -459,22 +448,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 send_count = 0
                 while True:
-                    # 获取汇总梯度
-                    merged_gradients = await self.grad_q.get()
-                    log(f"[{idx}] queue size: {self.grad_q.qsize()}")
+                    # 获取汇总梯度 TODO 使用共享内存替代
+                    merged_gradients = await grad_q.get()
+                    log(f"[{idx}] queue size: {grad_q.qsize()}")
                     
                     # # 压缩梯度
-                    # compressed_grads, compress_info = self.gradient_compressor.compress(merged_gradients)
+                    # compressed_grads, compress_info = gradient_compressor.compress(merged_gradients)
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
                     compressed_result = await loop.run_in_executor(
-                        self.process_pool,
-                        partial(self.gradient_compressor.compress, merged_gradients)
+                        process_pool,
+                        partial(gradient_compressor.compress, merged_gradients)
                     )
                     compressed_grads, compress_info = compressed_result
 
                     # 发送梯度
-                    await _async_send_gradients(writer, self.train_title, compressed_grads, compress_info, self.version)
+                    await _async_send_gradients(writer, info.train_title, compressed_grads, compress_info, info.version)
                     log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
 
@@ -492,12 +481,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     await writer.wait_closed()
                 except:
                     pass
-                    
-    async def param_coroutine(self):
+
+    @staticmethod
+    async def param_coroutine(info, process_pool, param_q, params_dict, grad_params_dict):
         """
         获取服务器参数
         """
-        log(f"[{self.client_id}] param_coroutine start")
+        log(f"[{info.client_id}] param_coroutine start")
+
+        params_keys = list(params_dict.keys())
+        # 参数解压器
+        param_compressor = ParamCompressor(params_keys)
+        # 共享参数
+        shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
         while True:
             try:
@@ -510,31 +506,31 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 send_count = 0
                 while True:
                     # 请求参数的轮次
-                    ask_update_count = self.param_q.get()
+                    ask_update_count = param_q.get()
 
                     last_ask_update_count = ask_update_count
                     log(f"[{last_ask_update_count}] request server weights")
                     send_count += 1
 
                     # 获取参数
-                    params_list, info, self.version = await _async_get_server_weights(writer, reader, self.train_title, self.version)
+                    params_list, info, info.version = await _async_get_server_weights(writer, reader, info.train_title, info.version)
                     log(f"[{last_ask_update_count}] recv params data")
                     # 解压参数
-                    # params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+                    # params_dict = param_compressor.decompress_params_dict(params_list, info)
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
                     decompressed_result = await loop.run_in_executor(
-                        self.process_pool,
-                        partial(self.param_compressor.decompress_params_dict, params_list, info)
+                        process_pool,
+                        partial(param_compressor.decompress_params_dict, params_list, info)
                     )
                     log(f"[{last_ask_update_count}] decompress params data")
                     params_dict = decompressed_result
                     # 更新共享参数
-                    self.shared_param.set_param(params_dict)
+                    shared_param.set_param(params_dict)
                     log(f"[{last_ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
-                    self.shared_param.param_event.set()
-                    log(f"[{self.client_id}] update latest server weights done")
+                    shared_param.param_event.set()
+                    log(f"[{last_ask_update_count}] update latest server weights done")
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:

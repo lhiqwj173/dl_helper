@@ -6,6 +6,12 @@ import platform
 import pandas as pd
 import numpy as np
 
+import asyncio
+from multiprocessing.queues import Queue
+from asyncio import Queue as AsyncQueue
+from queue import Empty
+import threading
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import io
@@ -76,6 +82,67 @@ def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     if std == 0:
         return 0
     return excess_returns.mean() / std * np.sqrt(len(returns))  # 根据序列长度标准化
+
+class AsyncProcessQueueReader:
+    """
+    异步进程队列读取器，使用单个专用线程
+    """
+    def __init__(self, queue: Queue, start: bool = True):
+        self.queue = queue
+        self._loop = None
+        self._thread = None
+        self._running = False
+        self.async_queue = AsyncQueue()
+        self._stop = False
+
+        # 启动
+        if start:
+            self._start()
+
+    def _reader_thread(self):
+        """后台读取线程"""
+        while not self._stop:
+            try:
+                # 使用较短的超时以便能够响应停止信号
+                item = self.queue.get(timeout=0.1)
+                # 使用线程安全的方式将任务加入事件循环
+                asyncio.run_coroutine_threadsafe(
+                    self.async_queue.put(item), 
+                    self._loop
+                )
+            except Empty:
+                continue
+            except Exception as e:
+                print(f"Reader thread error: {e}")
+                # 出错时短暂等待后继续
+                time.sleep(0.1)
+
+    def _start(self):
+        """启动读取器"""
+        if self._thread is not None:
+            return
+        
+        self._loop = asyncio.get_event_loop()
+        self._stop = False
+        self._thread = threading.Thread(target=self._reader_thread, daemon=True)
+        self._thread.start()
+
+    def _stop(self):
+        """停止读取器"""
+        if self._thread is None:
+            return
+            
+        self._stop = True
+        self._thread.join()
+        self._thread = None
+
+    def __del__(self):
+        """析构函数中停止读取器"""
+        self._stop()
+
+    async def get(self):
+        """获取队列中的数据"""
+        return await self.async_queue.get()
 
 # def calc_sortino_ratio(returns, risk_free_rate=0.0):
 #     """计算索提诺比率

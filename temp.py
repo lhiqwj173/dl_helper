@@ -1,49 +1,66 @@
-import threading
-import queue
+import multiprocessing
+import asyncio
+import random
 import time
+from multiprocessing.queues import Queue
 
-# 生产者线程
-def producer(q, items):
-    for item in items:
-        print(f"生产者生产了: {item}")
-        q.put(item)  # 将数据放入队列
-        time.sleep(5)  # 模拟生产时间
-    q.put(None)  # 发送结束信号
+from dl_helper.tool import AsyncProcessQueueReader
 
-# 消费者线程
-def consumer(q):
+async def worker(name, queue):
+    """工作协程"""
     while True:
-        item = q.get()  # 从队列中取出数据
-        if item is None:
-            break  # 收到结束信号，退出循环
-        print(f"消费者消费了: {item}")
-        time.sleep(2)  # 模拟消费时间
-        q.task_done()  # 标记任务完成
+        task = await queue.get()
+        try:
+            # 模拟异步网络操作
+            await asyncio.sleep(random.uniform(0.5, 2))
+            print(f"Coroutine {name}: Completed {task}")
+        except Exception as e:
+            print(f"Coroutine {name} error: {e}")
+        finally:
+            queue.task_done()
 
-# 创建队列
-q = queue.Queue()
+def task_producer(task_queue):
+    """任务生产者进程"""
+    task_id = 0
+    while True:
+        time.sleep(random.uniform(0.1, 0.5))
+        task = f"Task-{task_id}"
+        task_queue.put(task)
+        print(f"Producer: Generated {task}")
+        task_id += 1
 
-# 创建生产者线程
-producer_thread = threading.Thread(target=producer, args=(q, [1, 2, 3, 4, 5]))
+async def process_queue_consumer(mp_queue: Queue, worker_count: int = 10):
+    """处理进程队列的消费者"""
+    # 创建队列读取器
+    reader = AsyncProcessQueueReader(mp_queue)
+    
+    # 创建worker协程
+    workers = [asyncio.create_task(worker(f"Worker-{i}", reader.async_queue)) 
+              for i in range(worker_count)]
+    
+    await asyncio.gather(*workers)
 
-# 创建消费者线程
-consumer_thread_list = []
-for i in range(3):
-    consumer_thread = threading.Thread(target=consumer, args=(q,))
-    consumer_thread_list.append(consumer_thread)
-        
-# 启动线程
-producer_thread.start()
-for consumer_thread in consumer_thread_list:
-    consumer_thread.start()
+def process_tasks(task_queue):
+    """任务处理进程"""
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(process_queue_consumer(task_queue))
+    finally:
+        loop.close()
 
-# 等待生产者线程完成
-producer_thread.join()
-
-# 等待队列中的所有任务被处理完毕
-q.join()
-
-# 等待消费者线程完成
-consumer_thread.join()
-
-print("所有任务完成")
+if __name__ == "__main__":
+    task_queue = multiprocessing.Queue()
+    
+    producer = multiprocessing.Process(target=task_producer, args=(task_queue,))
+    producer.daemon = True
+    producer.start()
+    
+    consumer = multiprocessing.Process(target=process_tasks, args=(task_queue,))
+    consumer.daemon = True
+    consumer.start()
+    
+    try:
+        producer.join()
+        consumer.join()
+    except KeyboardInterrupt:
+        print("Shutting down...")
