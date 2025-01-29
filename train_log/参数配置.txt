@@ -1,0 +1,13 @@
+标准 
+	round 3 - 257s
+	
+测试
+	round 3 | param_sync_interval 4 | apply_last_grad False - 486s
+	
+	round 3 | param_sync_interval 4 | apply_last_grad True - 479s
+	round 3 | param_sync_interval 6 | apply_last_grad True - 402s
+	round 3 | param_sync_interval 8 | apply_last_grad True - 386s
+	round 3 | param_sync_interval 10 | apply_last_grad True - 373s
+	
+	round 100 | param_sync_interval 4 | apply_last_grad True - 
+	
