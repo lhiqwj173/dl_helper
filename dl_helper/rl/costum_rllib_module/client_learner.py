@@ -330,7 +330,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.min_param_sync_interval = 4 
 
         # 拉取应用参数后，是否需要应用最后的梯度
-        self.apply_last_grad = False
+        self.apply_last_grad = True
 
         # 共享参数
         self.shared_param = None
