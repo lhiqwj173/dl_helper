@@ -1,5 +1,6 @@
 标准 
 	round 3 - 257s
+	round 100 - 3076
 	
 测试
 	round 3 | param_sync_interval 4 | apply_last_grad False - 486s
@@ -9,5 +10,6 @@
 	round 3 | param_sync_interval 8 | apply_last_grad True - 386s
 	round 3 | param_sync_interval 10 | apply_last_grad True - 373s
 	
-	round 100 | param_sync_interval 4 | apply_last_grad True - 
+	round 100 | param_sync_interval 4 | apply_last_grad True | machine 1 - 8579 2.79
+	round 100 | param_sync_interval 4 | apply_last_grad True | machine 3 - 8579 2.79
 	
