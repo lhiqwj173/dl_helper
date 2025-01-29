@@ -543,9 +543,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
+        # report_memory_usage(f'[{self.update_count}][0]')
 
         if self.client_id == 0:
-            report_memory_usage(f'[{self.update_count}][0]')
 
             # 按照梯度同步频率请求服务器参数
             if self.update_count % self.gradient_sync_frequency == 0:
@@ -557,7 +557,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 清空梯度事件
             self.shared_param.grad_event.clear()
 
-            report_memory_usage(f'[{self.update_count}][1]')
 
         # 计算梯度
         # log('self._params:')
@@ -571,8 +570,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
-            report_memory_usage(f'[{self.update_count}][2]')
-
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
 
@@ -597,8 +594,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
             
-            report_memory_usage(f'[{self.update_count}][3]')
-
         # nouse3
         # 返回空
         return {}
