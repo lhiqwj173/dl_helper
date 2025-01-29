@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 try:
-    from py_ext.tool import log
+    from py_ext.tool import log, get_exception_msg
 except:
     log = print
 
@@ -110,6 +110,7 @@ def _connect_server_apply(func, *args, **kwargs):
         return func(_socket, *args, **kwargs)
     except Exception as e:
         log(f"连接服务器失败")
+        log(get_exception_msg())
         raise e
     finally:
         _socket.close()

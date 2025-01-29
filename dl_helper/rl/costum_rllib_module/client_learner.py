@@ -26,7 +26,7 @@ import socket
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
-from py_ext.tool import safe_share_memory, share_tensor, log, Event
+from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
@@ -403,7 +403,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self.client_id = client_id
                 self.version = 0
 
-        info = share_info(train_title, client_id)
+        info_data = share_info(train_title, client_id)
         
         # 梯度事件队列
         grad_q = AsyncQueue(maxsize=30)
@@ -419,22 +419,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 启动协程任务
         tasks = []
         for _idx in range(10):
-            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info, process_pool, grad_q))
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info_data, process_pool, grad_q))
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info, process_pool, param_q, params_dict, grad_params_dict)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_dict)) 
         tasks.append(task)
 
         # 运行事件循环
         loop.run_forever()
 
     @staticmethod
-    async def grad_coroutine(idx, info, process_pool, grad_q):
+    async def grad_coroutine(idx, info_data, process_pool, grad_q):
         """
         梯度协程
         """
-        log(f"[{info.client_id}] grad_coroutine {idx} start")
+        log(f"[{info_data.client_id}] grad_coroutine {idx} start")
 
         # 梯度压缩器
         gradient_compressor = GradientCompressor()
@@ -463,7 +463,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     compressed_grads, compress_info = compressed_result
 
                     # 发送梯度
-                    await _async_send_gradients(writer, info.train_title, compressed_grads, compress_info, info.version)
+                    await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
                     log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
 
@@ -474,7 +474,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{idx}] recv response done")
 
             except Exception as e:
-                log(f"[{idx}] 连接服务器失败: {str(e)}")
+                log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")
                 # 关闭连接
                 try:
                     writer.close()
@@ -483,11 +483,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     pass
 
     @staticmethod
-    async def param_coroutine(info, process_pool, param_q, params_dict, grad_params_dict):
+    async def param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_dict):
         """
         获取服务器参数
         """
-        log(f"[{info.client_id}] param_coroutine start")
+        log(f"[{info_data.client_id}] param_coroutine start")
 
         params_keys = list(params_dict.keys())
         # 参数解压器
@@ -513,7 +513,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     send_count += 1
 
                     # 获取参数
-                    params_list, info, info.version = await _async_get_server_weights(writer, reader, info.train_title, info.version)
+                    params_list, info, info_data.version = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{last_ask_update_count}] recv params data")
                     # 解压参数
                     # params_dict = param_compressor.decompress_params_dict(params_list, info)
@@ -539,7 +539,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"recv response done")
 
             except Exception as e:
-                log(f"连接服务器失败: {str(e)}")
+                log(f"连接服务器失败: \n{get_exception_msg()}")
                 # 关闭连接
                 try:
                     writer.close()
