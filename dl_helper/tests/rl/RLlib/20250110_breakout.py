@@ -1,4 +1,5 @@
 import sys, os, time
+os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
