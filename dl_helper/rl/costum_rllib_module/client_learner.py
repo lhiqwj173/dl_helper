@@ -506,7 +506,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 send_count = 0
                 while True:
                     # 请求参数的轮次
-                    ask_update_count = param_q.get()
+                    ask_update_count = await param_q.get()
 
                     last_ask_update_count = ask_update_count
                     log(f"[{last_ask_update_count}] request server weights")
