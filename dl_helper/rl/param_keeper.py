@@ -162,7 +162,10 @@ class ExperimentHandler:
             num_gpus_per_learner=0,
             num_cpus_per_learner=0.5,
         )
-        env_creater = _global_registry.get(ENV_CREATOR, config.env)
+        # env_creater = _global_registry.get(ENV_CREATOR, config.env)
+        _, env_creater = config.algo_class._get_env_id_and_creator(
+            config.env, config
+        )
         env = env_creater()
         param_server = AsyncRLParameterServer(config, env)
         _params_dict = param_server.get_weights()[0] 
