@@ -1,6 +1,7 @@
 import torch, time, math
 import multiprocessing
 import asyncio
+import gymnasium as gym
 
 import numpy as np
 import pickle, requests
@@ -162,11 +163,13 @@ class ExperimentHandler:
             num_gpus_per_learner=0,
             num_cpus_per_learner=0.5,
         )
-        # env_creater = _global_registry.get(ENV_CREATOR, config.env)
-        _, env_creater = config.algo_class._get_env_id_and_creator(
-            config.env, config
-        )
-        env = env_creater()
+        env_specifier = config.env
+        if _global_registry.contains(ENV_CREATOR, env_specifier):
+            # 注册的环境
+            env = _global_registry.get(ENV_CREATOR, env_specifier)()
+        else:
+            # gym 环境
+            env = gym.make(env_specifier)
         param_server = AsyncRLParameterServer(config, env)
         _params_dict = param_server.get_weights()[0] 
         _grad_params_dict = param_server.get_gradients_params()
@@ -337,11 +340,13 @@ class ExperimentHandler:
             num_gpus_per_learner=0,
             num_cpus_per_learner=0.5,
         )
-        # env_creater = _global_registry.get(ENV_CREATOR, config.env)
-        _, env_creater = config.algo_class._get_env_id_and_creator(
-            config.env, config
-        )
-        env = env_creater()
+        env_specifier = config.env
+        if _global_registry.contains(ENV_CREATOR, env_specifier):
+            # 注册的环境
+            env = _global_registry.get(ENV_CREATOR, env_specifier)()
+        else:
+            # gym 环境
+            env = gym.make(env_specifier)
         param_server = AsyncRLParameterServer(config, env)
         _params_dict = param_server.get_weights()[0] 
         _grad_params_dict = param_server.get_gradients_params()
