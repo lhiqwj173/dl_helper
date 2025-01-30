@@ -631,7 +631,7 @@ class ParamCompressor:
             iters = params
 
         # for debug
-        return list(iters), []
+        return iters, []
 
         for param in iters:
             quantized, compress_info = self.compress_param(param)
