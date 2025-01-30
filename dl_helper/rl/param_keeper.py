@@ -116,7 +116,7 @@ class ExperimentHandler:
         # 初始化共享梯度
         for idx, _shape in enumerate(_simple_grad_params):
             # for debug
-            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float64', 30, debug=self.debug))
+            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', 30, debug=self.debug))
             # self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
