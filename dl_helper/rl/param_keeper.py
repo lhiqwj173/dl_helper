@@ -115,10 +115,14 @@ class ExperimentHandler:
         self.params_cache_share = []
         # 初始化共享梯度
         for idx, _shape in enumerate(_simple_grad_params):
-            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
+            # for debug
+            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float64', 30, debug=self.debug))
+            # self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
-            self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
+            # for debug
+            self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
+            # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
     
     def __del__(self):
         self.p.terminate()
@@ -196,7 +200,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_params_dict.items()):
             log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
             _shape = v.shape
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+            # for debug
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', v.shape, 'float32'))
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
             _simple_params.append(_shape)
 
         # 初始化共享梯度
@@ -204,7 +210,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
+            # for debug
+            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', 30, debug=debug))
+            # gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             _simple_grad_params.append(_compress_shape)
 
@@ -291,7 +299,9 @@ class ExperimentHandler:
         params_cache_share = []
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
+            # for debug
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _params_cache_share_float32.append(torch.zeros(_shape, dtype=torch.float32))
 
@@ -371,7 +381,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_params_dict.items()):
             log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
             _shape = v.shape
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+            # for debug
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _simple_params.append(_shape)
 
@@ -380,7 +392,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
+            # for debug
+            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', 30, debug=debug))
+            # gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             _simple_grad_params.append(_compress_shape)
 
