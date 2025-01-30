@@ -523,9 +523,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     shared_param.param_event.set()
                     # log(f"[{ask_update_count}] update latest server weights done")
 
-                    # # 统计耗时
-                    # total_cost_time += time.time() - t0
-                    # total_count += 1
+                    # 统计耗时
+                    total_cost_time += time.time() - t0
+                    total_count += 1
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
@@ -533,8 +533,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         await async_recv_msg(reader)
                         # log(f"recv response done")
 
-                    # if total_count % 30 == 0:
-                    #     log(f"[{ask_update_count}] avg cost time: {int((total_cost_time / total_count) * 1000)}ms")
+                    if total_count % 30 == 0:
+                        log(f"[{ask_update_count}] avg cost time: {int((total_cost_time / total_count) * 1000)}ms")
 
             except Exception as e:
                 log(f"连接服务器失败: \n{get_exception_msg()}")

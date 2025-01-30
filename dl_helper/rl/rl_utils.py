@@ -614,24 +614,24 @@ class ParamCompressor:
         
         return decompressed
     
-    def compress_params_dict(self, params_dict):
+    def compress_params_dict(self, params):
         """压缩整个参数字典 
         参数:
-            params_dict: 参数字典{k:torch.Tensor} / 参数张量的列表[torch.Tensor]
+            params: 参数字典{k:torch.Tensor} / 参数张量的列表[torch.Tensor]
 
         返回是 
             压缩后的参数列表[torch.Tensor]，以及压缩信息字典
         """
-        # for debug
-        return list(params_dict.values()), []
-
         compressed_list = []
         info_list = []
 
-        if isinstance(params_dict, dict):
-            iters = list(params_dict.values())
+        if isinstance(params, dict):
+            iters = list(params.values())
         else:
-            iters = params_dict
+            iters = params
+
+        # for debug
+        return list(iters), []
 
         for param in iters:
             quantized, compress_info = self.compress_param(param)
