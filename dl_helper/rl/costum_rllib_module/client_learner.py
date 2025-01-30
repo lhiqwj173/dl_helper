@@ -222,7 +222,6 @@ class ClientLearnerGroup(LearnerGroup):
         params_list, info, version = get_server_weights(self.train_title)
         # 解压参数
         _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        # log(f"LearnerGroup decompress_params_dict param_keys: {list(params_dict.keys())}")
         # 更新参数到所有learner
         params_dict = OrderedDict()
         for k, v in _params_dict.items():
@@ -315,7 +314,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    
         # 参数压缩器
         self.param_compressor = None
 

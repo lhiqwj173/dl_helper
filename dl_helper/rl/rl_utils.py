@@ -334,6 +334,9 @@ class GradientCompressor:
 
     def compress(self, gradients):
         """压缩梯度，确保输出大小固定且不小于最小元素数量"""
+        # for debug
+        return gradients, []
+
         compressed_grads = []
         compress_info = []
 
@@ -432,6 +435,9 @@ class GradientCompressor:
 
     def decompress(self, compressed_grads, compress_info):
         """解压梯度"""
+        # for debug
+        return compressed_grads
+
         decompressed_grads = []
 
         for quantized_values, info in zip(compressed_grads, compress_info):
@@ -616,6 +622,9 @@ class ParamCompressor:
         返回是 
             压缩后的参数列表[torch.Tensor]，以及压缩信息字典
         """
+        # for debug
+        return list(params_dict.values()), []
+
         compressed_list = []
         info_list = []
 
@@ -639,6 +648,11 @@ class ParamCompressor:
         返回的是 解压后的参数字典[torch.Tensor]
         """
         decompressed_dict = OrderedDict()
+
+        # for debug
+        for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
+            decompressed_dict[k] = compressed_list[idx]
+        return decompressed_dict
         
         for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
             decompressed_dict[k] = self.decompress_param(compressed_list[idx], info)
