@@ -334,8 +334,8 @@ class GradientCompressor:
 
     def compress(self, gradients):
         """压缩梯度，确保输出大小固定且不小于最小元素数量"""
-        # for debug
-        return gradients, []
+        # # for debug
+        # return gradients, []
 
         compressed_grads = []
         compress_info = []
@@ -435,8 +435,8 @@ class GradientCompressor:
 
     def decompress(self, compressed_grads, compress_info):
         """解压梯度"""
-        # for debug
-        return compressed_grads
+        # # for debug
+        # return compressed_grads
 
         decompressed_grads = []
 
@@ -630,8 +630,8 @@ class ParamCompressor:
         else:
             iters = params
 
-        # # for debug
-        # return iters, []
+        # for debug
+        return iters, []
 
         for param in iters:
             quantized, compress_info = self.compress_param(param)
@@ -649,10 +649,10 @@ class ParamCompressor:
         """
         decompressed_dict = OrderedDict()
 
-        # # for debug
-        # for idx, k in enumerate(self.param_keys):
-        #     decompressed_dict[k] = compressed_list[idx]
-        # return decompressed_dict
+        # for debug
+        for idx, k in enumerate(self.param_keys):
+            decompressed_dict[k] = compressed_list[idx]
+        return decompressed_dict
         
         for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
             decompressed_dict[k] = self.decompress_param(compressed_list[idx], info)
