@@ -557,7 +557,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 按照梯度同步频率请求服务器参数
             if self.update_count % self.min_param_sync_interval == 0:
-                # log(f'[{self.update_count}] request param and reset event')
+                log(f'[{self.update_count}] request param and reset event')
                 self.task_queue.put(self.update_count)
                 # 重置event
                 self.shared_param.param_event.clear()
@@ -600,7 +600,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             else:
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
-            
+        
+        log(f'[{self.update_count}] compute_gradients done')
         # nouse3
         # 返回空
         return {}
@@ -628,16 +629,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 等待并应用新的参数
             # 等待参数就绪
-            # log(f'[{self.client_id}] wait param ready')
+            log(f'[{self.client_id}] wait param ready')
             self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
-            # log(f'[{self.client_id}] apply shared param')
+            log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
             # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
             if self.apply_last_grad:
                 super().apply_gradients(*args, **kwargs)
+
+            log(f'[{self.client_id}] apply_gradients done')
 
     def after_gradient_based_update(self, *args, **kwargs):
         # 重置
