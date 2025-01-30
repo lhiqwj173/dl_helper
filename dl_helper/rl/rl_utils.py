@@ -630,14 +630,14 @@ class ParamCompressor:
         else:
             iters = params
 
-        # for debug
-        return iters, []
+        # # for debug
+        # return iters, []
 
         for param in iters:
             quantized, compress_info = self.compress_param(param)
             compressed_list.append(quantized)
             info_list.append(compress_info)
-            
+        
         return compressed_list, info_list
     
     def decompress_params_dict(self, compressed_list, info_list):
@@ -649,10 +649,10 @@ class ParamCompressor:
         """
         decompressed_dict = OrderedDict()
 
-        # for debug
-        for idx, k in enumerate(self.param_keys):
-            decompressed_dict[k] = compressed_list[idx]
-        return decompressed_dict
+        # # for debug
+        # for idx, k in enumerate(self.param_keys):
+        #     decompressed_dict[k] = compressed_list[idx]
+        # return decompressed_dict
         
         for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
             decompressed_dict[k] = self.decompress_param(compressed_list[idx], info)

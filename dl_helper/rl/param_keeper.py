@@ -120,9 +120,9 @@ class ExperimentHandler:
             # self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
-            # for debug
-            self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
-            # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
+            # # for debug
+            # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
+            self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
     
     def __del__(self):
         self.p.terminate()
@@ -200,9 +200,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_params_dict.items()):
             log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
             _shape = v.shape
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', v.shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+            # # for debug
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', v.shape, 'float32'))
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
             _simple_params.append(_shape)
 
         # 初始化共享梯度
@@ -297,9 +297,9 @@ class ExperimentHandler:
         params_cache_share = []
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
+            # # for debug
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _params_cache_share_float32.append(torch.zeros(_shape, dtype=torch.float32))
 
@@ -379,9 +379,9 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_params_dict.items()):
             log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
             _shape = v.shape
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
+            # # for debug
+            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
+            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _simple_params.append(_shape)
 
