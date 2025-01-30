@@ -650,7 +650,7 @@ class ParamCompressor:
         decompressed_dict = OrderedDict()
 
         # for debug
-        for idx, (k, info) in enumerate(zip(self.param_keys, info_list)):
+        for idx, k in enumerate(self.param_keys):
             decompressed_dict[k] = compressed_list[idx]
         return decompressed_dict
         

@@ -225,7 +225,6 @@ class ClientLearnerGroup(LearnerGroup):
         # 更新参数到所有learner
         params_dict = OrderedDict()
         for k, v in _params_dict.items():
-            log(k)
             params_dict[f'module.{k}'] = v
         if self.is_local:
             self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
