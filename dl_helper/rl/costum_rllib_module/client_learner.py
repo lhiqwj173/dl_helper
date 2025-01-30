@@ -327,7 +327,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 限制最小参数同步间隔
         # 若频率更高, 会增加服务器压力
-        self.min_param_sync_interval = 1
+        self.min_param_sync_interval = 4
 
         # 拉取应用参数后，是否需要应用最后的梯度
         self.apply_last_grad = True
