@@ -10,6 +10,6 @@
 	round 3 | param_sync_interval 8 | apply_last_grad True - 386s
 	round 3 | param_sync_interval 10 | apply_last_grad True - 373s
 	
-	round 100 | param_sync_interval 4 | apply_last_grad True | machine 1 - 8579 2.79
-	round 100 | param_sync_interval 4 | apply_last_grad True | machine 3 - 8579 2.79
+	round 100 | param_sync_interval 4 | apply_last_grad True | machine 1 - 8579 2.79 训练似乎停滞不前
+	round 100 | param_sync_interval 4 | apply_last_grad True | machine 3 - 1个完整训练完成(7842) / 2中途失败 训练似乎停滞不前
 	

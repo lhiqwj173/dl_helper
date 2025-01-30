@@ -23,7 +23,7 @@ from dl_helper.train_param import is_kaggle
 rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
-def plot_training_curve(train_folder, total_time=None):
+def plot_training_curve(train_folder, total_time=None, y_axis_max = None):
     """
     total_time: 训练总时间 sec
     """
@@ -40,10 +40,14 @@ def plot_training_curve(train_folder, total_time=None):
                 max_reward.append(float(line.split(' ')[-1]))
     
     # 绘制训练曲线并保存到 train_folder 中
-    plt.plot(mean_reward, label='mean_reward')
-    plt.plot(max_reward, label='max_reward')
+    mean_reward_max = max(mean_reward) if len(mean_reward) > 0 else 0
+    max_reward_max = max(max_reward) if len(max_reward) > 0 else 0
+    plt.plot(mean_reward, label=f'mean_reward({mean_reward_max:.2f})')
+    plt.plot(max_reward, label=f'max_reward({max_reward_max:.2f})')
     plt.legend()
     plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
+    if y_axis_max is not None:
+        plt.ylim(0, y_axis_max)
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
 
 class GradientCompressor_0:
