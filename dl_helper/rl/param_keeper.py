@@ -285,6 +285,7 @@ class ExperimentHandler:
             _simple_grad_params.append((v.shape, _compress_shape))
 
         # 初始化一个最新的参数/info
+        need_warn_up = grad_warm_up_steps > step_count
         copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
         
         # 回传 参数形状列表 
