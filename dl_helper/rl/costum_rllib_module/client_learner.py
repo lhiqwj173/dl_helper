@@ -229,7 +229,7 @@ class ClientLearnerGroup(LearnerGroup):
         _params_dict_torch = OrderedDict()
         for k, v in _params_dict.items():
             _params_dict_torch[k] = torch.from_numpy(v)
-        self.param_compressor.decompress(params_list, info, _params_dict)
+        self.param_compressor.decompress(params_list, info, _params_dict_torch)
         
         # 更新参数到所有learner
         params_dict = OrderedDict()
