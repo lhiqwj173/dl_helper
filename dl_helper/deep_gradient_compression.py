@@ -101,7 +101,7 @@ class DeepGradientCompression:
 
                 # for debug
                 import pickle
-                pickle.dumps((idx, gradient))
+                pickle.dump((idx, gradient), open(f'grad_{idx}.pkl', 'wb'))
 
                 if len(important_indices) > compressed_size:
                     # 随机抽取降采样
