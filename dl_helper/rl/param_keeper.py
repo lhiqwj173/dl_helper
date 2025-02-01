@@ -285,7 +285,7 @@ class ExperimentHandler:
             _simple_grad_params.append((v.shape, _compress_shape))
 
         # 初始化一个最新的参数/info
-        copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q)
+        copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
         
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
