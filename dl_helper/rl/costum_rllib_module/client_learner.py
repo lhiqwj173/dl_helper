@@ -181,9 +181,9 @@ class ClientLearnerGroup(LearnerGroup):
         self.train_title = train_title
         
         # 参数压缩器
-        param_keys = list(self.get_weights()['default_policy'].keys())
-        self.param_compressor = ParamCompressor(param_keys)
-        # self.param_compressor = IncrementalCompressor()
+        # param_keys = list(self.get_weights()['default_policy'].keys())
+        # self.param_compressor = ParamCompressor(param_keys)
+        self.param_compressor = IncrementalCompressor()
 
         # 共享参数
         self.shared_param = None
@@ -224,9 +224,9 @@ class ClientLearnerGroup(LearnerGroup):
         params_list, info, version, need_warn_up = get_server_weights(self.train_title)
 
         # 解压参数
-        _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        # _params_dict = self.get_weights()['default_policy']
-        # self.param_compressor.decompress(params_list, info, _params_dict)
+        # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+        _params_dict = self.get_weights()['default_policy']
+        self.param_compressor.decompress(params_list, info, _params_dict)
         
         # 更新参数到所有learner
         params_dict = OrderedDict()
@@ -497,10 +497,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{info_data.client_id}] param_coroutine start")
 
         # 参数解压器
-        params_keys = list(params_dict.keys())
-        param_compressor = ParamCompressor(params_keys)
-        # param_compressor = IncrementalCompressor()
-        # sync_params_dict = copy.deepcopy(params_dict)
+        # params_keys = list(params_dict.keys())
+        # param_compressor = ParamCompressor(params_keys)
+        param_compressor = IncrementalCompressor()
+        sync_params_dict = copy.deepcopy(params_dict)
 
         # 共享参数
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
@@ -532,19 +532,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
-                    decompressed_result = await loop.run_in_executor(
-                        process_pool,
-                        partial(param_compressor.decompress_params_dict, params_list, info)
-                    )
-                    # 更新共享参数
-                    shared_param.set_param(decompressed_result)
-
-                    # await loop.run_in_executor(
+                    # decompressed_result = await loop.run_in_executor(
                     #     process_pool,
-                    #     partial(param_compressor.decompress, params_list, info, sync_params_dict)
+                    #     partial(param_compressor.decompress_params_dict, params_list, info)
                     # )
                     # # 更新共享参数
-                    # shared_param.set_param(sync_params_dict)
+                    # shared_param.set_param(decompressed_result)
+
+                    # 增量解压操作
+                    param_compressor.decompress(params_list, info, sync_params_dict)
+                    # 更新共享参数
+                    shared_param.set_param(sync_params_dict)
 
                     # log(f"[{ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
@@ -647,7 +645,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 正确处理最后一次的梯度
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
-                # log(f'[{self.client_id}] wait shared grad set')
+                if self.client_id == 0:
+                    log(f'[{self.update_count}] wait shared grad set')
                 self.shared_param.grad_event.wait()
                 # 替换应用梯度
                 self.shared_param.apply_grad_to_local(self)
@@ -657,7 +656,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 等待并应用新的参数
             # 等待参数就绪
-            # log(f'[{self.client_id}] wait param ready')
+            if self.client_id == 0:
+                log(f'[{self.client_id}] wait param ready')
             self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
             # log(f'[{self.client_id}] apply shared param')

@@ -23,19 +23,18 @@ class IncrementalCompressor:
     def _init_reference(self, 
                        client_id: str,
                        tensors: List[torch.Tensor],
-                       init: bool = False
                       ) -> None:
         """初始化参考张量"""
-        if init or client_id not in self.client_params:
+        if client_id not in self.client_params:
             self.client_params[client_id] = [t.clone().detach() for t in tensors]
+            return True
         
     def compress(self, 
                 tensors: List[torch.Tensor],
                 client_id: str,
-                init: bool = False
                ) -> Tuple[List[torch.Tensor], CompressInfo]:
         """压缩张量列表"""
-        self._init_reference(client_id, tensors, init)
+        init = self._init_reference(client_id, tensors)
         if init:
             return tensors, {'full': True}
         

@@ -225,6 +225,8 @@ class AsyncSocketServer:
                 data = None
                 if cmd == 'update_gradients':
                     data = await async_recv_msg(reader, timeout=3 if con_times == 1 else -1)
+                else:
+                    data = client_ip
                         
                 # 2. 处理指令
                 # 2.1 获取处理器

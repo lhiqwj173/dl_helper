@@ -77,6 +77,7 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
+        # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
         # 共享梯度队列
@@ -103,6 +104,7 @@ class ExperimentHandler:
             config,
             self.debug,
             self.grad_cache_size,
+            self.grad_warm_up_steps,
         ))
         self.p.start()
 
@@ -110,14 +112,14 @@ class ExperimentHandler:
         # 用于初始化共享数据
         _simple_params, _simple_grad_params = self.gradients_info_share_q.get()
 
-        # 启动cpu计算进程
-        self.p2 = multiprocessing.Process(target=ExperimentHandler.cpu_most_task, args=(
-            train_title, self.params_info_share_q, self.params_float32_ver_share_q,
-            self.share_params_lock, self.share_params_float32_lock,
-            _simple_params,
-            self.grad_warm_up_steps,
-        ))
-        self.p2.start()
+        # # 启动cpu计算进程
+        # self.p2 = multiprocessing.Process(target=ExperimentHandler.cpu_most_task, args=(
+        #     train_title, self.params_info_share_q, self.params_float32_ver_share_q,
+        #     self.share_params_lock, self.share_params_float32_lock,
+        #     _simple_params,
+        #     self.grad_warm_up_steps,
+        # ))
+        # self.p2.start()
 
         # 共享梯度列表
         self.gradients_cache_share_full = []# 全梯度
@@ -134,6 +136,9 @@ class ExperimentHandler:
             self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
             # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
     
+        # 增量参数压缩器
+        self.params_compressor = IncrementalCompressor()
+
     def __del__(self):
         self.p.terminate()
 
@@ -206,12 +211,13 @@ class ExperimentHandler:
         share_gradients_lock, share_params_lock, share_params_float32_lock,
         config, 
         debug,
-        grad_cache_size,
+        grad_cache_size, 
+        grad_warm_up_steps,
     ):
         """
         负责 梯度解压/梯度应用更新参数
         """
-        def copy_params(param_server, lock, params_cache_share_float32, params_float32_ver_share_q): 
+        def copy_params(param_server, lock, params_cache_share, q, need_warn_up): 
             """获取参数copy到共享参数中"""
             # log(f'copy params')
             # 获取模型参数
@@ -219,9 +225,8 @@ class ExperimentHandler:
             weights, version = param_server.get_weights()
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
-                    # log(f'copy params, idx: {idx}, cache shape: {params_cache_share_float32[idx].data.shape} < {v.shape}')
-                    params_cache_share_float32[idx].data[:] = v[:]
-                params_float32_ver_share_q.put(version)
+                    params_cache_share[idx].data[:] = v[:]
+                q.put((version, need_warn_up))
 
         log(f'[CG]{train_title} calculate gpu init')
 
@@ -257,7 +262,6 @@ class ExperimentHandler:
         temp_length = 0
 
         # 共享参数
-        params_cache_share_float32 = []
         params_cache_share = []
         # 初始化共享参数
         _simple_params = []
@@ -267,7 +271,6 @@ class ExperimentHandler:
             # for debug
             params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
             # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
-            params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _simple_params.append(_shape)
 
         # 初始化共享梯度
@@ -282,12 +285,14 @@ class ExperimentHandler:
             _simple_grad_params.append((v.shape, _compress_shape))
 
         # 初始化一个最新的参数/info
-        # 拷贝一份模型数据，交由cpu压缩生成缓存
-        copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
+        copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q)
         
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
         gradients_info_share_q.put((_simple_params, _simple_grad_params))
+
+        # 计算步数
+        step_count = 0
 
         log(f'{train_title} calculate most start')
         while True:
@@ -336,13 +341,12 @@ class ExperimentHandler:
                 # 更新梯度
                 # log(f'update gradients')
                 param_server.apply_gradients(gs, version)
+
+                # 是否需要预热
+                need_warn_up = grad_warm_up_steps > step_count
+                step_count += 1
                 
-                # # 每4次更新生成一次参数缓存
-                # if (idx + 1) % 4 == 0 or idx == temp_length - 1:
-                #     # 拷贝一份模型数据，交由cpu压缩生成缓存
-                #     copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
-                # 拷贝一份模型数据，交由cpu压缩生成缓存
-                copy_params(param_server, share_params_float32_lock, params_cache_share_float32, params_float32_ver_share_q)
+                copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
             
             log(f'[CG]{train_title} done')   
 
@@ -419,6 +423,11 @@ class ExperimentHandler:
                 # 取出再放回， 保证队列中仍有数据
                 info, v, need_warn_up = self.params_info_share_q.get()
                 self.params_info_share_q.put((info, v, need_warn_up))
+
+            # 计算更新增量
+            ip = data
+            params, info = self.params_compressor.compress(params, ip)
+
             log(f'{msg_header} prepare params, version: {v}')
             return pickle.dumps((params, info, v, need_warn_up))
 

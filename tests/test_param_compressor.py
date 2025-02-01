@@ -32,7 +32,7 @@ def _test_init_and_update(tensor1, tensor2):
     ])
     
     # 初始化参数记录（全量）
-    compressed_tensors, info = compressor.compress([tensor1], "client1", init=True)
+    compressed_tensors, info = compressor.compress([tensor1], "client1")
     
     # 压缩参数
     compressed_tensors, info = compressor.compress([tensor2], "client1")
