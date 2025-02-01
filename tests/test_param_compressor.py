@@ -98,7 +98,7 @@ def test_compressor():
     # 创建包含极端值的张量
     extreme_tensor1 = torch.tensor([float('inf'), float('-inf'), float('nan'), 1e38, -1e38, 0])
     extreme_tensor2 = extreme_tensor1.clone()
-    extreme_tensor2[0] = 1e39  # 更改一个值
+    extreme_tensor2[0] = torch.finfo(torch.float32).max  # 更改一个值
     
     params = OrderedDict([
         ('extreme', extreme_tensor2)
