@@ -305,9 +305,7 @@ class ExperimentHandler:
             log(f'[CG]{train_title} wait gradients: {temp_length}')
 
             # 是否是full梯度
-            import pickle
-            pickle.dump(gradients_cache_info_temp, open(f'gradients_cache_info_temp.pkl', 'wb'))
-            is_full_gradient = [i[0]['is_full_gradient'] for i in gradients_cache_info_temp]
+            is_full_gradient = [i[0][0]['is_full_gradient'] for i in gradients_cache_info_temp]
 
             # 计算梯度
             g_idx = 0

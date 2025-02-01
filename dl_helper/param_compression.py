@@ -48,6 +48,9 @@ class IncrementalCompressor:
             compress_info: 压缩信息字典
         """
         self._init_reference(client_id, tensors, init)
+        if init:
+            # 全量返回
+            return tensors, {'full': True,}
         
         compressed_tensors = []
         compress_info = {
@@ -91,14 +94,20 @@ class IncrementalCompressor:
         """
         param_names = list(param_dict.keys())
         
-        for param_name, compressed_t, indices in zip(
-            param_names,
-            compressed_tensors,
-            compress_info['update_indices'],
-        ):
-            # 获取参数张量
-            param_tensor = param_dict[param_name]
-            
-            # 使用压缩的值更新
-            if indices.numel() > 0:  # 有需要更新的值
-                param_tensor[indices[:, 0], *[indices[:, i] for i in range(1, indices.shape[1])]] = compressed_t
+        if 'full' not in compress_info:
+            for param_name, compressed_t, indices in zip(
+                param_names,
+                compressed_tensors,
+                compress_info['update_indices'],
+            ):
+                # 获取参数张量
+                param_tensor = param_dict[param_name]
+                
+                # 使用压缩的值更新
+                if indices.numel() > 0:  # 有需要更新的值
+                    param_tensor[indices[:, 0], *[indices[:, i] for i in range(1, indices.shape[1])]] = compressed_t
+
+        else:
+            # 全量更新
+            for param_name, compressed_t in zip(param_names, compressed_tensors):
+                param_dict[param_name][:] = compressed_t[:]
