@@ -226,7 +226,7 @@ class ExperimentHandler:
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
                     params_cache_share[idx].data[:] = v[:]
-                q.put((version, need_warn_up))
+                q.put((version, need_warn_up, need_warn_up))
 
         log(f'[CG]{train_title} calculate gpu init')
         
