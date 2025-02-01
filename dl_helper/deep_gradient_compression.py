@@ -99,13 +99,13 @@ class DeepGradientCompression:
                 # 校正索引
                 compressed_size = self.compress_shape(gradient.shape)[0]
 
-                if len(important_indices.shape) == 0 or len(important_indices) < compressed_size:
+                if important_indices.numel() < compressed_size:
                     # 没有重要梯度 / 重要梯度数量不足
                     # 选取 topk k = compressed_size
                     topk = torch.topk(abs_grad, compressed_size)
                     important_indices = topk.indices
 
-                elif len(important_indices) > compressed_size:
+                elif important_indices.numel() > compressed_size:
                     # 随机抽取降采样
                     important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
 

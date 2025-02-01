@@ -1,4 +1,4 @@
-import torch
+import torch, math
 import numpy as np
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
@@ -28,7 +28,7 @@ class IncrementalCompressor:
             init: 是否强制初始化
         """
         if init or client_id not in self.client_params:
-            self.client_params[client_id] = [t.clone().detach() for t in tensors]
+            self.client_params[client_id] = [t.clone().detach().view(-1) for t in tensors]
         
     def compress(self, 
                 tensors: List[torch.Tensor],
@@ -59,7 +59,8 @@ class IncrementalCompressor:
         
         for curr_t, last_t in zip(tensors, self.client_params[client_id]):
             # 计算变化量
-            diff = torch.abs(curr_t - last_t)
+            flat_curr_t = curr_t.view(-1)
+            diff = torch.abs(flat_curr_t - last_t)
             mask = diff > self.threshold
             update_indices = torch.nonzero(mask).squeeze()
             
@@ -72,7 +73,7 @@ class IncrementalCompressor:
             compressed_tensors.append(update_values)
             
             # 更新参考张量
-            last_t[mask] = curr_t[mask]
+            last_t[mask] = flat_curr_t[mask]
             
         return compressed_tensors, compress_info
     
@@ -105,7 +106,22 @@ class IncrementalCompressor:
                 
                 # 使用压缩的值更新
                 if indices.numel() > 0:  # 有需要更新的值
-                    param_tensor[indices[:, 0], *[indices[:, i] for i in range(1, indices.shape[1])]] = compressed_t
+                    param_tensor
+
+                    # 创建零张量
+                    full_p = torch.zeros(
+                        math.prod(param_tensor.shape), 
+                        device=param_tensor.device
+                    )
+
+                    # 填充压缩后的梯度
+                    full_p[indices] = compressed_t
+                    
+                    # 恢复原始形状
+                    full_p = full_p.view(param_tensor.shape)
+
+                    # 更新参数
+                    param_dict[param_name][:] = full_p[:]
 
         else:
             # 全量更新

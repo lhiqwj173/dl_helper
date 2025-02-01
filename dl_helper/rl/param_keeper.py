@@ -57,7 +57,7 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100,
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100, grad_cache_size=15
     ):
         """
         train_title: 训练标题
@@ -69,6 +69,9 @@ class ExperimentHandler:
 
         # 客户端 IP/id
         self.client_ip_ids = {}
+
+        # 梯度缓存数量
+        self.grad_cache_size = grad_cache_size
 
         # 版本号
         self.version = 0
@@ -98,6 +101,7 @@ class ExperimentHandler:
             self.share_gradients_lock, self.share_params_lock, self.share_params_float32_lock,
             config,
             self.debug,
+            self.grad_cache_size,
         ))
         self.p.start()
 
@@ -121,8 +125,8 @@ class ExperimentHandler:
         self.params_cache_share = []
         # 初始化共享梯度
         for idx, (_shape_full, _shape) in enumerate(_simple_grad_params):
-            self.gradients_cache_share_full.append(share_tensor_list(f'{self.train_title}_gcsfull_{idx}', _shape_full, 'float32', 30, debug=self.debug))
-            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', 30, debug=self.debug))
+            self.gradients_cache_share_full.append(share_tensor_list(f'{self.train_title}_gcsfull_{idx}', _shape_full, 'float32', self.grad_cache_size, debug=self.debug))
+            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', self.grad_cache_size, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
             # for debug
@@ -199,6 +203,7 @@ class ExperimentHandler:
         share_gradients_lock, share_params_lock, share_params_float32_lock,
         config, 
         debug,
+        grad_cache_size,
     ):
         """
         负责 梯度解压/梯度应用更新参数
@@ -267,8 +272,8 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', 30, debug=debug))
-            gradients_cache_share_full.append(share_tensor_list(f'{train_title}_gcsfull_{idx}', v.shape, 'float32', 30, debug=debug))
+            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', grad_cache_size, debug=debug))
+            gradients_cache_share_full.append(share_tensor_list(f'{train_title}_gcsfull_{idx}', v.shape, 'float32', grad_cache_size, debug=debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
             gradients_cache_temp_full.append(gradients_cache_share_full[idx].get_blank_same_data_local())
             _simple_grad_params.append((v.shape, _compress_shape))
