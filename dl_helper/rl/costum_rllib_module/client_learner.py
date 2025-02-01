@@ -259,7 +259,7 @@ class ClientLearnerGroup(LearnerGroup):
             grad_params_dict = self._get_results(results)[0]
 
         # 创建共享参数
-        self.shared_param = SharedParam(params_dict, grad_params_dict, create=True)
+        self.shared_param = SharedParam(_params_dict, grad_params_dict, create=True)
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
