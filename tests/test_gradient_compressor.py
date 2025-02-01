@@ -137,14 +137,14 @@ def test_gradient_compressor(compressor_cls, *args, warm_up_steps=False, **kwarg
             ]
         },
         
-        # # 10. 特殊数值测试
-        # {
-        #     "name": "特殊数值梯度",
-        #     "gradients": [
-        #         torch.tensor([[1.0, float('inf')], [float('nan'), 2.0]]),
-        #         torch.tensor([[3.0, float('-inf')], [float('nan'), 4.0]])
-        #     ]
-        # }
+        # 10. 特殊数值测试
+        {
+            "name": "极小梯度shape",
+            "gradients": [
+                torch.tensor([1.0, 2.0]),
+                torch.tensor(0.000001)
+            ]
+        }
     ]
     
     # 运行所有测试用例
@@ -182,5 +182,5 @@ def test_gradient_compressor(compressor_cls, *args, warm_up_steps=False, **kwarg
     return success_count == total_count
 
 if __name__ == "__main__":
-    # test_gradient_compressor(DeepGradientCompression)
-    test_gradient_compressor(DeepGradientCompression, warm_up_steps=True)
+    test_gradient_compressor(DeepGradientCompression)
+    # test_gradient_compressor(DeepGradientCompression, warm_up_steps=True)

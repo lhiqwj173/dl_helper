@@ -99,17 +99,15 @@ class DeepGradientCompression:
                 # 校正索引
                 compressed_size = self.compress_shape(gradient.shape)[0]
 
-                # for debug
-                import pickle
-                pickle.dump((idx, gradient), open(f'grad_{idx}.pkl', 'wb'))
-
-                if len(important_indices) > compressed_size:
-                    # 随机抽取降采样
-                    important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
-                elif len(important_indices) < compressed_size:
+                if len(important_indices.shape) == 0 or len(important_indices) < compressed_size:
+                    # 没有重要梯度 / 重要梯度数量不足
                     # 选取 topk k = compressed_size
                     topk = torch.topk(abs_grad, compressed_size)
                     important_indices = topk.indices
+
+                elif len(important_indices) > compressed_size:
+                    # 随机抽取降采样
+                    important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
 
                 # 获取重要梯度
                 important_grad = momentum_grad[important_indices]

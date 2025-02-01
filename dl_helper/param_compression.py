@@ -51,26 +51,20 @@ class IncrementalCompressor:
         
         compressed_tensors = []
         compress_info = {
-            'masks': [],
-            'ref_tensors': [],
             'update_indices': [],
-            'shapes': []
         }
         
         for curr_t, last_t in zip(tensors, self.client_params[client_id]):
             # 计算变化量
             diff = torch.abs(curr_t - last_t)
             mask = diff > self.threshold
+            update_indices = torch.nonzero(mask).squeeze()
             
-            # 获取需要更新的值和索引
-            update_idx = torch.nonzero(mask, as_tuple=False)
-            update_values = curr_t[mask]
+            # 获取需要更新的值
+            update_values = diff[update_indices]
             
             # 保存压缩信息
-            compress_info['masks'].append(mask)
-            compress_info['ref_tensors'].append(last_t)
-            compress_info['update_indices'].append(update_idx)
-            compress_info['shapes'].append(curr_t.shape)
+            compress_info['update_indices'].append(update_indices)
             
             compressed_tensors.append(update_values)
             
@@ -97,12 +91,10 @@ class IncrementalCompressor:
         """
         param_names = list(param_dict.keys())
         
-        for param_name, compressed_t, ref_t, indices, shape in zip(
+        for param_name, compressed_t, indices in zip(
             param_names,
             compressed_tensors,
-            compress_info['ref_tensors'],
             compress_info['update_indices'],
-            compress_info['shapes']
         ):
             # 获取参数张量
             param_tensor = param_dict[param_name]
