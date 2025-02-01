@@ -9,7 +9,8 @@ from typing import Dict, Any
 from collections import deque
 import copy
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
-from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor
+from dl_helper.rl.rl_utils import ParamCompressor
+from dl_helper.deep_gradient_compression import DeepGradientCompression
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -56,7 +57,8 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config, debug=False):
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100,
+    ):
         """
         train_title: 训练标题
         config: RLlib 配置
@@ -70,6 +72,8 @@ class ExperimentHandler:
 
         # 版本号
         self.version = 0
+
+        self.grad_warm_up_steps = grad_warm_up_steps
 
         # 共享梯度队列
         # 梯度数据经过稀疏化，形状
@@ -106,18 +110,19 @@ class ExperimentHandler:
             train_title, self.params_info_share_q, self.params_float32_ver_share_q,
             self.share_params_lock, self.share_params_float32_lock,
             _simple_params,
+            self.grad_warm_up_steps,
         ))
         self.p2.start()
 
         # 共享梯度列表
-        self.gradients_cache_share = []
+        self.gradients_cache_share_full = []# 全梯度
+        self.gradients_cache_share = []# 用于压缩的梯度使用
         # 共享参数, 只需要维护一份最新的数据
         self.params_cache_share = []
         # 初始化共享梯度
-        for idx, _shape in enumerate(_simple_grad_params):
-            # # for debug
-            # self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', 30, debug=self.debug))
-            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'int8', 30, debug=self.debug))
+        for idx, (_shape_full, _shape) in enumerate(_simple_grad_params):
+            self.gradients_cache_share_full.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape_full, 'float32', 30, debug=self.debug))
+            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', 30, debug=self.debug))
         # 初始化共享参数
         for idx, _shape in enumerate(_simple_params):
             # for debug
@@ -128,152 +133,16 @@ class ExperimentHandler:
         self.p.terminate()
 
     @staticmethod
-    def calculate_most_task(
-        train_title, gradients_info_share_q, params_info_share_q, share_data_new_event, share_gradients_lock, share_params_lock, 
-        config, 
-        debug,
-    ):
-        """计算密集型任务
-        负责 梯度解压/梯度应用更新参数/参数压缩
-        """
-        def produce_params_cache(param_server, param_compressor): 
-            """生成发送次数缓存"""
-            log(f'produce params cache')
-            # 获取模型参数
-            # weights： 参数字典[torch.Tensor]
-            weights, version = param_server.get_weights()
-            # 压缩参数
-            weights, info = param_compressor.compress_params_dict(weights)
-            return weights, info, version
-        
-        def update_params(lock, q, params_list, info, version, params_cache_share):
-            """更新参数信息"""
-            log(f'update params')
-            with lock:
-                # 清空q
-                while not q.empty():
-                    q.get()
-                # 最新数据
-                q.put((info, version))
-                # 更新参数
-                for idx, p in enumerate(params_list):
-                    params_cache_share[idx].data[:] = p[:]
-
-        log(f'{train_title} calculate most init')
-
-        # 参数服务器
-        config = config.learners(    
-            num_learners=1,
-            num_gpus_per_learner=0,
-            num_cpus_per_learner=0.5,
-        )
-        env_specifier = config.env
-        if _global_registry.contains(ENV_CREATOR, env_specifier):
-            # 注册的环境
-            env = _global_registry.get(ENV_CREATOR, env_specifier)()
-        else:
-            # gym 环境
-            env = gym.make(env_specifier)
-        param_server = AsyncRLParameterServer(config, env)
-        _params_dict = param_server.get_weights()[0] 
-        _grad_params_dict = param_server.get_gradients_params()
-
-        # 梯度压缩器
-        gradient_compressor = GradientCompressor()
-
-        # 参数压缩器
-        param_compressor = ParamCompressor(list(_params_dict.keys()))
-
-        # 共享梯度
-        gradients_cache_share = []
-        # 计算用临时梯度
-        gradients_cache_temp = []
-        # 计算用临时梯度信息
-        gradients_cache_info_temp = []
-        # 临时梯度的数量(待应用)
-        temp_length = 0
-
-        # 共享参数
-        params_cache_share = []
-        # 初始化共享参数
-        _simple_params = []
-        for idx, (k, v) in enumerate(_params_dict.items()):
-            log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
-            _shape = v.shape
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', v.shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
-            _simple_params.append(_shape)
-
-        # 初始化共享梯度
-        _simple_grad_params = []
-        for idx, (k, v) in enumerate(_grad_params_dict.items()):
-            _compress_shape = gradient_compressor.compress_shape(v.shape)
-            log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
-            gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
-            _simple_grad_params.append(_compress_shape)
-
-        # 初始化一个最新的参数/info
-        weights, info, version = produce_params_cache(param_server, param_compressor)
-        update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
-        
-        # 回传 参数形状列表 
-        # 回传后，共享参数以及初始化完成
-        gradients_info_share_q.put((_simple_params, _simple_grad_params))
-
-        log(f'{train_title} calculate most start')
-        while True:
-            share_data_new_event.wait()
-            share_data_new_event.clear()
-
-            # log(f'{train_title} calculate active')
-
-            with share_gradients_lock:
-                temp_length = gradients_cache_share[0].size()
-                if temp_length == 0:
-                    log(f'{train_title} no gradients, keep wait')
-                    continue
-                # 拷贝梯度到临时梯度
-                for idx, _g in enumerate(gradients_cache_share):
-                    _g.all_copy_slice(gradients_cache_temp[idx], 0)
-                # 获取全部的梯度信息
-                for idx in range(temp_length):
-                    gradients_cache_info_temp.append(gradients_info_share_q.get())  
-
-            log(f'{train_title} wait gradients: {temp_length}')
-
-            # 计算梯度
-            for idx in range(temp_length):
-                # 获取梯度列表
-                # log(f'get gradients')
-                gs = [i[idx] for i in gradients_cache_temp]
-                # 解压梯度
-                # log(f'decompress gradients')
-                info, version = gradients_cache_info_temp[idx]
-                gs = gradient_compressor.decompress(gs, info)
-                # 更新梯度
-                # log(f'update gradients')
-                param_server.apply_gradients(gs, version)
-                
-                # 每4次更新生成一次参数缓存
-                if (idx + 1) % 4 == 0 or idx == temp_length - 1:
-                    # 生成参数缓存
-                    # log(f'produce params cache')
-                    weights, info, version = produce_params_cache(param_server, param_compressor)
-                    update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
-                    log(f'{train_title} update params, version: {version}')
-
-    @staticmethod
     def cpu_most_task(
         train_title, params_info_share_q, params_float32_ver_share_q,
         share_params_lock, share_params_float32_lock,
         _simple_params,
+        grad_warm_up_steps,
     ):
         """
         参数压缩，生成缓存
         """
-        def update_params(lock, q, params_list, info, version, params_cache_share):
+        def update_params(lock, q, params_list, info, version, need_warn_up, params_cache_share):
             """更新参数信息"""
             log(f'update params')
             with lock:
@@ -281,7 +150,7 @@ class ExperimentHandler:
                 while not q.empty():
                     q.get()
                 # 最新数据
-                q.put((info, version))
+                q.put((info, version, need_warn_up))
                 # 更新参数
                 for idx, p in enumerate(params_list):
                     params_cache_share[idx].data[:] = p[:]
@@ -303,6 +172,7 @@ class ExperimentHandler:
             params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
             _params_cache_share_float32.append(torch.zeros(_shape, dtype=torch.float32))
 
+        step_count = 0
         while True:
             # 获取一份待压缩数据
             version = params_float32_ver_share_q.get()
@@ -315,8 +185,13 @@ class ExperimentHandler:
             # 压缩参数
             weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
 
+            # 是否需要预热
+            need_warn_up = grad_warm_up_steps > step_count
+
             # 更新到共享参数
-            update_params(share_params_lock, params_info_share_q, weights, info, version, params_cache_share)
+            update_params(share_params_lock, params_info_share_q, weights, info, version, need_warn_up, params_cache_share)
+
+            step_count += 1
 
     @staticmethod
     def gpu_most_task(
@@ -360,12 +235,14 @@ class ExperimentHandler:
         _grad_params_dict = param_server.get_gradients_params()
 
         # 梯度压缩器
-        gradient_compressor = GradientCompressor()
+        gradient_compressor = DeepGradientCompression()
 
         # 共享梯度
         gradients_cache_share = []
+        gradients_cache_share_full = []
         # 计算用临时梯度
         gradients_cache_temp = []
+        gradients_cache_temp_full = []
         # 计算用临时梯度信息
         gradients_cache_info_temp = []
         # 临时梯度的数量(待应用)
@@ -390,13 +267,11 @@ class ExperimentHandler:
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
             log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            # # for debug
-            # gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', v.shape, 'float32', 30, debug=debug))
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'int8', 30, debug=debug))
+            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', 30, debug=debug))
+            gradients_cache_share_full.append(share_tensor_list(f'{train_title}_gcs_{idx}', v.shape, 'float32', 30, debug=debug))
             gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
-            # # for debug
-            # _simple_grad_params.append(v.shape)
-            _simple_grad_params.append(_compress_shape)
+            gradients_cache_temp_full.append(gradients_cache_share_full[idx].get_blank_same_data_local())
+            _simple_grad_params.append((v.shape, _compress_shape))
 
         # 初始化一个最新的参数/info
         # 拷贝一份模型数据，交由cpu压缩生成缓存
@@ -414,24 +289,37 @@ class ExperimentHandler:
             # log(f'{train_title} calculate active')
 
             with share_gradients_lock:
-                temp_length = gradients_cache_share[0].size()
+                temp_length = gradients_cache_share[0].size() + gradients_cache_share_full[0].size()
                 if temp_length == 0:
                     log(f'{train_title} no gradients, keep wait')
                     continue
-                # 拷贝梯度到临时梯度
-                for idx, _g in enumerate(gradients_cache_share):
-                    _g.all_copy_slice(gradients_cache_temp[idx], 0)
                 # 获取全部的梯度信息
                 for idx in range(temp_length):
                     gradients_cache_info_temp.append(gradients_info_share_q.get())  
+                # 拷贝梯度到临时梯度
+                for idx, _g in enumerate(gradients_cache_share):
+                    _g.all_copy_slice(gradients_cache_temp[idx], 0)
+                for idx, _g in enumerate(gradients_cache_share_full):
+                    _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
 
             log(f'[CG]{train_title} wait gradients: {temp_length}')
 
+            # 是否是full梯度
+            is_full_gradient = [i[0]['is_full_gradient'] for i in gradients_cache_info_temp]
+
             # 计算梯度
+            g_idx = 0
+            g_idx_full = 0
             for idx in range(temp_length):
                 # 获取梯度列表
                 # log(f'get gradients')
-                gs = [i[idx] for i in gradients_cache_temp]
+                if is_full_gradient[idx]:
+                    gs = [i[g_idx_full] for i in gradients_cache_temp_full]
+                    g_idx_full += 1
+                else:
+                    gs = [i[g_idx] for i in gradients_cache_temp]
+                    g_idx += 1
+
                 # 解压梯度
                 # log(f'decompress gradients')
                 info, version = gradients_cache_info_temp[idx]
@@ -521,10 +409,10 @@ class ExperimentHandler:
                 for i in self.params_cache_share:
                     params.append(i.data.clone())
                 # 取出再放回， 保证队列中仍有数据
-                info, v = self.params_info_share_q.get()
-                self.params_info_share_q.put((info, v))
+                info, v, need_warn_up = self.params_info_share_q.get()
+                self.params_info_share_q.put((info, v, need_warn_up))
             log(f'{msg_header} prepare params, version: {v}')
-            return pickle.dumps((params, info, v))
+            return pickle.dumps((params, info, v, need_warn_up))
 
         elif cmd == 'update_gradients':
             log(f'{msg_header} recv update_gradients request')
@@ -535,15 +423,20 @@ class ExperimentHandler:
             self.gradients_info_share_q.put((compress_info, version))
             # 提交到共享梯度
             # log(f'put gradients')
-            
+
             wait_count = 0
             while True:
                 with self.share_gradients_lock:
-                    gradients_cache_share_length = self.gradients_cache_share[0].size()
+                    # 是否是全梯度
+                    if compress_info['is_full_gradient']:
+                        cache_share = self.gradients_cache_share_full
+                    else:
+                        cache_share = self.gradients_cache_share
+
+                    gradients_cache_share_length = cache_share[0].size()
                     if gradients_cache_share_length < 30:
                         for idx, _g in enumerate(g):
-                            # log(f'append gradients, idx: {idx}, shape: {_g.shape} > {self.gradients_cache_share[idx]._data[0].shape}')
-                            self.gradients_cache_share[idx].append(_g)
+                            cache_share[idx].append(_g)
                         gradients_cache_share_length += 1
                         break
                     

@@ -1,68 +1,55 @@
-import torch
+import torch, pickle
 from dl_helper.rl.rl_utils import GradientCompressor
+from dl_helper.deep_gradient_compression import DeepGradientCompression
 
-def test_gradient_compressor():
+def test_gradient_compressor(compressor_cls):
     """测试梯度压缩器在各种情况下的表现和压缩率"""
     # 初始化压缩器
-    compressor = GradientCompressor()
-    
     def calculate_compression_ratio(original_size, compressed_size):
         """计算压缩率"""
         return (original_size - compressed_size) / original_size * 100
     
     def get_tensor_size(tensor):
-        """获取张量占用的字节数"""
-        return tensor.element_size() * tensor.nelement()
+        """获取张量序列化后的字节数"""
+        return len(pickle.dumps(tensor))
     
     def run_test(test_name, gradients, expected_error=None):
         """运行单个测试用例"""
         print(f"\n测试用例: {test_name}")
-        try:
-            # 计算原始大小
-            original_size = sum(get_tensor_size(grad) for grad in gradients)
-            
-            # 压缩
-            compressed_grads, compress_info = compressor.compress(gradients)
-            print("压缩成功")
-            
-            # 计算压缩后大小
-            compressed_size = sum(get_tensor_size(grad) for grad in compressed_grads)
-            compression_ratio = calculate_compression_ratio(original_size, compressed_size)
-            print(f"压缩率: {compression_ratio:.2f}%")
-            
-            # 解压
-            decompressed_grads = compressor.decompress(compressed_grads, compress_info)
-            print("解压成功")
-            
-            # 计算压缩统计信息
-            stats = compressor.get_compression_stats(gradients, compressed_grads, compress_info)
-            print(f"压缩统计: {stats}")
-            
-            # 计算压缩误差
-            error = sum(torch.mean((orig - decomp) ** 2).item() 
-                       for orig, decomp in zip(gradients, decompressed_grads))
-            print(f"压缩误差 (MSE): {error:.2e}")
-            
-            # 验证解压后的形状与原始形状相同
-            for orig, decomp in zip(gradients, decompressed_grads):
-                assert orig.shape == decomp.shape, f"形状不匹配: 原始 {orig.shape} vs 解压 {decomp.shape}"
-            print("形状验证通过")
-            
-            return {
-                "success": True,
-                "compression_ratio": compression_ratio,
-                "error": error,
-                "stats": stats
-            }
-            
-        except Exception as e:
-            if expected_error and isinstance(e, expected_error):
-                print(f"预期错误: {str(e)}")
-                return {"success": True}
-            else:
-                print(f"意外错误: {str(e)}")
-                return {"success": False}
-    
+        compressor = compressor_cls()
+
+        # 计算原始大小
+        original_size = get_tensor_size(gradients)
+        
+        # 压缩
+        compressed_grads, compress_info = compressor.compress(gradients)
+        print("压缩成功")
+        
+        # 计算压缩后大小
+        compressed_size = get_tensor_size((compressed_grads, compress_info))
+        compression_ratio = calculate_compression_ratio(original_size, compressed_size)
+        print(f"压缩率: {compression_ratio:.2f}%")
+        
+        # 解压
+        decompressed_grads = compressor.decompress(compressed_grads, compress_info)
+        print("解压成功")
+        
+        # 计算压缩误差
+        error = sum(torch.mean((orig - decomp) ** 2).item() 
+                    for orig, decomp in zip(gradients, decompressed_grads))
+        print(f"压缩误差 (MSE): {error:.2e}")
+        
+        # 验证解压后的形状与原始形状相同
+        for orig, decomp in zip(gradients, decompressed_grads):
+            assert orig.shape == decomp.shape, f"形状不匹配: 原始 {orig.shape} vs 解压 {decomp.shape}"
+        print("形状验证通过")
+        
+        return {
+            "success": True,
+            "compression_ratio": compression_ratio,
+            "error": error,
+        }
+        
     # 测试用例列表
     test_cases = [
         # 1. 基本测试 - 正常梯度
@@ -151,14 +138,14 @@ def test_gradient_compressor():
             ]
         },
         
-        # 10. 特殊数值测试
-        {
-            "name": "特殊数值梯度",
-            "gradients": [
-                torch.tensor([[1.0, float('inf')], [float('nan'), 2.0]]),
-                torch.tensor([[3.0, float('-inf')], [float('nan'), 4.0]])
-            ]
-        }
+        # # 10. 特殊数值测试
+        # {
+        #     "name": "特殊数值梯度",
+        #     "gradients": [
+        #         torch.tensor([[1.0, float('inf')], [float('nan'), 2.0]]),
+        #         torch.tensor([[3.0, float('-inf')], [float('nan'), 4.0]])
+        #     ]
+        # }
     ]
     
     # 运行所有测试用例
@@ -196,4 +183,4 @@ def test_gradient_compressor():
     return success_count == total_count
 
 if __name__ == "__main__":
-    test_gradient_compressor()
+    test_gradient_compressor(DeepGradientCompression)

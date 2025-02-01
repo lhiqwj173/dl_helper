@@ -33,7 +33,8 @@ from dl_helper.rl.socket_base import get_server_weights, send_gradients, request
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_get_server_weights
 
-from dl_helper.rl.rl_utils import GradientCompressor, ParamCompressor, GradientAccumulator
+from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
+from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.tool import report_memory_usage, AsyncProcessQueueReader, Empty
 
 """
@@ -219,7 +220,7 @@ class ClientLearnerGroup(LearnerGroup):
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
         log('request server weights')
-        params_list, info, version = get_server_weights(self.train_title)
+        params_list, info, version, need_warn_up = get_server_weights(self.train_title)
         # 解压参数
         _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
         # 更新参数到所有learner
@@ -234,8 +235,12 @@ class ClientLearnerGroup(LearnerGroup):
                 lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
             )
         log(f"set weights to all learners, version: {version}")
+
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        # log(f"set weights to all learners, res: {res}")
+        log(f"set version to all learners, res: {res}")
+
+        res = self.foreach_learner(lambda learner: learner.set_weights_version(int(need_warn_up)))
+        log(f"set need_warn_up to all learners, res: {res}")
 
         # 获取一个learner的梯度字典
         if self.is_local:
@@ -339,6 +344,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 更新计数
         self.update_count = 0
 
+        self.version = 0
+        self.need_warn_up = False
+
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -370,12 +378,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 在新进程中运行事件循环
             self.event_loop_process = multiprocessing.Process(
-                target=self._run_event_loop_process, args=(self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_dict)
+                target=self._run_event_loop_process, 
+                args=(
+                    self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_dict,
+                    self.version, self.need_warn_up
+                )
             )
             self.event_loop_process.start()
 
     @staticmethod
-    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_dict):
+    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_dict, version, need_warn_up):
         """在新进程中运行事件循环"""
         # 事件循环
         try:
@@ -384,17 +396,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 如果当前线程没有事件循环，则创建一个新的
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
+        
         class share_info:
             """
             共享信息类
             """
-            def __init__(self, train_title, client_id):
+            def __init__(self, train_title, client_id, version, need_warn_up):
                 self.train_title = train_title
                 self.client_id = client_id
-                self.version = 0
-
-        info_data = share_info(train_title, client_id)
+                self.version = version
+                self.need_warn_up = need_warn_up
+        
+        info_data = share_info(train_title, client_id, version, need_warn_up)
         
         # 梯度事件队列
         grad_q = AsyncQueue(maxsize=30)
@@ -428,7 +441,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{info_data.client_id}] grad_coroutine {idx} start")
 
         # 梯度压缩器
-        gradient_compressor = GradientCompressor()
+        gradient_compressor = DeepGradientCompression()
 
         while True:
             try:
@@ -447,7 +460,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     loop = asyncio.get_event_loop()
                     compressed_result = await loop.run_in_executor(
                         process_pool,
-                        partial(gradient_compressor.compress, merged_gradients)
+                        partial(gradient_compressor.compress, merged_gradients, info_data.need_warn_up)
                     )
                     compressed_grads, compress_info = compressed_result
 
@@ -506,7 +519,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     send_count += 1
 
                     # 获取参数
-                    params_list, info, info_data.version = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
+                    params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     # log(f"[{ask_update_count}] recv params data")
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
@@ -669,6 +682,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.version = version
         return self.version
 
+    def set_need_warn_up(self, need_warn_up):
+        log(f"[{id(self)}] set_need_warn_up: {need_warn_up}")
+        self.need_warn_up = bool(need_warn_up)
 
 if __name__ == '__main__':
     gradient_buffer_file = r"C:\Users\lh\Downloads\gradient_buffer_0.pkl"

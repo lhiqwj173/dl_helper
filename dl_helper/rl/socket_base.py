@@ -120,11 +120,11 @@ def _handle_response_params(response):
         raise Exception('Failed to receive parameters')
     # 反序列化参数
     try:
-        weights, info, version = pickle.loads(response)
+        weights, info, version, need_warn_up = pickle.loads(response)
     except Exception as e:
         print(f"反序列化失败: {e}")
         raise e
-    return weights, info, version
+    return weights, info, version, need_warn_up
 
 def _get_server_weights(_socket, train_title, version):
     # 发送获取参数请求
