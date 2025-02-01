@@ -11,6 +11,7 @@ import copy
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
+from dl_helper.param_compression import IncrementalCompressor
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -162,7 +163,8 @@ class ExperimentHandler:
         log(f'[CC]{train_title} calculate cpu init')
 
         # 参数压缩器
-        param_compressor = ParamCompressor()
+        # param_compressor = ParamCompressor()
+        param_compressor = IncrementalCompressor()
         
         # 共享参数
         params_cache_share_float32 = []
@@ -187,7 +189,8 @@ class ExperimentHandler:
                     version = params_float32_ver_share_q.get()
 
             # 压缩参数
-            weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
+            # weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
+            weights, info = param_compressor.compress(_params_cache_share_float32)
 
             # 是否需要预热
             need_warn_up = grad_warm_up_steps > step_count
@@ -440,7 +443,7 @@ class ExperimentHandler:
                 with self.share_gradients_lock:
 
                     gradients_cache_share_length = cache_share[0].size()
-                    if gradients_cache_share_length < 30:
+                    if gradients_cache_share_length < self.grad_cache_size:
                         for idx, _g in enumerate(g):
                             cache_share[idx].append(_g)
                         gradients_cache_share_length += 1

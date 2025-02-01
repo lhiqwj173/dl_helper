@@ -35,6 +35,7 @@ from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
 from dl_helper.deep_gradient_compression import DeepGradientCompression
+from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import report_memory_usage, AsyncProcessQueueReader, Empty
 
 """
@@ -181,8 +182,8 @@ class ClientLearnerGroup(LearnerGroup):
         
         # 参数压缩器
         param_keys = list(self.get_weights()['default_policy'].keys())
-        # log(f"LearnerGroup param_keys: {param_keys}")
         self.param_compressor = ParamCompressor(param_keys)
+        # self.param_compressor = IncrementalCompressor()
 
         # 共享参数
         self.shared_param = None
@@ -221,8 +222,12 @@ class ClientLearnerGroup(LearnerGroup):
         # 获取服务器的参数，并更新到其他learner
         log('request server weights')
         params_list, info, version, need_warn_up = get_server_weights(self.train_title)
+
         # 解压参数
         _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+        # _params_dict = self.get_weights()['default_policy']
+        # self.param_compressor.decompress(params_list, info, _params_dict)
+        
         # 更新参数到所有learner
         params_dict = OrderedDict()
         for k, v in _params_dict.items():
@@ -491,9 +496,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         log(f"[{info_data.client_id}] param_coroutine start")
 
-        params_keys = list(params_dict.keys())
         # 参数解压器
+        params_keys = list(params_dict.keys())
         param_compressor = ParamCompressor(params_keys)
+        # param_compressor = IncrementalCompressor()
+        # sync_params_dict = copy.deepcopy(params_dict)
+
         # 共享参数
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
@@ -521,16 +529,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 获取参数
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     # log(f"[{ask_update_count}] recv params data")
+                    
                     # 在进程池中执行解压操作
                     loop = asyncio.get_event_loop()
                     decompressed_result = await loop.run_in_executor(
                         process_pool,
                         partial(param_compressor.decompress_params_dict, params_list, info)
                     )
-                    # log(f"[{ask_update_count}] decompress params data")
-                    params_dict = decompressed_result
                     # 更新共享参数
-                    shared_param.set_param(params_dict)
+                    shared_param.set_param(decompressed_result)
+
+                    # await loop.run_in_executor(
+                    #     process_pool,
+                    #     partial(param_compressor.decompress, params_list, info, sync_params_dict)
+                    # )
+                    # # 更新共享参数
+                    # shared_param.set_param(sync_params_dict)
+
                     # log(f"[{ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
                     shared_param.param_event.set()

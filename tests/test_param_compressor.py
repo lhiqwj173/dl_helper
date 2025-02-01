@@ -74,5 +74,12 @@ def test_compressor():
     extreme_tensor2[0] = torch.finfo(torch.float32).max  # 更改一个值
     _test_init_and_update(extreme_tensor1, extreme_tensor2)
 
+    # 测试用例5：无参数更新
+    print("\n=== 测试5：无参数更新 ===")
+    # 创建包含极端值的张量
+    small_tensor1 = torch.randn(100, 100)
+    small_tensor2 = small_tensor1.clone()
+    _test_init_and_update(small_tensor1, small_tensor2)
+
 if __name__ == "__main__":
     test_compressor()
