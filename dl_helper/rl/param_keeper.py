@@ -229,6 +229,9 @@ class ExperimentHandler:
                 q.put((version, need_warn_up))
 
         log(f'[CG]{train_title} calculate gpu init')
+        
+        # 计算步数
+        step_count = 0
 
         # 参数服务器
         config = config.learners(    
@@ -291,9 +294,6 @@ class ExperimentHandler:
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
         gradients_info_share_q.put((_simple_params, _simple_grad_params))
-
-        # 计算步数
-        step_count = 0
 
         log(f'{train_title} calculate most start')
         while True:
