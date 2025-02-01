@@ -225,20 +225,17 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 解压参数
         # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        _params_dict = self.get_weights()['default_policy']
-        _params_dict_torch = OrderedDict()
-        for k, v in _params_dict.items():
-            _params_dict_torch[k] = torch.from_numpy(v)
-        self.param_compressor.decompress(params_list, info, _params_dict_torch)
+        _params_dict_np = self.get_weights()['default_policy']
+        _params_dict = OrderedDict()
+        for k, v in _params_dict_np.items():
+            _params_dict[f'module.{k}'] = torch.from_numpy(v)
+        self.param_compressor.decompress(params_list, info, _params_dict)
         
         # 更新参数到所有learner
-        params_dict = OrderedDict()
-        for k, v in _params_dict.items():
-            params_dict[f'module.{k}'] = v
         if self.is_local:
-            self._learner.module._rl_modules['default_policy'].load_state_dict(params_dict)
+            self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
         else:
-            state_ref = ray.put(params_dict)
+            state_ref = ray.put(_params_dict)
             self.foreach_learner(
                 lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
             )
