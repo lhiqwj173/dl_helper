@@ -46,7 +46,7 @@ class DeepGradientCompression:
         compression_infos = []
 
         # 预热期间不压缩
-        if self.communication_steps < self.warm_up_steps:
+        if self.communication_steps < warm_up_steps:
             for idx, gradient in enumerate(gradients):
                 param_name = f'grad_{idx}'
                 
