@@ -163,8 +163,8 @@ class ExperimentHandler:
         log(f'[CC]{train_title} calculate cpu init')
 
         # 参数压缩器
-        # param_compressor = ParamCompressor()
-        param_compressor = IncrementalCompressor()
+        param_compressor = ParamCompressor()
+        # param_compressor = IncrementalCompressor()
         
         # 共享参数
         params_cache_share_float32 = []
@@ -189,8 +189,8 @@ class ExperimentHandler:
                     version = params_float32_ver_share_q.get()
 
             # 压缩参数
-            # weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
-            weights, info = param_compressor.compress(_params_cache_share_float32)
+            weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
+            # weights, info = param_compressor.compress(_params_cache_share_float32)
 
             # 是否需要预热
             need_warn_up = grad_warm_up_steps > step_count
