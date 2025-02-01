@@ -428,7 +428,7 @@ class ExperimentHandler:
             while True:
                 with self.share_gradients_lock:
                     # 是否是全梯度
-                    if compress_info['is_full_gradient']:
+                    if compress_info[0]['is_full_gradient']:
                         cache_share = self.gradients_cache_share_full
                     else:
                         cache_share = self.gradients_cache_share
