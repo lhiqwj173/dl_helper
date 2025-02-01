@@ -225,7 +225,7 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 解压参数
         # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        _params_dict = self.get_weights()['default_policy']
+        _params_dict = copy.deepcopy(self.get_weights()['default_policy'])
         self.param_compressor.decompress(params_list, info, _params_dict)
         
         # 更新参数到所有learner
