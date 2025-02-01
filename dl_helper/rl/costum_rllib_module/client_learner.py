@@ -225,7 +225,10 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 解压参数
         # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
-        _params_dict = copy.deepcopy(self.get_weights()['default_policy'])
+        _params_dict = self.get_weights()['default_policy']
+        _params_dict_torch = OrderedDict()
+        for k, v in _params_dict.items():
+            _params_dict_torch[k] = torch.from_numpy(v)
         self.param_compressor.decompress(params_list, info, _params_dict)
         
         # 更新参数到所有learner
