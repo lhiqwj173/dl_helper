@@ -583,7 +583,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 按照梯度同步频率请求服务器参数
             if self.update_count % self.min_param_sync_interval == 0:
-                # log(f'[{self.update_count}] request param and reset event')
+                log(f'[{self.update_count}] request param and reset event')
                 self.task_queue.put(self.update_count)
                 # 重置event
                 self.shared_param.param_event.clear()
@@ -592,14 +592,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.shared_param.grad_event.clear()
 
         # 计算梯度
-        # log('self._params:')
-        # for idx, (k, v) in enumerate(self._params.items()):
-        #     log(f'{idx} {k.shape} {v.shape}')
-        # log('compute gradients:')
         gradients_dict = super().compute_gradients(*args, **kwargs)
-        # for idx, (k, v) in enumerate(gradients_dict.items()):
-        #     log(f'{idx} {k.shape} {v.shape}')
-        # log(f'compute gradients done')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
