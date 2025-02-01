@@ -523,15 +523,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     t0 = time.time()
 
-                    # log(f"[{ask_update_count}] request server weights")
+                    log(f"[{ask_update_count}] request server weights")
                     send_count += 1
 
                     # 获取参数
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
-                    # log(f"[{ask_update_count}] recv params data")
+                    log(f"[{ask_update_count}] recv params data")
                     
                     # 在进程池中执行解压操作
-                    loop = asyncio.get_event_loop()
+                    # loop = asyncio.get_event_loop()
                     # decompressed_result = await loop.run_in_executor(
                     #     process_pool,
                     #     partial(param_compressor.decompress_params_dict, params_list, info)
@@ -540,14 +540,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # shared_param.set_param(decompressed_result)
 
                     # 增量解压操作
+                    log(f"[{ask_update_count}] decompress params data")
                     param_compressor.decompress(params_list, info, sync_params_dict)
                     # 更新共享参数
                     shared_param.set_param(sync_params_dict)
 
-                    # log(f"[{ask_update_count}] set params to shared param")
+                    log(f"[{ask_update_count}] set params to shared param")
                     # 触发共享参数更新事件
                     shared_param.param_event.set()
-                    # log(f"[{ask_update_count}] update latest server weights done")
+                    log(f"[{ask_update_count}] update latest server weights done")
 
                     # 统计耗时
                     total_cost_time += time.time() - t0
