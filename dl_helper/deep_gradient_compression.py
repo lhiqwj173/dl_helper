@@ -101,6 +101,11 @@ class DeepGradientCompression:
 
                 # 校正索引
                 compressed_size = self.compress_shape(gradient.shape)[0]
+
+                # for debug
+                import pickle
+                pickle.dumps((idx, gradient))
+
                 if len(important_indices) > compressed_size:
                     # 随机抽取降采样
                     important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
@@ -108,7 +113,7 @@ class DeepGradientCompression:
                     # 选取 topk k = compressed_size
                     topk = torch.topk(abs_grad, compressed_size)
                     important_indices = topk.indices
-                
+
                 # 获取重要梯度
                 important_grad = momentum_grad[important_indices]
                 
