@@ -1,8 +1,7 @@
 import torch, pickle
-from dl_helper.rl.rl_utils import GradientCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 
-def test_gradient_compressor(compressor_cls):
+def test_gradient_compressor(compressor_cls, *args, warm_up_steps=False, **kwargs):
     """测试梯度压缩器在各种情况下的表现和压缩率"""
     # 初始化压缩器
     def calculate_compression_ratio(original_size, compressed_size):
@@ -16,13 +15,13 @@ def test_gradient_compressor(compressor_cls):
     def run_test(test_name, gradients, expected_error=None):
         """运行单个测试用例"""
         print(f"\n测试用例: {test_name}")
-        compressor = compressor_cls()
+        compressor = compressor_cls(*args, **kwargs)
 
         # 计算原始大小
         original_size = get_tensor_size(gradients)
         
         # 压缩
-        compressed_grads, compress_info = compressor.compress(gradients)
+        compressed_grads, compress_info = compressor.compress(gradients, warm_up_steps=warm_up_steps)
         print("压缩成功")
         
         # 计算压缩后大小
@@ -183,4 +182,5 @@ def test_gradient_compressor(compressor_cls):
     return success_count == total_count
 
 if __name__ == "__main__":
-    test_gradient_compressor(DeepGradientCompression)
+    # test_gradient_compressor(DeepGradientCompression)
+    test_gradient_compressor(DeepGradientCompression, warm_up_steps=True)

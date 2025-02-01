@@ -49,16 +49,13 @@ class DeepGradientCompression:
         if self.communication_steps < warm_up_steps:
             for idx, gradient in enumerate(gradients):
                 param_name = f'grad_{idx}'
-                
-                # 扁平化梯度
-                flat_grad = gradient.view(-1)
-                
+
                 # 初始化动量状态
                 if param_name not in self.momentum_states:
-                    self.momentum_states[param_name] = torch.zeros_like(flat_grad)
+                    self.momentum_states[param_name] = torch.zeros_like(gradient)
                 
                 # 计算新的动量
-                momentum_grad = (self.momentum_factor * self.momentum_states[param_name]) + flat_grad
+                momentum_grad = (self.momentum_factor * self.momentum_states[param_name]) + gradient
                 self.momentum_states[param_name] = momentum_grad
                 
                 compression_info = {
@@ -135,9 +132,9 @@ class DeepGradientCompression:
         decompressed_gradients = []
 
         for compressed_grad, comp_info in zip(compressed_grads, compression_infos):
-            # 如果是全梯度,直接返回
+            # 如果是全梯度,不需要解压
             if comp_info['is_full_gradient']:
-                decompressed_gradients.append(compressed_grad.view(comp_info['original_shape']))
+                decompressed_gradients.append(compressed_grad)
                 continue
 
             # 创建零张量

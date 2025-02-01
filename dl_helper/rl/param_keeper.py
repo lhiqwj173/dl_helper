@@ -426,12 +426,13 @@ class ExperimentHandler:
 
             wait_count = 0
             while True:
+                # 是否是全梯度
+                if compress_info[0]['is_full_gradient']:
+                    cache_share = self.gradients_cache_share_full
+                else:
+                    cache_share = self.gradients_cache_share
+
                 with self.share_gradients_lock:
-                    # 是否是全梯度
-                    if compress_info[0]['is_full_gradient']:
-                        cache_share = self.gradients_cache_share_full
-                    else:
-                        cache_share = self.gradients_cache_share
 
                     gradients_cache_share_length = cache_share[0].size()
                     if gradients_cache_share_length < 30:
