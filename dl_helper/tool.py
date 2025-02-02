@@ -594,13 +594,11 @@ class AsyncLockWithLog:
         self.header = header
 
     async def __aenter__(self):
-        self.log_func(f"{self.header} Acquiring lock...")
         await self.lock.acquire()  # 异步获取锁
         self.log_func(f"{self.header} Lock acquired!")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.log_func(f"{self.header} Releasing lock...")
         self.lock.release()  # 释放锁
         self.log_func(f"{self.header} Lock released!")
 
@@ -611,12 +609,10 @@ class LockWithLog:
         self.header = header
 
     def __enter__(self):
-        self.log_func(f"{self.header} Acquiring lock...")
         self.lock.acquire()
         self.log_func(f"{self.header} Lock acquired!")
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.log_func(f"{self.header} Releasing lock...")
         self.lock.release()
         self.log_func(f"{self.header} Lock released!")
 

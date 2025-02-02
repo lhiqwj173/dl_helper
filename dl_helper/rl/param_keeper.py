@@ -18,7 +18,7 @@ from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
 from ray.tune.registry import _global_registry, ENV_CREATOR
 
-from py_ext.tool import log, share_tensor_list, share_tensor
+from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg
 
 class AsyncRLParameterServer:
     def __init__(self,
@@ -301,64 +301,68 @@ class ExperimentHandler:
 
         log(f'{train_title} calculate most start')
         while True:
-            log(f'[CG]{train_title} wait gradients event')
-            share_data_new_event.wait()
-            share_data_new_event.clear()
+            try:
+                log(f'[CG]{train_title} wait gradients event')
+                share_data_new_event.wait()
+                share_data_new_event.clear()
 
-            log(f'[CG]{train_title} active')
-            with LockWithLog(share_gradients_lock, log, '[CG]'):
-            # with share_gradients_lock:
-                g_length = gradients_cache_share[0].size()
-                fullg_length = gradients_cache_share_full[0].size()
-                temp_length = g_length + fullg_length
-                if temp_length == 0:
-                    log(f'{train_title} no gradients, keep wait')
-                    continue
-                # 获取全部的梯度信息
+                log(f'[CG]{train_title} active')
+                with LockWithLog(share_gradients_lock, log, '[CG]'):
+                # with share_gradients_lock:
+                    g_length = gradients_cache_share[0].size()
+                    fullg_length = gradients_cache_share_full[0].size()
+                    temp_length = g_length + fullg_length
+                    if temp_length == 0:
+                        log(f'{train_title} no gradients, keep wait')
+                        continue
+                    # 获取全部的梯度信息
+                    for idx in range(temp_length):
+                        gradients_cache_info_temp.append(gradients_info_share_q.get())  
+                    # 拷贝梯度到临时梯度
+                    if g_length:
+                        for idx, _g in enumerate(gradients_cache_share):
+                            _g.all_copy_slice(gradients_cache_temp[idx], 0)
+                    if fullg_length:
+                        for idx, _g in enumerate(gradients_cache_share_full):
+                            _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
+
+                log(f'[CG]{train_title} wait gradients: {temp_length}')
+
+                # 是否是full梯度
+                is_full_gradient = [i[0][0]['is_full_gradient'] for i in gradients_cache_info_temp]
+
+                # 计算梯度
+                g_idx = 0
+                g_idx_full = 0
                 for idx in range(temp_length):
-                    gradients_cache_info_temp.append(gradients_info_share_q.get())  
-                # 拷贝梯度到临时梯度
-                if g_length:
-                    for idx, _g in enumerate(gradients_cache_share):
-                        _g.all_copy_slice(gradients_cache_temp[idx], 0)
-                if fullg_length:
-                    for idx, _g in enumerate(gradients_cache_share_full):
-                        _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
+                    # 获取梯度列表
+                    # log(f'get gradients')
+                    if is_full_gradient[idx]:
+                        gs = [i[g_idx_full] for i in gradients_cache_temp_full]
+                        g_idx_full += 1
+                    else:
+                        gs = [i[g_idx] for i in gradients_cache_temp]
+                        g_idx += 1
 
-            log(f'[CG]{train_title} wait gradients: {temp_length}')
+                    # 解压梯度
+                    # log(f'decompress gradients')
+                    info, version = gradients_cache_info_temp[idx]
+                    # pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
+                    gs = gradient_compressor.decompress(gs, info)
+                    # 更新梯度
+                    # log(f'update gradients')
+                    param_server.apply_gradients(gs, version)
 
-            # 是否是full梯度
-            is_full_gradient = [i[0][0]['is_full_gradient'] for i in gradients_cache_info_temp]
-
-            # 计算梯度
-            g_idx = 0
-            g_idx_full = 0
-            for idx in range(temp_length):
-                # 获取梯度列表
-                # log(f'get gradients')
-                if is_full_gradient[idx]:
-                    gs = [i[g_idx_full] for i in gradients_cache_temp_full]
-                    g_idx_full += 1
-                else:
-                    gs = [i[g_idx] for i in gradients_cache_temp]
-                    g_idx += 1
-
-                # 解压梯度
-                # log(f'decompress gradients')
-                info, version = gradients_cache_info_temp[idx]
-                # pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
-                gs = gradient_compressor.decompress(gs, info)
-                # 更新梯度
-                # log(f'update gradients')
-                param_server.apply_gradients(gs, version)
-
-                # 是否需要预热
-                need_warn_up = grad_warm_up_steps > step_count
-                step_count += 1
+                    # 是否需要预热
+                    need_warn_up = grad_warm_up_steps > step_count
+                    step_count += 1
+                    
+                    copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
                 
-                copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
-            
-            log(f'[CG]{train_title} done')   
+                log(f'[CG]{train_title} done')   
+            except Exception as e:
+                log(f'ERROR: \n{get_exception_msg()}')
+                raise e
 
     def handle_request(self, client_socket, msg_header, cmd):
         """处理客户端请求"""
@@ -461,10 +465,10 @@ class ExperimentHandler:
             # 当前等待处理的梯度数量
             gradients_cache_share_length = 0
             async with self.gradients_add_lock:
+            # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
                 while True:
                     with LockWithLog(self.share_gradients_lock, log, msg_header):
                     # with self.share_gradients_lock:
-                        log(f'{msg_header} get gradients lock')
                         gradients_cache_share_length = cache_share[0].size()
                         if gradients_cache_share_length < self.grad_cache_size:
                             for idx, _g in enumerate(g):
