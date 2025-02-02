@@ -97,6 +97,9 @@ class ExperimentHandler:
         # 共享数据新增通知
         self.share_data_new_event = multiprocessing.Event()
 
+        # 添加梯度锁
+        self.gradients_add_lock = asyncio.Lock()
+
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
             train_title, self.gradients_info_share_q, self.params_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
@@ -438,7 +441,6 @@ class ExperimentHandler:
 
         elif cmd == 'update_gradients':
             log(f'{msg_header} recv update_gradients request')
-            gradients_cache_share_length = 0
             g, compress_info, version = pickle.loads(data)
             # 提交到共享梯度信息队列
             # log(f'put gradients info')
@@ -454,29 +456,30 @@ class ExperimentHandler:
             else:
                 cache_share = self.gradients_cache_share
 
-            while True:
-                with self.share_gradients_lock:
-                    gradients_cache_share_length = cache_share[0].size()
-                    if gradients_cache_share_length < self.grad_cache_size:
-                        for idx, _g in enumerate(g):
-                            cache_share[idx].append(_g)
-                        gradients_cache_share_length += 1
-                        wait_count = 0
-                        break
+            async with self.gradients_add_lock:
+                while True:
+                    with self.share_gradients_lock:
+                        gradients_cache_share_length = cache_share[0].size()
+                        if gradients_cache_share_length < self.grad_cache_size:
+                            for idx, _g in enumerate(g):
+                                cache_share[idx].append(_g)
+                            gradients_cache_share_length += 1
+                            wait_count = 0
+                            break
 
-                # 释放锁并等待
-                self.share_data_new_event.set()
-                log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
-                await asyncio.sleep(0.1)
+                    # 释放锁并等待
+                    self.share_data_new_event.set()
+                    log(f'{msg_header} wait gradients, wait length: {gradients_cache_share_length}')
+                    await asyncio.sleep(0.1)
 
-                wait_count += 1
-                if wait_count > 30:
-                    log(f'{msg_header} wait gradients timeout')
-                    import sys
-                    sys.exit()
+                    wait_count += 1
+                    if wait_count > 30:
+                        log(f'{msg_header} wait gradients timeout')
+                        import sys
+                        sys.exit()
 
             # 通知新梯度
-            # log(f'set share data new event')
+            log(f'set share data new event, wait length: {gradients_cache_share_length}')
             self.share_data_new_event.set()
 
         elif cmd == 'client_id':
