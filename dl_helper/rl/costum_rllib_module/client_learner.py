@@ -540,6 +540,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     send_count += 1
 
                     # 获取参数
+                    # weights, info, version, need_warn_up
+                    log(f'info_data: \n{info_data}')
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{ask_update_count}] recv params data")
                     
