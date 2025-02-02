@@ -571,10 +571,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 更新共享参数
                     shared_param.set_param(sync_params_dict)
 
-                    log(f"[{ask_update_count}] set params to shared param")
+                    log(f"[{ask_update_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
                     # 触发共享参数更新事件
                     shared_param.param_event.set()
-                    log(f"[{ask_update_count}] update latest server weights done")
+                    log(f"[{ask_update_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}")
 
                     # 统计耗时
                     total_cost_time += time.time() - t0
@@ -612,8 +612,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.update_count % self.min_param_sync_interval == 0:
                 log(f'[{self.update_count}] request param and reset event')
                 self.task_queue.put(self.update_count)
-                # 重置event
-                self.shared_param.param_event.clear()
+            # 重置event
+            self.shared_param.param_event.clear()
 
             # 清空梯度事件
             self.shared_param.grad_event.clear()
@@ -666,7 +666,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
                 if self.client_id == 0:
-                    log(f'[{self.update_count}] wait shared grad set')
+                    log(f'[{self.update_count}] wait shared grad set, sem_value: {self.shared_param.grad_event.sem.value}')
                 self.shared_param.grad_event.wait()
                 # 替换应用梯度
                 self.shared_param.apply_grad_to_local(self)
@@ -677,18 +677,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 等待并应用新的参数
             # 等待参数就绪
             if self.client_id == 0:
-                log(f'[{self.client_id}] wait param ready')
+                log(f'[{self.update_count}] wait param ready')
             self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
             if self.client_id == 0:
-                log(f'[{self.client_id}] apply shared param')
+                log(f'[{self.update_count}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
             # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
             if self.apply_last_grad:
                 if self.client_id == 0:
-                    log(f'[{self.client_id}] apply_last_grad')
+                    log(f'[{self.update_count}] apply_last_grad')
                 super().apply_gradients(*args, **kwargs)
 
         if self.client_id == 0:
