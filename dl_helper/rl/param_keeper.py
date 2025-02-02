@@ -297,13 +297,15 @@ class ExperimentHandler:
 
         log(f'{train_title} calculate most start')
         while True:
+            log(f'[CG]{train_title} wait gradients event')
             share_data_new_event.wait()
             share_data_new_event.clear()
 
-            # log(f'{train_title} calculate active')
-
+            log(f'[CG]{train_title} active')
             with share_gradients_lock:
-                temp_length = gradients_cache_share[0].size() + gradients_cache_share_full[0].size()
+                g_length = gradients_cache_share[0].size()
+                fullg_length = gradients_cache_share_full[0].size()
+                temp_length = g_length + fullg_length
                 if temp_length == 0:
                     log(f'{train_title} no gradients, keep wait')
                     continue
@@ -311,10 +313,12 @@ class ExperimentHandler:
                 for idx in range(temp_length):
                     gradients_cache_info_temp.append(gradients_info_share_q.get())  
                 # 拷贝梯度到临时梯度
-                for idx, _g in enumerate(gradients_cache_share):
-                    _g.all_copy_slice(gradients_cache_temp[idx], 0)
-                for idx, _g in enumerate(gradients_cache_share_full):
-                    _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
+                if g_length:
+                    for idx, _g in enumerate(gradients_cache_share):
+                        _g.all_copy_slice(gradients_cache_temp[idx], 0)
+                if fullg_length:
+                    for idx, _g in enumerate(gradients_cache_share_full):
+                        _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
 
             log(f'[CG]{train_title} wait gradients: {temp_length}')
 
