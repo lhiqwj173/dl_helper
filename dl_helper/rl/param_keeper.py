@@ -461,6 +461,8 @@ class ExperimentHandler:
 
                 # 释放锁并等待
                 log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
+                # log(f'set share data new event')
+                self.share_data_new_event.set()
                 await asyncio.sleep(0.1)
 
                 wait_count += 1
