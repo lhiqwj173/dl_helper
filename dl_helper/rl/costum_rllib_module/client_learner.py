@@ -374,6 +374,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             self.params_dict = params_dict
             self.grad_params_dict = grad_params_dict
+            log(f'init_shared_param params_dict:\n {self.params_dict}')
+            log(f'init_shared_param grad_params_dict:\n {self.grad_params_dict}')
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
@@ -395,6 +397,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     @staticmethod
     def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_dict, version, need_warn_up):
         """在新进程中运行事件循环"""
+        log(f'_run_event_loop_process params_dict:\n {params_dict}')
+        log(f'_run_event_loop_process grad_params_dict:\n {grad_params_dict}')
+
         # 事件循环
         try:
             loop = asyncio.get_event_loop()
