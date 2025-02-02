@@ -509,12 +509,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         total_cost_time = 0
         total_count = 0
 
+        log(f"param_coroutine init done")
         while True:
             try:
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
                 # 发送连接类型
                 await async_send_msg(writer, f'{CODE}_long')
+                log(f"param_coroutine connect to server")
 
                 send_count = 0
                 while True:
