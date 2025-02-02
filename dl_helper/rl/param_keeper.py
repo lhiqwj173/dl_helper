@@ -226,7 +226,7 @@ class ExperimentHandler:
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
                     params_cache_share[idx].data[:] = v[:]
-                q.put((version, need_warn_up, need_warn_up))
+                q.put((version, need_warn_up))
 
         log(f'[CG]{train_title} calculate gpu init')
         
@@ -410,8 +410,8 @@ class ExperimentHandler:
     async def async_handle_request(self, msg_header, cmd, data):
         """异步处理客户端请求"""
         if cmd.startswith('get@'):
-            log(f'{msg_header} recv get request')
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
+            log(f'{msg_header} recv get request, client version: {_client_version}')
 
             # 返回 共享参数
             params = []
@@ -422,8 +422,8 @@ class ExperimentHandler:
                 for i in self.params_cache_share:
                     params.append(i.data.clone())
                 # 取出再放回， 保证队列中仍有数据
-                info, v, need_warn_up = self.params_info_share_q.get()
-                self.params_info_share_q.put((info, v, need_warn_up))
+                v, need_warn_up = self.params_info_share_q.get()
+                self.params_info_share_q.put((v, need_warn_up))
 
             # 计算更新增量
             ip = data
