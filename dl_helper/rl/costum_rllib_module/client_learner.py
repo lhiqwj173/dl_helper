@@ -203,17 +203,17 @@ class ClientLearnerGroup(LearnerGroup):
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
         log(f"set train_title to all learners, res: {res}")
+        time.sleep(1)
 
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
         remote_actor_ids = self._worker_manager.actor_ids()[1:]
         res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-
-        # # 或 请求client_id
-        # res = self.foreach_learner(lambda learner: learner.request_client_id())
         log(f"set client_id to all learners, res: {res}")
+        time.sleep(1)
 
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
+        time.sleep(1)
 
         # 初始化
         self.foreach_learner(lambda learner: learner.init_param_thread())
