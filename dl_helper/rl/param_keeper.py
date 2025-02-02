@@ -456,6 +456,8 @@ class ExperimentHandler:
             else:
                 cache_share = self.gradients_cache_share
 
+            # 当前等待处理的梯度数量
+            gradients_cache_share_length = 0
             async with self.gradients_add_lock:
                 while True:
                     with self.share_gradients_lock:
