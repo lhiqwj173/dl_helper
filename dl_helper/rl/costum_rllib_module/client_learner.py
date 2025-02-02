@@ -548,6 +548,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f'need_warn_up: {info_data.need_warn_up}')
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{ask_update_count}] recv params data")
+                    log(f'version: {info_data.version}')
                     
                     # 在进程池中执行解压操作
                     # loop = asyncio.get_event_loop()
