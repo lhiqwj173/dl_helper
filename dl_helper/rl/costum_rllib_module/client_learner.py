@@ -360,7 +360,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.task_queue = None
         # 用于初始化共享参数
         self.params_dict = None
-        self.grad_params_dict = None
+        self.grad_params_value_shape = None
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -372,10 +372,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 获取梯度字典
         grad_params_dict = self._params
         if self.client_id == 0:
-            self.params_dict = params_dict
-            self.grad_params_dict = grad_params_dict
-            log(f'init_shared_param params_dict:\n {self.params_dict}')
-            log(f'init_shared_param grad_params_dict:\n {self.grad_params_dict}')
+            self.params_dict = OrderedDict()
+            for k,v in params_dict.items():
+                self.params_dict[k] = v.cpu()
+            self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
@@ -388,17 +388,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.event_loop_process = multiprocessing.Process(
                 target=self._run_event_loop_process, 
                 args=(
-                    self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_dict,
+                    self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_value_shape,
                     self.version, self.need_warn_up
                 )
             )
             self.event_loop_process.start()
 
     @staticmethod
-    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_dict, version, need_warn_up):
+    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_value_shape, version, need_warn_up):
         """在新进程中运行事件循环"""
-        log(f'_run_event_loop_process params_dict:\n {params_dict}')
-        log(f'_run_event_loop_process grad_params_dict:\n {grad_params_dict}')
 
         # 事件循环
         try:
@@ -438,7 +436,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_dict)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # 运行事件循环
@@ -496,7 +494,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     pass
 
     @staticmethod
-    async def param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_dict):
+    async def param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """
@@ -508,12 +506,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         param_compressor = IncrementalCompressor()
         log(f"param_coroutine init param_compressor")
 
-        sync_params_dict = OrderedDict()
-        for k, v in params_dict.items():
-            sync_params_dict[k] = v.cpu()
+        sync_params_dict = copy.deepcopy(params_dict)
         log(f"param_coroutine sync_params_dict")
 
         # 共享参数
+        grad_params_dict = OrderedDict()
+        for idx, shape in enumerate(grad_params_value_shape):
+            grad_params_dict[f'grad_{idx}'] = torch.zeros(shape)
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
         log(f"param_coroutine init shared_param")
 
