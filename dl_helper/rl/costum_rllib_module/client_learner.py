@@ -541,7 +541,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 获取参数
                     # weights, info, version, need_warn_up
-                    log(f'info_data: \n{info_data}')
+                    log(f'info_data:')
+                    log(f'client_id: {info_data.client_id}')
+                    log(f'train_title: {info_data.train_title}')
+                    log(f'version: {info_data.version}')
+                    log(f'need_warn_up: {info_data.need_warn_up}')
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{ask_update_count}] recv params data")
                     
