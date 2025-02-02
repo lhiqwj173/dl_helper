@@ -359,6 +359,9 @@ class ExperimentHandler:
                     
                     copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
                 
+                # 清空梯度信息
+                gradients_cache_info_temp.clear()
+
                 log(f'[CG]{train_title} done')   
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
