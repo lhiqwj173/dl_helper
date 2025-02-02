@@ -452,6 +452,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 梯度压缩器
         gradient_compressor = DeepGradientCompression()
 
+        # 统计耗时
+        begin_time = 0
+        total_count = 0
+
         while True:
             try:
                 # 创建异步socket连接
@@ -463,7 +467,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 获取汇总梯度 TODO 使用共享内存替代
                     merged_gradients = await grad_q.get()
-                    # log(f"[{idx}] queue size: {grad_q.qsize()}")
+                    log(f"[{idx}] queue size: {grad_q.qsize()}")
+
+                    if begin_time == 0:
+                        begin_time = time.time()
                     
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
@@ -477,12 +484,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
                     # log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
+                    total_count += 1
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
                         # log(f"[{idx}] wait response")
                         await async_recv_msg(reader)
                         # log(f"[{idx}] recv response done")
+
+                    if total_count % 30 == 0:
+                        log(f"[{idx}] avg send time: {int(((time.time()-begin_time) / total_count) * 1000)}ms")
+
 
             except Exception as e:
                 log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")
@@ -541,14 +553,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 获取参数
                     # weights, info, version, need_warn_up
-                    log(f'info_data:')
-                    log(f'client_id: {info_data.client_id}')
-                    log(f'train_title: {info_data.train_title}')
-                    log(f'version: {info_data.version}')
-                    log(f'need_warn_up: {info_data.need_warn_up}')
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     log(f"[{ask_update_count}] recv params data")
-                    log(f'version: {info_data.version}')
                     
                     # 在进程池中执行解压操作
                     # loop = asyncio.get_event_loop()
