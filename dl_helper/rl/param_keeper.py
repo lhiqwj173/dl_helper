@@ -443,43 +443,37 @@ class ExperimentHandler:
             # log(f'put gradients')
 
             wait_count = 0
+
+            # 是否是全梯度
+            if compress_info[0]['is_full_gradient']:
+                cache_share = self.gradients_cache_share_full
+            else:
+                cache_share = self.gradients_cache_share
+
             while True:
-                # 是否是全梯度
-                if compress_info[0]['is_full_gradient']:
-                    cache_share = self.gradients_cache_share_full
-                else:
-                    cache_share = self.gradients_cache_share
-
                 with self.share_gradients_lock:
-
                     gradients_cache_share_length = cache_share[0].size()
                     if gradients_cache_share_length < self.grad_cache_size:
                         for idx, _g in enumerate(g):
                             cache_share[idx].append(_g)
                         gradients_cache_share_length += 1
+                        wait_count = 0
                         break
 
                 # 释放锁并等待
-                log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
-                # log(f'set share data new event')
                 self.share_data_new_event.set()
+                log(f'{msg_header} wait gradients, current length: {gradients_cache_share_length}')
                 await asyncio.sleep(0.1)
 
                 wait_count += 1
-                if wait_count > 10:
+                if wait_count > 30:
                     log(f'{msg_header} wait gradients timeout')
                     import sys
                     sys.exit()
 
-            # if gradients_cache_share_length > 30:
-            #     log(f'{msg_header} gradients_cache_share_length > 15')
-            #     import sys
-            #     sys.exit()
-
             # 通知新梯度
             # log(f'set share data new event')
             self.share_data_new_event.set()
-            # log(f'{msg_header} Received gradients, gradients_cache_share length: {gradients_cache_share_length}')
 
         elif cmd == 'client_id':
             pass
