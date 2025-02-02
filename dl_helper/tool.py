@@ -585,3 +585,39 @@ def report_memory_usage(msg=''):
     # # # 打印合并统计后的内存大小
     # msg = '合并统计后的内存大小' if msg == '' else f'{msg}'
     # print(f"{msg}: {total_memory_gb:.3f}GB")
+
+
+class AsyncLockWithLog:
+    def __init__(self, lock, log_func=print, header=''):
+        self.lock = lock
+        self.log_func = log_func
+        self.header = header
+
+    async def __aenter__(self):
+        self.log_func(f"{self.header} Acquiring lock...")
+        await self.lock.acquire()  # 异步获取锁
+        self.log_func(f"{self.header} Lock acquired!")
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.log_func(f"{self.header} Releasing lock...")
+        self.lock.release()  # 释放锁
+        self.log_func(f"{self.header} Lock released!")
+
+class LockWithLog:
+    def __init__(self, lock, log_func=print, header=''):
+        self.lock = lock
+        self.log_func = log_func
+        self.header = header
+
+    def __enter__(self):
+        self.log_func(f"{self.header} Acquiring lock...")
+        self.lock.acquire()
+        self.log_func(f"{self.header} Lock acquired!")
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.log_func(f"{self.header} Releasing lock...")
+        self.lock.release()
+        self.log_func(f"{self.header} Lock released!")
+
+

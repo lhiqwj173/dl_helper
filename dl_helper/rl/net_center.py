@@ -317,6 +317,8 @@ def main():
         asyncio.run(server.start())
     except KeyboardInterrupt:
         log("Received keyboard interrupt")
+    except Exception as e:
+        log(f'ERROR:\n{get_exception_msg()}')
     finally:
         log("Server stopped")
 

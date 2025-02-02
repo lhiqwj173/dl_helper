@@ -479,10 +479,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         partial(gradient_compressor.compress, merged_gradients, info_data.need_warn_up)
                     )
                     compressed_grads, compress_info = compressed_result
+                    log(f"[{idx}][{send_count}] compress gradients done")
 
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
-                    # log(f"[{idx}][{send_count}] send gradients done")
+                    log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
                     total_count += 1
 
@@ -494,7 +495,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     if total_count % 30 == 0:
                         log(f"[{idx}] avg send time: {int(((time.time()-begin_time) / total_count) * 1000)}ms")
-
 
             except Exception as e:
                 log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")

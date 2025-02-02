@@ -12,6 +12,7 @@ from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
+from dl_helper.tool import AsyncLockWithLog, LockWithLog 
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -305,7 +306,8 @@ class ExperimentHandler:
             share_data_new_event.clear()
 
             log(f'[CG]{train_title} active')
-            with share_gradients_lock:
+            with LockWithLog(share_gradients_lock, log, '[CG]'):
+            # with share_gradients_lock:
                 g_length = gradients_cache_share[0].size()
                 fullg_length = gradients_cache_share_full[0].size()
                 temp_length = g_length + fullg_length
@@ -460,7 +462,9 @@ class ExperimentHandler:
             gradients_cache_share_length = 0
             async with self.gradients_add_lock:
                 while True:
-                    with self.share_gradients_lock:
+                    with LockWithLog(self.share_gradients_lock, log, msg_header):
+                    # with self.share_gradients_lock:
+                        log(f'{msg_header} get gradients lock')
                         gradients_cache_share_length = cache_share[0].size()
                         if gradients_cache_share_length < self.grad_cache_size:
                             for idx, _g in enumerate(g):
