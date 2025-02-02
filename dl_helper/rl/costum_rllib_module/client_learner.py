@@ -680,12 +680,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 log(f'[{self.client_id}] wait param ready')
             self.shared_param.param_event.wait()
             # 获取参数覆盖本地参数
-            # log(f'[{self.client_id}] apply shared param')
+            if self.client_id == 0:
+                log(f'[{self.client_id}] apply shared param')
             p = self.shared_param.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
             # 使用梯度更新一次参数 > 更新完成后参数与服务器参数一致
             if self.apply_last_grad:
+                if self.client_id == 0:
+                    log(f'[{self.client_id}] apply_last_grad')
                 super().apply_gradients(*args, **kwargs)
 
         if self.client_id == 0:
