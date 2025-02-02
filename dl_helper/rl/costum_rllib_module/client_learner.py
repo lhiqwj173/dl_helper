@@ -501,9 +501,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # param_compressor = ParamCompressor(params_keys)
         param_compressor = IncrementalCompressor()
         log(f"param_coroutine init param_compressor")
-        log(f'param_coroutine params_dict: \n{params_dict}')
-        sync_params_dict = copy.deepcopy(params_dict)
-        log(f"param_coroutine deepcopy")
+
+        try:
+            log(f'param_coroutine params_dict: \n{params_dict}')
+            sync_params_dict = copy.deepcopy(params_dict)
+            log(f"param_coroutine deepcopy")
+
+        except Exception as e:
+            log(f"param_coroutine deepcopy error: {e}")
 
         # 共享参数
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
