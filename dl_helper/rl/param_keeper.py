@@ -12,7 +12,7 @@ from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
-from dl_helper.tool import AsyncLockWithLog, LockWithLog 
+from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -362,6 +362,7 @@ class ExperimentHandler:
                 log(f'[CG]{train_title} done')   
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
+                report_memory_usage()
                 raise e
 
     def handle_request(self, client_socket, msg_header, cmd):
