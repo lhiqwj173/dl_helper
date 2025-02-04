@@ -381,6 +381,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
+        log(f"[{self.client_id}] init_shared_param done")
 
     def init_param_thread(self):
         if self.client_id == 0:
@@ -399,6 +400,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 )
             )
             self.event_loop_process.start()
+        log(f"[{self.client_id}] init_param_thread done")
 
     def stop_param_thread(self):
         if self.client_id == 0:
