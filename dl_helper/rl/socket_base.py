@@ -236,8 +236,6 @@ if "__main__" == __name__:
         choose = input("1.get_server_weights\n2.request_client_id\n3.test_pickle_numpy\n")
         if choose == "1":
             print(get_server_weights('test'))
-        elif choose == "2":
-            print(request_client_id('test'))
         elif choose == "3":
             test_pickle_numpy()
         else:
