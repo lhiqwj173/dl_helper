@@ -610,17 +610,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 清空梯度事件
             self.shared_param.grad_event.clear()
-        log(f'[{self.update_count}] compute_gradients begin')
+        log(f'[{self.client_id}][{self.update_count}] compute_gradients begin')
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
-        log(f'[{self.update_count}] gradients_dict ready')
+        log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            log(f'[{self.update_count}] cpu_gradients ready')
+            log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
             if self.gradient_sync_frequency > 1:
                 # 累积梯度
@@ -643,7 +643,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
         
-            log(f'[{self.update_count}] compute_gradients done')
+            log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
         # nouse3
         # 返回空
         return {}
