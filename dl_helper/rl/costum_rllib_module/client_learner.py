@@ -574,7 +574,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 while True:
                     # 被动获取参数
-                    # weights, info, version, need_warn_up
+                    log(f"[{total_count}] wait params")
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     total_count += 1
                     log(f"[{total_count}] recv params data")
