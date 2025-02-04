@@ -105,6 +105,10 @@ class ExperimentHandler:
         # 添加梯度锁
         self.gradients_add_lock = asyncio.Lock()
 
+        # 独立线程转发 进程任务
+        self.ready_params_event = multiprocessing.Event()
+        self.aper = AsyncProcessEventReader(self.ready_params_event)
+        
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
             train_title, self.gradients_info_share_q, self.params_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
@@ -143,10 +147,6 @@ class ExperimentHandler:
         self.need_val_ip = 0
         # 允许验证的时间戳
         self.need_val_timestamp = 0
-
-        # 独立线程转发 进程任务
-        self.ready_params_event = multiprocessing.Event()
-        self.aper = AsyncProcessEventReader(self.ready_params_event)
 
     def __del__(self):
         self.p.terminate()
