@@ -462,7 +462,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
         # 启动协程任务
         tasks = []
-        for _idx in range(10):
+        for _idx in range(30):
             task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info_data, process_pool, grad_q))
             tasks.append(task)
 
@@ -661,7 +661,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
         
-            # log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+            log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
         # nouse3
         # 返回空
         return {}
