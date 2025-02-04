@@ -8,6 +8,7 @@ import numpy as np
 
 import asyncio
 from multiprocessing.queues import Queue
+import multiprocessing
 from asyncio import Queue as AsyncQueue
 from queue import Empty
 import threading
@@ -82,6 +83,65 @@ def calc_sharpe_ratio(returns, risk_free_rate=0.0):
     if std == 0:
         return 0
     return excess_returns.mean() / std * np.sqrt(len(returns))  # 根据序列长度标准化
+
+class AsyncProcessEventReader:
+    """
+    异步进程事件读取器，使用单个专用线程
+    """
+    def __init__(self, multiprocessing_event, start: bool = True):
+        self.event = multiprocessing_event
+        self._loop = None
+        self._thread = None
+        self._running = False
+        self.async_event = asyncio.Event()
+        self._stop = False
+
+        # 启动
+        if start:
+            self._start()
+
+    def _reader_thread(self):
+        """后台读取线程"""
+        while not self._stop:
+            try:
+                # 使用较短的超时以便能够响应停止信号
+                e = self.event.wait()
+                # 转发给协程事件
+                self.async_event.set()
+                self.async_event.clear()
+            except Empty:
+                continue
+            except Exception as e:
+                print(f"Reader thread error: {e}")
+                # 出错时短暂等待后继续
+                time.sleep(0.1)
+
+    def _start(self):
+        """启动读取器"""
+        if self._thread is not None:
+            return
+        
+        self._loop = asyncio.get_event_loop()
+        self._stop = False
+        self._thread = threading.Thread(target=self._reader_thread, daemon=True)
+        self._thread.start()
+
+    def _stop(self):
+        """停止读取器"""
+        if self._thread is None:
+            return
+            
+        self._stop = True
+        self._thread.join()
+        self._thread = None
+
+    def __del__(self):
+        """析构函数中停止读取器"""
+        self._stop()
+
+    async def wait(self):
+        """获取队列中的数据"""
+        return await self.async_event.wait()
 
 class AsyncProcessQueueReader:
     """

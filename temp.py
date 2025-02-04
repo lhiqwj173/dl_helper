@@ -1,66 +1,22 @@
-import multiprocessing
-import asyncio
-import random
-import time
-from multiprocessing.queues import Queue
+import asyncio, random
 
-from dl_helper.tool import AsyncProcessQueueReader
-
-async def worker(name, queue):
-    """工作协程"""
+async def worker(event, name):
     while True:
-        task = await queue.get()
-        try:
-            # 模拟异步网络操作
-            await asyncio.sleep(random.uniform(0.5, 2))
-            print(f"Coroutine {name}: Completed {task}")
-        except Exception as e:
-            print(f"Coroutine {name} error: {e}")
-        finally:
-            queue.task_done()
+        print(f"{name} 等待事件...")
+        await event.wait()  # 等待事件触发
+        print(f"{name} 事件触发，开始执行")
+        await asyncio.sleep(random.randint(0, 5))  # 模拟任务执行
 
-def task_producer(task_queue):
-    """任务生产者进程"""
-    task_id = 0
+async def trigger(event):
     while True:
-        time.sleep(random.uniform(0.1, 0.5))
-        task = f"Task-{task_id}"
-        task_queue.put(task)
-        print(f"Producer: Generated {task}")
-        task_id += 1
+        await asyncio.sleep(random.randint(0, 5))  # 模拟任务执行
+        print("触发事件")
+        event.set()  # 触发所有 worker
+        event.clear()  # 只有一个 clear()，防止后续任务立即通过
 
-async def process_queue_consumer(mp_queue: Queue, worker_count: int = 10):
-    """处理进程队列的消费者"""
-    # 创建队列读取器
-    reader = AsyncProcessQueueReader(mp_queue)
-    
-    # 创建worker协程
-    workers = [asyncio.create_task(worker(f"Worker-{i}", reader.async_queue)) 
-              for i in range(worker_count)]
-    
-    await asyncio.gather(*workers)
+async def main():
+    event = asyncio.Event()
+    workers = [worker(event, f"任务 {i+1}") for i in range(3)]
+    await asyncio.gather(trigger(event), *workers)
 
-def process_tasks(task_queue):
-    """任务处理进程"""
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(process_queue_consumer(task_queue))
-    finally:
-        loop.close()
-
-if __name__ == "__main__":
-    task_queue = multiprocessing.Queue()
-    
-    producer = multiprocessing.Process(target=task_producer, args=(task_queue,))
-    producer.daemon = True
-    producer.start()
-    
-    consumer = multiprocessing.Process(target=process_tasks, args=(task_queue,))
-    consumer.daemon = True
-    consumer.start()
-    
-    try:
-        producer.join()
-        consumer.join()
-    except KeyboardInterrupt:
-        print("Shutting down...")
+asyncio.run(main())

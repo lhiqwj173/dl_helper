@@ -12,7 +12,7 @@ from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
-from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage
+from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage, AsyncProcessEventReader
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
@@ -113,6 +113,7 @@ class ExperimentHandler:
             self.debug,
             self.grad_cache_size,
             self.grad_warm_up_steps,
+            self.ready_params_event,
         ))
         self.p.start()
 
@@ -143,6 +144,10 @@ class ExperimentHandler:
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
+        # 独立线程转发 进程任务
+        self.ready_params_event = multiprocessing.Event()
+        self.aper = AsyncProcessEventReader(self.ready_params_event)
+
     def __del__(self):
         self.p.terminate()
 
@@ -154,13 +159,14 @@ class ExperimentHandler:
         debug,
         grad_cache_size, 
         grad_warm_up_steps,
+        ready_params_event,
     ):
         """
         负责 梯度解压/梯度应用更新参数
         """
-        def copy_params(param_server, lock, params_cache_share, q, need_warn_up): 
+        def ready_params(param_server, lock, params_cache_share, q, need_warn_up): 
             """获取参数copy到共享参数中"""
-            # log(f'copy params')
+            log(f'[CG] ready params begin')
             # 获取模型参数
             # weights： 参数字典[torch.Tensor]
             weights, version = param_server.get_weights()
@@ -173,6 +179,9 @@ class ExperimentHandler:
                     q.get()
 
                 q.put((version, need_warn_up))
+            # 通知参数发送任务
+            ready_params_queue.put(version)
+            log(f'[CG] ready params done')
 
         log(f'[CG]{train_title} calculate gpu init')
         
@@ -235,7 +244,7 @@ class ExperimentHandler:
 
         # 初始化一个最新的参数/info
         need_warn_up = grad_warm_up_steps > step_count
-        copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
+        ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
         
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
@@ -299,7 +308,7 @@ class ExperimentHandler:
                     need_warn_up = grad_warm_up_steps > step_count
                     step_count += 1
                     
-                    copy_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
+                    ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
                 
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
@@ -345,8 +354,12 @@ class ExperimentHandler:
             last_send_v = 0
             ip = data
             while True:
+                # 等待事件
+                await self.aper.wait()
+
                 # 获取最新参数
                 params, v, need_warn_up = await self._get_latest_raw_params()
+                log(f'wait_params prepare v: {v}')
 
                 # 控制参数推送频率
                 if v - last_send_v >= self.push_params_interval:
