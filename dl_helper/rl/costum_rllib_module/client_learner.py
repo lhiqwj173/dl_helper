@@ -200,8 +200,7 @@ class ClientLearnerGroup(LearnerGroup):
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
         remote_actor_ids = self._worker_manager.actor_ids()[1:]
         res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-        res = self._get_results(res)
-        log(f"set client_id to all learners, res: {res}")
+        log(f"set client_id to all learners, res: {res.results}")
 
         # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
@@ -210,16 +209,14 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
-        res = self._get_results(res)
-        log(f"set train_title to all learners, res: {res}")
+        log(f"set train_title to all learners, res: {res.results}")
 
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
 
         # 初始化
         res = self.foreach_learner(lambda learner: learner.init_param_thread())
-        res = self._get_results(res)
-        log(f"foreach_learner: init_param_thread, res: {res}")
+        log(f"foreach_learner: init_param_thread, res: {res.results}")
 
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
@@ -245,12 +242,10 @@ class ClientLearnerGroup(LearnerGroup):
             )
 
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        res = self._get_results(res)
-        log(f"set version to all learners, res: {res}")
+        log(f"set version to all learners, res: {res.results}")
 
         res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
-        res = self._get_results(res)
-        log(f"set need_warn_up to all learners, res: {res}")
+        log(f"set need_warn_up to all learners, res: {res.results}")
 
         # 获取一个learner的梯度字典
         if self.is_local:
@@ -269,14 +264,12 @@ class ClientLearnerGroup(LearnerGroup):
 
         # 初始化learner的共享参数
         self.foreach_learner(lambda learner: learner.init_shared_param())
-        res = self._get_results(res)
-        log(f"foreach_learner: init shared param, res: {res}")
+        log(f"foreach_learner: init shared param, res: {res.results}")
 
     def stop_extra_process(self):
         """停止额外进程"""
         res = self.foreach_learner(lambda learner: learner.stop_param_thread())
-        res = self._get_results(res)
-        log(f"foreach_learner: stop_param_thread, res: {res}")
+        log(f"foreach_learner: stop_param_thread, res: {res.results}")
 
 class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
     """
