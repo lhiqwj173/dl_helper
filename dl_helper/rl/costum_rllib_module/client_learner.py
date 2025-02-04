@@ -170,7 +170,7 @@ class SharedParam:
 def get_results(RemoteCallResults):
     res = []
     for r in RemoteCallResults:
-        res.append(r)
+        res.append(r.get())
     return res
 
 class ClientLearnerGroup(LearnerGroup):
@@ -206,8 +206,7 @@ class ClientLearnerGroup(LearnerGroup):
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
         remote_actor_ids = self._worker_manager.actor_ids()[1:]
         res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-        for result in res:
-            log(result.get())
+        log(f"set set_client_id to not main learners, res: {get_results(res)}")
 
         # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
