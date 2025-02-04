@@ -60,7 +60,7 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100, grad_cache_size=30
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100, grad_cache_size=30, push_params_interval=4
     ):
         """
         train_title: 训练标题
@@ -83,7 +83,7 @@ class ExperimentHandler:
         self.grad_warm_up_steps = grad_warm_up_steps
 
         # 参数推送频率
-        self.push_params_interval = 6 # 每6步推送一次参数
+        self.push_params_interval = push_params_interval # 每 push_params_interval 步推送一次参数
 
         # 共享梯度队列
         # 梯度数据经过稀疏化，形状
