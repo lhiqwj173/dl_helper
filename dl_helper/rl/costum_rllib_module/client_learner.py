@@ -26,7 +26,7 @@ import socket
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
-from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg
+from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients
@@ -38,6 +38,9 @@ from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import report_memory_usage, AsyncProcessQueueReader, Empty
 from dl_helper.train_param import match_num_processes
+
+train_folder = 'cartpole'
+init_logger('20250130_cartpole', home=train_folder, timestamp=False)
 
 """
 # 分布式训练流程
@@ -337,8 +340,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        log(f'log_folder: {get_log_folder()}')
+
         # 参数压缩器
         self.param_compressor = None
+
 
         # 梯度累积器
         self.gradient_accumulator = GradientAccumulator()
@@ -492,7 +498,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 获取汇总梯度 TODO 使用共享内存替代
                     merged_gradients = await grad_q.get()
-                    log(f"[{idx}] queue size: {grad_q.qsize()}")
+                    q_size = grad_q.qsize()
+                    if q_size > 15:
+                        log(f"[{idx}] queue size: {q_size}")
 
                     if begin_time == 0:
                         begin_time = time.time()
@@ -504,11 +512,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         partial(gradient_compressor.compress, merged_gradients, info_data.need_warn_up)
                     )
                     compressed_grads, compress_info = compressed_result
-                    log(f"[{idx}][{send_count}] compress gradients done")
+                    # log(f"[{idx}][{send_count}] compress gradients done")
 
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
-                    log(f"[{idx}][{send_count}] send gradients done")
+                    # log(f"[{idx}][{send_count}] send gradients done")
                     send_count += 1
                     total_count += 1
 
@@ -541,10 +549,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # params_keys = list(params_dict.keys())
         # param_compressor = ParamCompressor(params_keys)
         param_compressor = IncrementalCompressor()
-        log(f"param_coroutine init param_compressor")
 
         sync_params_dict = copy.deepcopy(params_dict)
-        log(f"param_coroutine sync_params_dict")
 
         # 是否处于训练阶段
         is_training_event = Event(name=f'_is_training_event')
@@ -557,7 +563,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         for idx, shape in enumerate(grad_params_value_shape):
             grad_params_dict[f'grad_{idx}'] = torch.zeros(shape)
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
-        log(f"param_coroutine init shared_param")
 
         # 统计拉取参数耗时
         begin_time = time.time()
@@ -576,20 +581,20 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 while True:
                     # 被动获取参数
-                    log(f"[{total_count}] wait params")
+                    # log(f"[{total_count}] wait params")
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     total_count += 1
-                    log(f"[{total_count}] recv params data")
+                    # log(f"[{total_count}] recv params data")
 
                     # 当前是否处于训练阶段
                     if is_training_event.is_set():
                         # 增量解压操作
-                        log(f"[{total_count}] decompress params data")
+                        # log(f"[{total_count}] decompress params data")
                         param_compressor.decompress(params_list, info, sync_params_dict)
                         # 更新共享参数
                         shared_param.set_param(sync_params_dict)
 
-                        log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
+                        # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
                         # 触发共享参数更新事件
                         shared_param.param_event.clear_reset(num_learners)
                         log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}")
@@ -599,7 +604,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 统计耗时
                     if total_count % 30 == 0:
-                        log(f"[{total_count}] avg cost time: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
+                        log(f"[{total_count}] avg param push freq: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
+
 
             except Exception as e:
                 log(f"连接服务器失败: \n{get_exception_msg()}")
@@ -622,17 +628,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 清空梯度事件
             self.shared_param.grad_event.clear()
-        log(f'[{self.client_id}][{self.update_count}] compute_gradients begin')
+        # log(f'[{self.client_id}][{self.update_count}] compute_gradients begin')
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
-        log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
+        # log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
+            # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
             if self.gradient_sync_frequency > 1:
                 # 累积梯度
@@ -655,7 +661,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
         
-            log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+            # log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
         # nouse3
         # 返回空
         return {}
@@ -675,8 +681,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 正确处理最后一次的梯度
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
-                if self.client_id == 0:
-                    log(f'[{self.update_count}] wait shared grad set, sem_value: {self.shared_param.grad_event.sem.value}')
+                # if self.client_id == 0:
+                #     log(f'[{self.update_count}] wait shared grad set, sem_value: {self.shared_param.grad_event.sem.value}')
                 self.shared_param.grad_event.wait()
                 # 替换应用梯度
                 self.shared_param.apply_grad_to_local(self)
@@ -684,8 +690,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 已经存在正确的梯度
                 pass
 
-            if self.client_id == 0:
-                log(f'[{self.update_count}] param ready, apply to local')
+            # if self.client_id == 0:
+            #     log(f'[{self.update_count}] param ready, apply to local')
 
             # 获取参数覆盖本地参数
             p = self.shared_param.get_weights()
@@ -697,8 +703,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f'[{self.update_count}] apply_last_grad')
                 super().apply_gradients(*args, **kwargs)
 
-        if self.client_id == 0:
-            log(f'[{self.update_count}] apply_gradients done')
+        # if self.client_id == 0:
+        #     log(f'[{self.update_count}] apply_gradients done')
 
     def after_gradient_based_update(self, *args, **kwargs):
         # 重置
