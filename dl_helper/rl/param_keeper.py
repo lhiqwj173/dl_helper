@@ -341,6 +341,7 @@ class ExperimentHandler:
             return pickle.dumps((params, info, v, need_warn_up))
 
         elif cmd == 'wait_params':
+            log(f'{msg_header} recv wait_params request')
             last_send_v = 0
             ip = data
             while True:

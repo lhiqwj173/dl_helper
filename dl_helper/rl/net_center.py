@@ -243,7 +243,6 @@ class AsyncSocketServer:
                 res = await handler.async_handle_request(msg_header, cmd, data, writer, reader)
                 if res:
                     await async_send_msg(writer, res)
-                    log(f'{msg_header}  params sended')
 
                 # 3. 回复客户端
                 if count % need_res_time == 0:

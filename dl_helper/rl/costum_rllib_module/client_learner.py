@@ -563,16 +563,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 await async_send_msg(writer, f'{info_data.train_title}:wait_params'.encode())
 
                 while True:
-                    # 当前是否处于训练阶段
-                    in_training = is_training_event.is_set()
-
                     # 被动获取参数
                     # weights, info, version, need_warn_up
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
                     total_count += 1
                     log(f"[{total_count}] recv params data")
 
-                    if in_training:
+                    # 当前是否处于训练阶段
+                    if is_training_event.is_set():
                         # 增量解压操作
                         log(f"[{total_count}] decompress params data")
                         param_compressor.decompress(params_list, info, sync_params_dict)
@@ -611,6 +609,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         if self.client_id == 0:
             # 清空梯度事件
+            log(f'[{self.update_count}] compute_gradients begin')
             self.shared_param.grad_event.clear()
 
         # 计算梯度
