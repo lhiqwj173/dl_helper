@@ -29,7 +29,7 @@ from functools import partial
 from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
-from dl_helper.rl.socket_base import get_server_weights, send_gradients, request_client_id
+from dl_helper.rl.socket_base import get_server_weights, send_gradients
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_get_server_weights
 
@@ -708,13 +708,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def set_train_title(self, train_title):
         log(f"[{id(self)}] set_train_title: {train_title}")
         self.train_title = train_title
-
-    def request_client_id(self):
-        # 获取客户端 id
-        log(f"[{id(self)}] request_client_id")
-        self.client_id = request_client_id(self.train_title)
-        log(f"[{id(self)}] client_id: {self.client_id}")
-        return self.client_id
 
     def set_weights_version(self, version):
         log(f"[{id(self)}] set_version: {version}")
