@@ -187,24 +187,9 @@ def send_gradients(train_title, grads, compress_info, version):
     """发送梯度"""
     return _connect_server_apply(_send_gradients, train_title, grads, compress_info, version)
 
-def _request_client_id(_socket, train_title):
-    # 发送请求分配id
-    message = f'{CODE}_{train_title}:client_id'
-    send_msg(_socket, message.encode())
-
-    # 接收分配的id
-    response = recv_msg(_socket)
-    if response:
-        return int(response.decode())
-    return -1
-
-def request_client_id(train_title):
-    """请求分配客户端id"""
-    return _connect_server_apply(_request_client_id, train_title)
-
 def _request_need_val(_socket, train_title):
     # 发送请求是否需要验证
-    message = f'{CODE}_{train_title}:need_val'
+    message = f'{train_title}:need_val'
     send_msg(_socket, message.encode())
 
     # 接收是否需要验证
