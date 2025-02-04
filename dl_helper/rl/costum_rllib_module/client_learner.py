@@ -246,7 +246,7 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
         log(f"set version to all learners, res: {res}")
 
-        res = self.foreach_learner(lambda learner: learner.set_weights_version(int(need_warn_up)))
+        res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
         log(f"set need_warn_up to all learners, res: {res}")
 
         # 获取一个learner的梯度字典
@@ -609,16 +609,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         if self.client_id == 0:
             # 清空梯度事件
-            log(f'[{self.update_count}] compute_gradients begin')
             self.shared_param.grad_event.clear()
+        log(f'[{self.update_count}] compute_gradients begin')
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
+        log(f'[{self.update_count}] gradients_dict ready')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
             # 主learner
             cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+            log(f'[{self.update_count}] cpu_gradients ready')
 
             if self.gradient_sync_frequency > 1:
                 # 累积梯度
