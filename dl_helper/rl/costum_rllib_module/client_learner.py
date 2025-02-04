@@ -198,6 +198,8 @@ class ClientLearnerGroup(LearnerGroup):
         # 初始化客户端learner
         self._init_client_learner()
 
+        log(f"ClientLearnerGroup init done")
+
     def _init_client_learner(self):
         """初始化客户端learner"""
         # 设置每个learner的train_title
@@ -666,8 +668,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
-        # 若有待应用的新参数，消耗一个信号量
         if self.shared_param.param_event.is_set():
+            # 若有待应用的新参数，消耗一个信号量
             self.shared_param.param_event.wait()
 
             # 正确处理最后一次的梯度
@@ -701,15 +703,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def after_gradient_based_update(self, *args, **kwargs):
         # 重置
         self.update_count = 0
-        # 训练结束, 清空参数事件
-        self.shared_param.param_event.clear()
-        # 训练结束, 参数协程不在处理新参数
-        self.is_training_event.clear()
+        if self.client_id == 0:
+            # 训练结束, 清空参数事件
+            self.shared_param.param_event.clear()
+            # 训练结束, 参数协程不在处理新参数
+            self.is_training_event.clear()
         return super().after_gradient_based_update(*args, **kwargs)
     
     def before_gradient_based_update(self, *args, **kwargs):
-        # 训练开始，参数协程开始处理新参数
-        self.is_training_event.set(1)
+        if self.client_id == 0:
+            # 训练开始，参数协程开始处理新参数
+            self.is_training_event.set(1)
         return super().before_gradient_based_update(*args, **kwargs)
 
     def set_client_id(self, client_id):
