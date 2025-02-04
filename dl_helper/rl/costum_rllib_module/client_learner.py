@@ -196,6 +196,13 @@ class ClientLearnerGroup(LearnerGroup):
         """初始化客户端learner"""
         # 设置每个learner的train_title
         log(f"init_client_learner")
+
+        # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
+        remote_actor_ids = self._worker_manager.actor_ids()[1:]
+        res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
+        res = self._get_results(res)
+        log(f"set client_id to all learners, res: {res}")
+
         # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
         # res = self.foreach_learner(lambda learner: learner.set_train_title(1))
@@ -203,22 +210,16 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
+        res = self._get_results(res)
         log(f"set train_title to all learners, res: {res}")
-        time.sleep(1)
-
-        # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
-        remote_actor_ids = self._worker_manager.actor_ids()[1:]
-        res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-        log(f"set client_id to all learners, res: {res}")
-        time.sleep(1)
 
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
-        time.sleep(1)
 
         # 初始化
-        self.foreach_learner(lambda learner: learner.init_param_thread())
-        time.sleep(1)
+        res = self.foreach_learner(lambda learner: learner.init_param_thread())
+        res = self._get_results(res)
+        log(f"foreach_learner: init_param_thread, res: {res}")
 
     def _sync_learner_weights(self):
         # 获取服务器的参数，并更新到其他learner
@@ -230,23 +231,25 @@ class ClientLearnerGroup(LearnerGroup):
         _params_dict_np = self.get_weights()['default_policy']
         _params_dict = OrderedDict()
         for k, v in _params_dict_np.items():
-            _params_dict[f'module.{k}'] = torch.from_numpy(v)
+            _params_dict[f'module.{k}'] = torch.from_numpy(v.copy())
         self.param_compressor.decompress(params_list, info, _params_dict)
         
         # 更新参数到所有learner
+        log(f"set weights to all learners, version: {version}")
         if self.is_local:
             self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
         else:
             state_ref = ray.put(_params_dict)
-            self.foreach_learner(
+            res = self.foreach_learner(
                 lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
             )
-        log(f"set weights to all learners, version: {version}")
 
         res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
+        res = self._get_results(res)
         log(f"set version to all learners, res: {res}")
 
         res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
+        res = self._get_results(res)
         log(f"set need_warn_up to all learners, res: {res}")
 
         # 获取一个learner的梯度字典
@@ -265,12 +268,15 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
-        log(f"foreach_learner: init shared param")
         self.foreach_learner(lambda learner: learner.init_shared_param())
+        res = self._get_results(res)
+        log(f"foreach_learner: init shared param, res: {res}")
 
     def stop_extra_process(self):
         """停止额外进程"""
-        self.foreach_learner(lambda learner: learner.stop_param_thread())
+        res = self.foreach_learner(lambda learner: learner.stop_param_thread())
+        res = self._get_results(res)
+        log(f"foreach_learner: stop_param_thread, res: {res}")
 
 class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
     """
@@ -707,19 +713,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def set_client_id(self, client_id):
         log(f"[{id(self)}] set_client_id: {client_id}")
         self.client_id = client_id
+        return True
 
     def set_train_title(self, train_title):
-        log(f"[{id(self)}] set_train_title: {train_title}")
+        log(f"[{self.client_id}] set_train_title: {train_title}")
         self.train_title = train_title
+        return True
 
     def set_weights_version(self, version):
-        log(f"[{id(self)}] set_version: {version}")
+        log(f"[{self.client_id}] set_version: {version}")
         self.version = version
         return self.version
 
     def set_need_warn_up(self, need_warn_up):
-        log(f"[{id(self)}] set_need_warn_up: {need_warn_up}")
+        log(f"[{self.client_id}] set_need_warn_up: {need_warn_up}")
         self.need_warn_up = bool(need_warn_up)
+        return True
 
 if __name__ == '__main__':
     gradient_buffer_file = r"C:\Users\lh\Downloads\gradient_buffer_0.pkl"
