@@ -13,6 +13,7 @@ from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -81,6 +82,9 @@ class ExperimentHandler:
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
+        # 参数推送频率
+        self.push_params_interval = 6 # 每6步推送一次参数
+
         # 共享梯度队列
         # 梯度数据经过稀疏化，形状
         self.gradients_info_share_q = multiprocessing.Queue()
@@ -116,15 +120,6 @@ class ExperimentHandler:
         # 用于初始化共享数据
         _simple_params, _simple_grad_params = self.gradients_info_share_q.get()
 
-        # # 启动cpu计算进程
-        # self.p2 = multiprocessing.Process(target=ExperimentHandler.cpu_most_task, args=(
-        #     train_title, self.params_info_share_q, self.params_float32_ver_share_q,
-        #     self.share_params_lock, self.share_params_float32_lock,
-        #     _simple_params,
-        #     self.grad_warm_up_steps,
-        # ))
-        # self.p2.start()
-
         # 共享梯度列表
         self.gradients_cache_share_full = []# 全梯度
         self.gradients_cache_share = []# 用于压缩的梯度使用
@@ -143,71 +138,13 @@ class ExperimentHandler:
         # 增量参数压缩器
         self.params_compressor = IncrementalCompressor()
 
+        # 允许验证的客户端ip
+        self.need_val_ip = 0
+        # 允许验证的时间戳
+        self.need_val_timestamp = 0
+
     def __del__(self):
         self.p.terminate()
-
-    @staticmethod
-    def cpu_most_task(
-        train_title, params_info_share_q, params_float32_ver_share_q,
-        share_params_lock, share_params_float32_lock,
-        _simple_params,
-        grad_warm_up_steps,
-    ):
-        """
-        参数压缩，生成缓存
-        """
-        def update_params(lock, q, params_list, info, version, need_warn_up, params_cache_share):
-            """更新参数信息"""
-            log(f'update params')
-            with lock:
-                # 清空q
-                while not q.empty():
-                    q.get()
-                # 最新数据
-                q.put((info, version, need_warn_up))
-                # 更新参数
-                for idx, p in enumerate(params_list):
-                    params_cache_share[idx].data[:] = p[:]
-                    
-        log(f'[CC]{train_title} calculate cpu init')
-
-        # 参数压缩器
-        param_compressor = ParamCompressor()
-        # param_compressor = IncrementalCompressor()
-        
-        # 共享参数
-        params_cache_share_float32 = []
-        _params_cache_share_float32 = []
-        params_cache_share = []
-        # 初始化共享参数
-        for idx, _shape in enumerate(_simple_params):
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
-            params_cache_share_float32.append(share_tensor(f'{train_title}_pcs32_{idx}', _shape, 'float32'))
-            _params_cache_share_float32.append(torch.zeros(_shape, dtype=torch.float32))
-
-        step_count = 0
-        while True:
-            # 获取一份待压缩数据
-            version = params_float32_ver_share_q.get()
-            with share_params_float32_lock:
-                for idx, _data in enumerate(params_cache_share_float32):
-                    _params_cache_share_float32[idx][:] = _data.data[:]
-                while not params_float32_ver_share_q.empty():
-                    version = params_float32_ver_share_q.get()
-
-            # 压缩参数
-            weights, info = param_compressor.compress_params_dict(_params_cache_share_float32)
-            # weights, info = param_compressor.compress(_params_cache_share_float32)
-
-            # 是否需要预热
-            need_warn_up = grad_warm_up_steps > step_count
-
-            # 更新到共享参数
-            update_params(share_params_lock, params_info_share_q, weights, info, version, need_warn_up, params_cache_share)
-
-            step_count += 1
 
     @staticmethod
     def gpu_most_task(
@@ -230,6 +167,11 @@ class ExperimentHandler:
             with lock:
                 for idx, (k, v) in enumerate(weights.items()):
                     params_cache_share[idx].data[:] = v[:]
+
+                # 清空队列
+                while not q.empty:
+                    q.get()
+
                 q.put((version, need_warn_up))
 
         log(f'[CG]{train_title} calculate gpu init')
@@ -368,79 +310,28 @@ class ExperimentHandler:
                 report_memory_usage()
                 raise e
 
-    def handle_request(self, client_socket, msg_header, cmd):
-        """处理客户端请求"""
-        raise Exception('弃用，使用 async_handle_request 代替')
-        try:
-            if cmd == 'get':
-                # 返回模型参数
-                weights, version = self.param_server.get_weights()
-                # 压缩参数
-                weights = self.param_compressor.compress_params_dict(weights)
-                send_msg(client_socket, pickle.dumps((weights, version)))
-                log(f'{msg_header} Parameters sent, version: {version}')
+    async def _get_latest_raw_params(self):
+        """获取最新参数(无压缩)"""
+        # 获取参数
+        params = []
+        v = 0   
+        with self.share_params_lock:
+            # 交换
+            for i in self.params_cache_share:
+                params.append(i.data.clone())
+            # 取出再放回， 保证队列中仍有数据
+            v, need_warn_up = self.params_info_share_q.get()
+            self.params_info_share_q.put((v, need_warn_up))
+        return params, v, need_warn_up
 
-            elif cmd == 'update_gradients':
-                update_data = recv_msg(client_socket)
-                if update_data is None:
-                    return
-                grads, compress_info, version = pickle.loads(update_data)
-                log(f'{msg_header} Received gradients, version: {version}')
-                # 解压梯度
-                grads = self.gradient_compressor.decompress(grads, compress_info)
-                # 更新梯度并返回模型参数
-                weights = self.param_server.apply_gradients(grads, version)
-                # send_msg(client_socket, pickle.dumps(weights))
-                # log(f'{msg_header} Send back weights, version: {weights[1]}')
-
-            elif cmd == 'client_id':
-                """
-                根据ip分配返回客户端id
-                若ip已经存在, 返回 id+1
-                """
-                client_ip = client_socket.getpeername()[0]
-                current_time = time.time()
-
-                # 清理过期的ip-id映射并检查当前ip
-                if client_ip in self.client_ip_ids:
-                    # ip存在,检查是否过期
-                    _, timestamp = self.client_ip_ids[client_ip]
-                    if current_time - timestamp <= 12 * 3600:
-                        # 未过期,id+1 返回
-                        self.client_ip_ids[client_ip][0] += 1
-                        send_msg(client_socket, str(self.client_ip_ids[client_ip][0]).encode())
-                        log(f'{msg_header} ip:{client_ip} exist, Send back client_id:{self.client_ip_ids[client_ip][0]}')
-                        return
-                    # 已过期,删除
-                    del self.client_ip_ids[client_ip]
-                    log(f'{msg_header} ip:{client_ip} out of date')
-
-                # 分配新id
-                new_id = 0
-                self.client_ip_ids[client_ip] = [new_id, current_time]
-                send_msg(client_socket, str(new_id).encode())
-                log(f'{msg_header} new ip:{client_ip}, Send back client_id: {new_id}')
-
-        except ConnectionResetError:
-            pass
-
-    async def async_handle_request(self, msg_header, cmd, data):
+    async def async_handle_request(self, msg_header, cmd, data, writer, reader):
         """异步处理客户端请求"""
         if cmd.startswith('get@'):
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
             log(f'{msg_header} recv get request, client version: {_client_version}')
 
-            # 返回 共享参数
-            params = []
-            info = None
-            v = 0
-            with self.share_params_lock:
-                # 交换
-                for i in self.params_cache_share:
-                    params.append(i.data.clone())
-                # 取出再放回， 保证队列中仍有数据
-                v, need_warn_up = self.params_info_share_q.get()
-                self.params_info_share_q.put((v, need_warn_up))
+            # 获取最新参数
+            params, v, need_warn_up = await self._get_latest_raw_params()
 
             # 计算更新增量
             ip = data
@@ -448,6 +339,35 @@ class ExperimentHandler:
 
             log(f'{msg_header} prepare params, version: {v}')
             return pickle.dumps((params, info, v, need_warn_up))
+
+        elif cmd == 'wait_params':
+            last_send_v = 0
+            ip = data
+            while True:
+                # 获取最新参数
+                params, v, need_warn_up = await self._get_latest_raw_params()
+
+                # 控制参数推送频率
+                if v - last_send_v >= self.push_params_interval:
+                    # 计算更新增量
+                    params, info = self.params_compressor.compress(params, ip)
+
+                    log(f'{msg_header} prepare params, version: {v}')
+                    await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
+                    last_send_v = v
+                    log(f'{msg_header} send params, version: {v}')
+                    # 等待回复
+                    await async_recv_msg(reader)
+
+        elif cmd == 'need_val':
+            # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
+            current_time = time.time()
+            if current_time - self.need_val_timestamp > 12 * 3600:
+                self.need_val_timestamp = current_time
+                self.need_val_ip = data
+                return b'1'
+            else:
+                return b'0'
 
         elif cmd == 'update_gradients':
             log(f'{msg_header} recv update_gradients request')

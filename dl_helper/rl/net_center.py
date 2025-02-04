@@ -240,7 +240,7 @@ class AsyncSocketServer:
                         handler = self.handlers[train_title]
 
                 # 2.2 处理指令
-                res = await handler.async_handle_request(msg_header, cmd, data)
+                res = await handler.async_handle_request(msg_header, cmd, data, writer, reader)
                 if res:
                     await async_send_msg(writer, res)
                     log(f'{msg_header}  params sended')

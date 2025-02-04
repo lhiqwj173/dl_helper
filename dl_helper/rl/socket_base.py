@@ -202,6 +202,20 @@ def request_client_id(train_title):
     """请求分配客户端id"""
     return _connect_server_apply(_request_client_id, train_title)
 
+def _request_need_val(_socket, train_title):
+    # 发送请求是否需要验证
+    message = f'{CODE}_{train_title}:need_val'
+    send_msg(_socket, message.encode())
+
+    # 接收是否需要验证
+    response = recv_msg(_socket)
+    if response:
+        return response.decode() == '1'
+    return False
+
+def request_need_val(train_title):
+    """请求是否需要验证"""
+    return _connect_server_apply(_request_need_val, train_title)
 
 def test_pickle_numpy():
     """测试pickle序列化numpy数组"""
