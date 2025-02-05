@@ -256,6 +256,7 @@ class ExperimentHandler:
                 log(f'[CG]{train_title} wait gradients event')
                 share_data_new_event.wait()
                 share_data_new_event.clear()
+                t = time.time()
 
                 log(f'[CG]{train_title} active')
                 # with LockWithLog(share_gradients_lock, log, '[CG]'):
@@ -313,7 +314,7 @@ class ExperimentHandler:
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
 
-                log(f'[CG]{train_title} done')   
+                log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms')   
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
@@ -335,6 +336,7 @@ class ExperimentHandler:
 
     async def async_handle_request(self, msg_header, cmd, data, writer, reader):
         """异步处理客户端请求"""
+        t = time.time()
         if cmd.startswith('get@'):
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
             log(f'{msg_header} recv get request, client version: {_client_version}')
@@ -346,7 +348,7 @@ class ExperimentHandler:
             ip = data
             params, info = self.params_compressor.compress(params, ip)
 
-            log(f'{msg_header} prepare params, version: {v}')
+            log(f'{msg_header} prepare params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
 
             await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
 
@@ -385,7 +387,7 @@ class ExperimentHandler:
                 res = b'1'
 
             await async_send_msg(writer, res)
-            log(f'{msg_header} send need_val: {res}')
+            log(f'{msg_header} send need_val: {res}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'update_gradients':
             log(f'{msg_header} recv update_gradients request')
@@ -434,11 +436,8 @@ class ExperimentHandler:
             await async_send_msg(writer, b'1')
 
             # 通知新梯度
-            log(f'set share data new event, wait length: {gradients_cache_share_length}')
+            log(f'set share data new event, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
             self.share_data_new_event.set()
-
-        elif cmd == 'client_id':
-            pass
 
 if __name__ == '__main__':
     pass
