@@ -514,8 +514,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
-                # 发送连接类型
+                # 发送连接验证
                 await async_send_msg(writer, f'{CODE}')
+
+                # 发送指令类型
+                await async_send_msg(writer, f'{info_data.train_title}:update_gradients')
 
                 send_count = 0
                 while True:
@@ -556,7 +559,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")
 
             except Exception as e:
-                log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")
+                log(f"[{idx}] connect to server failed: \n{get_exception_msg()}")
                 # 关闭连接
                 try:
                     writer.close()

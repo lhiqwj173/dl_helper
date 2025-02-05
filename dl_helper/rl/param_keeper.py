@@ -397,6 +397,7 @@ class ExperimentHandler:
                 # 获取梯度数据
                 data = await async_recv_msg(reader)
                 t = time.time()
+                log(f'{msg_header} recv gradients')
 
                 g, compress_info, version = pickle.loads(data)
                 # 提交到共享梯度信息队列

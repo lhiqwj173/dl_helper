@@ -200,6 +200,7 @@ class AsyncSocketServer:
             # 1. 接收 CODE
             res = await async_recv_msg(reader, timeout=3)
             _code = res.decode()
+            log(f'{msg_header} recv code: {_code}')
             if _code != CODE:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')
@@ -207,6 +208,7 @@ class AsyncSocketServer:
             # 2.1 接收指令数据
             data = await async_recv_msg(reader, timeout=3)
             a = data.decode()
+            log(f'{msg_header} recv data: {a}')
 
             # 2.2 分解指令
             train_title, cmd = a.split(':', maxsplit=1)

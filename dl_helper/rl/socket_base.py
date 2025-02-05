@@ -58,13 +58,13 @@ async def async_recvall(reader, n, timeout=10.0):
                     timeout=timeout  # 添加超时设置
                 )
             if not packet:
-                log("连接已关闭，接收到空数据包")
+                log("Connection closed, received empty packet")
                 raise Exception('connect closed unexpectedly')
 
-            # log(f"接收到数据包，大小: {len(packet)} 字节")  # 添加日志
+            # log(f"Received packet, size: {len(packet)} bytes")  # Add log
             data.extend(packet)
         except asyncio.TimeoutError:
-            log("接收数据超时")
+            log("Receive data timeout")
             raise Exception('recv timeout')
         except Exception as e:
             raise e
@@ -107,10 +107,11 @@ def _connect_server_apply(func, *args, **kwargs):
         send_msg(_socket, f'{CODE}')
         return func(_socket, *args, **kwargs)
     except Exception as e:
-        log(f"连接服务器失败")
+        log(f"Failed to connect to server")
         log(get_exception_msg())
         raise e
     finally:
+
         _socket.close()
 
 def _handle_response_params(response):
@@ -120,9 +121,10 @@ def _handle_response_params(response):
     try:
         weights, info, version, need_warn_up = pickle.loads(response)
     except Exception as e:
-        print(f"反序列化失败: {e}")
+        log(f"Failed to deserialize parameters: {e}")
         raise e
     return weights, info, version, need_warn_up
+
 
 def _get_server_weights(_socket, train_title, version):
     # 发送获取参数请求
