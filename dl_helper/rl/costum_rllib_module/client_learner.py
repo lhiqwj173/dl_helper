@@ -636,7 +636,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.shared_param.grad_event.clear()
             # 清空learner参数同步事件
             self.sync_learner_param_event.clear()
-        # log(f'[{self.client_id}][{self.update_count}] compute_gradients begin')
+            # 清空learner同步事件
+            self.sync_learner_event.clear()
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
@@ -678,8 +679,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 触发主learner的梯度更新事件
             self.sync_learner_event.set(self.num_learners - 1)
-            # 清空learner同步事件
-            self.sync_learner_event.clear()
         else:
             # 非主learner, 等待主learner的梯度更新事件
             self.sync_learner_event.wait()
