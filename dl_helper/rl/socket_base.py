@@ -10,6 +10,7 @@ import pickle
 import struct
 
 CODE = '0QYg9Ky17dWnN4eK'
+# PS IP
 HOST = '217.142.135.154'
 PORT = 12346
 
