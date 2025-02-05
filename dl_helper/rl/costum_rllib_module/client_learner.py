@@ -29,9 +29,9 @@ from functools import partial
 from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
-from dl_helper.rl.socket_base import get_server_weights, send_gradients
-from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_wait_server_weights
+from dl_helper.rl.socket_base import get_server_weights
+from dl_helper.rl.socket_base import HOST, PORT, CODE
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
 from dl_helper.deep_gradient_compression import DeepGradientCompression
