@@ -79,6 +79,7 @@ if __name__ == "__main__":
         begin_time = time.time()
 
         # 训练循环
+        # 标准训练 30 527.9s 
         rounds = 30
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")

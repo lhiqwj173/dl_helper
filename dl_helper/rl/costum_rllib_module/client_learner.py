@@ -345,7 +345,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 参数压缩器
         self.param_compressor = None
 
-
         # 梯度累积器
         self.gradient_accumulator = GradientAccumulator()
         
@@ -366,6 +365,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         self.version = 0
         self.need_warn_up = False
+
+        # learner 之间的同步
+        self.sync_learner_event = Event(name=f'_sync_learner_event')
+        self.sync_learner_param_event = Event(name=f'_sync_learner_param_event')
+
+        # learner 的个数(gpu数)
+        self.num_learners = match_num_processes()
 
         ####################
         # 只有主 learner 需要初始化
@@ -400,7 +406,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.task_queue = multiprocessing.Queue()
+            self.task_queue = multiprocessing.Queue(maxsize=15)
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
@@ -448,9 +454,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self.need_warn_up = need_warn_up
         
         info_data = share_info(train_title, client_id, version, need_warn_up)
+
+        grad_coroutine_num = 10
         
         # 梯度事件队列
-        grad_q = AsyncQueue(maxsize=30)
+        grad_q = AsyncQueue()
         # 参数事件队列
         param_q = AsyncQueue()
 
@@ -462,7 +470,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
         # 启动协程任务
         tasks = []
-        for _idx in range(30):
+        for _idx in range(grad_coroutine_num):
             task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info_data, process_pool, grad_q))
             tasks.append(task)
 
@@ -484,7 +492,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         gradient_compressor = DeepGradientCompression()
 
         # 统计耗时
-        begin_time = 0
+        total_cost_time = 0
         total_count = 0
 
         while True:
@@ -498,13 +506,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 获取汇总梯度 TODO 使用共享内存替代
                     merged_gradients = await grad_q.get()
+                    begin_time = time.time()
                     q_size = grad_q.qsize()
                     if q_size > 15:
                         log(f"[{idx}] queue size: {q_size}")
 
-                    if begin_time == 0:
-                        begin_time = time.time()
-                    
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
                     compressed_result = await loop.run_in_executor(
@@ -516,9 +522,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
-                    # log(f"[{idx}][{send_count}] send gradients done")
+
+
                     send_count += 1
                     total_count += 1
+                    cost_time = time.time() - begin_time
+                    total_cost_time += cost_time
+                    log(f"[{idx}][{send_count}] send gradients done, cost time: {int(cost_time * 1000)}ms")
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
@@ -526,8 +536,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         await async_recv_msg(reader)
                         # log(f"[{idx}] recv response done")
 
-                    if total_count % 30 == 0:
-                        log(f"[{idx}] avg send time: {int(((time.time()-begin_time) / total_count) * 1000)}ms")
+                    if total_count % 5 == 0:
+                        log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")
 
             except Exception as e:
                 log(f"[{idx}] 连接服务器失败: \n{get_exception_msg()}")
@@ -554,9 +564,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 是否处于训练阶段
         is_training_event = Event(name=f'_is_training_event')
-
-        # learner 的个数(gpu数)
-        num_learners = match_num_processes()
 
         # 共享参数
         grad_params_dict = OrderedDict()
@@ -596,7 +603,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                         # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
                         # 触发共享参数更新事件
-                        shared_param.param_event.clear_reset(num_learners)
+                        shared_param.param_event.clear_reset(1)
                         log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}")
 
                     # 处理完成回复
@@ -604,8 +611,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 统计耗时
                     if total_count % 30 == 0:
-                        log(f"[{total_count}] avg param push freq: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
-
+                        log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
 
             except Exception as e:
                 log(f"连接服务器失败: \n{get_exception_msg()}")
@@ -628,6 +634,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 清空梯度事件
             self.shared_param.grad_event.clear()
+            # 清空learner参数同步事件
+            self.sync_learner_param_event.clear()
         # log(f'[{self.client_id}][{self.update_count}] compute_gradients begin')
 
         # 计算梯度
@@ -660,11 +668,29 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             else:
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
-        
+
+            # 检查是否有待应用的新参数
+            if self.shared_param.param_event.is_set():
+                # 消耗一个信号量
+                self.shared_param.param_event.wait()
+                # 触发主learner的参数更新事件
+                self.sync_learner_param_event.set(1)
+
+            # 触发主learner的梯度更新事件
+            self.sync_learner_event.set(self.num_learners - 1)
+            # 清空learner同步事件
+            self.sync_learner_event.clear()
+        else:
+            # 非主learner, 等待主learner的梯度更新事件
+            self.sync_learner_event.wait()
+
+        if self.client_id == 0:
             log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+
         # nouse3
         # 返回空
         return {}
+
     # nouse4
 
     def postprocess_gradients(self, gradients_dict):
@@ -674,10 +700,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
-        if self.shared_param.param_event.is_set():
-            # 若有待应用的新参数，消耗一个信号量
-            self.shared_param.param_event.wait()
 
+        if self.sync_learner_param_event.is_set():
+            # 存在待应用的新参数
             # 正确处理最后一次的梯度
             if self.gradient_sync_frequency > 1 and self.apply_last_grad:
                 # 将共享梯度应用到本地参数
