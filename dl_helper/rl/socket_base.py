@@ -98,15 +98,13 @@ def _connect_server_apply(func, *args, **kwargs):
     func: 函数名, 第一个参数为socket连接
     *args: 函数其他参数
     **kwargs: 函数其他参数
-    _type: 连接类型 1次/长连接
     """
     _socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         _socket.connect((HOST, PORT))
 
-        # 发送连接类型
-        send_msg(_socket, f'{CODE}_one')
-        
+        # 发送验证
+        send_msg(_socket, f'{CODE}')
         return func(_socket, *args, **kwargs)
     except Exception as e:
         log(f"连接服务器失败")
@@ -139,23 +137,9 @@ def _get_server_weights(_socket, train_title, version):
     # 反序列化参数
     return _handle_response_params(response)
 
-async def _async_get_server_weights(writer, reader, train_title, version):
-    """
-    获取服务器参数
-    返回: 
-        weights, info, version
-        None: 连接已关闭 / 0:超时
-    """
-    # 发送获取参数请求
-    message = f'{train_title}:get@{version}'
-    await async_send_msg(writer, message.encode())
-
+async def _async_wait_server_weights(reader):
     # 接收参数数据
     response = await async_recv_msg(reader)
-    if response in [-1, 0]:
-        return None
-    
-    # 反序列化参数
     return _handle_response_params(response)
 
 def get_server_weights(train_title, version=-1):
@@ -164,28 +148,6 @@ def get_server_weights(train_title, version=-1):
     server返回: (self.learner.get_state(components=COMPONENT_RL_MODULE), self.ver)
     """
     return _connect_server_apply(_get_server_weights, train_title, version)
-
-def _send_gradients(_socket, train_title, grads, compress_info, version):
-    # 发送梯度请求
-    message = f'{train_title}:update_gradients'
-    send_msg(_socket, message.encode())
-    
-    # 发送累积梯度
-    data = pickle.dumps((grads, compress_info, version))
-    send_msg(_socket, data)
-
-async def _async_send_gradients(writer, train_title, grads, compress_info, version):
-    # 发送梯度请求
-    message = f'{train_title}:update_gradients'
-    await async_send_msg(writer, message.encode())
-    
-    # 发送累积梯度
-    data = pickle.dumps((grads, compress_info, version))
-    await async_send_msg(writer, data)
-
-def send_gradients(train_title, grads, compress_info, version):
-    """发送梯度"""
-    return _connect_server_apply(_send_gradients, train_title, grads, compress_info, version)
 
 def _request_need_val(_socket, train_title):
     # 发送请求是否需要验证
@@ -202,41 +164,3 @@ def request_need_val(train_title):
     """请求是否需要验证"""
     return _connect_server_apply(_request_need_val, train_title)
 
-def test_pickle_numpy():
-    """测试pickle序列化numpy数组"""
-    import numpy as np
-    
-    # 创建numpy数组
-    arr = np.random.rand(3,4)
-    print("原始数组:")
-    print(arr)
-    
-    # 序列化
-    data = pickle.dumps(arr)
-    print("\n序列化后的bytes长度:", len(data))
-    
-    # 反序列化
-    arr2 = pickle.loads(data)
-    print("\n还原后的数组:")
-    print(arr2)
-    
-    # 验证是否完全相同
-    print("\n两个数组是否完全相同:", np.array_equal(arr, arr2))
-
-
-if "__main__" == __name__:
-
-    file = r"C:\Users\lh\Desktop\fsdownload\debug_pickle.pkl"
-    with open(file, 'rb') as f:
-        data = f.read()
-    response = pickle.loads(data)
-    print(response)
-
-    while 1:
-        choose = input("1.get_server_weights\n2.request_client_id\n3.test_pickle_numpy\n")
-        if choose == "1":
-            print(get_server_weights('test'))
-        elif choose == "3":
-            test_pickle_numpy()
-        else:
-            print("invalid input")

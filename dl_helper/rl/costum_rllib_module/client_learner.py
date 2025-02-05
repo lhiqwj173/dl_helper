@@ -31,7 +31,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights, send_gradients
 from dl_helper.rl.socket_base import HOST, PORT, send_msg, recv_msg, CODE, _get_server_weights, _send_gradients
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_get_server_weights
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_send_gradients, _async_wait_server_weights
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
 from dl_helper.deep_gradient_compression import DeepGradientCompression
@@ -515,7 +515,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
                 # 发送连接类型
-                await async_send_msg(writer, f'{CODE}_long')
+                await async_send_msg(writer, f'{CODE}')
 
                 send_count = 0
                 while True:
@@ -537,12 +537,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # log(f"[{idx}][{send_count}] compress gradients done")
 
                     # 发送梯度
-                    await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
-                    log(f"[{idx}][{send_count}] send grads done, cost time: {int(time.time() - begin_time * 1000)}ms")
+                    data = pickle.dumps((compressed_grads, compress_info, info_data.version))
+                    await async_send_msg(writer, data)
+                    log(f"[{idx}][{send_count}] send grads done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     # 等待回复
                     await async_recv_msg(reader)
-                    log(f"[{idx}][{send_count}] recv grads done, cost time: {int(time.time() - begin_time * 1000)}ms")
+                    log(f"[{idx}][{send_count}] recv grads done, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     send_count += 1
                     total_count += 1
@@ -595,8 +596,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
-                # 发送连接类型
-                await async_send_msg(writer, f'{CODE}_one')
+                # 发送连接验证
+                await async_send_msg(writer, f'{CODE}')
                 log(f"param_coroutine connect to server")
                 # 发送指令
                 await async_send_msg(writer, f'{info_data.train_title}:wait_params'.encode())
@@ -604,7 +605,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 while True:
                     # 被动获取参数
                     # log(f"[{total_count}] wait params")
-                    params_list, info, info_data.version, info_data.need_warn_up = await _async_get_server_weights(writer, reader, info_data.train_title, info_data.version)
+                    params_list, info, info_data.version, info_data.need_warn_up = await _async_wait_server_weights(reader)
                     total_count += 1
                     # log(f"[{total_count}] recv params data")
 
@@ -685,7 +686,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
 
-            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()}')
+            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 

@@ -334,10 +334,12 @@ class ExperimentHandler:
             self.params_info_share_q.put((v, need_warn_up))
         return params, v, need_warn_up
 
-    async def async_handle_request(self, msg_header, cmd, data, writer, reader):
-        """异步处理客户端请求"""
-        t = time.time()
+    async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
+        """异步处理客户端请求
+        """
         if cmd.startswith('get@'):
+            t = time.time()
+            # 单次请求参数
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
             log(f'{msg_header} recv get request, client version: {_client_version}')
 
@@ -345,19 +347,18 @@ class ExperimentHandler:
             params, v, need_warn_up = await self._get_latest_raw_params()
 
             # 计算更新增量
-            ip = data
             params, info = self.params_compressor.compress(params, ip)
 
-            log(f'{msg_header} prepare params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
-
+            # 发送参数
             await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
+            log(f'{msg_header} send params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'wait_params':
+            # 长连接请求参数
             log(f'{msg_header} recv wait_params request')
             last_send_v = 0
-            ip = data
             while True:
-                # 等待事件
+                # 等待参数更新事件
                 await self.aper.wait()
 
                 # 获取最新参数
@@ -378,66 +379,75 @@ class ExperimentHandler:
 
         elif cmd == 'need_val':
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
+            t = time.time()
             current_time = time.time()
             res = b'0'
             if current_time - self.need_val_timestamp > 12 * 3600:
                 self.need_val_timestamp = current_time
-                self.need_val_ip = data
-
+                self.need_val_ip = ip
                 res = b'1'
 
             await async_send_msg(writer, res)
             log(f'{msg_header} send need_val: {res}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'update_gradients':
+            # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
-            g, compress_info, version = pickle.loads(data)
-            # 提交到共享梯度信息队列
-            # log(f'put gradients info')
-            self.gradients_info_share_q.put((compress_info, version))
-            # 提交到共享梯度
-            # log(f'put gradients')
+            while True:
+                # 获取梯度数据
+                data = await async_recv_msg(reader)
+                t = time.time()
 
-            wait_count = 0
+                g, compress_info, version = pickle.loads(data)
+                # 提交到共享梯度信息队列
+                # log(f'put gradients info')
+                self.gradients_info_share_q.put((compress_info, version))
+                # 提交到共享梯度
+                # log(f'put gradients')
 
-            # 是否是全梯度
-            if compress_info[0]['is_full_gradient']:
-                cache_share = self.gradients_cache_share_full
-            else:
-                cache_share = self.gradients_cache_share
+                wait_count = 0
 
-            # 当前等待处理的梯度数量
-            gradients_cache_share_length = 0
-            async with self.gradients_add_lock:
-            # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
-                while True:
-                    # with LockWithLog(self.share_gradients_lock, log, msg_header):
-                    with self.share_gradients_lock:
-                        gradients_cache_share_length = cache_share[0].size()
-                        if gradients_cache_share_length < self.grad_cache_size:
-                            for idx, _g in enumerate(g):
-                                cache_share[idx].append(_g)
-                            gradients_cache_share_length += 1
-                            wait_count = 0
-                            break
+                # 是否是全梯度
+                if compress_info[0]['is_full_gradient']:
+                    cache_share = self.gradients_cache_share_full
+                else:
+                    cache_share = self.gradients_cache_share
 
-                    # 释放锁并等待
-                    self.share_data_new_event.set()
-                    log(f'{msg_header} wait gradients, wait length: {gradients_cache_share_length}')
-                    await asyncio.sleep(0.1)
+                # 当前等待处理的梯度数量
+                gradients_cache_share_length = 0
+                async with self.gradients_add_lock:
+                # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
+                    while True:
+                        # with LockWithLog(self.share_gradients_lock, log, msg_header):
+                        with self.share_gradients_lock:
+                            gradients_cache_share_length = cache_share[0].size()
+                            if gradients_cache_share_length < self.grad_cache_size:
+                                for idx, _g in enumerate(g):
+                                    cache_share[idx].append(_g)
+                                gradients_cache_share_length += 1
+                                wait_count = 0
+                                break
 
-                    wait_count += 1
-                    if wait_count > 30:
-                        log(f'{msg_header} wait gradients timeout')
-                        import sys
-                        sys.exit()
+                        # 等待处理的梯度大于 梯度缓存大小
+                        # 释放锁并等待
+                        self.share_data_new_event.set()
+                        log(f'{msg_header} wait gradients, wait length: {gradients_cache_share_length}')
+                        await asyncio.sleep(0.1)
 
-            # 回复，避免socket堆积
-            await async_send_msg(writer, b'1')
+                        wait_count += 1
+                        if wait_count > 30:
+                            log(f'{msg_header} wait gradients timeout')
+                            import sys
+                            sys.exit()
 
-            # 通知新梯度
-            log(f'set share data new event, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
-            self.share_data_new_event.set()
+                log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
+
+                # 回复，避免socket堆积
+                await async_send_msg(writer, b'1')
+
+                # 通知新梯度
+                self.share_data_new_event.set()
+                log(f'{msg_header} handle gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
 
 if __name__ == '__main__':
     pass

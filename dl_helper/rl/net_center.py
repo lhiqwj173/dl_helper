@@ -191,57 +191,42 @@ class AsyncSocketServer:
         msg_header_add_title = False
 
         try:
-            # 接收 CODE_one/long
-            res = await async_recv_msg(reader, timeout=10)
-            data_str = res.decode()
-            # log(f'{msg_header} recv data_str: {data_str}')
-            # 验证CODE
-            _code, _type = data_str.split('_', maxsplit=1)
-            log(f'{msg_header} code: {_code}, type: {_type}')
-            if _code != CODE and _type not in ['one', 'long']:
+            """
+            1. 接收 CODE (验证)
+            2. 接收指令数据 
+            3. 处理指令
+            4. 关闭连接
+            """
+            # 1. 接收 CODE
+            res = await async_recv_msg(reader, timeout=3)
+            _code = res.decode()
+            if _code != CODE:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')
 
-            # 连接类型 1次/长连接
-            con_times = 1 if _type == 'one' else 0
-            
-            handler = None
-            count = 0
-            while con_times == 0 or count < con_times:
-                count += 1
+            # 2.1 接收指令数据
+            data = await async_recv_msg(reader, timeout=3)
+            a = data.decode()
 
-                # 1. 接收指令数据
-                data = await async_recv_msg(reader, timeout=3 if con_times == 1 else -1)
-                a = data.decode()
+            # 2.2 分解指令
+            train_title, cmd = a.split(':', maxsplit=1)
+            if not msg_header_add_title:
+                msg_header += f'[{train_title}]'
+                msg_header_add_title = True
 
-                # 1.2 分解指令
-                train_title, cmd = a.split(':', maxsplit=1)
-                if not msg_header_add_title:
-                    msg_header += f'[{train_title}]'
-                    msg_header_add_title = True
+            # 2.3 获取处理器
+            if train_title == 'test':
+                handler = list(self.handlers.values())[0]
+            else:
+                if train_title not in self.handlers:
+                    log(f'{train_title} not found')
+                    return
+                handler = self.handlers[train_title]
 
-                # 1.3 获取数据
-                data = None
-                if cmd == 'update_gradients':
-                    data = await async_recv_msg(reader, timeout=3 if con_times == 1 else -1)
-                else:
-                    data = client_ip
-                        
-                # 2. 处理指令
-                # 2.1 获取处理器
-                if None is handler:
-                    if train_title == 'test':
-                        handler = list(self.handlers.values())[0]
-                    else:
-                        if train_title not in self.handlers:
-                            log(f'{train_title} not found')
-                            break
-                        handler = self.handlers[train_title]
+            # 3 处理指令
+            await handler.async_handle_request(client_ip, msg_header, cmd, writer, reader)
 
-                # 2.2 处理指令
-                await handler.async_handle_request(msg_header, cmd, data, writer, reader)
-
-            # 3. 关闭连接
+            # 4. 关闭连接
             return
                
         except ConnectionError as e:
