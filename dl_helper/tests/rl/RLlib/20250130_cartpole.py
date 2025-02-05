@@ -39,6 +39,7 @@ if __name__ == "__main__":
         .extra_config(
             learner_group_class=ClientLearnerGroup,
             learner_group_kwargs={
+                'train_folder': train_folder,
                 "train_title": train_title,
             },
         )

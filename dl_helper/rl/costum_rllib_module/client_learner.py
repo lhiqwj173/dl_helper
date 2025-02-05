@@ -182,14 +182,19 @@ class ClientLearnerGroup(LearnerGroup):
     - 若存在多个 learner，则需要选择设置是否与参数服务器通信
     - 需要在每次 update_from_batch 后，获取communicate_learner的参数，并更新到其他learner
     """
-    def __init__(self, *args, train_title='', **kwargs):
+    def __init__(self, *args, train_title='',train_folder='', **kwargs):
         super().__init__(*args, **kwargs)
         assert not isinstance(self.config.algo_class, (IMPALA, APPO)), "暂不支持异步算法 IMPALA/APPO"
 
         # 训练标题
         assert train_title != '', "train_title 不能为空"
+        assert train_folder != '', "train_folder 不能为空"
         self.train_title = train_title
-        
+        self.train_folder = train_folder
+
+        # 初始化日志
+        init_logger(train_title, home=train_folder, timestamp=False)
+
         # 参数压缩器
         # param_keys = list(self.get_weights()['default_policy'].keys())
         # self.param_compressor = ParamCompressor(param_keys)
@@ -213,6 +218,7 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
         log(f"set set_client_id to not main learners, res: {get_results(res)}")
 
+        # 设置各个learner的 train_title 和 train_folder
         # !!! 字符串需要通过 ray.put 传递
         # res = self.foreach_learner(lambda learner: learner.set_train_title('20250108_breakout'))
         # res = self.foreach_learner(lambda learner: learner.set_train_title(1))
@@ -221,6 +227,15 @@ class ClientLearnerGroup(LearnerGroup):
             lambda _learner, _ref=state_ref: _learner.set_train_title(ray.get(_ref))
         )
         log(f"set train_title to all learners, res: {get_results(res)}")
+        state_ref = ray.put(self.train_folder)
+        res = self.foreach_learner(
+            lambda _learner, _ref=state_ref: _learner.set_train_folder(ray.get(_ref))
+        )
+        log(f"set train_title to all learners, res: {get_results(res)}")
+
+        # 初始化各个learner的日志
+        res = self.foreach_learner(lambda learner: learner.init_logger())
+        log(f"foreach_learner: init_logger, res: {get_results(res)}")
 
         # 初始化参数 使用服务器的最新参数
         self._sync_learner_weights()
@@ -325,7 +340,6 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                         self._loop
                     )
 
-
             except Empty:
                 continue
             except Exception as e:
@@ -339,8 +353,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        log(f'log_folder: {get_log_folder()}')
 
         # 参数压缩器
         self.param_compressor = None
@@ -405,6 +417,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
     def init_param_thread(self):
         if self.client_id == 0:
+
             # 主learner
             self.task_queue = multiprocessing.Queue(maxsize=15)
 
@@ -415,7 +428,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.event_loop_process = multiprocessing.Process(
                 target=self._run_event_loop_process, 
                 args=(
-                    self.task_queue, self.train_title, self.client_id, self.params_dict, self.grad_params_value_shape,
+                    self.task_queue, self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
                     self.version, self.need_warn_up
                 )
             )
@@ -432,8 +445,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     @staticmethod
-    def _run_event_loop_process(task_queue, train_title, client_id, params_dict, grad_params_value_shape, version, need_warn_up):
+    def _run_event_loop_process(task_queue, train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up):
         """在新进程中运行事件循环"""
+        # 初始化日志
+        init_logger(train_title, home=train_folder, timestamp=False)
 
         # 事件循环
         try:
@@ -508,8 +523,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     merged_gradients = await grad_q.get()
                     begin_time = time.time()
                     q_size = grad_q.qsize()
-                    if q_size > 15:
-                        log(f"[{idx}] queue size: {q_size}")
+                    # if q_size > 15:
+                    #     log(f"[{idx}] queue size: {q_size}")
+                    log(f"[{idx}] grad handler begin, queue size: {q_size}")
 
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
@@ -522,15 +538,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
+                    log(f"[{idx}][{send_count}] send grads done, cost time: {int(time.time() - begin_time * 1000)}ms")
 
                     # 等待回复
                     await async_recv_msg(reader)
+                    log(f"[{idx}][{send_count}] recv grads done, cost time: {int(time.time() - begin_time * 1000)}ms")
 
                     send_count += 1
                     total_count += 1
                     cost_time = time.time() - begin_time
                     total_cost_time += cost_time
-                    log(f"[{idx}][{send_count}] send gradients done, cost time: {int(cost_time * 1000)}ms")
+
+                    log(f"[{idx}][{send_count}] grad handler done, cost time: {int(cost_time * 1000)}ms")
 
                     if total_count % 10 == 0:
                         log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")
@@ -666,6 +685,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入推送队列
                 self.task_queue.put(cpu_gradients)
 
+            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()}')
+            log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+            log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+
             # 检查是否有待应用的新参数
             if self.shared_param.param_event.is_set():
                 # 消耗一个信号量
@@ -677,10 +700,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.sync_learner_event.set(self.num_learners - 1)
         else:
             # 非主learner, 等待主learner的梯度更新事件
+            log(f'[{self.client_id}][{self.update_count}] wait sync_learner_event: {self.sync_learner_event.is_set()}')
             self.sync_learner_event.wait()
 
-        if self.client_id == 0:
-            log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        # if self.client_id == 0:
+        #     log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
 
         # nouse3
         # 返回空
@@ -743,15 +768,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().before_gradient_based_update(*args, **kwargs)
 
     def set_client_id(self, client_id):
-        log(f"[{id(self)}] set_client_id: {client_id}")
         self.client_id = client_id
         return True
 
     def set_train_title(self, train_title):
-        log(f"[{self.client_id}] set_train_title: {train_title}")
         self.train_title = train_title
         return True
 
+    def set_train_folder(self, train_folder):
+        self.train_folder = train_folder
+        return True
+
+    def init_logger(self):
+        init_logger(self.train_title, home=self.train_folder, timestamp=False)
+        log(f"[{self.client_id}] init_logger done: {get_log_folder()}")
+        return True
+    
     def set_weights_version(self, version):
         log(f"[{self.client_id}] set_version: {version}")
         self.version = version
