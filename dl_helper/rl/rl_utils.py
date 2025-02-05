@@ -23,6 +23,90 @@ from dl_helper.train_param import is_kaggle
 rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
+def simplify_rllib_metrics(data, out_func=print):
+    important_metrics = {
+        "env_runner": {},
+        "val": {},
+        "learner": {},
+    }
+
+    if 'counters' in data:
+        if 'num_env_steps_sampled' in data["counters"]:
+            important_metrics["env_runner"]["num_env_steps_sampled"] = data["counters"]["num_env_steps_sampled"]
+
+    if 'env_runners' in data:
+        if 'episode_return_mean' in data["env_runners"]:
+            important_metrics["env_runner"]["episode_return_mean"] = data["env_runners"]["episode_return_mean"]
+        if 'episode_return_max' in data["env_runners"]:
+            important_metrics["env_runner"]["episode_return_max"] = data["env_runners"]["episode_return_max"]
+        if 'episode_len_mean' in data["env_runners"]:
+            important_metrics["env_runner"]["episode_len_mean"] = data["env_runners"]["episode_len_mean"]
+        if 'episode_len_max' in data["env_runners"]:
+            important_metrics["env_runner"]["episode_len_max"] = data["env_runners"]["episode_len_max"]
+        if 'num_env_steps_sampled' in data["env_runners"]:
+            important_metrics["env_runner"]["num_env_steps_sampled"] = data["env_runners"]["num_env_steps_sampled"]
+        if 'num_episodes' in data["env_runners"]:
+            important_metrics["env_runner"]["num_episodes"] = data["env_runners"]["num_episodes"]
+
+    if 'evaluation' in data:
+        if 'env_runners' in data["evaluation"]:
+            if 'episode_return_mean' in data["evaluation"]["env_runners"]:
+                important_metrics["val"]["episode_return_mean"] = data["evaluation"]["env_runners"]["episode_return_mean"]
+            if 'episode_return_max' in data["evaluation"]["env_runners"]:
+                important_metrics["val"]["episode_return_max"] = data["evaluation"]["env_runners"]["episode_return_max"]
+            if 'episode_len_mean' in data["evaluation"]["env_runners"]:
+                important_metrics["val"]["episode_len_mean"] = data["evaluation"]["env_runners"]["episode_len_mean"]
+            if 'episode_len_max' in data["evaluation"]["env_runners"]:
+                important_metrics["val"]["episode_len_max"] = data["evaluation"]["env_runners"]["episode_len_max"]
+
+    if 'learners' in data:
+        if 'default_policy' in data["learners"]:
+            important_metrics["learner"]["default_policy"] = {}
+            if 'entropy' in data["learners"]["default_policy"]:
+                important_metrics["learner"]["default_policy"]["entropy"] = data["learners"]["default_policy"]["entropy"]
+            if 'policy_loss' in data["learners"]["default_policy"]:
+                important_metrics["learner"]["default_policy"]["policy_loss"] = data["learners"]["default_policy"]["policy_loss"]
+            if 'vf_loss' in data["learners"]["default_policy"]:
+                important_metrics["learner"]["default_policy"]["vf_loss"] = data["learners"]["default_policy"]["vf_loss"]
+            if 'total_loss' in data["learners"]["default_policy"]:
+                important_metrics["learner"]["default_policy"]["total_loss"] = data["learners"]["default_policy"]["total_loss"]
+
+    if 'time_this_iter_s' in data:
+        important_metrics["time_this_iter_s"] = data["time_this_iter_s"]
+    if 'num_training_step_calls_per_iteration' in data:
+        important_metrics["num_training_step_calls_per_iteration"] = data["num_training_step_calls_per_iteration"]
+    if 'training_iteration' in data:
+        important_metrics["training_iteration"] = data["training_iteration"]
+            
+    out_func(f"--------- training iteration: {important_metrics['training_iteration']} ---------")
+    out_func("env_runner:")
+    if important_metrics['env_runner']:
+        for k, v in important_metrics['env_runner'].items():
+            out_func(f"  {k}: {v:.4f}")
+    else:
+        out_func("  no env_runner data")
+    
+    out_func("\nval:")
+    for k, v in important_metrics['val'].items():
+        out_func(f"  {k}: {v:.4f}")
+    else:
+        out_func("  no val data")
+
+    out_func("\nlearner(default_policy):")
+    if 'default_policy' in important_metrics['learner'] and important_metrics['learner']['default_policy']:
+        for k, v in important_metrics['learner']['default_policy'].items():
+            out_func(f"  {k}: {v:.4f}")
+    else:
+        out_func("  no learner data")
+    
+    if 'time_this_iter_s' in important_metrics:
+        out_func(f"\ntime_this_iter_s: {important_metrics['time_this_iter_s']:.4f}")
+    if 'num_training_step_calls_per_iteration' in important_metrics:
+        out_func(f"num_training_step_calls_per_iteration: {important_metrics['num_training_step_calls_per_iteration']}")
+    out_func('-'*30)
+    return important_metrics
+
+
 def plot_training_curve(train_folder, total_time=None, y_axis_max = None):
     """
     total_time: 训练总时间 sec
@@ -34,9 +118,9 @@ def plot_training_curve(train_folder, total_time=None, y_axis_max = None):
     max_reward = []
     with open(log_file, 'r') as f:
         for line in f:
-            if '185 -   episode平均回报:' in line:
+            if ' -   episode_return_mean:' in line:
                 mean_reward.append(float(line.split(' ')[-1]))
-            if '185 -   episode最大回报:' in line:
+            if ' -   episode_return_max:' in line:
                 max_reward.append(float(line.split(' ')[-1]))
     
     # 绘制训练曲线并保存到 train_folder 中

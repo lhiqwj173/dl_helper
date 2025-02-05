@@ -7,7 +7,7 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearne
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
         # 询问服务器，本机是否需要验证环节
         need_val = request_need_val(train_title)
-        log(f"本机是否需要验证: {need_val}")
+        log(f"need_val: {need_val}")
         if need_val:
             config = config.evaluation(
                 evaluation_interval=10,

@@ -532,9 +532,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 每10次接收一次响应
                     if send_count % 10 == 0:
-                        # log(f"[{idx}] wait response")
+                        log(f"[{idx}] wait response")
                         await async_recv_msg(reader)
-                        # log(f"[{idx}] recv response done")
+                        log(f"[{idx}] recv response done")
 
                     if total_count % 5 == 0:
                         log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")

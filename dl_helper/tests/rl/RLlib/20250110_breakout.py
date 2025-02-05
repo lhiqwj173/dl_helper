@@ -7,7 +7,7 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearne
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from py_ext.tool import init_logger, log
 
 train_folder = 'breakout'

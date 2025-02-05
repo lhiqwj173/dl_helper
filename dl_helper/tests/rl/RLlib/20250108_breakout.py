@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv# 自定义环境
 from dl_helper.rl.easy_helper import *
-from dl_helper.rl.rl_utils import plot_training_curve
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.train_param import match_num_processes
 from py_ext.tool import init_logger, log, get_log_file
 

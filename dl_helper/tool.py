@@ -152,7 +152,7 @@ class AsyncProcessQueueReader:
         self._loop = None
         self._thread = None
         self._running = False
-        self.async_queue = AsyncQueue()
+        self.async_queue = AsyncQueue(self.queue._maxsize)
         self._stop = False
 
         # 启动
