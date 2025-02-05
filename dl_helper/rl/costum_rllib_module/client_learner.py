@@ -493,6 +493,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
+        # debug
+        loop.set_debug(True)
+
         # 运行事件循环
         loop.run_forever()
 
@@ -546,7 +549,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     # 等待回复
                     await async_recv_msg(reader)
-                    log(f"[{idx}][{send_count}] recv grads done, cost time: {int((time.time() - begin_time) * 1000)}ms")
+                    log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     send_count += 1
                     total_count += 1
