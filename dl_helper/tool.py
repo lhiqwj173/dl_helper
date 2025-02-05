@@ -86,62 +86,68 @@ def calc_sharpe_ratio(returns, risk_free_rate=0.0):
 
 class AsyncProcessEventReader:
     """
-    异步进程事件读取器，使用单个专用线程
+    异步进程事件转发器，将进程事件转发到异步事件
     """
-    def __init__(self, multiprocessing_event, start: bool = True):
-        self.event = multiprocessing_event
+    def __init__(self, process_event, start: bool = True):
+        self.process_event = process_event
         self._loop = None
         self._thread = None
-        self._running = False
-        self.async_event = asyncio.Event()
-        self._stop = False
-
-        # 启动
+        self._stop_flag = False
+        self._event = asyncio.Event()
+        
         if start:
-            self._start()
+            self.start()
 
     def _reader_thread(self):
-        """后台读取线程"""
-        while not self._stop:
+        """后台读取线程，负责监听进程事件并触发异步事件"""
+        while not self._stop_flag:
             try:
-                # 使用较短的超时以便能够响应停止信号
-                e = self.event.wait()
-                # 转发给协程事件
-                self.async_event.set()
-                self.async_event.clear()
-            except Empty:
-                continue
+                if self.process_event.wait(timeout=0.1):
+                    # 进程事件被触发时，设置异步事件
+                    asyncio.run_coroutine_threadsafe(
+                        self._set_event(),
+                        self._loop
+                    )
             except Exception as e:
                 print(f"Reader thread error: {e}")
-                # 出错时短暂等待后继续
                 time.sleep(0.1)
 
-    def _start(self):
-        """启动读取器"""
+    async def _set_event(self):
+        """设置异步事件"""
+        self._event.set()
+        self._event.clear()
+
+    def start(self):
+        """启动事件转发器"""
         if self._thread is not None:
             return
-        
+            
         self._loop = asyncio.get_event_loop()
-        self._stop = False
+        self._stop_flag = False
         self._thread = threading.Thread(target=self._reader_thread, daemon=True)
         self._thread.start()
 
-    def _stop(self):
-        """停止读取器"""
+    def stop(self):
+        """停止事件转发器"""
         if self._thread is None:
             return
             
-        self._stop = True
+        self._stop_flag = True
         self._thread.join()
         self._thread = None
 
     def __del__(self):
-        """析构函数中停止读取器"""
-        self._stop()
+        """析构时确保停止转发器"""
+        self.stop()
 
     async def wait(self):
-        """获取队列中的数据"""
-        return await self.async_event.wait()
+        """等待事件发生"""
+        await self._event.wait()
+        self._event.clear()
+
+    def is_set(self) -> bool:
+        """检查事件是否已触发"""
+        return self._event.is_set()
 
 class AsyncProcessQueueReader:
     """

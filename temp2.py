@@ -1,24 +1,53 @@
-from pprint import pprint
+from dl_helper.tool import AsyncProcessEventReader
+from multiprocessing import Event, Process
+import time, asyncio, random
 
-from ray.rllib.algorithms.ppo import PPOConfig
+async def event_waiter(waiter_id: int, forwarder):
+    """事件等待者"""
+    while True:
+        print(f"Waiter {waiter_id} waiting for event...")
+        await forwarder.wait()
+        print(f"Waiter {waiter_id} active")
 
-config = (
-    PPOConfig()
-    .api_stack(
-        enable_rl_module_and_learner=True,
-        enable_env_runner_and_connector_v2=True,
-    )
-    .environment("CartPole-v1")
-    .env_runners(num_env_runners=1)
-)
+def worker_process(event):
+    """工作进程：定期触发事件"""
+    count = 0
+    print(f"Worker process started")
+    while count < 5:  # 发送5次事件后退出
+        time.sleep(random.randint(2, 5))
+        print(f"Process setting event")
+        event.set()
+        event.clear()
+        count += 1
 
-algo = config.build()
 
-for i in range(10):
-    result = algo.train()
-    result.pop("config")
-    pprint(result)
+async def main():
+    # 创建进程事件
+    process_event = Event()
+    
+    # 创建事件转发器
+    forwarder = AsyncProcessEventReader(process_event)
+    
+    # 创建并启动工作进程
+    process = Process(target=worker_process, args=(process_event,))
+    process.start()
+    print(f"Worker process started")
+    
+    # 创建三个等待者任务
+    waiters = [
+        asyncio.create_task(event_waiter(i, forwarder))
+        for i in range(3)
+    ]
+    
+    # 等待所有任务完成
+    await asyncio.gather(*waiters)
+    await asyncio.sleep(60)
+    
+    # 停止并清理
+    process.terminate()
+    process.join()
+    forwarder.stop()
 
-    if i % 5 == 0:
-        checkpoint_dir = algo.save_to_path()
-        print(f"Checkpoint saved in directory {checkpoint_dir}")
+if __name__ == "__main__":
+    # 运行主协程
+    asyncio.run(main())

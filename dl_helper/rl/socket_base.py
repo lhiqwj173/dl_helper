@@ -42,7 +42,7 @@ def send_msg(sock, msg):
     msg = struct.pack('>I', len(msg)) + msg
     sock.sendall(msg)
 
-async def async_recvall(reader, n, timeout=10.0):
+async def async_recvall_0(reader, n, timeout=10.0):
     """异步地从流中读取指定字节数的数据
     timeout: 超时时间，-1表示不设置超时
     返回值: 读取到的数据
@@ -72,6 +72,35 @@ async def async_recvall(reader, n, timeout=10.0):
     # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
     return data
 
+async def async_recvall(reader, n, timeout=10.0, buffer_size=1024*64):  # 增加buffer_size参数
+    """异步地从流中读取指定字节数的数据，使用更大的缓冲区提高吞吐量"""
+    data = bytearray(n)  # 预分配内存
+    view = memoryview(data)  # 使用memoryview避免内存拷贝
+    pos = 0
+    
+    while pos < n:
+        try:
+            if timeout == -1:
+                # 一次性请求尽可能多的数据
+                chunk = await reader.read(min(buffer_size, n - pos))
+            else:
+                chunk = await asyncio.wait_for(
+                    reader.read(min(buffer_size, n - pos)),
+                    timeout=timeout
+                )
+            if not chunk:
+                raise ConnectionError('Connection closed unexpectedly')
+            
+            view[pos:pos + len(chunk)] = chunk
+            pos += len(chunk)
+            
+        except asyncio.TimeoutError:
+            raise TimeoutError('Receive timeout')
+        except Exception as e:
+            raise e
+            
+    return data
+
 async def async_recv_msg(reader, timeout=-1):
     """异步地接收带长度前缀的消息
     timeout: 超时时间，-1表示不设置超时
@@ -87,11 +116,27 @@ async def async_recv_msg(reader, timeout=-1):
     res = await async_recvall(reader, msglen, timeout)
     return res
 
-async def async_send_msg(writer, msg):
+async def async_send_msg_0(writer, msg):
     """异步地发送带长度前缀的消息"""
     msg = msg.encode() if isinstance(msg, str) else msg
     msg = struct.pack('>I', len(msg)) + msg
     writer.write(msg)
+    await writer.drain()
+
+async def async_send_msg(writer, msg, chunk_size=65536):
+    """异步地分块发送大消息"""
+    if isinstance(msg, str):
+        msg = msg.encode()
+        
+    # 发送长度前缀
+    length_prefix = struct.pack('>I', len(msg))
+    writer.write(length_prefix)
+    
+    # 分块发送消息体
+    for i in range(0, len(msg), chunk_size):
+        chunk = msg[i:i + chunk_size]
+        writer.write(chunk)
+        
     await writer.drain()
 
 def _connect_server_apply(func, *args, **kwargs):
