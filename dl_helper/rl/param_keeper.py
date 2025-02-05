@@ -258,8 +258,8 @@ class ExperimentHandler:
                 share_data_new_event.clear()
 
                 log(f'[CG]{train_title} active')
-                with LockWithLog(share_gradients_lock, log, '[CG]'):
-                # with share_gradients_lock:
+                # with LockWithLog(share_gradients_lock, log, '[CG]'):
+                with share_gradients_lock:
                     g_length = gradients_cache_share[0].size()
                     fullg_length = gradients_cache_share_full[0].size()
                     temp_length = g_length + fullg_length
@@ -347,7 +347,8 @@ class ExperimentHandler:
             params, info = self.params_compressor.compress(params, ip)
 
             log(f'{msg_header} prepare params, version: {v}')
-            return pickle.dumps((params, info, v, need_warn_up))
+
+            await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
 
         elif cmd == 'wait_params':
             log(f'{msg_header} recv wait_params request')
@@ -376,12 +377,15 @@ class ExperimentHandler:
         elif cmd == 'need_val':
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
             current_time = time.time()
+            res = b'0'
             if current_time - self.need_val_timestamp > 12 * 3600:
                 self.need_val_timestamp = current_time
                 self.need_val_ip = data
-                return b'1'
-            else:
-                return b'0'
+
+                res = b'1'
+
+            await async_send_msg(writer, res)
+            log(f'{msg_header} send need_val: {res}')
 
         elif cmd == 'update_gradients':
             log(f'{msg_header} recv update_gradients request')
@@ -405,8 +409,8 @@ class ExperimentHandler:
             async with self.gradients_add_lock:
             # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
                 while True:
-                    with LockWithLog(self.share_gradients_lock, log, msg_header):
-                    # with self.share_gradients_lock:
+                    # with LockWithLog(self.share_gradients_lock, log, msg_header):
+                    with self.share_gradients_lock:
                         gradients_cache_share_length = cache_share[0].size()
                         if gradients_cache_share_length < self.grad_cache_size:
                             for idx, _g in enumerate(g):
@@ -425,6 +429,9 @@ class ExperimentHandler:
                         log(f'{msg_header} wait gradients timeout')
                         import sys
                         sys.exit()
+
+            # 回复，避免socket堆积
+            await async_send_msg(writer, b'1')
 
             # 通知新梯度
             log(f'set share data new event, wait length: {gradients_cache_share_length}')

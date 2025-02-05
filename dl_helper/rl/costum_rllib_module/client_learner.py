@@ -458,9 +458,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         grad_coroutine_num = 10
         
         # 梯度事件队列
-        grad_q = AsyncQueue()
+        grad_q = AsyncQueue(maxsize=task_queue._maxsize)
         # 参数事件队列
-        param_q = AsyncQueue()
+        param_q = AsyncQueue(maxsize=task_queue._maxsize)
 
         # 独立线程转发 进程任务
         apqr = AsyncProcessQueueReader_grad_param(task_queue, param_q, grad_q)
@@ -523,6 +523,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 发送梯度
                     await _async_send_gradients(writer, info_data.train_title, compressed_grads, compress_info, info_data.version)
 
+                    # 等待回复
+                    await async_recv_msg(reader)
 
                     send_count += 1
                     total_count += 1
@@ -530,13 +532,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     total_cost_time += cost_time
                     log(f"[{idx}][{send_count}] send gradients done, cost time: {int(cost_time * 1000)}ms")
 
-                    # 每10次接收一次响应
-                    if send_count % 10 == 0:
-                        log(f"[{idx}] wait response")
-                        await async_recv_msg(reader)
-                        log(f"[{idx}] recv response done")
-
-                    if total_count % 5 == 0:
+                    if total_count % 10 == 0:
                         log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")
 
             except Exception as e:

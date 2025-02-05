@@ -207,7 +207,6 @@ class AsyncSocketServer:
             
             handler = None
             count = 0
-            need_res_time = 10# 每10次需要回复一次，避免客户端发送过多发数据
             while con_times == 0 or count < con_times:
                 count += 1
 
@@ -240,14 +239,7 @@ class AsyncSocketServer:
                         handler = self.handlers[train_title]
 
                 # 2.2 处理指令
-                res = await handler.async_handle_request(msg_header, cmd, data, writer, reader)
-                if res:
-                    await async_send_msg(writer, res)
-
-                # 3. 回复客户端
-                if count % need_res_time == 0:
-                    await async_send_msg(writer, b'ok')
-                    log(f'{msg_header} response sended')
+                await handler.async_handle_request(msg_header, cmd, data, writer, reader)
 
             # 3. 关闭连接
             return
