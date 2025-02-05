@@ -8,3 +8,5 @@ type = "tcp"
 localIP = "127.0.0.1"
 localPort = 12346
 remotePort = 12346
+transport.useEncryption = false
+transport.useCompression = false
