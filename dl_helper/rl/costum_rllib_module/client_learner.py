@@ -302,7 +302,8 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
     异步进程队列读取器
     用于转发 进程任务 到 事件循环
     """
-    def __init__(self, queue, param_q, grad_q):
+    def __init__(self, queue, grad_q):
+
         self.queue = queue
         self._loop = None
         self._thread = None
@@ -310,7 +311,6 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
         self._stop = False
 
         # 使用传入的队列
-        self.param_q = param_q
         self.grad_q = grad_q
 
         # pard 缓存
@@ -323,26 +323,16 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                 # 使用较短的超时以便能够响应停止信号
                 item = self.queue.get(timeout=0.1)
 
-                # 分发事件
-                # 使用线程安全的方式将任务加入事件循环
-                if isinstance(item, int):
-                    # 参数事件
+                # 梯度事件
+                self.grads.append(item)
+
+                # 积累到一定数量后，推送到队列
+                if len(self.grads) == GRAD_BATCH_SIZE:
                     asyncio.run_coroutine_threadsafe(
-                        self.param_q.put(item), 
+                        self.grad_q.put(self.grads), 
                         self._loop
                     )
-                
-                else:
-                    # 梯度事件
-                    self.grads.append(item)
-
-                    # 积累到一定数量后，推送到队列
-                    if len(self.grads) == GRAD_BATCH_SIZE:
-                        asyncio.run_coroutine_threadsafe(
-                            self.grad_q.put(self.grads), 
-                            self._loop
-                        )
-                        self.grads = []
+                    self.grads = []
 
             except Empty:
                 continue
@@ -423,7 +413,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
 
             # 主learner
-            self.task_queue = multiprocessing.Queue(maxsize=15)
+            self.task_queue = multiprocessing.Queue(maxsize=5)
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
@@ -478,11 +468,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         # 梯度事件队列
         grad_q = AsyncQueue(maxsize=task_queue._maxsize)
-        # 参数事件队列
-        param_q = AsyncQueue(maxsize=task_queue._maxsize)
 
         # 独立线程转发 进程任务
-        apqr = AsyncProcessQueueReader_grad_param(task_queue, param_q, grad_q)
+        apqr = AsyncProcessQueueReader_grad_param(task_queue, grad_q)
         apqr.start(loop)
 
         # 进程池,用于压缩/加压等计算密集任务计算
@@ -495,7 +483,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_value_shape)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # debug
@@ -538,7 +526,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # if q_size > 15:
                     #     log(f"[{idx}] queue size: {q_size}")
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
-
 
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
@@ -583,7 +570,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     pass
 
     @staticmethod
-    async def param_coroutine(info_data, process_pool, param_q, params_dict, grad_params_value_shape):
+    async def param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """

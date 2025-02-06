@@ -175,6 +175,7 @@ class ExperimentHandler:
                     params_cache_share[idx].data[:] = v[:]
 
                 # 清空队列
+                log(f'ready params clear q, size: {q.qsize()}')
                 while not q.empty:
                     q.get()
 
@@ -331,7 +332,11 @@ class ExperimentHandler:
             for i in self.params_cache_share:
                 params.append(i.data.clone())
             # 取出再放回， 保证队列中仍有数据
-            v, need_warn_up = self.params_info_share_q.get()
+            log(f'get latest params, q size: {self.params_info_share_q.qsize()}')
+            while not self.params_info_share_q.empty():
+                v, need_warn_up = self.params_info_share_q.get()
+
+            # 放回队列最后一个
             self.params_info_share_q.put((v, need_warn_up))
         return params, v, need_warn_up
 
