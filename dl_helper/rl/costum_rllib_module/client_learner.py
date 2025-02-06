@@ -626,20 +626,24 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # log(f"[{total_count}] wait params")
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_wait_server_weights(reader)
                     total_count += 1
-                    # log(f"[{total_count}] recv params data")
+                    t = time.time()
+                    log(f"[{total_count}] recv params push")
 
                     # 当前是否处于训练阶段
                     if is_training_event.is_set():
                         # 增量解压操作
                         # log(f"[{total_count}] decompress params data")
                         param_compressor.decompress(params_list, info, sync_params_dict)
+                        log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
+
                         # 更新共享参数
                         shared_param.set_param(sync_params_dict)
+                        log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
 
                         # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
                         # 触发共享参数更新事件
                         shared_param.param_event.clear_reset(1)
-                        log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}")
+                        log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
 
                     # 处理完成回复
                     await async_send_msg(writer, b'1')
@@ -712,6 +716,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 检查是否有待应用的新参数
             if self.shared_param.param_event.is_set():
                 # 消耗一个信号量
+                log(f'[{self.client_id}][{self.update_count}] have new params to apply')
                 self.shared_param.param_event.wait()
                 # 触发主learner的参数更新事件
                 self.sync_learner_param_event.set(1)
@@ -755,8 +760,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 已经存在正确的梯度
                 pass
 
-            # if self.client_id == 0:
-            #     log(f'[{self.update_count}] param ready, apply to local')
+            if self.client_id == 0:
+                log(f'[{self.update_count}] apply new param to local')
 
             # 获取参数覆盖本地参数
             p = self.shared_param.get_weights()

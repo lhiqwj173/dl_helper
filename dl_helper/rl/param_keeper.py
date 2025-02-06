@@ -181,7 +181,7 @@ class ExperimentHandler:
                 q.put((version, need_warn_up))
             # 通知参数发送任务
             ready_params_event.set()
-            log(f'[CG] ready params done')
+            log(f'[CG] ready params done v: {version}')
 
         log(f'[CG]{train_title} calculate gpu init')
         
@@ -366,23 +366,25 @@ class ExperimentHandler:
                 # 等待参数更新事件
                 log(f'wait_params prepare wait')
                 await self.aper.wait()
+                t = time.time()
                 log(f'wait_params wait active')
 
                 # 获取最新参数
                 params, v, need_warn_up = await self._get_latest_raw_params()
-                log(f'wait_params prepare v: {v}')
+                log(f'wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 控制参数推送频率
                 if v - last_send_v >= self.push_params_interval:
                     # 计算更新增量
                     params, info = self.params_compressor.compress(params, ip)
 
-                    log(f'{msg_header} prepare params, version: {v}')
+                    log(f'{msg_header} prepare params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
                     await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
                     last_send_v = v
-                    log(f'{msg_header} send params, version: {v}')
+                    log(f'{msg_header} send params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
                     # 等待回复
                     await async_recv_msg(reader)
+                    log(f'{msg_header} recv check, version: {v}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'need_val':
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
