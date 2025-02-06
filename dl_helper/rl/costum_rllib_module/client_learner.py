@@ -539,7 +539,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     q_size = grad_q.qsize()
                     # if q_size > 15:
                     #     log(f"[{idx}] queue size: {q_size}")
-                    log(f"[{idx}] grad handler begin, queue size: {q_size}")
+                    log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
 
 
                     # 在进程池中执行压缩操作

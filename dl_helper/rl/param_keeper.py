@@ -418,7 +418,7 @@ class ExperimentHandler:
 
                 # 当前等待处理的梯度数量
                 done_idxs = []
-                gradients_cache_share_lengths = []
+                gradients_cache_share_lengths = [0] * GRAD_BATCH_SIZE
                 async with self.gradients_add_lock:
                 # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
                     while True:
@@ -452,7 +452,7 @@ class ExperimentHandler:
                         # 等待处理的梯度大于 梯度缓存大小
                         # 释放锁并等待
                         self.share_data_new_event.set()
-                        log(f'{msg_header} wait gradients, wait length: {gradients_cache_share_length}')
+                        log(f'{msg_header} wait gradients, wait length: {max(gradients_cache_share_lengths)}')
                         await asyncio.sleep(0.1)
 
                         wait_count += 1
