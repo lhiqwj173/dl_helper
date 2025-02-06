@@ -413,7 +413,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
 
             # 主learner
-            self.task_queue = multiprocessing.Queue(maxsize=5)
+            self.task_queue = multiprocessing.Queue(maxsize=8)
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
