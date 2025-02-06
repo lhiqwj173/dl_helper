@@ -115,6 +115,7 @@ class AsyncProcessEventReader:
 
     async def _set_event(self):
         """设置异步事件"""
+        log(f'转发事件被触发')
         self._event.set()
         self._event.clear()
 
@@ -124,6 +125,8 @@ class AsyncProcessEventReader:
             return
             
         self._loop = asyncio.get_event_loop()
+        log(f'AsyncProcessEventReader start, loop: {self._loop}')
+
         self._stop_flag = False
         self._thread = threading.Thread(target=self._reader_thread, daemon=True)
         self._thread.start()
