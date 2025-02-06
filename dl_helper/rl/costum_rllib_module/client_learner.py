@@ -503,7 +503,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         batch_compressed_results = []
         while True:
             try:
-
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
                 # reader, writer = await connect_and_tune(HOST, PORT)

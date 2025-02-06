@@ -82,7 +82,6 @@ if __name__ == "__main__":
         # 训练循环
         # 标准训练 30 527.9s 
         rounds = 30
-        rounds = 15
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
