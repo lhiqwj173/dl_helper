@@ -103,8 +103,10 @@ class AsyncProcessEventReader:
         while not self._stop_flag:
             try:
                 if self.process_event.wait(timeout=0.1):
+                    log(f'process_event active')
                     self.process_event.clear()
                     # 进程事件被触发时，设置异步事件
+
                     asyncio.run_coroutine_threadsafe(
                         self._set_event(),
                         self._loop
@@ -115,7 +117,7 @@ class AsyncProcessEventReader:
 
     async def _set_event(self):
         """设置异步事件"""
-        log(f'转发事件被触发')
+        log(f'async event set')
         self._event.set()
         self._event.clear()
 
