@@ -15,7 +15,7 @@ def tune_tcp_socket(sock, buffer_size):
         print("TCP_FASTOPEN not supported, skipping...")
     # 使用BBR拥塞控制算法（需要内核支持）
     try:
-        sock.setsockopt(socket.SOL_TCP, socket.TCP_CONGESTION, 'bbr')
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_CONGESTION, b'bbr')
     except (AttributeError, OSError):
         print("BBR not supported, using default congestion control...")
 
