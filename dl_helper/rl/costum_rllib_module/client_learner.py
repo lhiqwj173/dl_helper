@@ -504,8 +504,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         while True:
             try:
                 # 创建异步socket连接
-                reader, writer = await asyncio.open_connection(HOST, PORT)
-                # reader, writer = await connect_and_tune(HOST, PORT)
+                # reader, writer = await asyncio.open_connection(HOST, PORT)
+                reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}')
 
@@ -596,8 +596,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         while True:
             try:
                 # 创建异步socket连接
-                reader, writer = await asyncio.open_connection(HOST, PORT)
-                # reader, writer = await connect_and_tune(HOST, PORT)
+                # reader, writer = await asyncio.open_connection(HOST, PORT)
+                reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}')
                 log(f"param_coroutine connect to server")

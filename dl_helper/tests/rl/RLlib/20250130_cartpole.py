@@ -95,6 +95,7 @@ if __name__ == "__main__":
 
         # 停止学习者额外的事件进程
         algo.learner_group.stop_extra_process()
+        log(f"learner_group.stop_extra_process done")
 
         # 保存最终模型
         final_checkpoint_dir = algo.save_to_path(

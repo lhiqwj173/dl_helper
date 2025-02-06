@@ -16,37 +16,6 @@ PORT = 12346
 GRAD_BATCH_SIZE = 4
 CHUNK_SIZE = 1024 * 64
 
-def tune_tcp_socket(sock):
-    """TCP协议调优"""
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 禁用Nagle算法
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 0)     # 动态发送缓冲区
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)     # 动态接收缓冲区
-    # 开启TCP快速打开（需要内核支持）
-    try:
-        sock.setsockopt(socket.SOL_TCP, socket.TCP_FASTOPEN, 5)
-    except (AttributeError, OSError):
-        print("TCP_FASTOPEN not supported, skipping...")
-    # 使用BBR拥塞控制算法（需要内核支持）
-    try:
-        sock.setsockopt(socket.SOL_TCP, socket.TCP_CONGESTION, 'bbr')
-    except (AttributeError, OSError):
-        print("BBR not supported, using default congestion control...")
-
-async def connect_and_tune(HOST, PORT):
-    """创建异步连接并调优TCP参数"""
-    reader, writer = await asyncio.open_connection(HOST, PORT)
-    
-    # 获取底层socket对象
-    sock = writer.transport.get_extra_info('socket')
-    if sock is not None:
-        print("Tuning TCP socket...")
-        tune_tcp_socket(sock)
-    else:
-        print("Warning: Could not get underlying socket for tuning")
-    
-    return reader, writer
-
 def recvall(sock, n):
     """接收指定字节数的数据"""
     data = bytearray()
@@ -75,35 +44,36 @@ def send_msg(sock, msg):
     msg = struct.pack('>I', len(msg)) + msg
     sock.sendall(msg)
 
-async def async_recvall_0(reader, n, timeout=10.0):
-    """异步地从流中读取指定字节数的数据
-    timeout: 超时时间，-1表示不设置超时
-    返回值: 读取到的数据
-    """
-    # log(f"开始接收 {n} 字节数据...")  # 添加日志
-    data = bytearray()
-    while len(data) < n:
-        try:
-            if timeout == -1:
-                packet = await reader.read(n - len(data))
-            else:
-                packet = await asyncio.wait_for(
-                    reader.read(n - len(data)),
-                    timeout=timeout  # 添加超时设置
-                )
-            if not packet:
-                log("Connection closed, received empty packet")
-                raise Exception('connect closed unexpectedly')
+def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
+    """TCP协议调优"""
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # 重用地址
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 禁用Nagle算法
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buffer_size)     # 动态发送缓冲区
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, buffer_size)     # 动态接收缓冲区
+    # 开启TCP快速打开（需要内核支持）
+    try:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_FASTOPEN, 5)
+    except (AttributeError, OSError):
+        log("TCP_FASTOPEN not supported, skipping...")
+    # 使用BBR拥塞控制算法（需要内核支持）
+    try:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_CONGESTION, b'bbr')
+    except (AttributeError, OSError):
+        log("BBR not supported, using default congestion control...")
 
-            # log(f"Received packet, size: {len(packet)} bytes")  # Add log
-            data.extend(packet)
-        except asyncio.TimeoutError:
-            log("Receive data timeout")
-            raise Exception('recv timeout')
-        except Exception as e:
-            raise e
-    # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
-    return data
+async def connect_and_tune(HOST, PORT, buffer_size=CHUNK_SIZE):
+    """创建异步连接并调优TCP参数"""
+    reader, writer = await asyncio.open_connection(HOST, PORT)
+    
+    # 获取底层socket对象
+    sock = writer.transport.get_extra_info('socket')
+    if sock is not None:
+        log("Tuning TCP socket...")
+        tune_tcp_socket(sock, buffer_size)
+    else:
+        log("Warning: Could not get underlying socket for tuning")
+    
+    return reader, writer
 
 async def async_recvall(reader, n, timeout=10.0, buffer_size=CHUNK_SIZE):  # 增加buffer_size参数
     """异步地从流中读取指定字节数的数据，使用更大的缓冲区提高吞吐量"""

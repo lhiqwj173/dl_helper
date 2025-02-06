@@ -18,7 +18,7 @@ import uvloop
 from typing import Optional
 import signal
 
-from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
+from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg, tune_tcp_socket
 from dl_helper.rl.socket_base import async_recv_msg, async_send_msg
 from dl_helper.rl.rl_utils import read_train_title_item
 from dl_helper.rl.param_keeper import ExperimentHandler
@@ -153,15 +153,7 @@ class AsyncSocketServer:
         
         # 设置socket选项
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        
-        # 设置TCP选项
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+        tune_tcp_socket(self.sock)
 
         # 初始化block ip
         self.block_ips = BlockIPs()
