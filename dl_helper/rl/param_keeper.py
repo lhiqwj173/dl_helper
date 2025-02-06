@@ -419,6 +419,7 @@ class ExperimentHandler:
                 # 当前等待处理的梯度数量
                 done_idxs = []
                 gradients_cache_share_lengths = [0] * GRAD_BATCH_SIZE
+                gradients_cache_share_length = 0
                 async with self.gradients_add_lock:
                 # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
                     while True:
@@ -461,7 +462,7 @@ class ExperimentHandler:
                             import sys
                             sys.exit()
 
-                gradients_cache_share_length += 1
+                gradients_cache_share_length = max(gradients_cache_share_lengths) + 1
                 log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 回复，避免socket堆积
