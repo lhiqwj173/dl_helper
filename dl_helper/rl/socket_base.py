@@ -142,11 +142,14 @@ async def async_recv_msg(reader, timeout=-1):
     # log("开始接收消息长度前缀...")  # 添加日志
     # 接收4字节的长度前缀
     raw_msglen = await async_recvall(reader, 4, timeout)
+    log(f'recv msg len')
+    t = time.time()
     # 解析消息长度
     msglen = struct.unpack('>I', raw_msglen)[0]
     # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
     # 接收消息内容
     res = await async_recvall(reader, msglen, timeout)
+    log(f'recv msg, cost: {int(1000*(time.time() - t))}ms')
     return res
 
 async def async_send_msg_0(writer, msg):
