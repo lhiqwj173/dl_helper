@@ -112,22 +112,16 @@ async def async_recv_msg(reader, timeout=-1):
     # log("开始接收消息长度前缀...")  # 添加日志
     # 接收4字节的长度前缀
     raw_msglen = await async_recvall(reader, 4, timeout)
-    log(f'recv msg len')
+    log(f'recv msg({4}) length')
     t = time.time()
     # 解析消息长度
     msglen = struct.unpack('>I', raw_msglen)[0]
     # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
     # 接收消息内容
     res = await async_recvall(reader, msglen, timeout)
-    log(f'recv msg({msglen}), cost: {int(1000*(time.time() - t))}ms')
+    cost_time = time.time() - t
+    log(f'recv msg({msglen}), cost: {int(1000*cost_time)}ms, speed: {(msglen / cost_time) / (1024*1024):.3f}MB/s')
     return res
-
-async def async_send_msg_0(writer, msg):
-    """异步地发送带长度前缀的消息"""
-    msg = msg.encode() if isinstance(msg, str) else msg
-    msg = struct.pack('>I', len(msg)) + msg
-    writer.write(msg)
-    await writer.drain()
 
 async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
     """异步地分块发送大消息"""
