@@ -256,8 +256,14 @@ class AsyncSocketServer:
         
         log(f"Server started on {self.host}:{self.port}")
         
+        # 启动所有处理器
+        loop = asyncio.get_event_loop()
+        for handler in self.handlers.values():
+            handler.start(loop)
+        
         # 设置信号处理
         for sig in (signal.SIGTERM, signal.SIGINT):
+
             asyncio.get_event_loop().add_signal_handler(
                 sig,
                 lambda: asyncio.create_task(self.shutdown())

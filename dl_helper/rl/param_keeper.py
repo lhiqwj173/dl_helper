@@ -335,8 +335,12 @@ class ExperimentHandler:
             self.params_info_share_q.put((v, need_warn_up))
         return params, v, need_warn_up
 
+    def start(self, loop=None):
+        self.aper.start(loop)
+
     async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
         """异步处理客户端请求
+
         """
         if cmd.startswith('get@'):
             t = time.time()

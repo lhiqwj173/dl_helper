@@ -302,7 +302,7 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
     异步进程队列读取器
     用于转发 进程任务 到 事件循环
     """
-    def __init__(self, queue, param_q, grad_q, start: bool = True):
+    def __init__(self, queue, param_q, grad_q):
         self.queue = queue
         self._loop = None
         self._thread = None
@@ -315,10 +315,6 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
 
         # pard 缓存
         self.grads = []
-
-        # 启动
-        if start:
-            self._start()
 
     def _reader_thread(self):
         """后台读取线程"""
@@ -487,6 +483,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 独立线程转发 进程任务
         apqr = AsyncProcessQueueReader_grad_param(task_queue, param_q, grad_q)
+        apqr.start(loop)
 
         # 进程池,用于压缩/加压等计算密集任务计算
         process_pool = ProcessPoolExecutor(max_workers=GRAD_BATCH_SIZE)  # 可以根据需要调整进程数

@@ -88,15 +88,12 @@ class AsyncProcessEventReader:
     """
     异步进程事件转发器，将进程事件转发到异步事件
     """
-    def __init__(self, process_event, start: bool = True):
+    def __init__(self, process_event):
         self.process_event = process_event
         self._loop = None
         self._thread = None
         self._stop_flag = False
         self._event = asyncio.Event()
-        
-        if start:
-            self.start()
 
     def _reader_thread(self):
         """后台读取线程，负责监听进程事件并触发异步事件"""
@@ -121,12 +118,15 @@ class AsyncProcessEventReader:
         self._event.set()
         self._event.clear()
 
-    def start(self):
+    def start(self, loop=None):
         """启动事件转发器"""
         if self._thread is not None:
             return
             
-        self._loop = asyncio.get_event_loop()
+        if None is loop:
+            self._loop = asyncio.get_event_loop()
+        else:
+            self._loop = loop
         log(f'AsyncProcessEventReader start, loop: {self._loop}')
 
         self._stop_flag = False
@@ -158,18 +158,15 @@ class AsyncProcessQueueReader:
     """
     异步进程队列读取器，使用单个专用线程
     """
-    def __init__(self, queue: Queue, start: bool = True):
+    def __init__(self, queue: Queue):
         self.queue = queue
         self._loop = None
         self._thread = None
         self._running = False
         log(f'AsyncProcessQueueReader queue maxsize: {self.queue._maxsize}')
         self.async_queue = AsyncQueue(self.queue._maxsize)
-        self._stop = False
 
-        # 启动
-        if start:
-            self._start()
+        self._stop = False
 
     def _reader_thread(self):
         """后台读取线程"""
@@ -189,15 +186,19 @@ class AsyncProcessQueueReader:
                 # 出错时短暂等待后继续
                 time.sleep(0.1)
 
-    def _start(self):
+    def start(self, loop=None):
         """启动读取器"""
         if self._thread is not None:
             return
-        
-        self._loop = asyncio.get_event_loop()
+        if None is loop:
+            self._loop = asyncio.get_event_loop()
+        else:
+            self._loop = loop
         self._stop = False
         self._thread = threading.Thread(target=self._reader_thread, daemon=True)
         self._thread.start()
+
+
 
     def _stop(self):
         """停止读取器"""
