@@ -313,9 +313,6 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
         # 使用传入的队列
         self.grad_q = grad_q
 
-        # pard 缓存
-        self.grads = []
-
     def _reader_thread(self):
         """后台读取线程"""
         while not self._stop:
@@ -323,16 +320,11 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                 # 使用较短的超时以便能够响应停止信号
                 item = self.queue.get(timeout=0.1)
 
-                # 梯度事件
-                self.grads.append(item)
-
-                # 积累到一定数量后，推送到队列
-                if len(self.grads) == GRAD_BATCH_SIZE:
-                    asyncio.run_coroutine_threadsafe(
-                        self.grad_q.put(self.grads), 
-                        self._loop
-                    )
-                    self.grads = []
+                # 推送到队列
+                asyncio.run_coroutine_threadsafe(
+                    self.grad_q.put(item), 
+                    self._loop
+                )
 
             except Empty:
                 continue
@@ -384,6 +376,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         ####################
         # 时间队列(与协程进程通讯)
         self.task_queue = None
+        self.grads = []
         # 用于初始化共享参数
         self.params_dict = None
         self.grad_params_value_shape = None
@@ -413,7 +406,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
 
             # 主learner
-            self.task_queue = multiprocessing.Queue(maxsize=8)
+            self.task_queue = multiprocessing.Queue(maxsize=1)
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
@@ -468,6 +461,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         # 梯度事件队列
         grad_q = AsyncQueue(maxsize=task_queue._maxsize)
+        log(f'转发梯度队列: {grad_q._maxsize}')
 
         # 独立线程转发 进程任务
         apqr = AsyncProcessQueueReader_grad_param(task_queue, grad_q)
@@ -683,8 +677,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 汇总梯度
                     # log(f'merge gradients')
                     gradients_to_send = self.gradient_accumulator.merge_gradients()
-                    # 加入推送队列
-                    self.task_queue.put(gradients_to_send)
+                    # 加入缓存
+                    self.grads.append(gradients_to_send)
 
                     if self.apply_last_grad:
                         # 需要替换梯度
@@ -693,17 +687,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         # 2. 触发梯度更新事件
                         self.shared_param.grad_event.set()
             else:
-                # 加入推送队列
-                self.task_queue.put(cpu_gradients)
+                # 加入缓存
+                self.grads.append(cpu_gradients)
+
+            # 加入推送队列
+            need_new_params = False
+            if len(self.grads) == GRAD_BATCH_SIZE:
+                self.task_queue.put(self.grads)
+                self.grads = []
+                need_new_params = True
 
             log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
-            # 检查是否有待应用的新参数
-            if self.shared_param.param_event.is_set():
-                # 消耗一个信号量
-                log(f'[{self.client_id}][{self.update_count}] have new params to apply')
+            # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
+            if need_new_params:
+                log(f'[{self.client_id}][{self.update_count}] wait new params ready')
                 self.shared_param.param_event.wait()
                 # 触发主learner的参数更新事件
                 self.sync_learner_param_event.set(1)
