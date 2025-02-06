@@ -181,7 +181,7 @@ class ExperimentHandler:
                 q.put((version, need_warn_up))
             # 通知参数发送任务
             ready_params_event.set()
-            ready_params_event.claer()
+            ready_params_event.clear()
             log(f'[CG] ready params done')
 
         log(f'[CG]{train_title} calculate gpu init')
