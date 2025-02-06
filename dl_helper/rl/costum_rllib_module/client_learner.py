@@ -31,7 +31,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
 from dl_helper.rl.socket_base import HOST, PORT, CODE, GRAD_BATCH_SIZE, CHUNK_SIZE, connect_and_tune
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights, ack, wait_ack
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
 from dl_helper.deep_gradient_compression import DeepGradientCompression
@@ -541,7 +541,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{idx}][{send_count}] send grads done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         # 等待回复
-                        await async_recv_msg(reader)
+                        await wait_ack(reader)
                         log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         send_count += 1
@@ -631,7 +631,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
 
                     # 处理完成回复
-                    await async_send_msg(writer, b'1')
+                    await ack(writer)
 
                     # 统计耗时
                     if total_count % 30 == 0:
@@ -698,10 +698,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
+            need_check_if_param_ready = False
+
             # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
             if need_new_params:
                 if not self.skiped:
                     # 跳过第一个参数更新等待
+                    log(f'[{self.client_id}][{self.update_count}] force sync step, skiped first param update')
                     self.skiped = True
                 else:
                     # 等待新的参数就位
@@ -712,10 +715,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         # 触发主learner的参数更新事件
                         self.sync_learner_param_event.set(1)
                         self.update_param_count += 1
+                    else:
+                        # 已经满足 should_update_num，无需强制等待
+                        log(f'[{self.client_id}][{self.update_count}] force sync step, should_update_num satisfied')
+                        need_check_if_param_ready = True
+
             else:
                 # 不需要强制同步参数的step, 
+                log(f'[{self.client_id}][{self.update_count}] not force sync step')
+                need_check_if_param_ready = True
+
+            if need_check_if_param_ready:
                 # 只检查是否有准备好的参数，而不强制等待
-                log(f'[{self.client_id}][{self.update_count}] not force sync step, param ready: {self.shared_param.param_event.is_set()}')
+                log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
                 if self.shared_param.param_event.is_set():
                     # 触发主learner的参数更新事件
                     self.sync_learner_param_event.set(1)

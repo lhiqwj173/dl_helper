@@ -13,7 +13,7 @@ from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage, AsyncProcessEventReader
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, GRAD_BATCH_SIZE
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, GRAD_BATCH_SIZE, ack, wait_ack
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -363,31 +363,35 @@ class ExperimentHandler:
 
         elif cmd == 'wait_params':
             # 长连接请求参数
-            log(f'{msg_header} recv wait_params request')
+            log(f'{msg_header} recv wait_params request, push params interval: {self.push_params_interval}')
             last_send_v = 0
+
             while True:
                 # 等待参数更新事件
-                log(f'wait_params prepare wait')
+                log(f'[{msg_header}] wait_params prepare wait')
                 await self.aper.wait()
                 t = time.time()
-                log(f'wait_params wait active')
+                log(f'[{msg_header}] wait_params wait active')
 
                 # 获取最新参数
                 params, v, need_warn_up = await self._get_latest_raw_params()
-                log(f'wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
+                log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 控制参数推送频率
-                if v - last_send_v >= self.push_params_interval:
+                if (v - last_send_v) >= self.push_params_interval:
+                    last_send_v = v
+
                     # 计算更新增量
                     params, info = self.params_compressor.compress(params, ip)
 
-                    log(f'{msg_header} prepare params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
+                    log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
-                    last_send_v = v
-                    log(f'{msg_header} send params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
+
+                    log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     # 等待回复
-                    await async_recv_msg(reader)
-                    log(f'{msg_header} recv check, version: {v}, cost: {int(1000*(time.time() - t))}ms')
+                    await wait_ack(reader)
+
+                    log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'need_val':
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
@@ -474,7 +478,7 @@ class ExperimentHandler:
                 log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 回复，避免socket堆积
-                await async_send_msg(writer, b'1')
+                await ack(writer)
 
                 # 通知新梯度
                 self.share_data_new_event.set()

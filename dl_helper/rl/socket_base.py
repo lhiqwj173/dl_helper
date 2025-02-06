@@ -8,6 +8,7 @@ import asyncio
 import socket, time, os, re
 import pickle
 import struct
+from memoryview import memoryview
 
 CODE = '0QYg9Ky17dWnN4eK'
 # PS IP
@@ -104,7 +105,15 @@ async def async_recvall(reader, n, timeout=10.0, buffer_size=CHUNK_SIZE):  # 增
             
     return data
 
-async def async_recv_msg(reader, timeout=-1):
+async def ack(writer):
+    """发送确认消息"""
+    writer.write(b'1')
+
+async def wait_ack(reader):
+    """等待确认消息"""
+    await reader.read(1)
+
+async def async_recv_msg_0(reader, timeout=-1):
     """异步地接收带长度前缀的消息
     timeout: 超时时间，-1表示不设置超时
     返回值: 读取到的数据
@@ -123,7 +132,34 @@ async def async_recv_msg(reader, timeout=-1):
     log(f'recv msg({msglen}), cost: {int(1000*cost_time)}ms, speed: {(msglen / cost_time) / (1024*1024):.3f}MB/s')
     return res
 
-async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
+async def async_recv_data_length(reader, timeout=-1):
+    """读取变长头部"""
+    # 读取一个字节
+    byte = await async_recvall(reader, 1, timeout)
+    
+    # 解析已收到的头部字节
+    if byte[0] & 0x80 == 0:  # 1字节头
+        return byte[0], 1
+
+    elif byte[0] & 0xC0 == 0x80:  # 4字节头
+        # 接收剩下的长度
+        byte2 = await async_recvall(reader, 3, timeout)
+        header_buff = byte + byte2
+        return struct.unpack('>I', header_buff)[0] & 0x7FFFFFFF, 4
+
+async def async_recv_msg(reader, timeout=-1):
+    """终极优化版消息接收"""
+    body_len, header_len = await async_recv_data_length(reader, timeout)
+    log(f'recv msg({header_len}) length')
+    t = time.time()
+    # 接收消息内容
+    res = await async_recvall(reader, body_len, timeout)
+    cost_time = time.time() - t
+
+    log(f'recv msg({body_len}), cost: {int(1000*cost_time)}ms, speed: {(body_len / cost_time) / (1024*1024):.3f}MB/s')
+    return res
+
+async def async_send_msg_0(writer, msg, chunk_size=CHUNK_SIZE):
     """异步地分块发送大消息"""
     if isinstance(msg, str):
         msg = msg.encode()
@@ -137,6 +173,27 @@ async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
         chunk = msg[i:i + chunk_size]
         writer.write(chunk)
         
+    await writer.drain()
+
+async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
+    """终极优化版消息发送"""
+    # 类型自动转换
+    data = msg.encode() if isinstance(msg, str) else msg
+    
+    # 变长编码长度前缀
+    length = len(data)
+    if length < 0x80:
+        header = struct.pack('B', length)
+    else:
+        header = struct.pack('>I', length | 0x80000000)
+    
+    # 创建内存视图
+    payload = memoryview(header + data)
+    
+    # 分块发送
+    for offset in range(0, len(payload), chunk_size):
+        writer.write(payload[offset:offset+chunk_size].tobytes())
+    
     await writer.drain()
 
 def _connect_server_apply(func, *args, **kwargs):
