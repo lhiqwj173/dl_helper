@@ -30,7 +30,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
-from dl_helper.rl.socket_base import HOST, PORT, CODE
+from dl_helper.rl.socket_base import HOST, PORT, CODE, GRAD_BATCH_SIZE
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
@@ -313,6 +313,9 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
         self.param_q = param_q
         self.grad_q = grad_q
 
+        # pard 缓存
+        self.grads = []
+
         # 启动
         if start:
             self._start()
@@ -335,10 +338,15 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                 
                 else:
                     # 梯度事件
-                    asyncio.run_coroutine_threadsafe(
-                        self.grad_q.put(item), 
-                        self._loop
-                    )
+                    self.grads.append(item)
+
+                    # 积累到一定数量后，推送到队列
+                    if len(self.grads) == GRAD_BATCH_SIZE:
+                        asyncio.run_coroutine_threadsafe(
+                            self.grad_q.put(self.grads), 
+                            self._loop
+                        )
+                        self.grads = []
 
             except Empty:
                 continue
@@ -470,7 +478,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         info_data = share_info(train_title, client_id, version, need_warn_up)
 
-        grad_coroutine_num = 10
+        grad_coroutine_num = 1
         
         # 梯度事件队列
         grad_q = AsyncQueue(maxsize=task_queue._maxsize)
@@ -481,7 +489,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         apqr = AsyncProcessQueueReader_grad_param(task_queue, param_q, grad_q)
 
         # 进程池,用于压缩/加压等计算密集任务计算
-        process_pool = ProcessPoolExecutor(max_workers=3)  # 可以根据需要调整进程数
+        process_pool = ProcessPoolExecutor(max_workers=GRAD_BATCH_SIZE)  # 可以根据需要调整进程数
     
         # 启动协程任务
         tasks = []
@@ -526,24 +534,30 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 send_count = 0
                 while True:
                     # 获取汇总梯度 TODO 使用共享内存替代
-                    merged_gradients = await grad_q.get()
+                    batch_gradients = await grad_q.get()# 获取到n个梯度的列表
                     begin_time = time.time()
                     q_size = grad_q.qsize()
                     # if q_size > 15:
                     #     log(f"[{idx}] queue size: {q_size}")
                     log(f"[{idx}] grad handler begin, queue size: {q_size}")
 
+
                     # 在进程池中执行压缩操作
                     loop = asyncio.get_event_loop()
-                    compressed_result = await loop.run_in_executor(
-                        process_pool,
-                        partial(gradient_compressor.compress, merged_gradients, info_data.need_warn_up)
-                    )
-                    compressed_grads, compress_info = compressed_result
-                    # log(f"[{idx}][{send_count}] compress gradients done")
+                    batch_compressed_results = []
+                    for grads in batch_gradients:
+                        compressed_result = await loop.run_in_executor(
+                            process_pool,
+                            partial(gradient_compressor.compress, grads, info_data.need_warn_up)
+                        )
+
+                        compressed_grads, compress_info = compressed_result
+                        batch_compressed_results.append((compressed_grads, compress_info))
+
+                    log(f"[{idx}][{send_count}] compress gradients done, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     # 发送梯度
-                    data = pickle.dumps((compressed_grads, compress_info, info_data.version))
+                    data = pickle.dumps((batch_compressed_results, info_data.version))
                     await async_send_msg(writer, data)
                     log(f"[{idx}][{send_count}] send grads done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 

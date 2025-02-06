@@ -13,7 +13,7 @@ from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage, AsyncProcessEventReader
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, GRAD_BATCH_SIZE
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -60,7 +60,7 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=0, grad_cache_size=30, push_params_interval=4
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=0
     ):
         """
         train_title: 训练标题
@@ -74,7 +74,7 @@ class ExperimentHandler:
         self.client_ip_ids = {}
 
         # 梯度缓存数量
-        self.grad_cache_size = grad_cache_size
+        self.grad_cache_size = GRAD_BATCH_SIZE * 10
 
         # 版本号
         self.version = 0
@@ -83,7 +83,7 @@ class ExperimentHandler:
         self.grad_warm_up_steps = grad_warm_up_steps
 
         # 参数推送频率
-        self.push_params_interval = push_params_interval # 每 push_params_interval 步推送一次参数
+        self.push_params_interval = GRAD_BATCH_SIZE # 每 push_params_interval 步推送一次参数
 
         # 共享梯度队列
         # 梯度数据经过稀疏化，形状
@@ -181,6 +181,7 @@ class ExperimentHandler:
                 q.put((version, need_warn_up))
             # 通知参数发送任务
             ready_params_event.set()
+            ready_params_event.claer()
             log(f'[CG] ready params done')
 
         log(f'[CG]{train_title} calculate gpu init')
@@ -309,8 +310,9 @@ class ExperimentHandler:
                     need_warn_up = grad_warm_up_steps > step_count
                     step_count += 1
                     
-                    ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
-                
+                    if (idx + 1) % GRAD_BATCH_SIZE == 0:  
+                        ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
+
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
 
@@ -401,37 +403,51 @@ class ExperimentHandler:
                 t = time.time()
                 log(f'{msg_header} recv gradients({len(data)})')
 
-                g, compress_info, version = pickle.loads(data)
+                batch_g_info, version = pickle.loads(data)
+                # g, compress_info, version = pickle.loads(data)
                 log(f'{msg_header} loads gradients, cost: {int(1000*(time.time() - t))}ms')
                 # 提交到共享梯度信息队列
                 # log(f'put gradients info')
-                self.gradients_info_share_q.put((compress_info, version))
+                for i in range(GRAD_BATCH_SIZE):
+                    self.gradients_info_share_q.put((batch_g_info[i][1], version))
                 log(f'{msg_header} add info&version done, cost: {int(1000*(time.time() - t))}ms')
                 # 提交到共享梯度
                 # log(f'put gradients')
 
                 wait_count = 0
 
-                # 是否是全梯度
-                if compress_info[0]['is_full_gradient']:
-                    cache_share = self.gradients_cache_share_full
-                else:
-                    cache_share = self.gradients_cache_share
-
                 # 当前等待处理的梯度数量
-                gradients_cache_share_length = 0
+                done_idxs = []
+                gradients_cache_share_lengths = []
                 async with self.gradients_add_lock:
                 # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
                     while True:
                         # with LockWithLog(self.share_gradients_lock, log, msg_header):
                         with self.share_gradients_lock:
-                            gradients_cache_share_length = cache_share[0].size()
-                            if gradients_cache_share_length < self.grad_cache_size:
-                                for idx, _g in enumerate(g):
-                                    cache_share[idx].append(_g)
-                                gradients_cache_share_length += 1
-                                wait_count = 0
-                                break
+                            for idx, (g, compress_info) in enumerate(batch_g_info):
+                                # 是否已经处理过
+                                if idx in done_idxs:
+                                    continue
+
+                                # 是否是全梯度
+                                if compress_info[0]['is_full_gradient']:
+                                    cache_share = self.gradients_cache_share_full
+
+                                else:
+                                    cache_share = self.gradients_cache_share
+
+                                # 拷贝到共享梯度
+                                gradients_cache_share_lengths[idx] = cache_share[0].size()
+                                if gradients_cache_share_lengths[idx] < self.grad_cache_size:
+                                    for idx, _g in enumerate(g):
+                                        cache_share[idx].append(_g)
+                                    done_idxs.append(idx)
+                                else:
+                                    break
+
+                        if len(done_idxs) == GRAD_BATCH_SIZE:
+                            wait_count = 0
+                            break
 
                         # 等待处理的梯度大于 梯度缓存大小
                         # 释放锁并等待
@@ -445,6 +461,7 @@ class ExperimentHandler:
                             import sys
                             sys.exit()
 
+                gradients_cache_share_length += 1
                 log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 回复，避免socket堆积

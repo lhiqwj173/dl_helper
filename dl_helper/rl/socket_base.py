@@ -13,6 +13,7 @@ CODE = '0QYg9Ky17dWnN4eK'
 # PS IP
 HOST = '217.142.135.154'
 PORT = 12346
+GRAD_BATCH_SIZE = 4
 
 def recvall(sock, n):
     """接收指定字节数的数据"""
@@ -123,7 +124,7 @@ async def async_send_msg_0(writer, msg):
     writer.write(msg)
     await writer.drain()
 
-async def async_send_msg(writer, msg, chunk_size=65536):
+async def async_send_msg(writer, msg, chunk_size=1024*64):
     """异步地分块发送大消息"""
     if isinstance(msg, str):
         msg = msg.encode()
