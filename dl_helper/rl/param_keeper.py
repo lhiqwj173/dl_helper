@@ -88,8 +88,8 @@ class ExperimentHandler:
         # 共享梯度队列
         # 梯度数据经过稀疏化，形状
         self.gradients_info_share_q = multiprocessing.Queue()
-        # 共享参数信息队列
-        self.params_info_share_q = multiprocessing.Queue()
+        # 共享参数信息
+        self.params_info_share = share_tensor(f'{train_title}_params_info_share', (2,), 'int64')
         # 共享参数float32 ver 队列
         self.params_float32_ver_share_q = multiprocessing.Queue()
         # 共享梯度锁
@@ -111,7 +111,7 @@ class ExperimentHandler:
         
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
-            train_title, self.gradients_info_share_q, self.params_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
+            train_title, self.gradients_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
             self.share_gradients_lock, self.share_params_lock, self.share_params_float32_lock,
             config,
             self.debug,
@@ -153,7 +153,7 @@ class ExperimentHandler:
 
     @staticmethod
     def gpu_most_task(
-        train_title, gradients_info_share_q, params_info_share_q, params_float32_ver_share_q, share_data_new_event, 
+        train_title, gradients_info_share_q, params_float32_ver_share_q, share_data_new_event, 
         share_gradients_lock, share_params_lock, share_params_float32_lock,
         config, 
         debug,
@@ -164,7 +164,7 @@ class ExperimentHandler:
         """
         负责 梯度解压/梯度应用更新参数
         """
-        def ready_params(param_server, lock, params_cache_share, q, need_warn_up): 
+        def ready_params(param_server, lock, params_cache_share, params_info_share, need_warn_up): 
             """获取参数copy到共享参数中"""
             log(f'[CG] ready params begin')
             # 获取模型参数
@@ -174,17 +174,17 @@ class ExperimentHandler:
                 for idx, (k, v) in enumerate(weights.items()):
                     params_cache_share[idx].data[:] = v[:]
 
-                # 清空队列
-                log(f'ready params clear q, size: {q.qsize()}')
-                while not q.empty:
-                    q.get()
+                params_info_share.data[0] = version
+                params_info_share.data[1] = need_warn_up
 
-                q.put((version, need_warn_up))
             # 通知参数发送任务
             ready_params_event.set()
             log(f'[CG] ready params done v: {version}')
 
         log(f'[CG]{train_title} calculate gpu init')
+
+        # 共享参数信息
+        params_info_share = share_tensor(f'{train_title}_params_info_share', (2,), 'int64')
         
         # 计算步数
         step_count = 0
@@ -245,7 +245,7 @@ class ExperimentHandler:
 
         # 初始化一个最新的参数/info
         need_warn_up = grad_warm_up_steps > step_count
-        ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
+        ready_params(param_server, share_params_lock, params_cache_share, params_info_share, need_warn_up)
         
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
@@ -311,7 +311,7 @@ class ExperimentHandler:
                     step_count += 1
                     
                     if (idx + 1) % GRAD_BATCH_SIZE == 0:  
-                        ready_params(param_server, share_params_lock, params_cache_share, params_info_share_q, need_warn_up)
+                        ready_params(param_server, share_params_lock, params_cache_share, params_info_share, need_warn_up)
 
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
@@ -331,13 +331,11 @@ class ExperimentHandler:
             # 交换
             for i in self.params_cache_share:
                 params.append(i.data.clone())
-            # 取出再放回， 保证队列中仍有数据
-            log(f'get latest params, q size: {self.params_info_share_q.qsize()}')
-            while not self.params_info_share_q.empty():
-                v, need_warn_up = self.params_info_share_q.get()
 
-            # 放回队列最后一个
-            self.params_info_share_q.put((v, need_warn_up))
+            # 获取参数版本号
+            v = self.params_info_share.data[0]
+            # 获取是否需要预热
+            need_warn_up = self.params_info_share.data[1]
         return params, v, need_warn_up
 
     def start(self, loop=None):

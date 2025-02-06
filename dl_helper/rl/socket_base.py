@@ -14,7 +14,7 @@ CODE = '0QYg9Ky17dWnN4eK'
 HOST = '217.142.135.154'
 PORT = 12346
 GRAD_BATCH_SIZE = 4
-CHUNK_SIZE = 1024 * 64
+CHUNK_SIZE = 1024 * 1024
 
 def recvall(sock, n):
     """接收指定字节数的数据"""
@@ -119,7 +119,7 @@ async def async_recv_msg(reader, timeout=-1):
     # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
     # 接收消息内容
     res = await async_recvall(reader, msglen, timeout)
-    log(f'recv msg, cost: {int(1000*(time.time() - t))}ms')
+    log(f'recv msg({msglen}), cost: {int(1000*(time.time() - t))}ms')
     return res
 
 async def async_send_msg_0(writer, msg):

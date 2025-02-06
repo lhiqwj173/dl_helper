@@ -377,12 +377,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 时间队列(与协程进程通讯)
         self.task_queue = None
         self.grads_count = 0
+        self.update_param_count = 0
         # 用于初始化共享参数
         self.params_dict = None
         self.grad_params_value_shape = None
         # 是否处于训练阶段
         self.is_training_event = None
         ####################
+
         # 只有主 learner 需要初始化
         ####################
 
@@ -689,13 +691,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 加入推送队列
             need_new_params = False
-            if self.grads_count == GRAD_BATCH_SIZE:
-                self.grads_count = 0
+            if self.grads_count % GRAD_BATCH_SIZE == 0:
                 need_new_params = True
 
             log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
-            log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
-            log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+            # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+            # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
             # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
             if need_new_params:
@@ -704,21 +705,32 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     self.skiped = True
                 else:
                     # 等待新的参数就位
-                    log(f'[{self.client_id}][{self.update_count}] wait new params ready')
-                    self.shared_param.param_event.wait()
+                    should_update_num = self.grads_count / GRAD_BATCH_SIZE - 1#跳过一个
+                    if self.update_param_count < should_update_num:
+                        log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, should_update_num: {should_update_num}, update_param_count: {self.update_param_count}')
+                        self.shared_param.param_event.wait()
+                        # 触发主learner的参数更新事件
+                        self.sync_learner_param_event.set(1)
+                        self.update_param_count += 1
+            else:
+                # 不需要强制同步参数的step, 
+                # 只检查是否有准备好的参数，而不强制等待
+                log(f'[{self.client_id}][{self.update_count}] not force sync step, param ready: {self.shared_param.param_event.is_set()}')
+                if self.shared_param.param_event.is_set():
                     # 触发主learner的参数更新事件
                     self.sync_learner_param_event.set(1)
+                    self.update_param_count += 1
 
             # 触发主learner的梯度更新事件
             self.sync_learner_event.set(self.num_learners - 1)
         else:
             # 非主learner, 等待主learner的梯度更新事件
-            log(f'[{self.client_id}][{self.update_count}] wait sync_learner_event: {self.sync_learner_event.is_set()}')
+            # log(f'[{self.client_id}][{self.update_count}] wait sync_learner_event: {self.sync_learner_event.is_set()}')
             self.sync_learner_event.wait()
 
         # if self.client_id == 0:
         #     log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
-        log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        # log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
 
         # nouse3
         # 返回空
