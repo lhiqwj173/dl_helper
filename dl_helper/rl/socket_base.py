@@ -8,7 +8,6 @@ import asyncio
 import socket, time, os, re
 import pickle
 import struct
-from memoryview import memoryview
 
 CODE = '0QYg9Ky17dWnN4eK'
 # PS IP
