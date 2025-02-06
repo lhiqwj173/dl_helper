@@ -30,7 +30,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
-from dl_helper.rl.socket_base import HOST, PORT, CODE, GRAD_BATCH_SIZE
+from dl_helper.rl.socket_base import HOST, PORT, CODE, GRAD_BATCH_SIZE, CHUNK_SIZE, connect_and_tune
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
@@ -525,6 +525,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
+                # reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}')
 
@@ -616,6 +617,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 reader, writer = await asyncio.open_connection(HOST, PORT)
+                # reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}')
                 log(f"param_coroutine connect to server")

@@ -14,6 +14,38 @@ CODE = '0QYg9Ky17dWnN4eK'
 HOST = '217.142.135.154'
 PORT = 12346
 GRAD_BATCH_SIZE = 4
+CHUNK_SIZE = 1024 * 64
+
+def tune_tcp_socket(sock):
+    """TCP协议调优"""
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 禁用Nagle算法
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 0)     # 动态发送缓冲区
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 0)     # 动态接收缓冲区
+    # 开启TCP快速打开（需要内核支持）
+    try:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_FASTOPEN, 5)
+    except (AttributeError, OSError):
+        print("TCP_FASTOPEN not supported, skipping...")
+    # 使用BBR拥塞控制算法（需要内核支持）
+    try:
+        sock.setsockopt(socket.SOL_TCP, socket.TCP_CONGESTION, 'bbr')
+    except (AttributeError, OSError):
+        print("BBR not supported, using default congestion control...")
+
+async def connect_and_tune(HOST, PORT):
+    """创建异步连接并调优TCP参数"""
+    reader, writer = await asyncio.open_connection(HOST, PORT)
+    
+    # 获取底层socket对象
+    sock = writer.transport.get_extra_info('socket')
+    if sock is not None:
+        print("Tuning TCP socket...")
+        tune_tcp_socket(sock)
+    else:
+        print("Warning: Could not get underlying socket for tuning")
+    
+    return reader, writer
 
 def recvall(sock, n):
     """接收指定字节数的数据"""
@@ -73,7 +105,7 @@ async def async_recvall_0(reader, n, timeout=10.0):
     # log(f"成功接收完整数据，总大小: {len(data)} 字节")  # 添加日志
     return data
 
-async def async_recvall(reader, n, timeout=10.0, buffer_size=1024*64):  # 增加buffer_size参数
+async def async_recvall(reader, n, timeout=10.0, buffer_size=CHUNK_SIZE):  # 增加buffer_size参数
     """异步地从流中读取指定字节数的数据，使用更大的缓冲区提高吞吐量"""
     data = bytearray(n)  # 预分配内存
     view = memoryview(data)  # 使用memoryview避免内存拷贝
@@ -124,7 +156,7 @@ async def async_send_msg_0(writer, msg):
     writer.write(msg)
     await writer.drain()
 
-async def async_send_msg(writer, msg, chunk_size=1024*64):
+async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
     """异步地分块发送大消息"""
     if isinstance(msg, str):
         msg = msg.encode()
