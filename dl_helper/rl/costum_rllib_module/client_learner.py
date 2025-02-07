@@ -481,8 +481,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
-        # debug
-        loop.set_debug(True)
+        # # debug
+        # loop.set_debug(True)
 
         # 运行事件循环
         loop.run_forever()
