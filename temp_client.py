@@ -1,3 +1,4 @@
+%%writefile client.py
 import asyncio
 import struct
 import time
@@ -122,7 +123,7 @@ async def wait_ack(reader):
     await reader.read(1)
 
 class BandwidthClient:
-    def __init__(self, host='217.142.135.154', port=12346):
+    def __init__(self, host='217.142.135.154', port=12345):
         self.host = host
         self.port = port
         
@@ -135,6 +136,7 @@ class BandwidthClient:
 
             total_time = 0
             for i in range(30):
+                print(f"send {i} times")
                 t = time.time()
                 # 发送数据
                 await async_send_msg(writer, param_data)
@@ -151,5 +153,7 @@ class BandwidthClient:
         except Exception as e:
             print(f"Error: {e}")
 
-client = BandwidthClient()
-asyncio.run(client.test_data())  # 测试1GB数据传输
+
+if __name__ == "__main__":
+    client = BandwidthClient()
+    asyncio.run(client.test_data())  # 测试1GB数据传输

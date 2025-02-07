@@ -22,13 +22,14 @@ class BandwidthServer:
         
     async def handle_client(self, reader, writer):
         try:
-            # 接收数据
-            data = await async_recv_msg(reader)
-            print(f"Received data: {len(data)} bytes")
+            while True:
+                # 接收数据
+                data = await async_recv_msg(reader)
+                print(f"Received data: {len(data)} bytes")
 
-            # 发送确认
-            await ack(writer)
-            print(f"Sent ack")
+                # 发送确认
+                await ack(writer)
+                print(f"Sent ack")
             
         except Exception as e:
             print(f"Error handling client: {e}")
