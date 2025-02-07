@@ -555,12 +555,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
 
                     # 在进程池中执行压缩操作
-                    loop = asyncio.get_event_loop()
-                    compressed_result = await loop.run_in_executor(
-                        process_pool,
-                        # partial(gradient_compressor.compress, grads, info_data.need_warn_up)
-                        partial(gradient_compressor.try_compress, grads, info_data.need_warn_up)
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        compressed_result = await loop.run_in_executor(
+                            process_pool,
+                            partial(gradient_compressor.compress, grads, info_data.need_warn_up)
+                        )
+                    except Exception as e:
+                        import pickle
+                        log(get_exception_msg())
+                        pickle.dump(grads, open('error_grads.pkl', 'wb'))
+                        raise e
 
                     compressed_grads, compress_info = compressed_result
                     batch_compressed_results.append((compressed_grads, compress_info))
