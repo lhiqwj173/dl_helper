@@ -143,11 +143,15 @@ class BandwidthClient:
                 # 等待回复
                 await wait_ack(reader)
                 total_time += time.time() - t
+
+                await asyncio.sleep(3)
                 
             # 关闭连接
             writer.close()
             await writer.wait_closed()
 
+            # param_data avg time: 118ms
+            # grad_data avg time: 697ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
         except Exception as e:

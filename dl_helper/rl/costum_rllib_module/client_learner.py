@@ -517,7 +517,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
     @staticmethod
     async def grad_coroutine(idx, info_data, process_pool, grad_q):
-
         """
         梯度协程
         """
@@ -582,7 +581,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                         send_count += 1
                         total_count += 1
-                        log(f"[{idx}][{send_count}] grad handler done, cost time: {int(time.time() - begin_time * 1000)}ms")
+                        log(f"[{idx}][{send_count}] grad handler done, cost time: {int((time.time() - begin_time)* 1000)}ms")
 
                         if total_count % 10 == 0:
                             # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
@@ -718,9 +717,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     # nouse4 100 iter about H
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
-        # report_memory_usage(f'[{self.update_count}][0]')
 
         if self.client_id == 0:
+            report_memory_usage(f'[{self.update_count}]')
             # 清空梯度事件
             self.shared_param.grad_event.clear()
             # 清空learner参数同步事件
@@ -754,11 +753,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             self.grads_count += 1
 
-            # 加入推送队列
-            need_new_params = False
-            if self.grads_count % GRAD_BATCH_SIZE == 0:
-                need_new_params = True
-
             log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
@@ -766,7 +760,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             need_check_if_param_ready = True
             # need_check_if_param_ready = False
             # # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
-            # if need_new_params:
+            # if self.grads_count % GRAD_BATCH_SIZE == 0:
             #     if not self.skiped:
             #         # 跳过第一个参数更新等待
             #         log(f'[{self.client_id}][{self.update_count}] force sync step, skiped first param update')
@@ -826,7 +820,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
-
         if self.sync_learner_param_event.is_set():
             if self.client_id == 0:
                 log(f'[{self.update_count}] apply new param to local')
