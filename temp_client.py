@@ -166,6 +166,9 @@ class BandwidthClient:
 
             # 512KB
             # grad_data_m2 avg time: 342ms
+
+            # 256KB
+            # ack avg time: 69ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
 
