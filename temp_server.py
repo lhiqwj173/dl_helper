@@ -22,7 +22,7 @@ class BandwidthServer:
 
         # 设置socket选项
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tune_tcp_socket(self.sock)
+        tune_tcp_socket(self.sock, buffer_size)
         
     async def handle_client(self, reader, writer):
         try:
