@@ -76,16 +76,23 @@ def recv_msg(sock):
     # 解析头部长度
     if byte[0] & 0x80 == 0:  # 1字节头
         msglen = byte[0]
+        header_len = 1
     elif byte[0] & 0xC0 == 0x80:  # 4字节头
         # 接收剩下的长度
         byte2 = recvall(sock, 3)
         if not byte2:
+
             return None
         header_buff = byte + byte2
         msglen = struct.unpack('>I', header_buff)[0] & 0x7FFFFFFF
-        
+        header_len = 4
+
+    log(f'recv msg({header_len}) length')
     # 接收消息内容
-    return recvall(sock, msglen)
+    data = recvall(sock, msglen)
+    log(f'recv msg({msglen}) data')
+    return data
+
 
 def send_msg(sock, msg):
     """发送变长编码的消息"""
