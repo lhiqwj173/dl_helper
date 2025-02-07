@@ -86,13 +86,13 @@ def recv_msg(sock):
         header_buff = byte + byte2
         msglen = struct.unpack('>I', header_buff)[0] & 0x7FFFFFFF
         header_len = 4
-
+    t = time.time()
     log(f'recv msg({header_len}) length')
     # 接收消息内容
     data = recvall(sock, msglen)
-    log(f'recv msg({msglen}) data')
+    cost_time = time.time() - t
+    log(f'recv msg({msglen}), cost: {int(1000*cost_time)}ms, speed: {(msglen / cost_time) / (1024*1024):.3f}MB/s')
     return data
-
 
 def send_msg(sock, msg):
     """发送变长编码的消息"""
@@ -161,25 +161,8 @@ async def async_recv_msg(reader, timeout=-1):
     # 接收消息内容
     res = await async_recvall(reader, body_len, timeout)
     cost_time = time.time() - t
-
     log(f'recv msg({body_len}), cost: {int(1000*cost_time)}ms, speed: {(body_len / cost_time) / (1024*1024):.3f}MB/s')
     return res
-
-async def async_send_msg_0(writer, msg, chunk_size=CHUNK_SIZE):
-    """异步地分块发送大消息"""
-    if isinstance(msg, str):
-        msg = msg.encode()
-        
-    # 发送长度前缀
-    length_prefix = struct.pack('>I', len(msg))
-    writer.write(length_prefix)
-    
-    # 分块发送消息体
-    for i in range(0, len(msg), chunk_size):
-        chunk = msg[i:i + chunk_size]
-        writer.write(chunk)
-        
-    await writer.drain()
 
 async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
     """终极优化版消息发送"""

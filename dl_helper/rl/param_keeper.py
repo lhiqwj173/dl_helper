@@ -368,10 +368,10 @@ class ExperimentHandler:
 
             while True:
                 # 等待参数更新事件
-                log(f'[{msg_header}] wait_params prepare wait')
+                log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 await self.aper.wait()
                 t = time.time()
-                log(f'[{msg_header}] wait_params wait active')
+                log(f'[{msg_header}] wait_params wait active, last_send_v: {last_send_v}')
 
                 # 获取最新参数
                 params, v, need_warn_up = await self._get_latest_raw_params()
