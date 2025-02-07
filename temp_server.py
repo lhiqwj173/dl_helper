@@ -47,8 +47,8 @@ class BandwidthServer:
         )
 
         print(f"Server started on {self.host}:{self.port}")
-        async with server:
-            await server.serve_forever()
+        async with self.server:
+            await self.server.serve_forever()
 
 if __name__ == "__main__":
     server = BandwidthServer()
