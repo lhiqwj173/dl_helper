@@ -5,10 +5,16 @@ import time
 import socket
 
 # 模拟数据
+ack = b'1'
 param_data = b'x' * 8724
 grad_data = b'x' * 544454
+grad_data_m2 = b'x' * 272227
+
 
 CHUNK_SIZE = 4*1024*1024# 4 MB 缓冲区
+CHUNK_SIZE = 1024*1024# 1 MB 缓冲区
+CHUNK_SIZE = 512*1024# 512 KB 缓冲区
+CHUNK_SIZE = 256*1024# 256 KB 缓冲区
 
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
@@ -139,7 +145,7 @@ class BandwidthClient:
                 print(f"send {i} times")
                 t = time.time()
                 # 发送数据
-                await async_send_msg(writer, param_data)
+                await async_send_msg(writer, ack)
                 # 等待回复
                 await wait_ack(reader)
                 total_time += time.time() - t
@@ -153,23 +159,13 @@ class BandwidthClient:
             # 4MB 
             # param_data avg time: 118ms
             # grad_data avg time: 697ms
-            # grad_data/2 avg time: 463ms
+            # grad_data_m2 avg time: 463ms
 
             # 1MB
-            # param_data
-            # grad_data
-            # grad_data/2 avg time: 463ms
+            # grad_data_m2 avg time: 463ms
 
             # 512KB
-            # param_data
-            # grad_data
-            # grad_data/2 avg time: 342ms
-
-            # 256KB
-            # param_data
-            # grad_data
-            # grad_data/2 avg time: 
-
+            # grad_data_m2 avg time: 342ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
 
