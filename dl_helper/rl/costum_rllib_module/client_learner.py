@@ -383,6 +383,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.grad_params_value_shape = None
         # 是否处于训练阶段
         self.is_training_event = None
+        # stop event
+        self.stop_event = None
         ####################
 
         # 只有主 learner 需要初始化
@@ -412,6 +414,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
 
+            # stop event
+            self.stop_event = Event(name=f'_stop_loop_event')
+
             # 在新进程中运行事件循环
             self.event_loop_process = multiprocessing.Process(
                 target=self._run_event_loop_process, 
@@ -428,8 +433,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             # 停止事件循环
             log(f"[{self.client_id}] stop_param_thread")
-            self.event_loop_process.terminate()  # 强制终止进程
-            self.event_loop_process.join()
+            self.stop_event.set()
+            # 等待子进程退出
+            self.event_loop_process.join(timeout=5)  # 给子进程一些时间来退出
+            if self.event_loop_process.is_alive():
+                log(f"[{self.client_id}] Force terminating the process...")
+                self.event_loop_process.terminate()
+
+            self.event_loop_process.join()  # 确保资源被释放
         return True
 
     @staticmethod
@@ -481,6 +492,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
+        # 启动停止事件循环协程
+        task = loop.create_task(ClientPPOTorchLearner.stop_loop_event())
+        tasks.append(task)
+
         # # debug
         # loop.set_debug(True)
 
@@ -488,7 +503,21 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         loop.run_forever()
 
     @staticmethod
+    async def stop_loop_event():
+        """停止事件循环"""
+        stop_event = Event(name=f'_stop_loop_event')
+        while True:
+            if stop_event.is_set():
+                break
+            await asyncio.sleep(1)
+
+        # 停止事件循环
+        loop = asyncio.get_event_loop()
+        loop.stop()
+
+    @staticmethod
     async def grad_coroutine(idx, info_data, process_pool, grad_q):
+
         """
         梯度协程
         """
@@ -556,8 +585,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{idx}][{send_count}] grad handler done, cost time: {int(time.time() - begin_time * 1000)}ms")
 
                         if total_count % 10 == 0:
-                            # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time)
+                            # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
                             # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
+                            # avg grad send time: 925ms, avg wait time: 523ms, avg handle time: 171ms
+                            # 优化空间:
+                            #     平均等待梯度时间 = 925 -523-171 = 231ms > 取消强制参数同步的等待, 不断计算梯度，消除 平均等待梯度时间(只受限于梯度被处理的速度, 队列大小: GRAD_BATCH_SIZE)
+                            #     网络传输耗时 = 523 - 15 = 508ms
+                            #     压缩处理耗时 = 171ms
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
                             
                         # 清空
@@ -654,6 +688,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 统计耗时
                     if total_count % 30 == 0:
                         # 本机接收后处理耗时(avg handle time)
+                        # avg param push time: 928ms, avg handle time: 0ms
                         log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
             except Exception as e:
@@ -717,34 +752,34 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
-            need_check_if_param_ready = False
+            need_check_if_param_ready = True
+            # need_check_if_param_ready = False
+            # # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
+            # if need_new_params:
+            #     if not self.skiped:
+            #         # 跳过第一个参数更新等待
+            #         log(f'[{self.client_id}][{self.update_count}] force sync step, skiped first param update')
+            #         self.skiped = True
+            #     else:
+            #         # 等待新的参数就位
+            #         should_update_num = self.grads_count / GRAD_BATCH_SIZE - 1#跳过一个
+            #         if self.update_param_count < should_update_num:
+            #             t = time.time()
+            #             log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, should_update_num: {should_update_num}, update_param_count: {self.update_param_count}')
+            #             self.shared_param.param_event.wait()
+            #             # 触发主learner的参数更新事件
+            #             log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, cost: {int(1000*(time.time() - t))}ms')
+            #             self.sync_learner_param_event.set(1)
+            #             self.update_param_count += 1
+            #         else:
+            #             # 已经满足 should_update_num，无需强制等待
+            #             log(f'[{self.client_id}][{self.update_count}] force sync step, should_update_num satisfied')
+            #             need_check_if_param_ready = True
 
-            # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
-            if need_new_params:
-                if not self.skiped:
-                    # 跳过第一个参数更新等待
-                    log(f'[{self.client_id}][{self.update_count}] force sync step, skiped first param update')
-                    self.skiped = True
-                else:
-                    # 等待新的参数就位
-                    should_update_num = self.grads_count / GRAD_BATCH_SIZE - 1#跳过一个
-                    if self.update_param_count < should_update_num:
-                        t = time.time()
-                        log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, should_update_num: {should_update_num}, update_param_count: {self.update_param_count}')
-                        self.shared_param.param_event.wait()
-                        # 触发主learner的参数更新事件
-                        log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, cost: {int(1000*(time.time() - t))}ms')
-                        self.sync_learner_param_event.set(1)
-                        self.update_param_count += 1
-                    else:
-                        # 已经满足 should_update_num，无需强制等待
-                        log(f'[{self.client_id}][{self.update_count}] force sync step, should_update_num satisfied')
-                        need_check_if_param_ready = True
-
-            else:
-                # 不需要强制同步参数的step, 
-                log(f'[{self.client_id}][{self.update_count}] not force sync step')
-                need_check_if_param_ready = True
+            # else:
+            #     # 不需要强制同步参数的step, 
+            #     log(f'[{self.client_id}][{self.update_count}] not force sync step')
+            #     need_check_if_param_ready = True
 
             if need_check_if_param_ready:
                 # 只检查是否有准备好的参数，而不强制等待

@@ -406,8 +406,12 @@ class ExperimentHandler:
 
                     push_count += 1
                     if push_count % 30 == 0:
-                        # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time)
+                        # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
                         # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
+                        # avg param push time: 925ms, avg wait time: 447ms, avg handle time: 3ms
+                        # 优化空间:
+                        #     平均等待参数时间 = 925 - 447 - 3 = 475ms
+                        #     网络传输耗时 = 447 - 0 = 447ms
                         log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms')
 
                 handle_cost_time = time.time() - t
@@ -517,8 +521,7 @@ class ExperimentHandler:
 
                 push_count += 1
                 if push_count % 30 == 0:
-                    # 每次处理完梯度耗时: 本机接收后处理耗时 + 客户端计算 + 网络传输耗时
-                    # 剩余的耗时 = 932ms - 15ms = 917ms = 客户端计算 + 网络传输
+                    # avg gradients recv time: 923ms, avg handle time: 15ms
                     log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg handle time: {int(total_handle_time / push_count * 1000)}ms')
 
 if __name__ == '__main__':
