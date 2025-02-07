@@ -16,33 +16,6 @@ PORT = 12346
 GRAD_BATCH_SIZE = 4
 CHUNK_SIZE = 1024 * 1024
 
-def recvall(sock, n):
-    """接收指定字节数的数据"""
-    data = bytearray()
-    while len(data) < n:
-        packet = sock.recv(n - len(data))
-        if not packet:
-            return None
-        data.extend(packet)
-    return data
-
-def recv_msg(sock):
-    """接收带长度前缀的消息"""
-    # 接收4字节的长度前缀
-    raw_msglen = recvall(sock, 4)
-    if not raw_msglen:
-        return None
-    # 解析消息长度
-    msglen = struct.unpack('>I', raw_msglen)[0]
-    # 接收消息内容
-    return recvall(sock, msglen)
-
-def send_msg(sock, msg):
-    """发送带长度前缀的消息"""
-    # 添加4字节的长度前缀
-    msg = msg.encode() if isinstance(msg, str) else msg
-    msg = struct.pack('>I', len(msg)) + msg
-    sock.sendall(msg)
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
     """TCP协议调优"""
@@ -75,6 +48,60 @@ async def connect_and_tune(HOST, PORT, buffer_size=CHUNK_SIZE):
     
     return reader, writer
 
+async def ack(writer):
+    """发送确认消息"""
+    writer.write(b'1')
+
+async def wait_ack(reader):
+    """等待确认消息"""
+    await reader.read(1)
+
+def recvall(sock, n):
+    """接收指定字节数的数据"""
+    data = bytearray()
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data.extend(packet)
+    return data
+
+def recv_msg(sock):
+    """接收变长编码的消息"""
+    # 读取第一个字节
+    byte = sock.recv(1)
+    if not byte:
+        return None
+
+    # 解析头部长度
+    if byte[0] & 0x80 == 0:  # 1字节头
+        msglen = byte[0]
+    elif byte[0] & 0xC0 == 0x80:  # 4字节头
+        # 接收剩下的长度
+        byte2 = recvall(sock, 3)
+        if not byte2:
+            return None
+        header_buff = byte + byte2
+        msglen = struct.unpack('>I', header_buff)[0] & 0x7FFFFFFF
+        
+    # 接收消息内容
+    return recvall(sock, msglen)
+
+def send_msg(sock, msg):
+    """发送变长编码的消息"""
+    msg = msg.encode() if isinstance(msg, str) else msg
+    msg_len = len(msg)
+    
+    # 使用变长编码
+    if msg_len < 0x80:
+        # 1字节头
+        header = struct.pack('B', msg_len)
+    else:
+        # 4字节头
+        header = struct.pack('>I', msg_len | 0x80000000)
+        
+    sock.sendall(header + msg)
+
 async def async_recvall(reader, n, timeout=10.0, buffer_size=CHUNK_SIZE):  # 增加buffer_size参数
     """异步地从流中读取指定字节数的数据，使用更大的缓冲区提高吞吐量"""
     data = bytearray(n)  # 预分配内存
@@ -103,33 +130,6 @@ async def async_recvall(reader, n, timeout=10.0, buffer_size=CHUNK_SIZE):  # 增
             raise e
             
     return data
-
-async def ack(writer):
-    """发送确认消息"""
-    writer.write(b'1')
-
-async def wait_ack(reader):
-    """等待确认消息"""
-    await reader.read(1)
-
-async def async_recv_msg_0(reader, timeout=-1):
-    """异步地接收带长度前缀的消息
-    timeout: 超时时间，-1表示不设置超时
-    返回值: 读取到的数据
-    """
-    # log("开始接收消息长度前缀...")  # 添加日志
-    # 接收4字节的长度前缀
-    raw_msglen = await async_recvall(reader, 4, timeout)
-    log(f'recv msg({4}) length')
-    t = time.time()
-    # 解析消息长度
-    msglen = struct.unpack('>I', raw_msglen)[0]
-    # log(f"消息长度前缀: {msglen} 字节")  # 添加日志
-    # 接收消息内容
-    res = await async_recvall(reader, msglen, timeout)
-    cost_time = time.time() - t
-    log(f'recv msg({msglen}), cost: {int(1000*cost_time)}ms, speed: {(msglen / cost_time) / (1024*1024):.3f}MB/s')
-    return res
 
 async def async_recv_data_length(reader, timeout=-1):
     """读取变长头部"""
