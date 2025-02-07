@@ -439,8 +439,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             if self.event_loop_process.is_alive():
                 log(f"[{self.client_id}] Force terminating the process...")
                 self.event_loop_process.terminate()
-
-            self.event_loop_process.join()  # 确保资源被释放
+                self.event_loop_process.join()  # 确保资源被释放
         return True
 
     @staticmethod
@@ -512,6 +511,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             await asyncio.sleep(1)
 
         # 停止事件循环
+        log(f"stop loop event")
         loop = asyncio.get_event_loop()
         loop.stop()
 
@@ -587,12 +587,23 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         if total_count % 10 == 0:
                             # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
                             # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
+
+                            # ROUND 0
                             # avg grad send time: 925ms, avg wait time: 523ms, avg handle time: 171ms
                             # 优化空间:
                             #     平均等待梯度时间 = 925 -523-171 = 231ms > 取消强制参数同步的等待, 不断计算梯度，消除 平均等待梯度时间(只受限于梯度被处理的速度, 队列大小: GRAD_BATCH_SIZE)
                             #     网络传输耗时 = 523 - 15 = 508ms
                             #     压缩处理耗时 = 171ms
+
+                            # ROUND 1
+                            # avg grad send time: 759ms, avg wait time: 518ms, avg handle time: 229ms
+                            # 优化空间:
+                            #     平均等待梯度时间 = 759 - 518 - 229 = 12ms > 目标达成
+                            #     网络传输耗时 = 518 - 15 = 503ms
+                            #     压缩处理耗时 = 229ms
+
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
+
                             
                         # 清空
                         batch_compressed_results.clear()
@@ -785,6 +796,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 只检查是否有准备好的参数，而不强制等待
                 log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
                 if self.shared_param.param_event.is_set():
+                    # 消耗掉事件
+                    self.shared_param.param_event.wait()
                     # 触发主learner的参数更新事件
                     self.sync_learner_param_event.set(1)
                     self.update_param_count += 1
