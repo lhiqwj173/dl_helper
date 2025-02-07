@@ -326,16 +326,16 @@ class ExperimentHandler:
         """获取最新参数(无压缩)"""
         # 获取参数
         params = []
-        v = 0   
+        v = 0
         with self.share_params_lock:
             # 交换
             for i in self.params_cache_share:
                 params.append(i.data.clone())
 
             # 获取参数版本号
-            v = self.params_info_share.data[0]
+            v = self.params_info_share.data[0].item()
             # 获取是否需要预热
-            need_warn_up = self.params_info_share.data[1]
+            need_warn_up = self.params_info_share.data[1].item()
         return params, v, need_warn_up
 
     def start(self, loop=None):
