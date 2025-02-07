@@ -152,6 +152,7 @@ class BandwidthClient:
 
             # param_data avg time: 118ms
             # grad_data avg time: 697ms
+            # grad_data/2 avg time: 463ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
         except Exception as e:
