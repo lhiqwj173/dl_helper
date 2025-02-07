@@ -498,8 +498,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         gradient_compressor = DeepGradientCompression()
 
         # 统计耗时
-        begin_time = 0
+        all_begin_time = 0
         total_count = 0
+        total_wait_time = 0
+        total_handle_time = 0
 
         # 存储一个batch的压缩梯度，一起推送
         batch_compressed_results = []
@@ -519,6 +521,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 获取汇总梯度 TODO 使用共享内存替代
                     grads = await grad_q.get()# 获取到1个梯度
                     begin_time = time.time()
+                    if all_begin_time == 0:
+                        all_begin_time = begin_time
                     q_size = grad_q.qsize()
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
 
@@ -536,28 +540,36 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     if len(batch_compressed_results) == GRAD_BATCH_SIZE:
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
                         data = pickle.dumps((batch_compressed_results, info_data.version))
-                        await async_send_msg(writer, data)
 
+                        send_begin_time = time.time()
+                        await async_send_msg(writer, data)
                         log(f"[{idx}][{send_count}] send grads done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         # 等待回复
                         await wait_ack(reader)
-                        log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms")
+                        wait_time = time.time() - send_begin_time
+                        total_wait_time += wait_time
+                        log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
 
                         send_count += 1
                         total_count += 1
-                        cost_time = time.time() - begin_time
-
-                        log(f"[{idx}][{send_count}] grad handler done, cost time: {int(cost_time * 1000)}ms")
+                        log(f"[{idx}][{send_count}] grad handler done, cost time: {int(time.time() - begin_time * 1000)}ms")
 
                         if total_count % 10 == 0:
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
+                            # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time)
+                            # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
                             
                         # 清空
                         batch_compressed_results.clear()
 
+                    # 统计耗时
+                    handle_cost_time = time.time() - begin_time
+                    total_handle_time += handle_cost_time
+
             except Exception as e:
                 log(f"[{idx}] connect to server failed: \n{get_exception_msg()}")
+
                 # 关闭连接
                 try:
 
@@ -590,8 +602,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         shared_param = SharedParam(params_dict, grad_params_dict, create=False)
 
         # 统计拉取参数耗时
-        begin_time = time.time()
+        begin_time = 0
         total_count = 0
+        total_handle_time = 0
 
         log(f"param_coroutine init done")
         while True:
@@ -611,6 +624,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     params_list, info, info_data.version, info_data.need_warn_up = await _async_wait_server_weights(reader)
                     total_count += 1
                     t = time.time()
+                    if begin_time == 0:
+                        begin_time = t
                     log(f"[{total_count}] recv params push")
 
                     # 当前是否处于训练阶段
@@ -633,8 +648,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     await ack(writer)
 
                     # 统计耗时
+                    handle_cost_time = time.time() - t
+                    total_handle_time += handle_cost_time
+
+                    # 统计耗时
                     if total_count % 30 == 0:
-                        log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
+                        # 本机接收后处理耗时(avg handle time)
+                        log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
             except Exception as e:
                 log(f"连接服务器失败: \n{get_exception_msg()}")

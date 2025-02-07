@@ -60,7 +60,7 @@ class AsyncRLParameterServer:
 
 class ExperimentHandler:
     """处理单个实验的类"""
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=0
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=10
     ):
         """
         train_title: 训练标题
@@ -368,6 +368,8 @@ class ExperimentHandler:
 
             begin_time = 0
             push_count = 0
+            total_handle_time = 0
+            total_wait_time = 0
             while True:
                 # 等待参数更新事件
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
@@ -391,19 +393,29 @@ class ExperimentHandler:
                     params, info = self.params_compressor.compress(params, ip)
 
                     log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                    send_begin_time = time.time()
                     await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
 
                     log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     # 等待回复
                     await wait_ack(reader)
+                    wait_time = time.time() - send_begin_time
+                    total_wait_time += wait_time
 
                     log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
 
                     push_count += 1
                     if push_count % 30 == 0:
-                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms')
+                        # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time)
+                        # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
+                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms')
+
+                handle_cost_time = time.time() - t
+                total_handle_time += handle_cost_time
 
         elif cmd == 'need_val':
+
+
 
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
             t = time.time()
@@ -421,6 +433,7 @@ class ExperimentHandler:
             # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
 
+            total_handle_time = 0
             begin_time = 0
             push_count = 0
             while True:
@@ -498,12 +511,15 @@ class ExperimentHandler:
 
                 # 通知新梯度
                 self.share_data_new_event.set()
-                log(f'{msg_header} handle gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
+                handle_cost_time = time.time() - t
+                total_handle_time += handle_cost_time
+                log(f'{msg_header} handle gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*handle_cost_time)}ms')
 
                 push_count += 1
                 if push_count % 30 == 0:
-                    log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms')
-
+                    # 每次处理完梯度耗时: 本机接收后处理耗时 + 客户端计算 + 网络传输耗时
+                    # 剩余的耗时 = 932ms - 15ms = 917ms = 客户端计算 + 网络传输
+                    log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg handle time: {int(total_handle_time / push_count * 1000)}ms')
 
 if __name__ == '__main__':
     pass
