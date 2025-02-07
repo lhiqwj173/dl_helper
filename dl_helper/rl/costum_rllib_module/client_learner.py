@@ -481,7 +481,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         apqr.start(loop)
 
         # 进程池,用于压缩/加压等计算密集任务计算
-        process_pool = ProcessPoolExecutor(max_workers=GRAD_BATCH_SIZE)  # 可以根据需要调整进程数
+        process_pool = ProcessPoolExecutor(max_workers=2)  # 可以根据需要调整进程数
     
         # 启动协程任务
         tasks = []
