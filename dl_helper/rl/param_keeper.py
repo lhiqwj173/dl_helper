@@ -378,6 +378,7 @@ class ExperimentHandler:
                 log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 控制参数推送频率
+                log(f'[{msg_header}] v - last_send_v: {v - last_send_v}, need_send: {(v - last_send_v) >= self.push_params_interval}')
                 if (v - last_send_v) >= self.push_params_interval:
                     last_send_v = v
 
