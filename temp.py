@@ -2,8 +2,13 @@ import asyncio
 import struct
 import socket
 
+# 模拟数据
+param_data = b'x' * 8724
+grad_data = b'x' * 544454
+
 def tune_tcp_socket(sock, buffer_size):
     """TCP协议调优"""
+
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # 重用地址
     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # 禁用Nagle算法
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, buffer_size)     # 动态发送缓冲区

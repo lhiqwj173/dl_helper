@@ -366,11 +366,16 @@ class ExperimentHandler:
             log(f'{msg_header} recv wait_params request, push params interval: {self.push_params_interval}')
             last_send_v = 0
 
+            begin_time = 0
+            push_count = 0
             while True:
                 # 等待参数更新事件
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 await self.aper.wait()
                 t = time.time()
+                if begin_time == 0:
+                    begin_time = t
+
                 log(f'[{msg_header}] wait_params wait active, last_send_v: {last_send_v}')
 
                 # 获取最新参数
@@ -394,7 +399,12 @@ class ExperimentHandler:
 
                     log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
 
+                    push_count += 1
+                    if push_count % 30 == 0:
+                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms')
+
         elif cmd == 'need_val':
+
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
             t = time.time()
             current_time = time.time()
@@ -410,10 +420,15 @@ class ExperimentHandler:
         elif cmd == 'update_gradients':
             # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
+
+            begin_time = 0
+            push_count = 0
             while True:
                 # 获取梯度数据
                 data = await async_recv_msg(reader)
                 t = time.time()
+                if begin_time == 0:
+                    begin_time = t
                 log(f'{msg_header} recv gradients({len(data)})')
 
                 batch_g_info, version = pickle.loads(data)
@@ -484,6 +499,11 @@ class ExperimentHandler:
                 # 通知新梯度
                 self.share_data_new_event.set()
                 log(f'{msg_header} handle gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
+
+                push_count += 1
+                if push_count % 30 == 0:
+                    log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms')
+
 
 if __name__ == '__main__':
     pass

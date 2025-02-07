@@ -498,7 +498,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         gradient_compressor = DeepGradientCompression()
 
         # 统计耗时
-        total_cost_time = 0
+        begin_time = 0
         total_count = 0
 
         # 存储一个batch的压缩梯度，一起推送
@@ -547,13 +547,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         send_count += 1
                         total_count += 1
                         cost_time = time.time() - begin_time
-                        total_cost_time += cost_time
 
                         log(f"[{idx}][{send_count}] grad handler done, cost time: {int(cost_time * 1000)}ms")
 
                         if total_count % 10 == 0:
-                            log(f"[{idx}] avg send time: {int((total_cost_time / total_count) * 1000)}ms")
-
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - begin_time) / total_count) * 1000)}ms")
+                            
                         # 清空
                         batch_compressed_results.clear()
 
@@ -710,9 +709,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 等待新的参数就位
                     should_update_num = self.grads_count / GRAD_BATCH_SIZE - 1#跳过一个
                     if self.update_param_count < should_update_num:
+                        t = time.time()
                         log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, should_update_num: {should_update_num}, update_param_count: {self.update_param_count}')
                         self.shared_param.param_event.wait()
                         # 触发主learner的参数更新事件
+                        log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, cost: {int(1000*(time.time() - t))}ms')
                         self.sync_learner_param_event.set(1)
                         self.update_param_count += 1
                     else:
