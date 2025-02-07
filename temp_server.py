@@ -11,6 +11,7 @@ grad_data = b'x' * 544454
 buffer_size = 4*1024*1024# 4 MB 缓冲区
 buffer_size = 1024*1024# 1 MB 缓冲区
 buffer_size = 512*1024# 1 MB 缓冲区
+buffer_size = 256*1024# 1 MB 缓冲区
 
 class BandwidthServer:
     def __init__(self, host='0.0.0.0', port=12345):

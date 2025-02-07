@@ -160,7 +160,18 @@ class BandwidthClient:
             # grad_data
             # grad_data/2 avg time: 463ms
 
+            # 512KB
+            # param_data
+            # grad_data
+            # grad_data/2 avg time: 342ms
+
+            # 256KB
+            # param_data
+            # grad_data
+            # grad_data/2 avg time: 
+
             print(f"avg time: {int(1000* total_time / 30)}ms")
+
 
 
         except Exception as e:
