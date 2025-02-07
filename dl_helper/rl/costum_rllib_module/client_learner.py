@@ -11,6 +11,7 @@ from ray.rllib.core import (
 
 from collections import OrderedDict
 import numpy as np
+import psutil
 import torch
 import queue
 import time
@@ -562,10 +563,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             partial(gradient_compressor.compress, grads, info_data.need_warn_up)
                         )
                     except Exception as e:
-                        import pickle
                         log(get_exception_msg())
-                        pickle.dump(grads, open('error_grads.pkl', 'wb'))
-                        raise e
+                        log(f"Total Memory: {psutil.virtual_memory().total / (1024*1024*1024):.2f} GB")
+                        log(f"Available Memory: {psutil.virtual_memory().available / (1024*1024*1024):.2f} GB")
+                        if not os.path.exists('error_grads.pkl'):
+                            pickle.dump(grads, open('error_grads.pkl', 'wb'))
 
                     compressed_grads, compress_info = compressed_result
                     batch_compressed_results.append((compressed_grads, compress_info))

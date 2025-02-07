@@ -180,7 +180,6 @@ def example_usage():
             print('预热梯度\n')
             continue
 
-        import pickle
         origin_size = len(pickle.dumps(example_gradients))
         compressed_size = len(pickle.dumps((compressed_grads, comp_infos)))
         compression_ratio = (origin_size - compressed_size) / origin_size * 100
@@ -193,8 +192,22 @@ def example_usage():
         #     compressed_grads, comp_infos
         # )
 
+def debug():
+    
+    file = r"C:\Users\lh\Downloads\error_grads.pkl"
+    grad = pickle.load(open(file, 'rb'))
+    print(grad)
+
+    dgc = DeepGradientCompression()
+    compressed_grads, comp_infos = dgc.compress(grad)
+
+    print(compressed_grads[0].shape)
+    print(comp_infos[0])
+
 # 如果直接运行此脚本,执行示例
 if __name__ == '__main__':
-    example_usage()
+
+    # example_usage()
+    debug()
 
 
