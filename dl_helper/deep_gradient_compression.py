@@ -1,4 +1,6 @@
-import torch, math
+import torch, math, copy, pickle
+from py_ext.tool import get_exception_msg
+
 
 class DeepGradientCompression:
     def __init__(self, momentum_buffer_size=32, compress_ratio=0.02, 
@@ -40,8 +42,18 @@ class DeepGradientCompression:
         compressed_size = int(math.prod(original_shape) * self.compress_ratio)
         return (compressed_size,)
 
+    def try_compress(self, gradients, warm_up_steps=False):
+        g = [copy.deepcopy(i) for i in gradients]
+        try:
+            return self.compress(gradients, warm_up_steps)
+        except Exception as e:
+            print(get_exception_msg(e))
+            pickle.dump(g, open('error_grads.pkl', 'wb'))
+            raise e
+
     def compress(self, gradients, warm_up_steps=False):
         """压缩梯度，确保输出大小固定且不小于最小元素数量"""
+
         compressed_gradients = []
         compression_infos = []
 

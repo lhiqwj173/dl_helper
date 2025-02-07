@@ -558,7 +558,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     loop = asyncio.get_event_loop()
                     compressed_result = await loop.run_in_executor(
                         process_pool,
-                        partial(gradient_compressor.compress, grads, info_data.need_warn_up)
+                        # partial(gradient_compressor.compress, grads, info_data.need_warn_up)
+                        partial(gradient_compressor.try_compress, grads, info_data.need_warn_up)
                     )
 
                     compressed_grads, compress_info = compressed_result
@@ -719,7 +720,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_count += 1
 
         if self.client_id == 0:
-            report_memory_usage(f'[{self.update_count}]')
+            # report_memory_usage(f'[{self.update_count}]')
             # 清空梯度事件
             self.shared_param.grad_event.clear()
             # 清空learner参数同步事件
@@ -734,8 +735,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
             # 主learner
-            cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
+            with torch.no_grad():
+                cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+                # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
             if self.gradient_sync_frequency > 1:
                 # 累积梯度
