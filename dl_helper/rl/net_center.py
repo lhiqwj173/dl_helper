@@ -84,11 +84,15 @@ class AsyncSocketServer:
 
     async def check_timeout(self):
         """检查是否超时"""
+        log(f"check timeout begin")
         while True:
             await asyncio.sleep(self.check_interval)
 
+            log(f"check timeout, clients: {len(self.clients)}")
+    
             if len(self.clients) > 0:
                 self.last_activity = time.time()
+                log(f"server has activity, last activity: {self.last_activity}")
 
             if self.last_activity == 0:
                 continue

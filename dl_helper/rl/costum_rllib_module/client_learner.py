@@ -426,7 +426,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_compressor = None
         self.info_data = None
         self.tatal_compress_cost = 0
-        self.tatal_step = 0
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -773,13 +772,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             cost = int((time.time() - t) * 1000)
             self.tatal_compress_cost += cost
-            self.tatal_step += 1
-            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.tatal_step)}ms')
+            self.grads_count += 1
+            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
             # 加入队列
             self.task_queue.put((compressed_grads, compress_info))
-
-            self.grads_count += 1
 
             # log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
