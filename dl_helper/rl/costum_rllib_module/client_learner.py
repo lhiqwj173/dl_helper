@@ -475,6 +475,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
             self.task_queue = safe_share_memory_queue('grad_data&info', _size, 4)
+            self.task_queue.clear()
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
