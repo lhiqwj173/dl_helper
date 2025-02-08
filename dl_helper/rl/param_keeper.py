@@ -418,9 +418,6 @@ class ExperimentHandler:
                 total_handle_time += handle_cost_time
 
         elif cmd == 'need_val':
-
-
-
             # 若当前时间戳 - 允许验证的时间戳 > 12小时, 则允许验证
             t = time.time()
             current_time = time.time()

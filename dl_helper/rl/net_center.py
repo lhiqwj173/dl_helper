@@ -61,7 +61,7 @@ class AsyncSocketServer:
         self.port = PORT
         self.backlog = backlog
         self.server: Optional[asyncio.Server] = None
-        self.clients = set()
+        self.clients = {}
 
         # 超时检查
         self.last_activity = 0
@@ -114,11 +114,15 @@ class AsyncSocketServer:
         #     writer.close()  # 对于被block的连接，直接关闭即可
         #     return
 
-        self.clients.add(writer)
+        if client_ip not in self.clients:
+            self.clients[client_ip] = set()
+
+        self.clients[client_ip].add(writer)
         msg_header = f'[{client_ip:<15} {client_port:<5}]'
         log(f"{msg_header} connected")
         msg_header_add_title = False
 
+        disconnect_means_client_dead = False
         try:
             """
             1. 接收 CODE (验证)
@@ -145,6 +149,11 @@ class AsyncSocketServer:
                 msg_header += f'[{train_title}]'
                 msg_header_add_title = True
 
+            # 判断是否是关键连接
+            if cmd in ['wait_params', 'update_gradients']:
+                log(f'{msg_header} {cmd} is key connection')
+                disconnect_means_client_dead = True
+
             # 2.3 获取处理器
             if train_title == 'test':
                 handler = list(self.handlers.values())[0]
@@ -168,9 +177,21 @@ class AsyncSocketServer:
             # if not safe_connect:
             #     self.block_ips.add(client_ip)
         finally:
-            self.clients.remove(writer)
-            if not writer.is_closing():
-                writer.close()  # 如果连接还未关闭，则关闭它
+            # 如果关键连接断开，则关闭该ip的所有连接
+            if disconnect_means_client_dead:
+                log(f'{msg_header} client {client_ip} is dead, close all connections from ip:{client_ip}')
+                for writer in self.clients[client_ip]:
+                    if not writer.is_closing():
+                        writer.close()  # 如果连接还未关闭，则关闭它
+                        await writer.wait_closed()
+                del self.clients[client_ip]
+
+            else:
+                self.clients[client_ip].remove(writer)
+                if not writer.is_closing():
+                    writer.close()  # 如果连接还未关闭，则关闭它
+                    await writer.wait_closed()
+
             log(f"Client disconnected from {peer}")
 
     async def start(self):
@@ -210,9 +231,10 @@ class AsyncSocketServer:
         log("Shutting down server...")
         
         # 关闭所有客户端连接
-        for writer in self.clients:
-            writer.close()
-            await writer.wait_closed()
+        for client_ip in self.clients:
+            for writer in self.clients[client_ip]:
+                writer.close()
+                await writer.wait_closed()
             
         # 停止服务器
         if self.server:
