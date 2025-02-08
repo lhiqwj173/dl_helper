@@ -433,8 +433,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 梯度压缩器
         self.gradient_compressor = None
         self.info_data = None
+        self.tatal_compress_cost = 0
+        self.tatal_step = 0
         ####################
-
         # 只有主 learner 需要初始化
         ####################
 
@@ -592,10 +593,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         all_begin_time = begin_time
                     q_size = grad_q.qsize()
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
-
-                    compressed_grads, compress_info = grads
-                    batch_compressed_results.append((compressed_grads, compress_info))
-                    log(f"[{idx}][{send_count}] compress gradients done, cost time: {int((time.time() - begin_time) * 1000)}ms")
+                    batch_compressed_results.append(grads)
 
                     if len(batch_compressed_results) == GRAD_BATCH_SIZE:
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
@@ -765,7 +763,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 计算梯度
         gradients_dict = super().compute_gradients(*args, **kwargs)
-        # log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
+        log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
@@ -775,14 +773,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
             # 梯度压缩
+            t = time.time()
             compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+            cost = int((time.time() - t) * 1000)
+            self.tatal_compress_cost += cost
+            self.tatal_step += 1
+            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {self.tatal_compress_cost / self.tatal_step}ms')
 
             # 加入队列
             self.task_queue.put((compressed_grads, compress_info))
 
             self.grads_count += 1
 
-            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+            # log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
@@ -834,7 +837,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # if self.client_id == 0:
         #     log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
-        # log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
 
         # nouse3
         # 返回空
