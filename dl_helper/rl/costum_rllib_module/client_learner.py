@@ -769,6 +769,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 梯度压缩
             t = time.time()
             log(f'[{self.client_id}][{self.update_count}] compress gradients begin')
+            log(f'[{self.client_id}][{self.update_count}] need_warn_up: {self.info_data.need_warn_up}')
             compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             cost = int((time.time() - t) * 1000)
             self.tatal_compress_cost += cost
