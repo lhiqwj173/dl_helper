@@ -782,7 +782,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             t = time.time()
             log(f'[{self.client_id}][{self.update_count}] compress gradients begin')
             try:
-                pickle.dump((cpu_gradients, self.gradient_compressor), open(f'compress_bak.pkl', 'wb'))
+                pickle.dump((cpu_gradients, self.gradient_compressor, self.info_data.need_warn_up), open(f'compress_bak.pkl', 'wb'))
                 compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             except Exception as e:
                 log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
