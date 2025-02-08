@@ -125,7 +125,7 @@ class AsyncSocketServer:
             # 1. 接收 CODE_ip
             res = await async_recv_msg(reader, timeout=3)
             _code, client_ip = res.decode().split('_', maxsplit=1)
-            log(f'{msg_header} recv code: {_code}, ip: {client_ip}')
+            log(f'recv code: {_code}, ip: {client_ip}')
             if _code != CODE:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')
