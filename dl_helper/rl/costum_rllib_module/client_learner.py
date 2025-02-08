@@ -28,7 +28,7 @@ import socket
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
-from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger
+from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger, Lock
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
@@ -171,6 +171,52 @@ class SharedParam:
         params = learner._params
         for idx, k in enumerate(params.keys()):
             params[k].grad = self._grad_params_list[idx].to(learner._device)
+
+class share_info:
+    """
+    共享信息类
+    """
+    def __init__(self, client_id=None, version=None, need_warn_up=None):
+        self.CLIENT_ID, self.VERSION, self.NEED_WARN_UP = range(3)
+        self._data = share_tensor(name=f'_share_info_data', shape=(3,), dtype='int64')
+        self._lock = Lock(name=f'_share_info_lock_event')
+
+        with self._lock:
+            if client_id is not None:
+                self._data.data_np[self.CLIENT_ID] = client_id
+            if version is not None:
+                self._data.data_np[self.VERSION] = version
+            if need_warn_up is not None:
+                self._data.data_np[self.NEED_WARN_UP] = need_warn_up
+
+    def _get(self, idx):
+        with self._lock:
+            return self._data.data_np[idx]
+
+    def _set(self, idx, value):
+        with self._lock:
+            self._data.data_np[idx] = value
+
+    def set_client_id(self, client_id):
+        self._set(self.CLIENT_ID, client_id)
+
+    def set_version(self, version):
+        self._set(self.VERSION, version)
+
+    def set_need_warn_up(self, need_warn_up):
+        self._set(self.NEED_WARN_UP, need_warn_up)
+
+    @ property
+    def client_id(self):
+        return self._get(self.CLIENT_ID)
+
+    @ property
+    def version(self):
+        return self._get(self.VERSION)
+
+    @ property
+    def need_warn_up(self):
+        return self._get(self.NEED_WARN_UP)
 
 def get_results(RemoteCallResults):
     res = []
@@ -347,9 +393,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 梯度累积器
         self.gradient_accumulator = GradientAccumulator()
-        
-        # 梯度推送频率
-        self.gradient_sync_frequency = 1
 
         # 共享参数
         self.shared_param = None
@@ -387,6 +430,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.is_training_event = None
         # stop event
         self.stop_event = None
+        # 梯度压缩器
+        self.gradient_compressor = None
+        self.info_data = None
         ####################
 
         # 只有主 learner 需要初始化
@@ -415,6 +461,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
+
+            # 梯度压缩器
+            self.gradient_compressor = DeepGradientCompression()
+
+            # 共享信息
+            self.info_data = share_info()
 
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
@@ -457,18 +509,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 如果当前线程没有事件循环，则创建一个新的
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
+    
         
-        class share_info:
-            """
-            共享信息类
-            """
-            def __init__(self, train_title, client_id, version, need_warn_up):
-                self.train_title = train_title
-                self.client_id = client_id
-                self.version = version
-                self.need_warn_up = need_warn_up
-        
-        info_data = share_info(train_title, client_id, version, need_warn_up)
+        info_data = share_info(client_id, version, need_warn_up)
 
         grad_coroutine_num = 1
         
@@ -480,17 +523,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         apqr = AsyncProcessQueueReader_grad_param(task_queue, grad_q)
         apqr.start(loop)
 
-        # 进程池,用于压缩/加压等计算密集任务计算
-        process_pool = ProcessPoolExecutor(max_workers=1)  # 可以根据需要调整进程数
-    
         # 启动协程任务
         tasks = []
         for _idx in range(grad_coroutine_num):
-            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_idx, info_data, process_pool, grad_q))
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(train_title, _idx, info_data, grad_q))
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(train_title, info_data, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # 启动停止事件循环协程
@@ -518,14 +558,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         loop.stop()
 
     @staticmethod
-    async def grad_coroutine(idx, info_data, process_pool, grad_q):
+    async def grad_coroutine(train_title, idx, info_data, grad_q):
         """
         梯度协程
         """
         log(f"[{info_data.client_id}] grad_coroutine {idx} start")
-
-        # 梯度压缩器
-        gradient_compressor = DeepGradientCompression()
 
         # 统计耗时
         all_begin_time = 0
@@ -544,7 +581,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 await async_send_msg(writer, f'{CODE}')
 
                 # 发送指令类型
-                await async_send_msg(writer, f'{info_data.train_title}:update_gradients')
+                await async_send_msg(writer, f'{train_title}:update_gradients')
 
                 send_count = 0
                 while True:
@@ -556,21 +593,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     q_size = grad_q.qsize()
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
 
-                    # 在进程池中执行压缩操作
-                    try:
-                        loop = asyncio.get_event_loop()
-                        compressed_result = await loop.run_in_executor(
-                            process_pool,
-                            partial(gradient_compressor.compress, grads, info_data.need_warn_up)
-                        )
-                    except Exception as e:
-                        log(get_exception_msg())
-                        log(f"Total Memory: {psutil.virtual_memory().total / (1024*1024*1024):.2f} GB")
-                        log(f"Available Memory: {psutil.virtual_memory().available / (1024*1024*1024):.2f} GB")
-                        if not os.path.exists('error_grads.pkl'):
-                            pickle.dump(grads, open('error_grads.pkl', 'wb'))
-
-                    compressed_grads, compress_info = compressed_result
+                    compressed_grads, compress_info = grads
                     batch_compressed_results.append((compressed_grads, compress_info))
                     log(f"[{idx}][{send_count}] compress gradients done, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
@@ -632,7 +655,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     pass
 
     @staticmethod
-    async def param_coroutine(info_data, process_pool, params_dict, grad_params_value_shape):
+    async def param_coroutine(train_title, info_data, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """
@@ -669,15 +692,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 await async_send_msg(writer, f'{CODE}')
                 log(f"param_coroutine connect to server")
                 # 发送指令
-                await async_send_msg(writer, f'{info_data.train_title}:wait_params'.encode())
+                await async_send_msg(writer, f'{train_title}:wait_params'.encode())
 
                 while True:
                     # 被动获取参数
                     # log(f"[{total_count}] wait params")
-                    params_list, info, info_data.version, info_data.need_warn_up = await _async_wait_server_weights(reader)
+                    params_list, info, version, need_warn_up = await _async_wait_server_weights(reader)
+                    info_data.set_version(version)
+                    info_data.set_need_warn_up(need_warn_up)
+
                     total_count += 1
                     t = time.time()
                     if begin_time == 0:
+
                         begin_time = t
                     log(f"[{total_count}] recv params push")
 
@@ -747,19 +774,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
                 # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
-            if self.gradient_sync_frequency > 1:
-                # 累积梯度
-                self.gradient_accumulator.add_gradients(cpu_gradients)
-                # log(f'add gradients to gradient_accumulator')
-                if self.update_count % self.gradient_sync_frequency == 0:
-                    # 汇总梯度
-                    # log(f'merge gradients')
-                    gradients_to_send = self.gradient_accumulator.merge_gradients()
-                    # 加入队列
-                    self.task_queue.put(gradients_to_send)
-            else:
-                # 加入队列
-                self.task_queue.put(cpu_gradients)
+            # 梯度压缩
+            compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+
+            # 加入队列
+            self.task_queue.put((compressed_grads, compress_info))
 
             self.grads_count += 1
 
