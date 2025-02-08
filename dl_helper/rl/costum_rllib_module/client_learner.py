@@ -361,6 +361,7 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                 item = self.queue.get(timeout=0.1)
 
                 # 推送到队列
+                log(f'[apqr] forward grad({type(item)}) to grad_q')
                 asyncio.run_coroutine_threadsafe(
                     self.grad_q.put(item), 
                     self._loop
@@ -781,6 +782,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             t = time.time()
             log(f'[{self.client_id}][{self.update_count}] compress gradients begin')
             try:
+                pickle.dump((cpu_gradients, self.gradient_compressor), open(f'compress_bak.pkl', 'wb'))
                 compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             except Exception as e:
                 log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
@@ -793,8 +795,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 加入队列
             self.task_queue.put((compressed_grads, compress_info))
-
-            # log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 

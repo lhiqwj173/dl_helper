@@ -215,19 +215,15 @@ class AsyncSocketServer:
 
         # 启动超时检查
         timeout_task = asyncio.create_task(self.check_timeout())
-        
-        # 设置信号处理
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            asyncio.get_event_loop().add_signal_handler(
-                sig,
-                lambda: asyncio.create_task(self.shutdown())
-            )
             
-        async with self.server:
-            try:
+        try:
+            async with self.server:
                 await self.server.serve_forever()
-            finally:
-                timeout_task.cancel()
+        except asyncio.CancelledError:
+            log("Server task cancelled")
+        finally:
+            timeout_task.cancel()
+            await self.shutdown()
 
     async def shutdown(self):
         log("Shutting down server...")
@@ -244,7 +240,8 @@ class AsyncSocketServer:
             await self.server.wait_closed()
             
         log("Server shutdown complete")
-
+        # 强制退出程序
+        os._exit(0)
 def main():
     # 使用uvloop替换默认事件循环
     uvloop.install()
