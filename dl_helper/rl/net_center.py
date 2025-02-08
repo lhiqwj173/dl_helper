@@ -243,8 +243,6 @@ class AsyncSocketServer:
             self.server.close()
             await self.server.wait_closed()
             
-        # 停止事件循环
-        asyncio.get_event_loop().stop()
         log("Server shutdown complete")
 
 def main():
@@ -269,5 +267,5 @@ if __name__ == '__main__':
     # run_param_center()
 
     # 异步启动
-    asyncio.run(main())
+    main()
 

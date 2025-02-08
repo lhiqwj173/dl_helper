@@ -629,6 +629,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     网络传输耗时 = 518 - 15 = 503ms
                             #     压缩处理耗时 = 229ms
 
+                            # ROUND 2
+                            # avg grad send time: 949ms, avg wait time: 940ms, avg handle time: -7ms
+                            # 优化空间:
+                            #     平均等待梯度时间 = 949 - 940 - 0 = 9ms > 目标达成
+                            #     网络传输耗时 = 940 - 15 = 925ms
+                            #     压缩处理耗时 = 0ms(主learner完成)      > 目标达成
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
 
                         # 清空
