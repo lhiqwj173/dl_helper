@@ -181,30 +181,22 @@ class share_info:
         self._data = share_tensor(name=f'_share_info_data', shape=(3,), dtype='int64')
         self._lock = Lock(name=f'_share_info_lock_event')
 
-        with self._lock:
-            if client_id is not None:
-                self._data.data_np[self.CLIENT_ID] = client_id
-            if version is not None:
-                self._data.data_np[self.VERSION] = version
-            if need_warn_up is not None:
-                self._data.data_np[self.NEED_WARN_UP] = need_warn_up
+        self.set(client_id, version, need_warn_up)
 
     def _get(self, idx):
         with self._lock:
             return self._data.data_np[idx]
 
-    def _set(self, idx, value):
-        with self._lock:
-            self._data.data_np[idx] = value
-
-    def set_client_id(self, client_id):
-        self._set(self.CLIENT_ID, client_id)
-
-    def set_version(self, version):
-        self._set(self.VERSION, version)
-
-    def set_need_warn_up(self, need_warn_up):
-        self._set(self.NEED_WARN_UP, need_warn_up)
+    def set(self, client_id=None, version=None, need_warn_up=None):
+        if client_id is not None:
+            with self._lock:
+                self._data.data_np[self.CLIENT_ID] = client_id
+        if version is not None:
+            with self._lock:
+                self._data.data_np[self.VERSION] = version
+        if need_warn_up is not None:
+            with self._lock:
+                self._data.data_np[self.NEED_WARN_UP] = need_warn_up
 
     @ property
     def client_id(self):
@@ -595,7 +587,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
                     batch_compressed_results.append(grads)
 
-                    if len(batch_compressed_results) == GRAD_BATCH_SIZE:
+                    _batch_size = len(batch_compressed_results)
+                    log(f"[{idx}][{send_count}] add grads to batch, batch size: {_batch_size}")
+
+                    if _batch_size == GRAD_BATCH_SIZE:
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
                         data = pickle.dumps((batch_compressed_results, info_data.version))
 
@@ -633,16 +628,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
 
-                            
                         # 清空
                         batch_compressed_results.clear()
 
                     # 统计耗时
-                    handle_cost_time = time.time() - begin_time
+                    handle_cost_time = time.time() - begin_time 
                     total_handle_time += handle_cost_time
+                    log(f"[{idx}][{send_count}] grad handler done, handle cost time: {int(handle_cost_time * 1000)}ms")
 
             except Exception as e:
                 log(f"[{idx}] connect to server failed: \n{get_exception_msg()}")
+
 
                 # 关闭连接
                 try:
@@ -696,8 +692,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 被动获取参数
                     # log(f"[{total_count}] wait params")
                     params_list, info, version, need_warn_up = await _async_wait_server_weights(reader)
-                    info_data.set_version(version)
-                    info_data.set_need_warn_up(need_warn_up)
+                    info_data.set(version=version, need_warn_up=need_warn_up)
 
                     total_count += 1
                     t = time.time()
@@ -774,11 +769,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 梯度压缩
             t = time.time()
+            log(f'[{self.client_id}][{self.update_count}] compress gradients begin')
             compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             cost = int((time.time() - t) * 1000)
             self.tatal_compress_cost += cost
             self.tatal_step += 1
-            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {self.tatal_compress_cost / self.tatal_step}ms')
+            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.tatal_step)}ms')
 
             # 加入队列
             self.task_queue.put((compressed_grads, compress_info))
