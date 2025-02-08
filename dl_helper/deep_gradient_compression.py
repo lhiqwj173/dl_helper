@@ -24,8 +24,12 @@ class DeepGradientCompression:
         # 可压缩的最小元素数量，若小于这个数量的原始数据，取最大的一个梯度进行更新
         self.min_raw_elements = int(math.ceil(1 / compress_ratio))
 
+    def clear(self):
+        self.momentum_states = {}
+
     def compress_shape(self, original_shape):
         """计算压缩后的形状, 确保压缩后长度不为0
+
         compress_ratio = 0.02
         min_raw_elements = 50
 

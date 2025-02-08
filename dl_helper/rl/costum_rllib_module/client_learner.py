@@ -13,7 +13,7 @@ from collections import OrderedDict
 import numpy as np
 import psutil
 import torch
-import queue, os
+import queue, os, sys
 import time
 import asyncio
 from asyncio import Queue as AsyncQueue
@@ -28,7 +28,7 @@ import socket
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
-from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger, Lock
+from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger, Lock, safe_share_memory_queue
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
@@ -360,17 +360,30 @@ class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
                 # 使用较短的超时以便能够响应停止信号
                 item = self.queue.get(timeout=0.1)
 
+                # 添加诊断信息
+                item_size = sys.getsizeof(item)
+                log(f'[apqr] Got item from queue, size: {item_size} bytes')
+
                 # 推送到队列
-                log(f'[apqr] forward grad({type(item)}) to grad_q')
-                asyncio.run_coroutine_threadsafe(
-                    self.grad_q.put(item), 
-                    self._loop
-                )
+                try:
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.grad_q.put(item), 
+                        self._loop
+                    )
+                    # 等待操作完成
+                    future.result(timeout=1.0)
+                    log(f'[apqr] Successfully forwarded item to grad_q')
+                except Exception as e:
+                    log(f'[apqr] Failed to forward item: {str(e)}')
+                    raise e
 
             except Empty:
                 continue
             except Exception as e:
-                log(f"Reader thread error: {e}")
+                log(f"Reader thread error: {str(e)}\n{get_exception_msg()}")
+                # 检查系统资源
+                vm = psutil.virtual_memory()
+                log(f"System memory: {vm.available/1024/1024:.1f}MB available out of {vm.total/1024/1024:.1f}MB")
                 # 出错时短暂等待后继续
                 time.sleep(0.1)
 
@@ -418,6 +431,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.update_param_count = 0
         # 用于初始化共享参数
         self.params_dict = None
+        self.grad_params_list = None
         self.grad_params_value_shape = None
         # 是否处于训练阶段
         self.is_training_event = None
@@ -441,6 +455,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.params_dict = OrderedDict()
             for k,v in params_dict.items():
                 self.params_dict[k] = v.cpu()
+            self.grad_params_list = []
+            for k,v in grad_params_dict.items():
+                self.grad_params_list.append(v.cpu())
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
         # 获取共享参数
         self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
@@ -450,13 +467,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def init_param_thread(self):
         if self.client_id == 0:
             # 主learner
-            self.task_queue = multiprocessing.Queue(maxsize=GRAD_BATCH_SIZE)
+            # 梯度压缩器
+            self.gradient_compressor = DeepGradientCompression()
+
+            # 获取一个梯度不压缩数据, 作为队列大小
+            _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
+            _size = len(pickle.dumps((_g, _info)))
+            self.gradient_compressor.clear()# 清理
+            self.task_queue = safe_share_memory_queue('grad_data&info', _size, 4)
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
-
-            # 梯度压缩器
-            self.gradient_compressor = DeepGradientCompression()
 
             # 共享信息
             self.info_data = share_info()
@@ -468,8 +489,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.event_loop_process = multiprocessing.Process(
                 target=self._run_event_loop_process, 
                 args=(
-                    self.task_queue, self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
-                    self.version, self.need_warn_up
+                    self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
+                    self.version, self.need_warn_up,
+                    _size,
                 )
             )
             self.event_loop_process.start()
@@ -490,10 +512,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     @staticmethod
-    def _run_event_loop_process(task_queue, train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up):
+    def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
         """在新进程中运行事件循环"""
         # 初始化日志
         init_logger(train_title, home=train_folder, timestamp=False)
+
+        # 共享梯度队列
+        grad_q = safe_share_memory_queue('grad_data&info', grad_q_size, 4)
 
         # 事件循环
         try:
@@ -503,19 +528,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
     
-        
         info_data = share_info(client_id, version, need_warn_up)
 
         grad_coroutine_num = 1
         
-        # 梯度事件队列
-        grad_q = AsyncQueue(maxsize=task_queue._maxsize)
-        log(f'forwarding queue: {grad_q._maxsize}')
-
-        # 独立线程转发 进程任务
-        apqr = AsyncProcessQueueReader_grad_param(task_queue, grad_q)
-        apqr.start(loop)
-
         # 获取设备ip
         _ip = requests.get('https://api.ipify.org').text
 
@@ -560,7 +576,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         log(f"[{info_data.client_id}] grad_coroutine {idx} start")
 
-
         # 统计耗时
         all_begin_time = 0
         total_count = 0
@@ -582,17 +597,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 send_count = 0
                 while True:
-                    # 获取汇总梯度 TODO 使用共享内存替代
-                    grads = await grad_q.get()# 获取到1个梯度
+                    send_data = grad_q.get()# 获取到1个发送数据
                     begin_time = time.time()
                     if all_begin_time == 0:
                         all_begin_time = begin_time
                     q_size = grad_q.qsize()
                     log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
-                    batch_compressed_results.append(grads)
+                    batch_compressed_results.append(send_data)
 
                     _batch_size = len(batch_compressed_results)
-                    log(f"[{idx}][{send_count}] add grads to batch, batch size: {_batch_size}")
+                    log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}")
 
                     if _batch_size == GRAD_BATCH_SIZE:
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
@@ -600,7 +614,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                         send_begin_time = time.time()
                         await async_send_msg(writer, data)
-                        log(f"[{idx}][{send_count}] send grads done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
+                        log(f"[{idx}][{send_count}] send send data done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         # 等待回复
                         await wait_ack(reader)
@@ -782,7 +796,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             t = time.time()
             log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
             try:
-                pickle.dump((cpu_gradients, self.gradient_compressor, self.info_data.need_warn_up), open(f'compress_bak.pkl', 'wb'))
+                # pickle.dump((cpu_gradients, self.gradient_compressor, self.info_data.need_warn_up), open(f'compress_bak.pkl', 'wb'))
                 compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
             except Exception as e:
                 log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
@@ -794,7 +808,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
             # 加入队列
-            self.task_queue.put((compressed_grads, compress_info))
+            self.task_queue.put(pickle.dumps((compressed_grads, compress_info)))
             log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
