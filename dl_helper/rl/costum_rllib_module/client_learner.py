@@ -474,7 +474,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
-            self.task_queue = safe_share_memory_queue('grad_data&info', _size, 4)
+            self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4)
             self.task_queue.clear()
 
             # 是否处于训练阶段
@@ -519,7 +519,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         init_logger(train_title, home=train_folder, timestamp=False)
 
         # 共享梯度队列
-        grad_q = safe_share_memory_queue('grad_data&info', grad_q_size, 4)
+        grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4)
 
         # 事件循环
         try:
