@@ -6,7 +6,7 @@ except:
 
 import asyncio
 import socket, time, os, re
-import pickle
+import pickle, requests
 import struct
 
 CODE = '0QYg9Ky17dWnN4eK'
@@ -196,10 +196,12 @@ def _connect_server_apply(func, *args, **kwargs):
         _socket.connect((HOST, PORT))
 
         # 发送验证
-        send_msg(_socket, f'{CODE}')
+        _ip = requests.get('https://api.ipify.org').text
+        send_msg(_socket, f'{CODE}_{_ip}')
         return func(_socket, *args, **kwargs)
     except Exception as e:
         log(f"Failed to connect to server")
+
         log(get_exception_msg())
         raise e
     finally:

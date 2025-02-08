@@ -114,29 +114,28 @@ class AsyncSocketServer:
         #     writer.close()  # 对于被block的连接，直接关闭即可
         #     return
 
-        if client_ip not in self.clients:
-            self.clients[client_ip] = set()
-
-        self.clients[client_ip].add(writer)
-        msg_header = f'[{client_ip:<15} {client_port:<5}]'
-        log(f"{msg_header} connected")
-        msg_header_add_title = False
-
         disconnect_means_client_dead = False
         try:
             """
-            1. 接收 CODE (验证)
+            1. 接收 CODE_ip
             2. 接收指令数据 
             3. 处理指令
             4. 关闭连接
             """
-            # 1. 接收 CODE
+            # 1. 接收 CODE_ip
             res = await async_recv_msg(reader, timeout=3)
-            _code = res.decode()
-            log(f'{msg_header} recv code: {_code}')
+            _code, client_ip = res.decode().split(':', maxsplit=1)
+            log(f'{msg_header} recv code: {_code}, ip: {client_ip}')
             if _code != CODE:
                 log(f'code error: {_code}')
                 raise Exception(f'code error: {_code}')
+            
+            # 记录 ip 连接
+            if client_ip not in self.clients:
+                self.clients[client_ip] = set()
+            self.clients[client_ip].add(writer)
+            msg_header = f'[{client_ip:<15} {client_port:<5}]'
+            log(f"{msg_header} connected")
 
             # 2.1 接收指令数据
             data = await async_recv_msg(reader, timeout=3)
@@ -145,9 +144,7 @@ class AsyncSocketServer:
 
             # 2.2 分解指令
             train_title, cmd = a.split(':', maxsplit=1)
-            if not msg_header_add_title:
-                msg_header += f'[{train_title}]'
-                msg_header_add_title = True
+            msg_header += f'[{train_title}]'
 
             # 判断是否是关键连接
             if cmd in ['wait_params', 'update_gradients']:
@@ -179,13 +176,18 @@ class AsyncSocketServer:
         finally:
             # 如果关键连接断开，则关闭该ip的所有连接
             if disconnect_means_client_dead:
-                log(f'{msg_header} client {client_ip} is dead, close all connections from ip:{client_ip}')
-                for writer in self.clients[client_ip]:
+                if client_ip == '127.0.0.1':
+                    # 若ip解析就异常了，直接关闭
                     if not writer.is_closing():
                         writer.close()  # 如果连接还未关闭，则关闭它
                         await writer.wait_closed()
-                del self.clients[client_ip]
-
+                else:
+                    log(f'{msg_header} client {client_ip} is dead, close all connections from ip:{client_ip}')
+                    for writer in self.clients[client_ip]:
+                        if not writer.is_closing():
+                            writer.close()  # 如果连接还未关闭，则关闭它
+                            await writer.wait_closed()
+                    del self.clients[client_ip]
             else:
                 self.clients[client_ip].remove(writer)
                 if not writer.is_closing():
@@ -258,7 +260,6 @@ def main():
     except KeyboardInterrupt:
         log("Received keyboard interrupt")
     except Exception as e:
-
         log(f'ERROR:\n{get_exception_msg()}')
     finally:
         log("Server stopped")

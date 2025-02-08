@@ -20,7 +20,6 @@ class DeepGradientCompression:
         self.momentum_factor = momentum_factor
         
         self.momentum_states = {}
-        self.communication_steps = 0
 
         # 可压缩的最小元素数量，若小于这个数量的原始数据，取最大的一个梯度进行更新
         self.min_raw_elements = int(math.ceil(1 / compress_ratio))
@@ -42,23 +41,23 @@ class DeepGradientCompression:
         compressed_size = int(math.prod(original_shape) * self.compress_ratio)
         return (compressed_size,)
 
-    def try_compress(self, gradients, warm_up_steps=False):
+    def try_compress(self, gradients, need_warm_up_steps=False):
         g = [copy.deepcopy(i) for i in gradients]
         try:
-            return self.compress(gradients, warm_up_steps)
+            return self.compress(gradients, need_warm_up_steps)
         except Exception as e:
             print(get_exception_msg(e))
             pickle.dump(g, open('error_grads.pkl', 'wb'))
             raise e
 
-    def compress(self, gradients, warm_up_steps=False):
+    def compress(self, gradients, need_warm_up_steps=False):
         """压缩梯度，确保输出大小固定且不小于最小元素数量"""
 
         compressed_gradients = []
         compression_infos = []
 
         # 预热期间不压缩
-        if self.communication_steps < warm_up_steps:
+        if need_warm_up_steps:
             for idx, gradient in enumerate(gradients):
                 param_name = f'grad_{idx}'
 
@@ -133,9 +132,6 @@ class DeepGradientCompression:
                 compressed_gradients.append(important_grad)
                 compression_infos.append(compression_info)
 
-        # 更新通信步数
-        self.communication_steps += 1
-        
         return compressed_gradients, compression_infos
 
     def decompress(self, compressed_grads, compression_infos):

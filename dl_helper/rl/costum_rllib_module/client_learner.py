@@ -515,14 +515,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         apqr = AsyncProcessQueueReader_grad_param(task_queue, grad_q)
         apqr.start(loop)
 
+        # 获取设备ip
+        _ip = requests.get('https://api.ipify.org').text
+
         # 启动协程任务
         tasks = []
         for _idx in range(grad_coroutine_num):
-            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(train_title, _idx, info_data, grad_q))
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_ip, train_title, _idx, info_data, grad_q))
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(train_title, info_data, params_dict, grad_params_value_shape)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(_ip, train_title, info_data, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # 启动停止事件循环协程
@@ -550,11 +553,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         loop.stop()
 
     @staticmethod
-    async def grad_coroutine(train_title, idx, info_data, grad_q):
+    async def grad_coroutine(ip, train_title, idx, info_data, grad_q):
         """
         梯度协程
         """
         log(f"[{info_data.client_id}] grad_coroutine {idx} start")
+
 
         # 统计耗时
         all_begin_time = 0
@@ -570,7 +574,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # reader, writer = await asyncio.open_connection(HOST, PORT)
                 reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
-                await async_send_msg(writer, f'{CODE}')
+                await async_send_msg(writer, f'{CODE}_{ip}')
 
                 # 发送指令类型
                 await async_send_msg(writer, f'{train_title}:update_gradients')
@@ -648,11 +652,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     pass
 
     @staticmethod
-    async def param_coroutine(train_title, info_data, params_dict, grad_params_value_shape):
+    async def param_coroutine(ip, train_title, info_data, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """
         log(f"[{info_data.client_id}] param_coroutine start")
+
 
         # 参数解压器
         # params_keys = list(params_dict.keys())
@@ -682,7 +687,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # reader, writer = await asyncio.open_connection(HOST, PORT)
                 reader, writer = await connect_and_tune(HOST, PORT)
                 # 发送连接验证
-                await async_send_msg(writer, f'{CODE}')
+                await async_send_msg(writer, f'{CODE}_{ip}')
                 log(f"param_coroutine connect to server")
                 # 发送指令
                 await async_send_msg(writer, f'{train_title}:wait_params'.encode())
@@ -769,10 +774,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 梯度压缩
             t = time.time()
             log(f'[{self.client_id}][{self.update_count}] compress gradients begin')
-            log(f'[{self.client_id}][{self.update_count}] need_warn_up: {self.info_data.need_warn_up}')
-            compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+            try:
+                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+            except Exception as e:
+                log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
+                raise e
             cost = int((time.time() - t) * 1000)
             self.tatal_compress_cost += cost
+
             self.grads_count += 1
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
