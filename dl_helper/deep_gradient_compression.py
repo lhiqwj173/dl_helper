@@ -1,11 +1,11 @@
 import torch, math, copy, pickle
-from py_ext.tool import get_exception_msg
-
+from py_ext.tool import get_exception_msg, log
 
 class DeepGradientCompression:
     def __init__(self, momentum_buffer_size=32, compress_ratio=0.02, 
                  communication_threshold=0.001,
                  momentum_factor=0.9):
+
         """
         Args:
             momentum_buffer_size (int): 动量缓冲区大小
@@ -89,7 +89,9 @@ class DeepGradientCompression:
                 flat_grad = gradient.view(-1)
 
                 # 初始化动量状态
-                if param_name not in self.momentum_states:
+                if param_name not in self.momentum_states or self.momentum_states[param_name].shape != flat_grad.shape:
+                    if param_name in self.momentum_states:
+                        log(f"param {param_name} shape {self.momentum_states[param_name].shape} change to {flat_grad.shape}, most likely due to no more need warm up")
                     self.momentum_states[param_name] = torch.zeros_like(flat_grad)
                 
                 # 计算新的动量
