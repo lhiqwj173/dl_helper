@@ -387,41 +387,42 @@ class ExperimentHandler:
 
                 # 控制参数推送频率
                 log(f'[{msg_header}] v - last_send_v: {v - last_send_v}, need_send: {(v - last_send_v) >= self.push_params_interval}')
-                if (v - last_send_v) >= self.push_params_interval:
-                    last_send_v = v
+                # 必须腰处理全部的增量更新
+                # if (v - last_send_v) >= self.push_params_interval:
+                last_send_v = v
 
-                    # 计算更新增量
-                    params, info = self.params_compressor.compress(params, ip)
+                # 计算更新增量
+                params, info = self.params_compressor.compress(params, ip)
 
-                    log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
-                    send_begin_time = time.time()
-                    data = pickle.dumps((params, info, v, need_warn_up))
-                    await async_send_msg(writer, data)
-                    send_size = len(data)
-                    mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
+                log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                send_begin_time = time.time()
+                data = pickle.dumps((params, info, v, need_warn_up))
+                await async_send_msg(writer, data)
+                send_size = len(data)
+                mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
-                    log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
-                    # # 等待回复
-                    # await wait_ack(reader)
-                    # log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
-                    wait_time = time.time() - send_begin_time
-                    total_wait_time += wait_time
+                log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                # # 等待回复
+                # await wait_ack(reader)
+                # log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                wait_time = time.time() - send_begin_time
+                total_wait_time += wait_time
 
-                    push_count += 1
-                    if push_count % 30 == 0:
-                        # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
-                        # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
-                        # avg param push time: 925ms, avg wait time: 447ms, avg handle time: 3ms
-                        # 优化空间:
-                        #     平均等待参数时间 = 925 - 447 - 3 = 475ms
-                        #     网络传输耗时 = 447 - 0 = 447ms
+                push_count += 1
+                if push_count % 30 == 0:
+                    # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
+                    # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
+                    # avg param push time: 925ms, avg wait time: 447ms, avg handle time: 3ms
+                    # 优化空间:
+                    #     平均等待参数时间 = 925 - 447 - 3 = 475ms
+                    #     网络传输耗时 = 447 - 0 = 447ms
 
-                        # avg param push time: 616ms, avg wait time: 417ms, avg handle time: 4ms
-                        # 优化空间:
-                        #     平均等待参数时间 = 616 - 417 - 4 = 195ms
-                        #     网络传输耗时 = 417 - 0 = 417ms
+                    # avg param push time: 616ms, avg wait time: 417ms, avg handle time: 4ms
+                    # 优化空间:
+                    #     平均等待参数时间 = 616 - 417 - 4 = 195ms
+                    #     网络传输耗时 = 417 - 0 = 417ms
 
-                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
+                    log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
 
                 handle_cost_time = time.time() - t
