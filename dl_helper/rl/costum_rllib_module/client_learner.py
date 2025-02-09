@@ -589,8 +589,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 log(f'[{idx}] grad_coroutine connect to server')
-                reader, writer = await asyncio.open_connection(HOST, PORT)
-                # reader, writer = await connect_and_tune(HOST, PORT)
+                # reader, writer = await asyncio.open_connection(HOST, PORT)
+                reader, writer = await connect_and_tune(HOST, PORT)
                 log(f'[{idx}] grad_coroutine connect to server done')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
@@ -601,6 +601,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 send_count = 0
                 while True:
+                    await asyncio.sleep(1)
+                    continue
+
                     send_data = grad_q.get()# 获取到1个发送数据
 
                     begin_time = time.time()
@@ -679,7 +682,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         获取服务器参数
         """
-        log(f"[{info_data.client_id}] param_coroutine start")
+        log(f"param_coroutine start")
 
 
         # 参数解压器
@@ -708,8 +711,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 log(f'param_coroutine connect to server')
-                reader, writer = await asyncio.open_connection(HOST, PORT)
-                # reader, writer = await connect_and_tune(HOST, PORT)
+                # reader, writer = await asyncio.open_connection(HOST, PORT)
+                reader, writer = await connect_and_tune(HOST, PORT)
                 log(f'param_coroutine connect to server done')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
@@ -813,14 +816,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.grads_count += 1
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
-            # 加入队列
-            try:
-                self.task_queue.put(pickle.dumps((compressed_grads, compress_info)))
-                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
-                # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
-                # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
-            except Exception as e:
-                log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
+            # # 加入队列
+            # try:
+            #     self.task_queue.put(pickle.dumps((compressed_grads, compress_info)))
+            #     log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+            # except Exception as e:
+            #     log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
 
             need_check_if_param_ready = True
             # need_check_if_param_ready = False
