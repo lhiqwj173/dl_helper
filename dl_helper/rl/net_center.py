@@ -194,8 +194,10 @@ class AsyncSocketServer:
                 if not writer.is_closing():
                     writer.close()  # 如果连接还未关闭，则关闭它
                     await writer.wait_closed()
+                if len(self.clients[client_ip]) == 0:
+                    del self.clients[client_ip]
 
-            log(f"Client disconnected from {peer}")
+            log(f"Client disconnected from {client_ip} {client_port}")
 
     async def start(self):
         self.sock.bind((self.host, self.port))

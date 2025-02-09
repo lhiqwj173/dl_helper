@@ -601,10 +601,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 send_count = 0
                 while True:
-                    await asyncio.sleep(1)
-                    continue
-
-                    send_data = grad_q.get()# 获取到1个发送数据
+                    # continue
+                    send_data = grad_q.get(block=False)# 获取到1个发送数据
+                    if send_data is None:
+                        log(f'[{idx}] grad_coroutine get None from queue')
+                        await asyncio.sleep(0.1)
+                        continue
 
                     begin_time = time.time()
                     if all_begin_time == 0:
