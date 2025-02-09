@@ -446,11 +446,16 @@ class ExperimentHandler:
                 log(f'{msg_header} recv gradients({len(data)})')
 
                 batch_g_info, version = pickle.loads(data)
-                batch_g_info = [pickle.loads(i) for i in batch_g_info]
+                if GRAD_BATCH_SIZE > 1:
+                    batch_g_info = [pickle.loads(i) for i in batch_g_info]
+                else:
+                    batch_g_info = [pickle.loads(batch_g_info)]
+
                 # g, compress_info, version = pickle.loads(data)
                 log(f'{msg_header} loads gradients, cost: {int(1000*(time.time() - t))}ms')
                 # 提交到共享梯度信息队列
                 # log(f'put gradients info')
+
                 for i in range(GRAD_BATCH_SIZE):
                     self.gradients_info_share_q.put((batch_g_info[i][1], version))
                 log(f'{msg_header} add info&version done, cost: {int(1000*(time.time() - t))}ms')

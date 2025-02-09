@@ -118,9 +118,9 @@ def plot_training_curve(train_folder, total_time=None, y_axis_max = None):
     max_reward = []
     with open(log_file, 'r') as f:
         for line in f:
-            if ' -   episode_return_mean:' in line:
+            if '85 -   episode_return_mean:' in line:
                 mean_reward.append(float(line.split(' ')[-1]))
-            if ' -   episode_return_max:' in line:
+            if '85 -   episode_return_max:' in line:
                 max_reward.append(float(line.split(' ')[-1]))
     
     # 绘制训练曲线并保存到 train_folder 中

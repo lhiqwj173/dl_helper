@@ -620,7 +620,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     if _batch_size == GRAD_BATCH_SIZE:
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
-                        data = pickle.dumps((batch_compressed_results, info_data.version))
+                        if GRAD_BATCH_SIZE > 1:
+                            data = pickle.dumps((batch_compressed_results, info_data.version))
+                        else:
+                            data = pickle.dumps((batch_compressed_results[0], info_data.version))
 
                         send_begin_time = time.time()
                         await async_send_msg(writer, data)
@@ -660,6 +663,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     平均等待梯度时间 = 949 - 940 - 0 = 9ms > 目标达成
                             #     网络传输耗时 = 940 - 15 = 925ms
                             #     压缩处理耗时 = 0ms(主learner完成)      > 目标达成
+
+                            # ROUND 3
+                            # avg grad send time: 587ms, avg wait time: 547ms, avg handle time: 0ms
+                            # 优化空间:
+                            #     平均等待梯度时间 = 587 - 547 - 0 = 40ms > 目标达成
+                            #     网络传输耗时 = 547 - 17 = 530ms
+                            #     压缩处理耗时 = 18ms(主learner完成)      > 目标达成
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
 
                         # 清空
@@ -816,6 +826,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.tatal_compress_cost += cost
 
             self.grads_count += 1
+            # compress gradients done, cost time: 19ms, avg cost: 18ms
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
             # 加入队列
