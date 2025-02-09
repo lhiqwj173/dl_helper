@@ -582,6 +582,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         total_count = 0
         total_wait_time = 0
         total_handle_time = 0
+        mean_send_size = 0
 
         # 存储一个batch的压缩梯度，一起推送
         batch_compressed_results = []
@@ -627,7 +628,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                         send_begin_time = time.time()
                         await async_send_msg(writer, data)
-                        log(f"[{idx}][{send_count}] send send data done({len(data)}), cost time: {int((time.time() - begin_time) * 1000)}ms")
+                        send_size = len(data)
+                        mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
+                        log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         # 等待回复
                         await wait_ack(reader)
@@ -670,7 +673,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     平均等待梯度时间 = 587 - 547 - 0 = 40ms > 目标达成
                             #     网络传输耗时 = 547 - 17 = 530ms
                             #     压缩处理耗时 = 18ms(主learner完成)      > 目标达成
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms")
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
 
                         # 清空
                         batch_compressed_results.clear()
@@ -773,6 +776,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     if total_count % 30 == 0:
                         # 本机接收后处理耗时(avg handle time)
                         # avg param push time: 928ms, avg handle time: 0ms
+                        # avg param push time: 616ms, avg handle time: 1ms
                         log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
             except Exception as e:

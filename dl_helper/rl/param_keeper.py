@@ -370,6 +370,7 @@ class ExperimentHandler:
             push_count = 0
             total_handle_time = 0
             total_wait_time = 0
+            mean_send_size = 0
             while True:
                 # 等待参数更新事件
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
@@ -394,7 +395,10 @@ class ExperimentHandler:
 
                     log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     send_begin_time = time.time()
-                    await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
+                    data = pickle.dumps((params, info, v, need_warn_up))
+                    await async_send_msg(writer, data)
+                    send_size = len(data)
+                    mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
                     log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     # 等待回复
@@ -412,7 +416,14 @@ class ExperimentHandler:
                         # 优化空间:
                         #     平均等待参数时间 = 925 - 447 - 3 = 475ms
                         #     网络传输耗时 = 447 - 0 = 447ms
-                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms')
+
+                        # avg param push time: 616ms, avg wait time: 417ms, avg handle time: 4ms
+                        # 优化空间:
+                        #     平均等待参数时间 = 616 - 417 - 4 = 195ms
+                        #     网络传输耗时 = 417 - 0 = 417ms
+
+                        log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
+
 
                 handle_cost_time = time.time() - t
                 total_handle_time += handle_cost_time
