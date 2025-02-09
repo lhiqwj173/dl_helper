@@ -34,7 +34,9 @@ class AsyncRLParameterServer:
         self.learner = config.build_learner(env=env)
         self.learner.build()
         self.ver = 0
-        
+        self.total_client_version_diff = 0
+        self.total_count = 0
+
     def apply_gradients(self, gradients_list, client_version):
         """
         更新参数
@@ -47,7 +49,9 @@ class AsyncRLParameterServer:
         
         self.learner.apply_gradients({})
         self.ver += 1
-    
+        self.total_client_version_diff += self.ver - client_version
+        self.total_count += 1
+
     def get_gradients_params(self):
         """获取计算梯度的参数"""
         return copy.deepcopy(self.learner._params)
@@ -58,8 +62,13 @@ class AsyncRLParameterServer:
         weights = self.learner.module._rl_modules['default_policy'].state_dict()
         return weights, self.ver
 
+    def get_mean_version_diff(self):
+        """获取平均版本差"""
+        return self.total_client_version_diff / self.total_count
+
 class ExperimentHandler:
     """处理单个实验的类"""
+
     def __init__(self, train_title, config, debug=False, grad_warm_up_steps=10
     ):
         """
@@ -316,11 +325,12 @@ class ExperimentHandler:
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
 
-                log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms')   
+                log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: {param_server.get_mean_version_diff():.2f}')   
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
                 raise e
+
 
     async def _get_latest_raw_params(self):
         """获取最新参数(无压缩)"""
@@ -456,11 +466,13 @@ class ExperimentHandler:
                     begin_time = t
                 log(f'{msg_header} recv gradients({len(data)})')
 
-                batch_g_info, version = pickle.loads(data)
+                # batch_g_info, version = pickle.loads(data)
+                # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                data = pickle.loads(data)
                 if GRAD_BATCH_SIZE > 1:
-                    batch_g_info = [pickle.loads(i) for i in batch_g_info]
+                    batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
                 else:
-                    batch_g_info = [pickle.loads(batch_g_info)]
+                    batch_g_info = [(pickle.loads(data[0]), data[1])]
 
                 # g, compress_info, version = pickle.loads(data)
                 log(f'{msg_header} loads gradients, cost: {int(1000*(time.time() - t))}ms')
@@ -468,7 +480,7 @@ class ExperimentHandler:
                 # log(f'put gradients info')
 
                 for i in range(GRAD_BATCH_SIZE):
-                    self.gradients_info_share_q.put((batch_g_info[i][1], version))
+                    self.gradients_info_share_q.put((batch_g_info[i][0][1], batch_g_info[i][1]))
                 log(f'{msg_header} add info&version done, cost: {int(1000*(time.time() - t))}ms')
                 # 提交到共享梯度
                 # log(f'put gradients')
@@ -484,7 +496,7 @@ class ExperimentHandler:
                     while True:
                         # with LockWithLog(self.share_gradients_lock, log, msg_header):
                         with self.share_gradients_lock:
-                            for idx, (g, compress_info) in enumerate(batch_g_info):
+                            for idx, ((g, compress_info), v) in enumerate(batch_g_info):
                                 # 是否已经处理过
                                 if idx in done_idxs:
                                     continue

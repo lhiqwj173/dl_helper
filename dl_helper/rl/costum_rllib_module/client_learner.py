@@ -474,7 +474,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
-            self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4)
+            self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, 8)# 额外一个 np.int64 用于保存梯度版本
             self.task_queue.clear()
 
             # 是否处于训练阶段
@@ -583,6 +583,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         total_wait_time = 0
         total_handle_time = 0
         mean_send_size = 0
+        total_version_diff = 0
 
         # 存储一个batch的压缩梯度，一起推送
         batch_compressed_results = []
@@ -620,11 +621,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}")
 
                     if _batch_size == GRAD_BATCH_SIZE:
+                        # 统计版本diff info_data.version
+                        current_version = info_data.version
+
                         # 达到GRAD_BATCH_SIZE个梯度，发送梯度
                         if GRAD_BATCH_SIZE > 1:
-                            data = pickle.dumps((batch_compressed_results, info_data.version))
+                            diff = [current_version - i[1] for i in batch_compressed_results]
+                            diff = sum(diff)
+                            data = pickle.dumps(batch_compressed_results)
                         else:
-                            data = pickle.dumps((batch_compressed_results[0], info_data.version))
+                            data = pickle.dumps(batch_compressed_results[0])
+                            diff = current_version - batch_compressed_results[0][1]
+
+                        total_version_diff += diff
 
                         send_begin_time = time.time()
                         await async_send_msg(writer, data)
@@ -680,7 +689,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
                             #     网络传输耗时 = 0ms                    > 目标达成
                             #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {int(total_version_diff / (total_count * GRAD_BATCH_SIZE))}")
 
                         # 清空
                         batch_compressed_results.clear()
@@ -843,7 +852,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 加入队列
             try:
-                self.task_queue.put(pickle.dumps((compressed_grads, compress_info)))
+                self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
                 log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
