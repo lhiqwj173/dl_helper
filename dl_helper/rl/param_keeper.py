@@ -535,6 +535,7 @@ class ExperimentHandler:
                 push_count += 1
                 if push_count % 30 == 0:
                     # avg gradients recv time: 923ms, avg handle time: 15ms
+                    # avg gradients recv time: 43ms, avg handle time: 9ms
                     log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg handle time: {int(total_handle_time / push_count * 1000)}ms')
 
 if __name__ == '__main__':

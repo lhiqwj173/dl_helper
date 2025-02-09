@@ -667,12 +667,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     网络传输耗时 = 940 - 15 = 925ms
                             #     压缩处理耗时 = 0ms(主learner完成)      > 目标达成
 
-                            # ROUND 3
+                            # ROUND 3 GRAD_BATCH_SIZE=4
                             # avg grad send time: 587ms, avg wait time: 547ms, avg handle time: 0ms
                             # 优化空间:
                             #     平均等待梯度时间 = 587 - 547 - 0 = 40ms > 目标达成
                             #     网络传输耗时 = 547 - 17 = 530ms
                             #     压缩处理耗时 = 18ms(主learner完成)      > 目标达成
+
+                            # ROUND 4 GRAD_BATCH_SIZE=1
+                            # avg grad send time: 43ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 40511
+                            # 优化空间:
+                            #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
+                            #     网络传输耗时 = 0ms                    > 目标达成
+                            #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
                             log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
 
                         # 清空
@@ -831,6 +838,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             self.grads_count += 1
             # compress gradients done, cost time: 19ms, avg cost: 18ms
+            # compress gradients done, cost time: 17ms, avg cost: 17ms
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
             # 加入队列

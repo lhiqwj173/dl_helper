@@ -169,14 +169,15 @@ class BandwidthClient:
                 await wait_ack(reader)
                 total_time += time.time() - t
 
-                await asyncio.sleep(3)
+                await asyncio.sleep(1)
                 
             # 关闭连接
             writer.close()
             await writer.wait_closed()
 
             # 4MB 
-            # grad_data 1 avg time: 
+            # grad_data 1 avg time: 1554ms
+            # grad_data 1 avg time: 1463ms
             # grad_data 3 avg time: 1051ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
@@ -186,4 +187,4 @@ class BandwidthClient:
 
 if __name__ == "__main__":
     client = BandwidthClient()
-    asyncio.run(client.test_data())  # 测试1GB数据传输
+    asyncio.run(client.test_data())
