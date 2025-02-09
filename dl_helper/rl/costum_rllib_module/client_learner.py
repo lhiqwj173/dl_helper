@@ -590,15 +590,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 创建异步socket连接
                 # reader, writer = await asyncio.open_connection(HOST, PORT)
                 reader, writer = await connect_and_tune(HOST, PORT)
+                log(f'grad_coroutine connect to server')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
+                log(f'grad_coroutine send CODE_IP done')
 
                 # 发送指令类型
                 await async_send_msg(writer, f'{train_title}:update_gradients')
+                log(f'grad_coroutine send CMD done')
 
                 send_count = 0
                 while True:
                     send_data = grad_q.get()# 获取到1个发送数据
+
                     begin_time = time.time()
                     if all_begin_time == 0:
                         all_begin_time = begin_time
@@ -708,11 +712,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 创建异步socket连接
                 # reader, writer = await asyncio.open_connection(HOST, PORT)
                 reader, writer = await connect_and_tune(HOST, PORT)
+                log(f'param_coroutine connect to server')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
-                log(f"param_coroutine connect to server")
-                # 发送指令
-                await async_send_msg(writer, f'{train_title}:wait_params'.encode())
+                log(f'param_coroutine send CODE_IP done')
+                # 发送指令类型
+                await async_send_msg(writer, f'{train_title}:wait_params')
+                log(f'param_coroutine send CMD done')
 
                 while True:
                     # 被动获取参数
