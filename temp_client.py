@@ -10,12 +10,11 @@ param_data = b'x' * 8724
 grad_data = b'x' * 544454
 grad_data_m2 = b'x' * 272227
 
-
 CHUNK_SIZE = 4*1024*1024# 4 MB 缓冲区
 # CHUNK_SIZE = 1024*1024# 1 MB 缓冲区
 # CHUNK_SIZE = 512*1024# 512 KB 缓冲区
 # CHUNK_SIZE = 256*1024# 256 KB 缓冲区
-
+CHUNK_SIZE = 8 * 1024 * 1024
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
     """TCP协议调优"""
@@ -153,7 +152,7 @@ class BandwidthClient:
                 print(f"send {i} times")
                 t = time.time()
                 # 发送数据
-                data = grad_data
+                data = grad_data_m2
                 if nums > 1:
                     tasks = []
                     each_length = len(data) // nums
@@ -177,8 +176,9 @@ class BandwidthClient:
 
             # 4MB 
             # grad_data 1 avg time: 1554ms
-            # grad_data 1 avg time: 1463ms
-            # grad_data 3 avg time: 1051ms
+            # grad_data 1 avg time: 1463ms 
+            # grad_data 2 avg time: 775ms
+            # ack avg time: 187ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
 
         except Exception as e:
