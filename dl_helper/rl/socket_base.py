@@ -37,7 +37,8 @@ def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
 async def connect_and_tune(HOST, PORT, buffer_size=CHUNK_SIZE):
     """创建异步连接并调优TCP参数"""
     reader, writer = await asyncio.open_connection(HOST, PORT)
-    
+    log(f'connected done')
+
     # 获取底层socket对象
     sock = writer.transport.get_extra_info('socket')
     if sock is not None:
@@ -45,7 +46,8 @@ async def connect_and_tune(HOST, PORT, buffer_size=CHUNK_SIZE):
         tune_tcp_socket(sock, buffer_size)
     else:
         log("Warning: Could not get underlying socket for tuning")
-    
+        
+    log(f'tune done')
     return reader, writer
 
 async def ack(writer):
