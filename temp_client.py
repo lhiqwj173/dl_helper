@@ -12,9 +12,9 @@ grad_data_m2 = b'x' * 272227
 
 
 CHUNK_SIZE = 4*1024*1024# 4 MB 缓冲区
-CHUNK_SIZE = 1024*1024# 1 MB 缓冲区
-CHUNK_SIZE = 512*1024# 512 KB 缓冲区
-CHUNK_SIZE = 256*1024# 256 KB 缓冲区
+# CHUNK_SIZE = 1024*1024# 1 MB 缓冲区
+# CHUNK_SIZE = 512*1024# 512 KB 缓冲区
+# CHUNK_SIZE = 256*1024# 256 KB 缓冲区
 
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
@@ -153,14 +153,17 @@ class BandwidthClient:
                 print(f"send {i} times")
                 t = time.time()
                 # 发送数据
-                tasks = []
                 data = grad_data
-                each_length = len(data) // nums
-                for idx in range(nums):
-                    start = idx * each_length
-                    end = (idx + 1) * each_length if idx < nums - 1 else len(data)
-                    tasks.append(async_send_msg(self.connected_clients[idx][1], data[start:end]))
-                await asyncio.gather(*tasks)
+                if nums > 1:
+                    tasks = []
+                    each_length = len(data) // nums
+                    for idx in range(nums):
+                        start = idx * each_length
+                        end = (idx + 1) * each_length if idx < nums - 1 else len(data)
+                        tasks.append(async_send_msg(self.connected_clients[idx][1], data[start:end]))
+                    await asyncio.gather(*tasks)
+                else:
+                    await async_send_msg(writer, data)
 
                 # 等待回复
                 await wait_ack(reader)
@@ -173,22 +176,9 @@ class BandwidthClient:
             await writer.wait_closed()
 
             # 4MB 
-            # param_data avg time: 118ms
-            # grad_data avg time: 697ms
-            # grad_data_m2 avg time: 463ms
-
-            # 1MB
-            # grad_data_m2 avg time: 463ms
-
-            # 512KB
-            # grad_data_m2 avg time: 342ms
-
-            # 256KB
-            # grad_data avg time: 432ms
-            # ack avg time: 69ms
+            # grad_data 1 avg time: 
+            # grad_data 3 avg time: 1051ms
             print(f"avg time: {int(1000* total_time / 30)}ms")
-
-
 
         except Exception as e:
             print(f"Error: {e}")

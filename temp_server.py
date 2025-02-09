@@ -45,11 +45,16 @@ class BandwidthServer:
                 # idx = 0
                 # 接收数据
                 nums = len(self.connected_clients[ip])
-                tasks = []
-                for _idx in range(nums):
-                    tasks.append(async_recv_msg(self.connected_clients[ip][_idx][0]))
-                data = await asyncio.gather(*tasks)
-                data = b''.join(data)
+                if nums > 1:
+                    tasks = []
+                    for _idx in range(nums):
+                        tasks.append(async_recv_msg(self.connected_clients[ip][_idx][0]))
+
+                    data = await asyncio.gather(*tasks)
+                    data = b''.join(data)
+                else:
+                    data = await async_recv_msg(reader)
+
                 print(f"Received data: {len(data)} bytes")
 
                 # 发送确认
