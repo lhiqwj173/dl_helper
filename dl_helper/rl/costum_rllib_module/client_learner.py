@@ -589,8 +589,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 log(f'[{idx}] grad_coroutine connect to server')
-                # reader, writer = await asyncio.open_connection(HOST, PORT)
-                reader, writer = await connect_and_tune(HOST, PORT)
+                reader, writer = await asyncio.open_connection(HOST, PORT)
+                # reader, writer = await connect_and_tune(HOST, PORT)
                 log(f'[{idx}] grad_coroutine connect to server done')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
@@ -708,8 +708,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             try:
                 # 创建异步socket连接
                 log(f'param_coroutine connect to server')
-                # reader, writer = await asyncio.open_connection(HOST, PORT)
-                reader, writer = await connect_and_tune(HOST, PORT)
+                reader, writer = await asyncio.open_connection(HOST, PORT)
+                # reader, writer = await connect_and_tune(HOST, PORT)
                 log(f'param_coroutine connect to server done')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
