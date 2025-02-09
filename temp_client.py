@@ -2,7 +2,7 @@
 import asyncio
 import struct
 import time
-import socket
+import socket, requests
 
 # 模拟数据
 ack = b'1'
@@ -132,20 +132,36 @@ class BandwidthClient:
     def __init__(self, host='217.142.135.154', port=12345):
         self.host = host
         self.port = port
+        self.connected_clients = []
+        self.ip = requests.get('https://api.ipify.org').text
         
     async def test_data(self):
+        nums = 3
         try:
-            reader, writer = await connect_and_tune(
-                self.host, 
-                self.port
-            )
+            # 连接, 0 是最后一个（主连接）
+            for idx in range(nums-1, -1, -1):
+                reader, writer = await connect_and_tune(
+                    self.host, 
+                    self.port
+                )
+                # 发送 ip_idx
+                await async_send_msg(writer, f"{self.ip}_{idx}")
+                self.connected_clients.append((reader, writer))
 
             total_time = 0
             for i in range(30):
                 print(f"send {i} times")
                 t = time.time()
                 # 发送数据
-                await async_send_msg(writer, ack)
+                tasks = []
+                data = grad_data
+                each_length = len(data) // nums
+                for idx in range(nums):
+                    start = idx * each_length
+                    end = (idx + 1) * each_length if idx < nums - 1 else len(data)
+                    tasks.append(async_send_msg(self.connected_clients[idx][1], data[start:end]))
+                await asyncio.gather(*tasks)
+
                 # 等待回复
                 await wait_ack(reader)
                 total_time += time.time() - t
