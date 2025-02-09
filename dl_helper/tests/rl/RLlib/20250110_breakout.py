@@ -8,7 +8,10 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
+from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
+from py_ext.wechat import wx
+from py_ext.alist import alist
 
 train_folder = 'breakout'
 init_logger('20250108_breakout', home=train_folder, timestamp=False)
@@ -35,11 +38,6 @@ if __name__ == "__main__":
         )
         .environment("breakout")# 直接使用
         .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
-        # TODO 计划将eval放在服务端
-        .evaluation(
-            evaluation_interval=30,
-            evaluation_duration=5,
-        )
         .rl_module(
             model_config={
                 "conv_filters": [
@@ -52,6 +50,7 @@ if __name__ == "__main__":
         .extra_config(
             learner_group_class=ClientLearnerGroup,
             learner_group_kwargs={
+                'train_folder': train_folder,
                 "train_title": train_title,
             },
         )
@@ -71,24 +70,21 @@ if __name__ == "__main__":
             num_learners=num_learners,
             num_gpus_per_learner=1,
         )
-        # for debug
-        # .learners(    
-        #     num_learners=2,
-        #     num_gpus_per_learner=0,
-        #     num_cpus_per_learner=0.3,
-        # )
-        
+
+        # 询问服务器，本机是否需要验证环节
+        need_val = request_need_val(train_title)
+        log(f"need_val: {need_val}")
+        if need_val:
+            config = config.evaluation(
+                evaluation_interval=10,
+                evaluation_duration=3,
+            )
 
         # 客户端运行
         # 构建算法
         algo = config.build()
 
-        # 创建检查点保存目录
-        checkpoint_base_dir = os.path.join(train_folder, 'checkpoints')
-        os.makedirs(checkpoint_base_dir, exist_ok=True)
-
         begin_time = time.time()
-
         # 训练循环
         # rounds = 2000
         rounds = 100
@@ -97,18 +93,11 @@ if __name__ == "__main__":
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
             simplify_rllib_metrics(result, out_func=log)
-            
-            if (i + 1) % 10 == 0:
-                checkpoint_dir = algo.save_to_path(
-                    os.path.join(os.path.abspath(checkpoint_base_dir), f"checkpoint_{i+1}")
-                )
-                log(f"Checkpoint saved in directory {checkpoint_dir}")
+        
+        # 停止学习者额外的事件进程
+        algo.learner_group.stop_extra_process()
+        log(f"learner_group.stop_extra_process done")
 
-        # 保存最终模型
-        final_checkpoint_dir = algo.save_to_path(
-            os.path.join(os.path.abspath(checkpoint_base_dir), "final_model")
-        )
-        log(f"Final model saved in directory {final_checkpoint_dir}")
-
-        # 绘制训练曲线
-        plot_training_curve(train_folder, time.time() - begin_time)
+        if need_val:
+            # 绘制训练曲线
+            plot_training_curve(train_folder, time.time() - begin_time, y_axis_max=30)
