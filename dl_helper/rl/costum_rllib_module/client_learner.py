@@ -588,16 +588,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         while True:
             try:
                 # 创建异步socket连接
-                log(f'grad_coroutine connect to server')
+                log(f'[{idx}] grad_coroutine connect to server')
                 # reader, writer = await asyncio.open_connection(HOST, PORT)
                 reader, writer = await connect_and_tune(HOST, PORT)
-                log(f'grad_coroutine connect to server done')
+                log(f'[{idx}] grad_coroutine connect to server done')
                 # 发送连接验证
                 await async_send_msg(writer, f'{CODE}_{ip}')
-                log(f'grad_coroutine send CODE_IP done')
+                log(f'[{idx}] grad_coroutine send CODE_IP done')
                 # 发送指令类型
                 await async_send_msg(writer, f'{train_title}:update_gradients')
-                log(f'grad_coroutine send CMD done')
+                log(f'[{idx}] grad_coroutine send CMD done')
 
                 send_count = 0
                 while True:
@@ -666,12 +666,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f"[{idx}][{send_count}] grad handler done, handle cost time: {int(handle_cost_time * 1000)}ms")
 
             except Exception as e:
-                log(f"[{idx}] connect to server failed: \n{get_exception_msg()}")
-
-
+                log(f"[{idx}] grad_coroutine connect to server failed: \n{get_exception_msg()}")
                 # 关闭连接
                 try:
-
                     writer.close()
                     await writer.wait_closed()
                 except:
@@ -764,7 +761,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
             except Exception as e:
-                log(f"连接服务器失败: \n{get_exception_msg()}")
+                log(f"param_coroutine connect to server failed: \n{get_exception_msg()}")
                 # 关闭连接
                 try:
                     writer.close()

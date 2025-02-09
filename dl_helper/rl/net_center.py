@@ -107,6 +107,7 @@ class AsyncSocketServer:
         peer = writer.get_extra_info('peername')
         client_ip, client_port = peer
 
+        log(f'handle client {client_port}')
         # 内网穿透后不需要block
         # # 0. 检查是否被block
         # if self.block_ips.is_blocked(client_ip):
