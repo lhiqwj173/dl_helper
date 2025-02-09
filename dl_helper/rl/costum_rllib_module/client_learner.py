@@ -632,11 +632,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
                         log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
-                        # 等待回复
-                        await wait_ack(reader)
+                        # # 等待回复
+                        # await wait_ack(reader)
+                        # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
                         wait_time = time.time() - send_begin_time
                         total_wait_time += wait_time
-                        log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
 
                         send_count += 1
                         total_count += 1
@@ -765,8 +765,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         shared_param.param_event.clear_reset(1)
                         log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
 
-                    # 处理完成回复
-                    await ack(writer)
+                    # # 处理完成回复
+                    # await ack(writer)
 
                     # 统计耗时
                     handle_cost_time = time.time() - t

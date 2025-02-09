@@ -401,12 +401,11 @@ class ExperimentHandler:
                     mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
                     log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
-                    # 等待回复
-                    await wait_ack(reader)
+                    # # 等待回复
+                    # await wait_ack(reader)
+                    # log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                     wait_time = time.time() - send_begin_time
                     total_wait_time += wait_time
-
-                    log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
 
                     push_count += 1
                     if push_count % 30 == 0:
@@ -524,8 +523,8 @@ class ExperimentHandler:
                 gradients_cache_share_length = max(gradients_cache_share_lengths) + 1
                 log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
 
-                # 回复，避免socket堆积
-                await ack(writer)
+                # # 回复，避免socket堆积
+                # await ack(writer)
 
                 # 通知新梯度
                 self.share_data_new_event.set()
