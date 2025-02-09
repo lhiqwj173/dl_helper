@@ -135,7 +135,7 @@ class BandwidthClient:
         self.ip = requests.get('https://api.ipify.org').text
         
     async def test_data(self):
-        nums = 3
+        nums = 2
         try:
             # 连接, 0 是最后一个（主连接）
             for idx in range(nums-1, -1, -1):
@@ -152,7 +152,7 @@ class BandwidthClient:
                 print(f"send {i} times")
                 t = time.time()
                 # 发送数据
-                data = grad_data_m2
+                data = grad_data
                 if nums > 1:
                     tasks = []
                     each_length = len(data) // nums
@@ -167,8 +167,6 @@ class BandwidthClient:
                 # 等待回复
                 await wait_ack(reader)
                 total_time += time.time() - t
-
-                await asyncio.sleep(1)
                 
             # 关闭连接
             writer.close()
