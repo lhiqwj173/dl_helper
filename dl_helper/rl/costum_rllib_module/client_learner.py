@@ -765,21 +765,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         begin_time = t
                     log(f"[{total_count}] recv params push")
 
-                    # 当前是否处于训练阶段
-                    if is_training_event.is_set():
-                        # 增量解压操作
-                        # log(f"[{total_count}] decompress params data")
-                        param_compressor.decompress(params_list, info, sync_params_dict)
-                        log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
+                    # 需要完整的处理参数推送
+                    # # 当前是否处于训练阶段
+                    # if is_training_event.is_set():
+                    # 增量解压操作
+                    # log(f"[{total_count}] decompress params data")
+                    param_compressor.decompress(params_list, info, sync_params_dict)
+                    log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
 
-                        # 更新共享参数
-                        shared_param.set_param(sync_params_dict)
-                        log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
+                    # 更新共享参数
+                    shared_param.set_param(sync_params_dict)
+                    log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
 
-                        # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
-                        # 触发共享参数更新事件
-                        shared_param.param_event.clear_reset(1)
-                        log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
+                    # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
+                    # 触发共享参数更新事件
+                    shared_param.param_event.clear_reset(1)
+                    log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
 
                     # # 处理完成回复
                     # await ack(writer)
