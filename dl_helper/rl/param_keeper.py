@@ -1,5 +1,6 @@
 import torch, time, math
 import multiprocessing
+from multiprocessing.queues import Empty
 import asyncio
 import gymnasium as gym
 
@@ -88,6 +89,9 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
+        # grad allow version diff
+        self.grad_allow_version_diff = 30
+
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
@@ -95,6 +99,7 @@ class ExperimentHandler:
         self.push_params_interval = GRAD_BATCH_SIZE # 每 push_params_interval 步推送一次参数
 
         # 共享梯度队列
+        self.client_nums_q = multiprocessing.Queue()
         # 梯度数据经过稀疏化，形状
         self.gradients_info_share_q = multiprocessing.Queue()
         # 共享参数信息
@@ -120,7 +125,7 @@ class ExperimentHandler:
         
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
-            train_title, self.gradients_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
+            train_title, self.client_nums_q, self.gradients_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
             self.share_gradients_lock, self.share_params_lock, self.share_params_float32_lock,
             config,
             self.debug,
@@ -157,12 +162,15 @@ class ExperimentHandler:
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
+        # 客户端数量
+        self.client_nums = 0
+
     def __del__(self):
         self.p.terminate()
 
     @staticmethod
     def gpu_most_task(
-        train_title, gradients_info_share_q, params_float32_ver_share_q, share_data_new_event, 
+        train_title, client_nums_q, gradients_info_share_q, params_float32_ver_share_q, share_data_new_event, 
         share_gradients_lock, share_params_lock, share_params_float32_lock,
         config, 
         debug,
@@ -264,13 +272,24 @@ class ExperimentHandler:
         total_client_version_diff = 0
         total_count = 0
 
+        # 客户端数量
+        client_nums = 0
+
         log(f'{train_title} calculate most start')
         while True:
+
             try:
                 log(f'[CG]{train_title} wait gradients event')
                 share_data_new_event.wait()
                 share_data_new_event.clear()
                 t = time.time()
+
+                # 获取最新客户端数量
+                try:
+                    new_client_nums = client_nums_q.get(block=False)
+                    client_nums = new_client_nums
+                except Empty:
+                    pass
 
                 log(f'[CG]{train_title} active')
                 # with LockWithLog(share_gradients_lock, log, '[CG]'):
@@ -278,12 +297,12 @@ class ExperimentHandler:
                     g_length = gradients_cache_share[0].size()
                     fullg_length = gradients_cache_share_full[0].size()
                     temp_length = g_length + fullg_length
-                    if temp_length == 0:
-                        log(f'{train_title} no gradients, keep wait')
+
+                    data_client_nums = temp_length // GRAD_BATCH_SIZE
+                    if data_client_nums < client_nums:
+                        log(f'{train_title} not enough gradients, keep wait({client_nums - data_client_nums} clients)')
                         continue
-                    # 获取全部的梯度信息
-                    for idx in range(temp_length):
-                        gradients_cache_info_temp.append(gradients_info_share_q.get())  
+
                     # 拷贝梯度到临时梯度
                     if g_length:
                         for idx, _g in enumerate(gradients_cache_share):
@@ -291,6 +310,9 @@ class ExperimentHandler:
                     if fullg_length:
                         for idx, _g in enumerate(gradients_cache_share_full):
                             _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
+                    # 获取全部的梯度信息
+                    for idx in range(temp_length):
+                        gradients_cache_info_temp.append(gradients_info_share_q.get())  
 
                 log(f'[CG]{train_title} wait gradients: {temp_length}')
 
@@ -402,6 +424,7 @@ class ExperimentHandler:
 
                 # 获取最新参数
                 params, v, need_warn_up = await self._get_latest_raw_params()
+                self.version = v
                 log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 控制参数推送频率
@@ -464,10 +487,15 @@ class ExperimentHandler:
             # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
 
+            # 客户端数量
+            self.client_nums += 1
+            self.client_nums_q.put(self.client_nums)
+
             total_handle_time = 0
             begin_time = 0
             push_count = 0
             while True:
+
                 # 获取梯度数据
                 data = await async_recv_msg(reader)
                 t = time.time()
@@ -488,8 +516,19 @@ class ExperimentHandler:
                 # 提交到共享梯度信息队列
                 # log(f'put gradients info')
 
-                for i in range(GRAD_BATCH_SIZE):
+                # version diff filter
+                version_diffs = [self.version - i[1] for i in batch_g_info]
+                not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > self.grad_allow_version_diff]
+                # 倒序删除不允许的梯度
+                for idx in sorted(not_allow_idxs, reverse=True):
+                    log(f'{msg_header} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                    batch_g_info.pop(idx)
+                _update_gradients_length = len(batch_g_info)
+
+                # 提交到共享梯度信息队列
+                for i in range(_update_gradients_length):
                     self.gradients_info_share_q.put((batch_g_info[i][0][1], batch_g_info[i][1]))
+
                 log(f'{msg_header} add info&version done, cost: {int(1000*(time.time() - t))}ms')
                 # 提交到共享梯度
                 # log(f'put gradients')
@@ -498,7 +537,7 @@ class ExperimentHandler:
 
                 # 当前等待处理的梯度数量
                 done_idxs = []
-                gradients_cache_share_lengths = [0] * GRAD_BATCH_SIZE
+                gradients_cache_share_lengths = [0] * _update_gradients_length
                 gradients_cache_share_length = 0
                 async with self.gradients_add_lock:
                 # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
@@ -526,7 +565,7 @@ class ExperimentHandler:
                                 else:
                                     break
 
-                        if len(done_idxs) == GRAD_BATCH_SIZE:
+                        if len(done_idxs) == _update_gradients_length:
                             wait_count = 0
                             break
 
