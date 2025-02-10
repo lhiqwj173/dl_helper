@@ -689,7 +689,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
                             #     网络传输耗时 = 0ms                    > 目标达成
                             #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {int(total_version_diff / (total_count * GRAD_BATCH_SIZE))}")
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
+
 
                         # 清空
                         batch_compressed_results.clear()

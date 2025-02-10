@@ -34,8 +34,8 @@ class AsyncRLParameterServer:
         self.learner = config.build_learner(env=env)
         self.learner.build()
         self.ver = 0
-        self.total_client_version_diff = 0
-        self.total_count = 0
+        # self.total_client_version_diff = 0
+        # self.total_count = 0
 
     def apply_gradients(self, gradients_list, client_version):
         """
@@ -49,8 +49,8 @@ class AsyncRLParameterServer:
         
         self.learner.apply_gradients({})
         self.ver += 1
-        self.total_client_version_diff += self.ver - client_version
-        self.total_count += 1
+        # self.total_client_version_diff += self.ver - client_version
+        # self.total_count += 1
 
     def get_gradients_params(self):
         """获取计算梯度的参数"""
@@ -62,9 +62,9 @@ class AsyncRLParameterServer:
         weights = self.learner.module._rl_modules['default_policy'].state_dict()
         return weights, self.ver
 
-    def get_mean_version_diff(self):
-        """获取平均版本差"""
-        return self.total_client_version_diff / self.total_count
+    # def get_mean_version_diff(self):
+    #     """获取平均版本差"""
+    #     return self.total_client_version_diff / self.total_count
 
 class ExperimentHandler:
     """处理单个实验的类"""
@@ -260,6 +260,10 @@ class ExperimentHandler:
         # 回传后，共享参数以及初始化完成
         gradients_info_share_q.put((_simple_params, _simple_grad_params))
 
+        # 版本差异统计
+        total_client_version_diff = 0
+        total_count = 0
+
         log(f'{train_title} calculate most start')
         while True:
             try:
@@ -293,6 +297,11 @@ class ExperimentHandler:
                 # 是否是full梯度
                 is_full_gradient = [i[0][0]['is_full_gradient'] for i in gradients_cache_info_temp]
 
+                # 版本差异列表
+                version_diff_list = [param_server.ver - i[1] for i in gradients_cache_info_temp]
+                total_client_version_diff += sum(version_diff_list)
+                total_count += len(version_diff_list)
+
                 # 计算梯度
                 g_idx = 0
                 g_idx_full = 0
@@ -325,7 +334,7 @@ class ExperimentHandler:
                 # 清空梯度信息
                 gradients_cache_info_temp.clear()
 
-                log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: {param_server.get_mean_version_diff():.2f}')   
+                log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: {total_client_version_diff / total_count :.2f}')   
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
