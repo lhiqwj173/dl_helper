@@ -327,16 +327,18 @@ class ExperimentHandler:
                 vs = []
                 for idx in range(temp_length):
                     # 获取梯度列表
-                    # log(f'get gradients')
-                    if is_full_gradient[idx]:
-                        # 全梯度 优先使用
-                        gs = [i[g_idx_full] for i in gradients_cache_temp_full]
-                        g_idx_full += 1
-                    elif not use_full_gradient:
+                    if use_full_gradient:
+                        # 使用全梯度(存在全梯度)，只获取 is_full_gradient 为True的梯度
+                        if is_full_gradient[idx]:
+                            gs = [i[g_idx_full] for i in gradients_cache_temp_full]
+                            g_idx_full += 1
+                        else:
+                            # 跳过
+                            continue
+                    else:
+                        # 使用增量梯度(不存在全梯度)，全部获取
                         gs = [i[g_idx] for i in gradients_cache_temp]
                         g_idx += 1
-                    else:
-                        raise Exception(f'{train_title} use_full_gradient: {use_full_gradient}, is_full_gradient: {is_full_gradient[idx]}')
 
                     # 解压梯度
                     # log(f'decompress gradients')
