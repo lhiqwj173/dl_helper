@@ -572,7 +572,7 @@ class ExperimentHandler:
                     if has_full_gradient:
                         log(f'{msg_header} has_full_gradient, del not full gradient, temp_is_full_gradient: {temp_is_full_gradient}')
                         # 删除增量的更新
-                        batch_g_info = [i for i in batch_g_info if not i[0][1][0]['is_full_gradient']]
+                        batch_g_info = [i for i in batch_g_info if i[0][1][0]['is_full_gradient']]
                         # 检查是否清空临时数据
                         if not temp_is_full_gradient:
                             # 清空临时数据

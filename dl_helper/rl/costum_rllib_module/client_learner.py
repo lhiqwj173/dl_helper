@@ -635,6 +635,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             diff = current_version - batch_compressed_results[0][1]
 
                         total_version_diff += diff
+                        log(f"[{idx}][{send_count}] send send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                         send_begin_time = time.time()
                         await async_send_msg(writer, data)
