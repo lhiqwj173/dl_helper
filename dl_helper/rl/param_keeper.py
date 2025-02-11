@@ -162,8 +162,8 @@ class ExperimentHandler:
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
-        # 客户端数量
-        self.client_nums = 0
+        # 客户端 ip 列表
+        self.clients = set()
 
     def __del__(self):
         self.p.terminate()
@@ -300,7 +300,7 @@ class ExperimentHandler:
 
                     data_client_nums = temp_length // GRAD_BATCH_SIZE
                     if data_client_nums < client_nums:
-                        log(f'{train_title} not enough gradients, keep wait({client_nums - data_client_nums} clients)')
+                        log(f'[CG]{train_title} not enough gradients, keep wait({client_nums - data_client_nums} clients, client_nums: {client_nums}, grad_client_nums: {data_client_nums})')
                         continue
 
                     # 拷贝梯度到临时梯度
@@ -511,8 +511,8 @@ class ExperimentHandler:
             log(f'{msg_header} recv update_gradients request')
 
             # 客户端数量
-            self.client_nums += 1
-            self.client_nums_q.put(self.client_nums)
+            self.clients.add(ip)
+            self.client_nums_q.put(len(self.clients))
 
             total_handle_time = 0
             begin_time = 0
@@ -630,8 +630,8 @@ class ExperimentHandler:
             except Exception as e:
                 # 异常处理
                 # 客户端数量
-                self.client_nums -= 1
-                self.client_nums_q.put(self.client_nums)
+                self.clients.remove(ip)
+                self.client_nums_q.put(len(self.clients))
                 raise e
 
 
