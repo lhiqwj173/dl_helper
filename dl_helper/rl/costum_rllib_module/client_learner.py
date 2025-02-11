@@ -531,7 +531,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
         info_data = share_info(client_id, version, need_warn_up)
 
-        grad_coroutine_num = 2
+        grad_coroutine_num = 1
+        assert grad_coroutine_num == 1, f'grad_coroutine_num: {grad_coroutine_num} must be 1 for now'
         
         # 获取设备ip
         _ip = requests.get('https://api.ipify.org').text

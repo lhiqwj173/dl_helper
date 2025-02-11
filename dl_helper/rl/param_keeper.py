@@ -512,6 +512,17 @@ class ExperimentHandler:
             # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
 
+            # 客户端数据索引
+            client_idx = len(self.clients)
+            grad_begin_idx = GRAD_BATCH_SIZE * client_idx
+
+            # 临时梯度列表
+            temp_gradients = []
+            # 临时梯度info列表
+            temp_info_version = []
+            # 临时数据是否是 全梯度
+            temp_is_full_gradient = False
+
             # 客户端数量
             self.clients.add(ip)
             self.client_nums_q.put(len(self.clients))
@@ -519,7 +530,6 @@ class ExperimentHandler:
             total_handle_time = 0
             begin_time = 0
             push_count = 0
-
             try:
                 while True:
 
@@ -543,7 +553,7 @@ class ExperimentHandler:
                     # 提交到共享梯度信息队列
                     # log(f'put gradients info')
 
-                    # version diff filter
+                    # version diff 过滤
                     version_diffs = [self.version - i[1] for i in batch_g_info]
                     not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > self.grad_allow_version_diff]
                     # 倒序删除不允许的梯度
@@ -554,74 +564,72 @@ class ExperimentHandler:
                     if _update_gradients_length == 0:
                         log(f'{msg_header} no gradients, keep wait')
                         continue
+                    log(f'{msg_header} version diff filt done, cost: {int(1000*(time.time() - t))}ms')
 
-                    # 提交到共享梯度信息队列
-                    for i in range(_update_gradients_length):
-                        self.gradients_info_share_q.put((batch_g_info[i][0][1], batch_g_info[i][1]))
+                    # 梯度类型过滤
+                    # 本次更新的数据中是否存在 全梯度
+                    has_full_gradient = any([i[0][1][0]['is_full_gradient'] for i in batch_g_info])
+                    if has_full_gradient:
+                        # 删除增量的更新
+                        batch_g_info = [i for i in batch_g_info if not i[0][1][0]['is_full_gradient']]
+                        # 检查是否清空临时数据
+                        if not temp_is_full_gradient:
+                            # 清空临时数据
+                            temp_gradients.clear()
+                            temp_info_version.clear()
+                            temp_is_full_gradient = True
+                    else:
+                        # 检查是否清空临时数据
+                        if temp_is_full_gradient:
+                            # 清空临时数据
+                            temp_gradients.clear()
+                            temp_info_version.clear()
+                            temp_is_full_gradient = False
+                    log(f'{msg_header} grad type filt done, cost: {int(1000*(time.time() - t))}ms')
 
-                    log(f'{msg_header} add info&version done, cost: {int(1000*(time.time() - t))}ms')
-                    # 提交到共享梯度
-                    # log(f'put gradients')
+                    # 将剩下的梯度添加到 临时梯度列表 中, 将梯度info添加到 临时梯度info列表
+                    for idx, ((g, compress_info), v) in enumerate(batch_g_info):
+                        temp_gradients.append(g)
+                        temp_info_version.append((compress_info, v))
+                    log(f'{msg_header} add to temp list done, cost: {int(1000*(time.time() - t))}ms')
 
-                    wait_count = 0
+                    # 若 临时梯度列表 大小 >= GRAD_BATCH_SIZE，
+                    #   临时梯度列表[-GRAD_BATCH_SIZE:] 拷贝到 共享梯度列表
+                    #   临时梯度info列表[-GRAD_BATCH_SIZE:] put 共享队列中, info中增加 对应梯度在 共享梯度列表 中的索引
+                    if len(temp_gradients) >= GRAD_BATCH_SIZE:
+                        # 是否是全梯度
+                        if temp_is_full_gradient:
+                            cache_share = self.gradients_cache_share_full
+                        else:
+                            cache_share = self.gradients_cache_share
 
-                    # 当前等待处理的梯度数量
-                    done_idxs = []
-                    gradients_cache_share_lengths = [0] * _update_gradients_length
-                    gradients_cache_share_length = 0
-                    async with self.gradients_add_lock:
-                    # async with AsyncLockWithLog(self.gradients_add_lock, log, msg_header):
-                        while True:
-                            # with LockWithLog(self.share_gradients_lock, log, msg_header):
+                        async with self.gradients_add_lock:
                             with self.share_gradients_lock:
-                                for idx, ((g, compress_info), v) in enumerate(batch_g_info):
-                                    # 是否已经处理过
-                                    if idx in done_idxs:
-                                        continue
+                                for i in range(GRAD_BATCH_SIZE):
+                                    # 0, 1
+                                    _idx = -i-1
+                                    g = temp_gradients[_idx]
+                                    info_data = temp_info_version[_idx]
 
-                                    # 是否是全梯度
-                                    if compress_info[0]['is_full_gradient']:
-                                        cache_share = self.gradients_cache_share_full
-
-                                    else:
-                                        cache_share = self.gradients_cache_share
+                                    share_idx = grad_begin_idx + i
+                                    # info_data = (info_data[0], info_data[1], share_idx)
 
                                     # 拷贝到共享梯度
-                                    gradients_cache_share_lengths[idx] = cache_share[0].size()
-                                    if gradients_cache_share_lengths[idx] < self.grad_cache_size:
-                                        for idx, _g in enumerate(g):
-                                            cache_share[idx].append(_g)
-                                        done_idxs.append(idx)
-                                    else:
-                                        break
-
-                            if len(done_idxs) == _update_gradients_length:
-                                wait_count = 0
-                                break
-
-                            # 等待处理的梯度大于 梯度缓存大小
-                            # 释放锁并等待
-                            self.share_data_new_event.set()
-                            log(f'{msg_header} wait gradients, wait length: {max(gradients_cache_share_lengths)}')
-                            await asyncio.sleep(0.1)
-
-                            wait_count += 1
-                            if wait_count > 30:
-                                log(f'{msg_header} wait gradients timeout')
-                                import sys
-                                sys.exit()
-
-                    gradients_cache_share_length = max(gradients_cache_share_lengths) + 1
-                    log(f'{msg_header} add gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*(time.time() - t))}ms')
-
-                    # # 回复，避免socket堆积
-                    # await ack(writer)
+                                    for idx, _g in enumerate(g):
+                                        cache_share[idx].set(share_idx, _g)
+                                    # 提交到共享梯度信息队列
+                                    self.gradients_info_share_q.put(info_data)
+                    
+                    # 清空临时数据
+                    temp_gradients.clear()
+                    temp_info_version.clear()
+                    log(f'{msg_header} add gradients done, cost: {int(1000*(time.time() - t))}ms')
 
                     # 通知新梯度
                     self.share_data_new_event.set()
                     handle_cost_time = time.time() - t
                     total_handle_time += handle_cost_time
-                    log(f'{msg_header} handle gradients done, wait length: {gradients_cache_share_length}, cost: {int(1000*handle_cost_time)}ms')
+                    log(f'{msg_header} handle gradients done, cost: {int(1000*handle_cost_time)}ms')
 
                     push_count += 1
                     if push_count % 30 == 0:
