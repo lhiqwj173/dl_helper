@@ -570,6 +570,7 @@ class ExperimentHandler:
                     # 本次更新的数据中是否存在 全梯度
                     has_full_gradient = any([i[0][1][0]['is_full_gradient'] for i in batch_g_info])
                     if has_full_gradient:
+                        log(f'{msg_header} has_full_gradient, del not full gradient, temp_is_full_gradient: {temp_is_full_gradient}')
                         # 删除增量的更新
                         batch_g_info = [i for i in batch_g_info if not i[0][1][0]['is_full_gradient']]
                         # 检查是否清空临时数据
@@ -579,6 +580,7 @@ class ExperimentHandler:
                             temp_info_version.clear()
                             temp_is_full_gradient = True
                     else:
+                        log(f'{msg_header} no full gradient, temp_is_full_gradient: {temp_is_full_gradient}')
                         # 检查是否清空临时数据
                         if temp_is_full_gradient:
                             # 清空临时数据
@@ -587,9 +589,9 @@ class ExperimentHandler:
                             temp_is_full_gradient = False
                     _update_gradients_length = len(batch_g_info)
                     if _update_gradients_length == 0:
-                        log(f'{msg_header} grad type filt no gradients, keep wait')
+                        log(f'{msg_header} grad type filt no gradients, keep wait, temp_is_full_gradient: {temp_is_full_gradient}')
                         continue
-                    log(f'{msg_header} grad type filt done, left: {len(batch_g_info)}, cost: {int(1000*(time.time() - t))}ms')
+                    log(f'{msg_header} grad type filt done, left: {len(batch_g_info)}, temp_is_full_gradient: {temp_is_full_gradient}, cost: {int(1000*(time.time() - t))}ms')
 
                     # 将剩下的梯度添加到 临时梯度列表 中, 将梯度info添加到 临时梯度info列表
                     for idx, ((g, compress_info), v) in enumerate(batch_g_info):
