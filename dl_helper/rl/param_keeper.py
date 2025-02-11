@@ -562,9 +562,9 @@ class ExperimentHandler:
                         batch_g_info.pop(idx)
                     _update_gradients_length = len(batch_g_info)
                     if _update_gradients_length == 0:
-                        log(f'{msg_header} no gradients, keep wait')
+                        log(f'{msg_header} version diff filt no gradients, keep wait')
                         continue
-                    log(f'{msg_header} version diff filt done, cost: {int(1000*(time.time() - t))}ms')
+                    log(f'{msg_header} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
                     # 梯度类型过滤
                     # 本次更新的数据中是否存在 全梯度
@@ -585,18 +585,23 @@ class ExperimentHandler:
                             temp_gradients.clear()
                             temp_info_version.clear()
                             temp_is_full_gradient = False
-                    log(f'{msg_header} grad type filt done, cost: {int(1000*(time.time() - t))}ms')
+                    _update_gradients_length = len(batch_g_info)
+                    if _update_gradients_length == 0:
+                        log(f'{msg_header} grad type filt no gradients, keep wait')
+                        continue
+                    log(f'{msg_header} grad type filt done, left: {len(batch_g_info)}, cost: {int(1000*(time.time() - t))}ms')
 
                     # 将剩下的梯度添加到 临时梯度列表 中, 将梯度info添加到 临时梯度info列表
                     for idx, ((g, compress_info), v) in enumerate(batch_g_info):
                         temp_gradients.append(g)
                         temp_info_version.append((compress_info, v))
-                    log(f'{msg_header} add to temp list done, cost: {int(1000*(time.time() - t))}ms')
+                    log(f'{msg_header} add to temp list done, length: {len(temp_gradients)}, cost: {int(1000*(time.time() - t))}ms')
 
                     # 若 临时梯度列表 大小 >= GRAD_BATCH_SIZE，
                     #   临时梯度列表[-GRAD_BATCH_SIZE:] 拷贝到 共享梯度列表
                     #   临时梯度info列表[-GRAD_BATCH_SIZE:] put 共享队列中, info中增加 对应梯度在 共享梯度列表 中的索引
                     if len(temp_gradients) >= GRAD_BATCH_SIZE:
+                        log(f'{msg_header} move to share data begin, cost: {int(1000*(time.time() - t))}ms')
                         # 是否是全梯度
                         if temp_is_full_gradient:
                             cache_share = self.gradients_cache_share_full
@@ -607,7 +612,7 @@ class ExperimentHandler:
                             with self.share_gradients_lock:
                                 for i in range(GRAD_BATCH_SIZE):
                                     # 0, 1
-                                    _idx = -i-1
+                                    _idx = -i-1# 取最新的梯度
                                     g = temp_gradients[_idx]
                                     info_data = temp_info_version[_idx]
 
@@ -619,6 +624,11 @@ class ExperimentHandler:
                                         cache_share[idx].set(share_idx, _g)
                                     # 提交到共享梯度信息队列
                                     self.gradients_info_share_q.put(info_data)
+
+                                log(f'{msg_header} move to share data done, share data length: {cache_share[0].size()}, cost: {int(1000*(time.time() - t))}ms')
+                    else:
+                        log(f'{msg_header} wait enough gradients, current: {len(temp_gradients)}')
+                        continue
                     
                     # 清空临时数据
                     temp_gradients.clear()
