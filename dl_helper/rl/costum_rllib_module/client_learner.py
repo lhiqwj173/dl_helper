@@ -643,9 +643,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
                         log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
-                        # # 等待回复
-                        # await wait_ack(reader)
-                        # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
+                        # 等待回复
+                        await wait_ack(reader)
+                        log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
+                        
                         wait_time = time.time() - send_begin_time
                         total_wait_time += wait_time
 

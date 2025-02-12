@@ -38,7 +38,9 @@ class AsyncRLParameterServer:
         # self.total_client_version_diff = 0
         # self.total_count = 0
 
-    def apply_gradients(self, gradients_list, client_version):
+        self.last_lr_times = 1
+
+    def apply_gradients(self, gradients_list, client_version, lr_times=1):
         """
         更新参数
         gradients_list: 梯度列表, 键为参数名, 值为torch.Tensor
@@ -48,6 +50,17 @@ class AsyncRLParameterServer:
         for idx, k in enumerate(params.keys()):
             params[k].grad = gradients_list[idx].to(self.learner._device)
         
+        # 修改学习率
+        if lr_times != self.last_lr_times:
+            _times = lr_times / self.last_lr_times
+            log(f'modify lr X{_times:.2f}')
+            for module_id, optimizer_names in self.learner._module_optimizers.items():
+                for optimizer_name in optimizer_names:
+                    optim = self.learner.get_optimizer(module_id, optimizer_name)
+                    for param_group in optim.param_groups:
+                        param_group['lr'] = param_group['lr'] * _times
+            self.last_lr_times = lr_times
+
         self.learner.apply_gradients({})
         self.ver += 1
         # self.total_client_version_diff += self.ver - client_version
@@ -364,7 +377,7 @@ class ExperimentHandler:
 
                 # 更新梯度
                 # log(f'update gradients')
-                param_server.apply_gradients(gs, version)
+                param_server.apply_gradients(gs, version, client_nums)
 
                 # 是否需要预热
                 need_warn_up = grad_warm_up_steps > step_count
@@ -409,7 +422,6 @@ class ExperimentHandler:
 
     async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
         """异步处理客户端请求
-
         """
         if cmd.startswith('get@'):
             t = time.time()
@@ -452,16 +464,14 @@ class ExperimentHandler:
                 self.version = v
                 log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
-                # 控制参数推送频率
-                log(f'[{msg_header}] v - last_send_v: {v - last_send_v}, need_send: {(v - last_send_v) >= self.push_params_interval}')
-                # 必须腰处理全部的增量更新
                 # if (v - last_send_v) >= self.push_params_interval:
+                # 每步都推送
                 last_send_v = v
 
                 # 计算更新增量
                 params, info = self.params_compressor.compress(params, ip)
 
-                log(f'[{msg_header}] prepare params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                log(f'[{msg_header}] compress params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                 send_begin_time = time.time()
                 data = pickle.dumps((params, info, v, need_warn_up))
                 await async_send_msg(writer, data)
@@ -476,6 +486,7 @@ class ExperimentHandler:
                 total_wait_time += wait_time
 
                 push_count += 1
+
                 if push_count % 30 == 0:
                     # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
                     # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
@@ -490,7 +501,6 @@ class ExperimentHandler:
                     #     网络传输耗时 = 417 - 0 = 417ms
 
                     log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
-
 
                 handle_cost_time = time.time() - t
                 total_handle_time += handle_cost_time
@@ -628,8 +638,13 @@ class ExperimentHandler:
                                     self.gradients_info_share_q.put(info_data)
 
                                 log(f'{msg_header} move to share data done, share data length: {cache_share[0].size()}, cost: {int(1000*(time.time() - t))}ms')
+                    
+                        # 回复客户端，运行继续生成梯度
+                        await ack(writer)
                     else:
                         log(f'{msg_header} wait enough gradients, current: {len(temp_gradients)}')
+                        # 回复客户端，运行继续生成梯度
+                        await ack(writer)
                         continue
                     
                     # 清空临时数据
