@@ -2,7 +2,7 @@ import asyncio
 import struct
 import socket
 
-from dl_helper.rl.socket_base import tune_tcp_socket, async_send_msg, async_recv_msg, ack
+from dl_helper.rl.socket_base import tune_tcp_socket, async_send_msg, async_recv_msg, ack, wait_ack
 
 # 模拟数据
 param_data = b'x' * 8724
@@ -44,23 +44,25 @@ class BandwidthServer:
 
             while True:
                 # idx = 0
-                # 接收数据
-                nums = len(self.connected_clients[ip])
-                if nums > 1:
-                    tasks = []
-                    for _idx in range(nums):
-                        tasks.append(async_recv_msg(self.connected_clients[ip][_idx][0]))
+                # # 接收数据
+                # nums = len(self.connected_clients[ip])
+                # if nums > 1:
+                #     tasks = []
+                #     for _idx in range(nums):
+                #         tasks.append(async_recv_msg(self.connected_clients[ip][_idx][0]))
 
-                    data = await asyncio.gather(*tasks)
-                    data = b''.join(data)
-                else:
-                    data = await async_recv_msg(reader)
+                #     data = await asyncio.gather(*tasks)
+                #     data = b''.join(data)
+                # else:
+                #     data = await async_recv_msg(reader)
+                # print(f"Received data: {len(data)} bytes")
 
-                print(f"Received data: {len(data)} bytes")
+                # 接收一个 ack
+                await wait_ack(reader)
 
                 # 发送确认
                 await ack(writer)
-                print(f"Sent ack")
+                print(f"reply ack")
             
         except Exception as e:
             print(f"Error handling client: {e}")
