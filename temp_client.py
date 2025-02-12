@@ -125,7 +125,16 @@ async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
 
 async def wait_ack(reader):
     """等待确认消息"""
-    await reader.read(1)
+    # await reader.read(1)
+    try:
+        chunk = await reader.read(1)
+        if not chunk:
+            raise ConnectionError('Connection closed unexpectedly')
+        
+    except asyncio.TimeoutError:
+        raise TimeoutError('Receive timeout')
+    except Exception as e:
+        raise e
 
 async def ack(writer):
     """发送确认消息"""
