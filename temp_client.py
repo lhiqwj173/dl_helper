@@ -5,7 +5,7 @@ import time
 import socket, requests
 
 # 模拟数据
-ack = b'1'
+# ack = b'1'
 param_data = b'x' * 8724
 grad_data = b'x' * 544454
 grad_data_m2 = b'x' * 272227
@@ -126,6 +126,10 @@ async def async_send_msg(writer, msg, chunk_size=CHUNK_SIZE):
 async def wait_ack(reader):
     """等待确认消息"""
     await reader.read(1)
+
+async def ack(writer):
+    """发送确认消息"""
+    writer.write(b'1')
 
 class BandwidthClient:
     def __init__(self, host='217.142.135.154', port=12345):
