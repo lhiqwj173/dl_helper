@@ -535,7 +535,7 @@ class ExperimentHandler:
 
             # 客户端数量
             self.clients.add(ip)
-            self.client_nums_q.put(len(self.clients))
+            put_client_nums_q = False
 
             total_handle_time = 0
             begin_time = 0
@@ -549,6 +549,11 @@ class ExperimentHandler:
                     if begin_time == 0:
                         begin_time = t
                     log(f'{msg_header} recv gradients({len(data)})')
+
+                    # 在收到梯度后更新客户端数量，避免等待浪费
+                    if not put_client_nums_q:
+                        self.client_nums_q.put(len(self.clients))
+                        put_client_nums_q = True
 
                     # batch_g_info, version = pickle.loads(data)
                     # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
@@ -639,14 +644,11 @@ class ExperimentHandler:
 
                                 log(f'{msg_header} move to share data done, share data length: {cache_share[0].size()}, cost: {int(1000*(time.time() - t))}ms')
                     
-                        # 回复客户端，运行继续生成梯度
-                        await ack(writer)
                     else:
+                        raise Exception('don\'t have enough gradients')
                         log(f'{msg_header} wait enough gradients, current: {len(temp_gradients)}')
-                        # 回复客户端，运行继续生成梯度
-                        await ack(writer)
                         continue
-                    
+
                     # 清空临时数据
                     temp_gradients.clear()
                     temp_info_version.clear()

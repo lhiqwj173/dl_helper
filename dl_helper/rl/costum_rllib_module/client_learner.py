@@ -419,9 +419,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # learner 的个数(gpu数)
         self.num_learners = match_num_processes()
 
-        # 跳过第一轮的等待参数，加速训练
-        self.skiped = False 
-
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -643,10 +640,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
                         log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
-                        # 等待回复
-                        await wait_ack(reader)
-                        log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
-                        
+                        # # 等待回复
+                        # await wait_ack(reader)
+                        # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
+
                         wait_time = time.time() - send_begin_time
                         total_wait_time += wait_time
 
@@ -864,44 +861,28 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             except Exception as e:
                 log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
 
-            need_check_if_param_ready = True
-            # need_check_if_param_ready = False
-            # # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
-            # if self.grads_count % GRAD_BATCH_SIZE == 0:
-            #     if not self.skiped:
-            #         # 跳过第一个参数更新等待
-            #         log(f'[{self.client_id}][{self.update_count}] force sync step, skiped first param update')
-            #         self.skiped = True
-            #     else:
-            #         # 等待新的参数就位
-            #         should_update_num = self.grads_count / GRAD_BATCH_SIZE - 1#跳过一个
-            #         if self.update_param_count < should_update_num:
-            #             t = time.time()
-            #             log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, should_update_num: {should_update_num}, update_param_count: {self.update_param_count}')
-            #             self.shared_param.param_event.wait()
-            #             # 触发主learner的参数更新事件
-            #             log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, cost: {int(1000*(time.time() - t))}ms')
-            #             self.sync_learner_param_event.set(1)
-            #             self.update_param_count += 1
-            #         else:
-            #             # 已经满足 should_update_num，无需强制等待
-            #             log(f'[{self.client_id}][{self.update_count}] force sync step, should_update_num satisfied')
-            #             need_check_if_param_ready = True
+            # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
+            if self.grads_count % GRAD_BATCH_SIZE == 0:
+                # 等待新的参数就位
+                t = time.time()
+                log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready')
+                self.shared_param.param_event.wait()
+                # 触发主learner的参数更新事件
+                log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready, cost: {int(1000*(time.time() - t))}ms')
+                self.sync_learner_param_event.set(1)
+                self.update_param_count += 1
+            else:
+                # 不需要强制同步参数的step, 
+                log(f'[{self.client_id}][{self.update_count}] not force sync step')
 
-            # else:
-            #     # 不需要强制同步参数的step, 
-            #     log(f'[{self.client_id}][{self.update_count}] not force sync step')
-            #     need_check_if_param_ready = True
-
-            if need_check_if_param_ready:
-                # 只检查是否有准备好的参数，而不强制等待
-                log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
-                if self.shared_param.param_event.is_set():
-                    # 消耗掉事件
-                    self.shared_param.param_event.wait()
-                    # 触发主learner的参数更新事件
-                    self.sync_learner_param_event.set(1)
-                    self.update_param_count += 1
+            # # 只检查是否有准备好的参数，而不强制等待
+            # log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
+            # if self.shared_param.param_event.is_set():
+            #     # 消耗掉事件
+            #     self.shared_param.param_event.wait()
+            #     # 触发主learner的参数更新事件
+            #     self.sync_learner_param_event.set(1)
+            #     self.update_param_count += 1
 
             # 触发主learner的梯度更新事件
             self.sync_learner_event.set(self.num_learners - 1)
