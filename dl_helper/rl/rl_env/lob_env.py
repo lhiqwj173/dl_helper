@@ -58,8 +58,27 @@ class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
     当天的数据读取完毕后，需要强制平仓
+
+    特征列:
+        [
+            'OF买1量', 'OF卖1量', 'OF买2量', 'OF卖2量', 'OF买3量', 'OF卖3量', 'OF买4量', 'OF卖4量', 'OF买5量', 'OF卖5量', 'OF买6量', 'OF卖6量', 'OF买7量', 'OF卖7量', 'OF买8量', 'OF卖8量', 'OF买9量', 'OF卖9量', 'OF买10量', 'OF卖10量', 
+            'BASE卖1价', 'BASE卖1量', 'BASE买1价', 'BASE买1量', 'BASE卖2价', 'BASE卖2量', 'BASE买2价', 'BASE买2量', 'BASE卖3价', 'BASE卖3量', 'BASE买3价', 'BASE买3量', 'BASE卖4价', 'BASE卖4量', 'BASE买4价', 'BASE买4量', 'BASE卖5价', 'BASE卖5量', 'BASE买5价', 'BASE买5量', 'BASE卖6价', 'BASE卖6量', 'BASE买6价', 'BASE买6量', 'BASE卖7价', 'BASE卖7量', 'BASE买7价', 'BASE买7量', 'BASE卖8价', 'BASE卖8量', 'BASE买8价', 'BASE买8量', 'BASE卖9价', 'BASE卖9量', 'BASE买9价', 'BASE买9量', 'BASE卖10价', 'BASE卖10量', 'BASE买10价', 'BASE买10量', 
+            'OB卖5量', 'OB卖4量', 'OB卖3量', 'OB卖2量', 'OB卖1量', 'OB买1量', 'OB买2量', 'OB买3量', 'OB买4量', 'OB买5量', 'OB买6量', 'OB买7量', 'OB买8量', 'OB买9量', 'OB买10量', 
+            'OS卖10量', 'OS卖9量', 'OS卖8量', 'OS卖7量', 'OS卖6量', 'OS卖5量', 'OS卖4量', 'OS卖3量', 'OS卖2量', 'OS卖1量', 'OS买1量', 'OS买2量', 'OS买3量', 'OS买4量', 'OS买5量', 
+            'OBC买1量', 'OBC买2量', 'OBC买3量', 'OBC买4量', 'OBC买5量', 'OBC买6量', 'OBC买7量', 'OBC买8量', 'OBC买9量', 'OBC买10量', 
+            'OSC卖10量', 'OSC卖9量', 'OSC卖8量', 'OSC卖7量', 'OSC卖6量', 'OSC卖5量', 'OSC卖4量', 'OSC卖3量', 'OSC卖2量', 'OSC卖1量', 
+            'DB卖5量', 'DB卖4量', 'DB卖3量', 'DB卖2量', 'DB卖1量', 'DB买1量', 'DB买2量', 'DB买3量', 'DB买4量', 'DB买5量', 
+            'DS卖5量', 'DS卖4量', 'DS卖3量', 'DS卖2量', 'DS卖1量', 'DS买1量', 'DS买2量', 'DS买3量', 'DS买4量', 'DS买5量'
+        ]
+
     """
-    def __init__(self, _type='train', his_len=100, file_num=0, simple_test=False):
+    def __init__(self, data_type='train', his_len=100, file_num=0, simple_test=False, need_cols=[]):
+        """
+        'data_type': 'train',# 训练/测试
+        'his_len': 100,# 每个样本的 历史数据长度
+        'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
+        'simple_test': False,# 是否为简单测试
+        """
         # 快速测试
         self.simple_test = simple_test
         if self.simple_test:
@@ -67,6 +86,17 @@ class data_producer:
 
         self.his_len = his_len
         self.file_num = file_num
+        
+        # 需要的特征列名
+        self.need_cols = need_cols
+        self.need_cols_idx = []
+        # 添加必须的列
+        # if self.need_cols:
+        #     for must_col in ['mid_pct', 'mid_price', 'mid_vol']:
+        #         if must_col not in self.need_cols:
+        #             self.need_cols.append(must_col)
+
+        self.cols_num = 130 if not self.need_cols else len(self.need_cols)
 
         # 训练数据
         if in_kaggle:
@@ -75,9 +105,9 @@ class data_producer:
             data_folder_name = os.listdir(input_folder)[0]
             self.data_folder = os.path.join(input_folder, data_folder_name)
         else:
-            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data_test'
+            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data'
 
-        self.data_type = _type
+        self.data_type = data_type
         self.files = []
 
         # 当前数据日期/code
@@ -142,6 +172,12 @@ class data_producer:
         file = self.files.pop(0)
         log(f'load date file({self.data_type}): {file}')
         self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
+
+        # 列过滤
+        if self.need_cols:
+            self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
+            # 只保留需要的列
+            self.all_raw_data = self.all_raw_data.loc[:, self.need_cols]
 
         if self.simple_test:
             self.ids = self.ids[:8000]
@@ -219,7 +255,7 @@ class data_producer:
 
             self.all_raw_data.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
             for col in depth_cols:
-                raw[col] = self.all_raw_data[col].ffill()
+                self.all_raw_data[col] = self.all_raw_data[col].ffill()
         if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
             # 成交数据
             deal_cols = [i for i in all_cols if i.startswith('D')]
@@ -229,6 +265,9 @@ class data_producer:
         if 'BASE卖1量' in all_cols and 'BASE买1量' in all_cols:
             # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
             for i in range(2, 11):
+                if f'BASE买{i}价' not in all_cols or f'BASE买{i-1}价' not in all_cols:
+                    continue
+
                 # 买价
                 self.all_raw_data.loc[:, f'BASE买{i}价'] = self.all_raw_data[f'BASE买{i}价'].fillna(self.all_raw_data[f'BASE买{i-1}价'] - 0.001)
 
@@ -262,20 +301,25 @@ class data_producer:
         # 重置日期文件停止标志
         self.date_file_done = False
 
-    def set_data_type(self, _type):
-        self.data_type = _type
+    def set_data_type(self, data_type):
+        self.data_type = data_type
 
     def data_size(self):
-        return 130*100
+        # 运行只获取部分列， 简化数据
+        return self.cols_num*self.his_len
 
     def use_data_split(self, raw, ms):
         """
         使用数据分割
         raw 是完整的 pickle 切片
-        ms 是标准化数据
+        ms 是标准化数据df
         都是 numpy 数组
+        TODO 运行只获取部分列， 简化数据
         """
-        return raw[:, :130], ms[:130, :]
+        if self.need_cols:
+            return raw, ms.iloc[self.need_cols_idx, :].values
+        else:
+            return raw[:, :130], ms.iloc[:130, :].values
 
     def store_bid_ask_1st_data(self, raw):
         """
@@ -311,7 +355,7 @@ class data_producer:
         # 记录 买卖1档 的价格
         self.store_bid_ask_1st_data(raw)
         # 数据标准化
-        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]]).values
+        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
         x, ms = self.use_data_split(raw, ms)
         x -= ms[:, 0]
         x /= ms[:, 1]
@@ -566,18 +610,43 @@ class LOB_trade_env(gym.Env):
 
     REG_NAME = 'lob'
     
-    def __init__(self, data_producer: data_producer):
+    def __init__(self, config: dict):
         """
-        :param data_producer: 数据生产器
+        :param config: 配置
+            {
+                # 用于实例化 数据生产器
+                'data_type': 'train'/'val'/'test',# 训练/测试
+                'his_len': 100,# 每个样本的 历史数据长度
+                'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
+                'simple_test': False,# 是否为简单测试
+
+                'period_done': False,
+                'need_close': False,
+            }
         """
         super().__init__()
+
+        defult_config = {
+            # 用于实例化 数据生产器
+            'data_type': 'train',# 训练/测试
+            'his_len': 100,# 每个样本的 历史数据长度
+            'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
+            'simple_test': False,# 是否为简单测试
+            'need_cols': [],# 需要读取的列
+
+            'period_done': False,
+            'need_close': False,
+        }
+        # 用户配置更新
+        for k, v in defult_config.items():
+            config[k] = config.get(k, v)
         
         # 数据生产器
-        self.data_producer = data_producer
-        self.period_done = False
+        self.data_producer = data_producer(config['data_type'], config['his_len'], config['file_num'], config['simple_test'], config['need_cols'])
+        self.period_done = config['period_done']
 
         # 账户数据
-        self.need_close = False # 下一个动作无论是什么，都要对做平仓操作(因为没有更多的连续数据)
+        self.need_close = config['need_close'] # False: 下一个动作无论是什么，都要对做平仓操作(因为没有更多的连续数据)
         self.acc = Account()
 
         # 动作空间 
@@ -608,11 +677,11 @@ class LOB_trade_env(gym.Env):
     def need_wait_close(self):
         return True
 
-    def set_data_type(self, _type):
-        if _type in ['val', 'test']:
+    def set_data_type(self, data_type):
+        if data_type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
-            self.need_upload_file = f'{_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
-        self.data_producer.set_data_type(_type)
+            self.need_upload_file = f'{data_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
+        self.data_producer.set_data_type(data_type)
 
     def _get_data(self):
         # 获取数据
