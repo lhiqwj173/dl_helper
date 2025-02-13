@@ -662,35 +662,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             #     网络传输耗时 = 523 - 15 = 508ms
                             #     压缩处理耗时 = 171ms
 
-                            # ROUND 1
-                            # avg grad send time: 759ms, avg wait time: 518ms, avg handle time: 229ms
-                            # 优化空间:
-                            #     平均等待梯度时间 = 759 - 518 - 229 = 12ms > 目标达成
-                            #     网络传输耗时 = 518 - 15 = 503ms
-                            #     压缩处理耗时 = 229ms
-
-                            # ROUND 2
-                            # avg grad send time: 949ms, avg wait time: 940ms, avg handle time: -7ms
-                            # 优化空间:
-                            #     平均等待梯度时间 = 949 - 940 - 0 = 9ms > 目标达成
-                            #     网络传输耗时 = 940 - 15 = 925ms
-                            #     压缩处理耗时 = 0ms(主learner完成)      > 目标达成
-
-                            # ROUND 3 GRAD_BATCH_SIZE=4
-                            # avg grad send time: 587ms, avg wait time: 547ms, avg handle time: 0ms
-                            # 优化空间:
-                            #     平均等待梯度时间 = 587 - 547 - 0 = 40ms > 目标达成
-                            #     网络传输耗时 = 547 - 17 = 530ms
-                            #     压缩处理耗时 = 18ms(主learner完成)      > 目标达成
-
                             # ROUND 4 GRAD_BATCH_SIZE=1
                             # avg grad send time: 43ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 40511
                             # 优化空间:
                             #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
                             #     网络传输耗时 = 0ms                    > 目标达成
                             #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
 
+                            # ROUND 5 GRAD_BATCH_SIZE=1 同步训练
+                            # avg grad send time: 738ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 41529, mean version diff: 0.00
+                            # 优化空间:
+                            #     平均等待梯度时间 = 738 - 0 - 0 = 738ms (发送梯度/等待参数推送)
+                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
 
                         # 清空
                         batch_compressed_results.clear()

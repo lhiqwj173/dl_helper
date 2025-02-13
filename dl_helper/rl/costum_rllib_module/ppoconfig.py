@@ -15,7 +15,10 @@ class ClientPPOConfig(PPOConfig):
         if rl_module_spec is None:
             rl_module_spec = self.get_multi_rl_module_spec(env=env, spaces=spaces)
 
-        learner_group = self._extra_learner_group_class(config=self.copy(), module_spec=rl_module_spec, **self._extra_learner_group_kwargs)
+        if hasattr(self, '_extra_learner_group_class'):
+            learner_group = self._extra_learner_group_class(config=self.copy(), module_spec=rl_module_spec, **self._extra_learner_group_kwargs)
+        else:
+            learner_group = LearnerGroup(config=self.copy(), module_spec=rl_module_spec)
         return learner_group
     
     def extra_config(self, learner_group_class=LearnerGroup, learner_group_kwargs={}):
