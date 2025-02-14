@@ -107,27 +107,48 @@ def simplify_rllib_metrics(data, out_func=print):
     return important_metrics
 
 
-def plot_training_curve(train_folder, total_time=None, y_axis_max = None):
+def plot_training_curve(train_folder, total_time=None, y_axis_max = None, log_file=None):
     """
     total_time: 训练总时间 sec
     """
     # 绘制训练曲线
-    log_file = get_log_file()
+    if log_file is None:
+        log_file = get_log_file()
     # 读取log文件
     mean_reward = []
     max_reward = []
+    val_mean_reward = []
+    val_max_reward = []
     with open(log_file, 'r') as f:
         for line in f:
             if '85 -   episode_return_mean:' in line:
                 mean_reward.append(float(line.split(' ')[-1]))
+                # 对齐其他列表，若有缺失用前值补齐
+                if len(mean_reward) > 1:
+                    for _list in [max_reward, val_mean_reward, val_max_reward]:
+                        if len(_list) < len(mean_reward):
+                            _list.append(_list[-1] if len(_list) > 0 else np.nan)
+                
             if '85 -   episode_return_max:' in line:
                 max_reward.append(float(line.split(' ')[-1]))
+            if '91 -   episode_return_mean:' in line:
+                val_mean_reward.append(float(line.split(' ')[-1]))
+            if '91 -   episode_return_max:' in line:
+                val_max_reward.append(float(line.split(' ')[-1]))
     
     # 绘制训练曲线并保存到 train_folder 中
     mean_reward_max = max(mean_reward) if len(mean_reward) > 0 else 0
     max_reward_max = max(max_reward) if len(max_reward) > 0 else 0
-    plt.plot(mean_reward, label=f'mean_reward({mean_reward_max:.2f})')
-    plt.plot(max_reward, label=f'max_reward({max_reward_max:.2f})')
+    val_mean_reward_max = max(val_mean_reward) if len(val_mean_reward) > 0 else 0
+    val_max_reward_max = max(val_max_reward) if len(val_max_reward) > 0 else 0
+
+    # Train curves (alpha=0.4)
+    plt.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
+    plt.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
+    # Val curves (solid lines)
+    plt.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
+    plt.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    
     plt.legend()
     plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
@@ -1709,3 +1730,7 @@ def calculate_importance_loss(loss: torch.Tensor) -> float:
     # 归一化到[0, 1]范围
     importance = np.clip(importance / 10.0, 0, 1)
     return importance
+
+
+if __name__ == "__main__":
+    plot_training_curve(r"D:\code\dl_helper\lob", log_file=r"D:\code\dl_helper\lob\logs\20250213_lob.log")

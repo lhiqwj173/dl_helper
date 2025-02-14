@@ -649,6 +649,9 @@ class LOB_trade_env(gym.Env):
         self.need_close = config['need_close'] # False: 下一个动作无论是什么，都要对做平仓操作(因为没有更多的连续数据)
         self.acc = Account()
 
+        # 是否需要重置（切换模式后需要）
+        self.need_reset = False
+
         # 动作空间 
         # 买 卖 不操作
         self.action_space = spaces.Discrete(3)
@@ -660,7 +663,7 @@ class LOB_trade_env(gym.Env):
         #       #交易数量 固定1单位
         #       0/1 空仓/多头
         # 13001 数组
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 1,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 4,), dtype=np.float32)
 
         # 测试数据集 预测输出文件
         self.need_upload_file = ''
@@ -677,11 +680,22 @@ class LOB_trade_env(gym.Env):
     def need_wait_close(self):
         return True
 
-    def set_data_type(self, data_type):
+    def _set_data_type(self, data_type):
         if data_type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
             self.need_upload_file = f'{data_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
         self.data_producer.set_data_type(data_type)
+        
+        self.need_reset = True
+
+    def val(self):
+        self._set_data_type('val')
+
+    def train(self):
+        self._set_data_type('train')
+
+    def test(self):
+        self._set_data_type('test')
 
     def _get_data(self):
         # 获取数据
@@ -775,6 +789,8 @@ class LOB_trade_env(gym.Env):
             f.write(f'{self.data_producer.id},{int(action)}\n')
     
     def step(self, action):
+        assert not self.need_reset, "LOB env need reset"
+
         # 如果是test数据集，需要输出预测数据文件
         if self.data_producer.data_type in ['val', 'test']:
             self.out_test_predict(action)
@@ -809,6 +825,8 @@ class LOB_trade_env(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
+        # 重置
+        self.need_reset = False
         # 清理图形对象
         if hasattr(self, 'fig'):
             plt.close(self.fig)

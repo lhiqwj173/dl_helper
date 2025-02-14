@@ -6,7 +6,7 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
-from dl_helper.rl.costum_rllib_module.lob_model import lob_PPOCatalog
+from dl_helper.rl.costum_rllib_module.lob_model import lob_PPOCatalog, LobCallbacks
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
@@ -58,10 +58,12 @@ if __name__ == "__main__":
             model_config={
                 # 自定义编码器参数
                 'input_dims' : (20, 10),
+                'extra_input_dims' : 4,
                 'ds' : (20, 40, 40, 3),
                 'ts' : (10, 6, 3, 1),
             },
         )
+        .callbacks(LobCallbacks)
     )
 
     if run_type == 'server':
@@ -128,23 +130,24 @@ if __name__ == "__main__":
 
     else:
         # 单机运行
-        config = config.learners(    
-            num_learners=num_learners,
-            num_gpus_per_learner=1,
-        )
+        # config = config.learners(    
+        #     num_learners=num_learners,
+        #     num_gpus_per_learner=1,
+        # )
         config = config.evaluation(
-            evaluation_interval=10,
+            evaluation_interval=5,
             evaluation_duration=3,
         )
 
         # 构建算法
         algo = config.build()
+        # print(algo.learner_group._learner.module._rl_modules['default_policy'])
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
         # rounds = 2000
         # rounds = 100
-        rounds = 3
+        rounds = 30
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
