@@ -145,14 +145,14 @@ if __name__ == "__main__":
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
-        # rounds = 2000
+        rounds = 2000
         # rounds = 100
-        rounds = 30
+        # rounds = 30
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
             simplify_rllib_metrics(result, out_func=log)
 
-        # 绘制训练曲线
-        plot_training_curve(train_folder, time.time() - begin_time)
+            # 绘制训练曲线
+            plot_training_curve(train_folder, time.time() - begin_time)
 
