@@ -9,11 +9,11 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.costum_rllib_module.lob_model import lob_PPOCatalog, LobCallbacks
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, package_folder
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
-from py_ext.wechat import wx
-from py_ext.alist import alist
+
+from dl_helper.train_folder_manager import TrainFolderManager
 
 train_folder = 'lob'
 init_logger('20250213_lob', home=train_folder, timestamp=False)
@@ -130,10 +130,10 @@ if __name__ == "__main__":
 
     else:
         # 单机运行
-        # config = config.learners(    
-        #     num_learners=num_learners,
-        #     num_gpus_per_learner=1,
-        # )
+        config = config.learners(    
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
+        )
         config = config.evaluation(
             evaluation_interval=5,
             evaluation_duration=3,
@@ -142,6 +142,12 @@ if __name__ == "__main__":
         # 构建算法
         algo = config.build()
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
+
+        # 训练文件夹管理
+        train_folder_manager = TrainFolderManager(train_folder)
+        if train_folder_manager.exists():
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
@@ -153,6 +159,12 @@ if __name__ == "__main__":
             result = algo.train()
             simplify_rllib_metrics(result, out_func=log)
 
-            # 绘制训练曲线
-            plot_training_curve(train_folder, time.time() - begin_time)
+            if i % 10 == 0 or i == rounds - 1:
+                # 保存检查点
+                checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
+                log(f"Checkpoint saved in directory {checkpoint_dir}")
+                # 绘制训练曲线
+                plot_training_curve(train_folder, time.time() - begin_time)
+                # 压缩并上传
+                package_folder(train_folder)
 

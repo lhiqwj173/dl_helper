@@ -622,6 +622,7 @@ class LOB_trade_env(gym.Env):
 
                 'period_done': False,
                 'need_close': False,
+                'save_folder': 'lob',
             }
         """
         super().__init__()
@@ -636,10 +637,16 @@ class LOB_trade_env(gym.Env):
 
             'period_done': False,
             'need_close': False,
+            'save_folder': LOB_trade_env.REG_NAME,
         }
         # 用户配置更新
         for k, v in defult_config.items():
             config[k] = config.get(k, v)
+
+        # 保存文件夹
+        self.save_folder = os.path.join(config['save_folder'], 'env_output')
+        if not os.path.exists(self.save_folder):
+            os.makedirs(self.save_folder)
         
         # 数据生产器
         self.data_producer = data_producer(config['data_type'], config['his_len'], config['file_num'], config['simple_test'], config['need_cols'])
@@ -683,7 +690,7 @@ class LOB_trade_env(gym.Env):
     def _set_data_type(self, data_type):
         if data_type in ['val', 'test']:
             # 切换到测试数据集，创建预测输出文件
-            self.need_upload_file = f'{data_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv'
+            self.need_upload_file = os.path.join(self.save_folder, f'{data_type}_{datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")}.csv')
         self.data_producer.set_data_type(data_type)
         
         self.need_reset = True
