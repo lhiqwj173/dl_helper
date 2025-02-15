@@ -9,7 +9,7 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.costum_rllib_module.lob_model import lob_PPOCatalog, LobCallbacks
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, package_folder
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
 
@@ -166,5 +166,5 @@ if __name__ == "__main__":
                 # 绘制训练曲线
                 plot_training_curve(train_folder, time.time() - begin_time)
                 # 压缩并上传
-                package_folder(train_folder)
+                train_folder_manager.push()
 
