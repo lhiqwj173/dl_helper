@@ -844,8 +844,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             except Exception as e:
                 log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
 
-            # 累计GRAD_BATCH_SIZE个梯度后，需要强制等待新的参数就位
-            if self.grads_count % GRAD_BATCH_SIZE == 0:
+            N = 0
+            # 累计 N 个梯度后，需要强制等待新的参数就位
+            if N > 0 and self.grads_count % N == 0:
                 # 等待新的参数就位
                 t = time.time()
                 log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready')
@@ -856,16 +857,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self.update_param_count += 1
             else:
                 # 不需要强制同步参数的step, 
+                # 只检查是否有准备好的参数，而不强制等待
                 log(f'[{self.client_id}][{self.update_count}] not force sync step')
-
-            # # 只检查是否有准备好的参数，而不强制等待
-            # log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
-            # if self.shared_param.param_event.is_set():
-            #     # 消耗掉事件
-            #     self.shared_param.param_event.wait()
-            #     # 触发主learner的参数更新事件
-            #     self.sync_learner_param_event.set(1)
-            #     self.update_param_count += 1
+                log(f'[{self.client_id}][{self.update_count}] check if param ready: {self.shared_param.param_event.is_set()}')
+                if self.shared_param.param_event.is_set():
+                    # 消耗掉事件
+                    self.shared_param.param_event.wait()
+                    # 触发主learner的参数更新事件
+                    self.sync_learner_param_event.set(1)
+                    self.update_param_count += 1
 
             # 触发主learner的梯度更新事件
             self.sync_learner_event.set(self.num_learners - 1)
