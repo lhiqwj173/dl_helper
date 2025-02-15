@@ -146,6 +146,9 @@ def plot_training_curve(train_folder, total_time=None, y_axis_max = None, log_fi
     val_mean_reward_max = max(val_mean_reward) if len(val_mean_reward) > 0 else 0
     val_max_reward_max = max(val_max_reward) if len(val_max_reward) > 0 else 0
 
+    # 创建一个新的图形对象，确保每次调用都有一个新图
+    plt.figure(figsize=(10, 6))  # 可以调整大小以适合您的需要
+
     # Train curves (alpha=0.4)
     plt.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
     plt.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
@@ -158,6 +161,8 @@ def plot_training_curve(train_folder, total_time=None, y_axis_max = None, log_fi
     if y_axis_max is not None:
         plt.ylim(0, y_axis_max)
     plt.savefig(os.path.join(train_folder, 'training_curve.png'))
+    
+    plt.close()  # 关闭当前图形
 
 class GradientAccumulator:
     def __init__(self, momentum=0.9, eps=1e-5):
