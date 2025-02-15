@@ -136,6 +136,10 @@ def plot_training_curve(train_folder, total_time=None, y_axis_max = None, log_fi
             if '91 -   episode_return_max:' in line:
                 val_max_reward.append(float(line.split(' ')[-1]))
     
+    if len(mean_reward) == 0:
+        log('No mean_reward data found')
+        return
+
     # 绘制训练曲线并保存到 train_folder 中
     mean_reward_max = max(mean_reward) if len(mean_reward) > 0 else 0
     max_reward_max = max(max_reward) if len(max_reward) > 0 else 0
