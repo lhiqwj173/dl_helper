@@ -83,7 +83,7 @@ class AsyncRLParameterServer:
 class ExperimentHandler:
     """处理单个实验的类"""
 
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=100
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=0
     ):
         """
         train_title: 训练标题

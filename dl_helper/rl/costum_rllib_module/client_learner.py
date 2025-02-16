@@ -765,7 +765,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 if begin_time == 0:
 
                     begin_time = t
-                log(f"[{total_count}] recv params push")
+                log(f"[{total_count}] recv params push, Version: {version}, need_warn_up: {need_warn_up}")
 
                 # 需要完整的处理参数推送
                 # # 当前是否处于训练阶段
