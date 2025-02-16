@@ -839,7 +839,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 加入队列
             try:
                 self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
-                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_qu eue.qsize()} / {self.task_queue._maxsize}')
+                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
             except Exception as e:
