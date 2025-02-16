@@ -645,6 +645,7 @@ class ExperimentHandler:
                                 log(f'{msg_header} move to share data done, share data length: {cache_share[0].size()}, cost: {int(1000*(time.time() - t))}ms')
                     
                     else:
+                        # TODO 过滤后数量不够
                         raise Exception('don\'t have enough gradients')
                         log(f'{msg_header} wait enough gradients, current: {len(temp_gradients)}')
                         continue

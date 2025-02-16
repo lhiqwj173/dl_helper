@@ -73,6 +73,8 @@ if __name__ == "__main__":
         # 构建算法
         algo = config.build()
 
+        out_file = os.path.join(train_folder, 'out.csv')
+
         begin_time = time.time()
         # 训练循环
         # 标准训练 30 527.9s 
@@ -81,7 +83,7 @@ if __name__ == "__main__":
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
-            simplify_rllib_metrics(result, out_func=log)
+            simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
         # 停止学习者额外的事件进程
         algo.learner_group.stop_extra_process()
@@ -89,4 +91,4 @@ if __name__ == "__main__":
 
         if need_val:
             # 绘制训练曲线
-            plot_training_curve(train_folder, time.time() - begin_time, y_axis_max=500)
+            plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)

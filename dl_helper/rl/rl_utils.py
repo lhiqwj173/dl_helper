@@ -25,12 +25,36 @@ from py_ext.alist import alist
 rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
-def simplify_rllib_metrics(data, out_func=print):
+def simplify_rllib_metrics(data, out_func=print, out_file=''):
     important_metrics = {
         "env_runner": {},
         "val": {},
         "learner": {},
     }
+
+    ks = [
+        'env_runner_episode_return_mean',
+        'env_runner_episode_return_max',
+        'env_runner_episode_len_mean',
+        'env_runner_episode_len_max',
+        'env_runner_num_env_steps_sampled',
+        'env_runner_num_episodes',
+        'val_episode_return_mean',
+        'val_episode_return_max',
+        'val_episode_len_mean',
+        'val_episode_len_max',
+        'learner_default_policy_entropy',
+        'learner_default_policy_policy_loss',
+        'learner_default_policy_vf_loss',
+        'learner_default_policy_total_loss',
+        'time_this_iter_s',
+        'num_training_step_calls_per_iteration',
+        'training_iteration',
+    ]
+
+    data_dict = OrderedDict()
+    for k in ks:
+        data_dict[k] = ''
 
     if 'counters' in data:
         if 'num_env_steps_sampled' in data["counters"]:
@@ -88,13 +112,13 @@ def simplify_rllib_metrics(data, out_func=print):
     else:
         out_func("  no env_runner data")
     
-    out_func("\nval:")
+    out_func("val:")
     for k, v in important_metrics['val'].items():
         out_func(f"  {k}: {v:.4f}")
     else:
         out_func("  no val data")
 
-    out_func("\nlearner(default_policy):")
+    out_func("learner(default_policy):")
     if 'default_policy' in important_metrics['learner'] and important_metrics['learner']['default_policy']:
         for k, v in important_metrics['learner']['default_policy'].items():
             out_func(f"  {k}: {v:.4f}")
@@ -102,40 +126,42 @@ def simplify_rllib_metrics(data, out_func=print):
         out_func("  no learner data")
     
     if 'time_this_iter_s' in important_metrics:
-        out_func(f"\ntime_this_iter_s: {important_metrics['time_this_iter_s']:.4f}")
+        out_func(f"time_this_iter_s: {important_metrics['time_this_iter_s']:.4f}")
     if 'num_training_step_calls_per_iteration' in important_metrics:
         out_func(f"num_training_step_calls_per_iteration: {important_metrics['num_training_step_calls_per_iteration']}")
     out_func('-'*30)
+
+    if out_file:
+        # 写入列名
+        if not os.path.exists(out_file):
+            with open(out_file, 'w') as f:
+                f.write(','.join(ks) + '\n')
+        
+        # 遍历提取数值
+        def get_k_v(data_dict, d, pk=''):
+            for k, v in d.items():
+                _k = f'{pk}_{k}' if pk else k
+                if isinstance(v, dict):
+                    get_k_v(data_dict, v, _k)
+                else:
+                    data_dict[_k] = str(v)
+        get_k_v(data_dict, important_metrics)
+
+        # 写入数据
+        with open(out_file, 'a') as f:
+            f.write(','.join(data_dict.values()) + '\n')
+
     return important_metrics
 
-def plot_training_curve(train_folder, total_time=None, y_axis_max = None, log_file=None):
+def plot_training_curve(train_folder, out_file, total_time=None, y_axis_max = None):
     """
     total_time: 训练总时间 sec
     """
-    # 绘制训练曲线
-    if log_file is None:
-        log_file = get_log_file()
-    # 读取log文件
-    mean_reward = []
-    max_reward = []
-    val_mean_reward = []
-    val_max_reward = []
-    with open(log_file, 'r') as f:
-        for line in f:
-            if '85 -   episode_return_mean:' in line:
-                mean_reward.append(float(line.split(' ')[-1]))
-                # 对齐其他列表，若有缺失用前值补齐
-                if len(mean_reward) > 1:
-                    for _list in [max_reward, val_mean_reward, val_max_reward]:
-                        if len(_list) < len(mean_reward):
-                            _list.append(_list[-1] if len(_list) > 0 else np.nan)
-                
-            if '85 -   episode_return_max:' in line:
-                max_reward.append(float(line.split(' ')[-1]))
-            if '91 -   episode_return_mean:' in line:
-                val_mean_reward.append(float(line.split(' ')[-1]))
-            if '91 -   episode_return_max:' in line:
-                val_max_reward.append(float(line.split(' ')[-1]))
+    out_data = pd.read_csv(out_file)
+    mean_reward = out_data['env_runner_episode_return_mean'].tolist()
+    max_reward = out_data['env_runner_episode_return_max'].tolist()
+    val_mean_reward = out_data['val_episode_return_mean'].tolist()
+    val_max_reward = out_data['val_episode_return_max'].tolist()
     
     if len(mean_reward) == 0:
         log('No mean_reward data found')
