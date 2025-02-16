@@ -92,3 +92,6 @@ if __name__ == "__main__":
         if need_val:
             # 绘制训练曲线
             plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
+            log(f"plot_training_curve done")
+
+        log(f'{train_title} client all done')

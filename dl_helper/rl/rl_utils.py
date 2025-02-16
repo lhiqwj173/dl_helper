@@ -168,10 +168,10 @@ def plot_training_curve(train_folder, out_file, total_time=None, y_axis_max = No
         return
 
     # 绘制训练曲线并保存到 train_folder 中
-    mean_reward_max = max(mean_reward) if len(mean_reward) > 0 else 0
-    max_reward_max = max(max_reward) if len(max_reward) > 0 else 0
-    val_mean_reward_max = max(val_mean_reward) if len(val_mean_reward) > 0 else 0
-    val_max_reward_max = max(val_max_reward) if len(val_max_reward) > 0 else 0
+    mean_reward_max = max([x for x in mean_reward if not np.isnan(x)]) if len(mean_reward) > 0 else 0
+    max_reward_max = max([x for x in max_reward if not np.isnan(x)]) if len(max_reward) > 0 else 0
+    val_mean_reward_max = max([x for x in val_mean_reward if not np.isnan(x)]) if len(val_mean_reward) > 0 else 0
+    val_max_reward_max = max([x for x in val_max_reward if not np.isnan(x)]) if len(val_max_reward) > 0 else 0
 
     # 创建一个新的图形对象，确保每次调用都有一个新图
     plt.figure(figsize=(10, 6))  # 可以调整大小以适合您的需要

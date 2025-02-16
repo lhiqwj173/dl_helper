@@ -502,7 +502,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             log(f"[{self.client_id}] stop_param_thread")
             self.stop_event.set()
             # 等待子进程退出
-            self.event_loop_process.join(timeout=5)  # 给子进程一些时间来退出
+            self.event_loop_process.join(timeout=10)  # 给子进程一些时间来退出
             if self.event_loop_process.is_alive():
                 log(f"[{self.client_id}] Force terminating the process...")
                 self.event_loop_process.terminate()
@@ -642,13 +642,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         diff = current_version - batch_compressed_results[0][1]
 
                     total_version_diff += diff
-                    log(f"[{idx}][{send_count}] send send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
+                    log(f"[{idx}][{send_count}] send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     send_begin_time = time.time()
                     await async_send_msg(writer, data)
                     send_size = len(data)
                     mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
-                    log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
+                    log(f"[{idx}][{send_count}] send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
                     # # 等待回复
                     # await wait_ack(reader)
