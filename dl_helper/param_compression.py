@@ -1,8 +1,5 @@
 import torch
-import math
-import numpy as np
-from typing import List, Tuple, Dict, Optional
-from dataclasses import dataclass
+from typing import List, Tuple, Dict
 
 CompressInfo = Dict[str, List[torch.Tensor]]
 
