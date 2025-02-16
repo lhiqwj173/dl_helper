@@ -15,6 +15,8 @@ import torch.nn.functional as F
 from dl_helper.models.binctabl import BiN, BL_layer, TABL_layer
 from dl_helper.rl.rl_env.lob_env import LOB_trade_env
 
+import pickle
+
 class BinCtablEncoder(TorchModel, Encoder):
     def __init__(self, config):
         TorchModel.__init__(self, config)
@@ -33,7 +35,12 @@ class BinCtablEncoder(TorchModel, Encoder):
         self.TABL = TABL_layer(d4, d3, t3, t4)
         self.dropout = nn.Dropout(0.1)
 
+        self.error_count = 0
+
     def _forward(self, inputs: dict, **kwargs) -> dict:
+        # for debug
+        pickle.dump(inputs, open(f'inputs_{self.error_count}.pkl', 'wb'))
+
         extra_x = inputs[Columns.OBS][:,self.split_index:]
         x = inputs[Columns.OBS][:,:self.split_index].reshape(-1, *self.input_dims)
         x = self.BiN(x)
@@ -57,6 +64,11 @@ class BinCtablEncoder(TorchModel, Encoder):
 
         x = torch.squeeze(x,dim=2)# 保留batch维度
         x = torch.cat([x, extra_x], dim=1)
+
+        # 数值检查
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            self.error_count += 1
+
         return {ENCODER_OUT: x}
 
     def max_norm_(self, p):
