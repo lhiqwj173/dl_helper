@@ -83,7 +83,7 @@ class AsyncRLParameterServer:
 class ExperimentHandler:
     """处理单个实验的类"""
 
-    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=10
+    def __init__(self, train_title, config, debug=False, grad_warm_up_steps=1000000
     ):
         """
         train_title: 训练标题
@@ -478,6 +478,7 @@ class ExperimentHandler:
                 send_size = len(data)
                 mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
+                # 9909 
                 log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                 # # 等待回复
                 # await wait_ack(reader)
@@ -659,6 +660,7 @@ class ExperimentHandler:
                     self.share_data_new_event.set()
                     handle_cost_time = time.time() - t
                     total_handle_time += handle_cost_time
+                    # 14015
                     log(f'{msg_header} handle gradients done, cost: {int(1000*handle_cost_time)}ms')
 
                     push_count += 1
