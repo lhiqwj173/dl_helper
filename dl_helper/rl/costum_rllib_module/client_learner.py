@@ -528,6 +528,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
         info_data = share_info(client_id, version, need_warn_up)
 
+        async_share_data = {
+            'stop': False,
+        }
+
         grad_coroutine_num = 1
         assert grad_coroutine_num == 1, f'grad_coroutine_num: {grad_coroutine_num} must be 1 for now'
         
@@ -537,39 +541,43 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 启动协程任务
         tasks = []
         for _idx in range(grad_coroutine_num):
-            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(_ip, train_title, _idx, info_data, grad_q))
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(async_share_data, _ip, train_title, _idx, info_data, grad_q))
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(_ip, train_title, info_data, params_dict, grad_params_value_shape)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(async_share_data, _ip, train_title, info_data, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # 启动停止事件循环协程
-        task = loop.create_task(ClientPPOTorchLearner.stop_loop_event())
+        task = loop.create_task(ClientPPOTorchLearner.stop_loop_event(async_share_data, ))
         tasks.append(task)
 
-        # # debug
-        # loop.set_debug(True)
+        try:
+            # 等待所有任务完成或者被取消
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        except Exception as e:
+            log(f"Event loop error: {str(e)}")
+        finally:
+            # 关闭事件循环
+            loop.close()
+            log("Event loop closed")
 
-        # 运行事件循环
-        loop.run_forever()
+        log(f"event loop process done")
 
     @staticmethod
-    async def stop_loop_event():
-        """停止事件循环"""
+    async def stop_loop_event(async_share_data):
+        """负责监控停止事件"""
         stop_event = Event(name=f'_stop_loop_event')
         while True:
             if stop_event.is_set():
                 break
             await asyncio.sleep(1)
 
-        # 停止事件循环
-        log(f"stop loop event")
-        loop = asyncio.get_event_loop()
-        loop.stop()
+        async_share_data['stop'] = True
+        log(f"stop_loop_event done")
 
     @staticmethod
-    async def grad_coroutine(ip, train_title, idx, info_data, grad_q):
+    async def grad_coroutine(async_share_data, ip, train_title, idx, info_data, grad_q):
         """
         梯度协程
         """
@@ -585,121 +593,124 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 存储一个batch的压缩梯度，一起推送
         batch_compressed_results = []
-        while True:
+        try:
+            # 创建异步socket连接
+            log(f'[{idx}] grad_coroutine connect to server')
+            # reader, writer = await asyncio.open_connection(HOST, PORT)
+            reader, writer = await connect_and_tune(HOST, PORT)
+            log(f'[{idx}] grad_coroutine connect to server done')
+            # 发送连接验证
+            await async_send_msg(writer, f'{CODE}_{ip}')
+            log(f'[{idx}] grad_coroutine send CODE_IP done')
+            # 发送指令类型
+            await async_send_msg(writer, f'{train_title}:update_gradients')
+            log(f'[{idx}] grad_coroutine send CMD done')
+
+            send_count = 0
+            while True:
+                # 停止事件
+                if async_share_data['stop']:
+                    break
+
+                send_data = grad_q.get(block=False)# 获取到1个发送数据
+                if send_data is None:
+                    log(f'[{idx}] grad_coroutine get None from queue')
+                    await asyncio.sleep(0.1)
+                    continue
+
+                begin_time = time.time()
+                if all_begin_time == 0:
+                    all_begin_time = begin_time
+                q_size = grad_q.qsize()
+                log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
+                batch_compressed_results.append(send_data)
+
+                _batch_size = len(batch_compressed_results)
+                log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}")
+
+                if _batch_size == GRAD_BATCH_SIZE:
+                    # 统计版本diff info_data.version
+                    current_version = info_data.version
+
+                    # 达到GRAD_BATCH_SIZE个梯度，发送梯度
+                    if GRAD_BATCH_SIZE > 1:
+                        diff = [current_version - i[1] for i in batch_compressed_results]
+                        diff = sum(diff)
+                        data = pickle.dumps(batch_compressed_results)
+                    else:
+                        data = pickle.dumps(batch_compressed_results[0])
+                        diff = current_version - batch_compressed_results[0][1]
+
+                    total_version_diff += diff
+                    log(f"[{idx}][{send_count}] send send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
+
+                    send_begin_time = time.time()
+                    await async_send_msg(writer, data)
+                    send_size = len(data)
+                    mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
+                    log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
+
+                    # # 等待回复
+                    # await wait_ack(reader)
+                    # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
+
+                    wait_time = time.time() - send_begin_time
+                    total_wait_time += wait_time
+
+                    send_count += 1
+                    total_count += 1
+                    # 14040
+                    log(f"[{idx}][{send_count}] grad handler done, cost time: {int((time.time() - begin_time)* 1000)}ms")
+
+                    if total_count % 10 == 0:
+                        # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
+                        # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
+
+                        # ROUND 0
+                        # avg grad send time: 925ms, avg wait time: 523ms, avg handle time: 171ms
+                        # 优化空间:
+                        #     平均等待梯度时间 = 925 -523-171 = 231ms > 取消强制参数同步的等待, 不断计算梯度，消除 平均等待梯度时间(只受限于梯度被处理的速度, 队列大小: GRAD_BATCH_SIZE)
+                        #     网络传输耗时 = 523 - 15 = 508ms
+                        #     压缩处理耗时 = 171ms
+
+                        # ROUND 4 GRAD_BATCH_SIZE=1
+                        # avg grad send time: 43ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 40511
+                        # 优化空间:
+                        #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
+                        #     网络传输耗时 = 0ms                    > 目标达成
+                        #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
+
+                        # ROUND 5 GRAD_BATCH_SIZE=1 同步训练
+                        # avg grad send time: 738ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 41529, mean version diff: 0.00
+                        # 优化空间:
+                        #     平均等待梯度时间 = 738 - 0 - 0 = 738ms (发送梯度/等待参数推送)
+                        log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
+
+                    # 清空
+                    batch_compressed_results.clear()
+
+                # 统计耗时
+                handle_cost_time = time.time() - begin_time 
+                total_handle_time += handle_cost_time
+                log(f"[{idx}][{send_count}] grad handler done, handle cost time: {int(handle_cost_time * 1000)}ms")
+
+        except Exception as e:
+            log(f"[{idx}] grad_coroutine connect to server failed: \n{get_exception_msg()}")
+            # 关闭连接
             try:
-                # 创建异步socket连接
-                log(f'[{idx}] grad_coroutine connect to server')
-                # reader, writer = await asyncio.open_connection(HOST, PORT)
-                reader, writer = await connect_and_tune(HOST, PORT)
-                log(f'[{idx}] grad_coroutine connect to server done')
-                # 发送连接验证
-                await async_send_msg(writer, f'{CODE}_{ip}')
-                log(f'[{idx}] grad_coroutine send CODE_IP done')
-                # 发送指令类型
-                await async_send_msg(writer, f'{train_title}:update_gradients')
-                log(f'[{idx}] grad_coroutine send CMD done')
+                writer.close()
+                await writer.wait_closed()
+            except:
+                pass
 
-                send_count = 0
-                while True:
-                    # continue
-                    send_data = grad_q.get(block=False)# 获取到1个发送数据
-                    if send_data is None:
-                        log(f'[{idx}] grad_coroutine get None from queue')
-                        await asyncio.sleep(0.1)
-                        continue
-
-                    begin_time = time.time()
-                    if all_begin_time == 0:
-                        all_begin_time = begin_time
-                    q_size = grad_q.qsize()
-                    log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
-                    batch_compressed_results.append(send_data)
-
-                    _batch_size = len(batch_compressed_results)
-                    log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}")
-
-                    if _batch_size == GRAD_BATCH_SIZE:
-                        # 统计版本diff info_data.version
-                        current_version = info_data.version
-
-                        # 达到GRAD_BATCH_SIZE个梯度，发送梯度
-                        if GRAD_BATCH_SIZE > 1:
-                            diff = [current_version - i[1] for i in batch_compressed_results]
-                            diff = sum(diff)
-                            data = pickle.dumps(batch_compressed_results)
-                        else:
-                            data = pickle.dumps(batch_compressed_results[0])
-                            diff = current_version - batch_compressed_results[0][1]
-
-                        total_version_diff += diff
-                        log(f"[{idx}][{send_count}] send send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
-
-                        send_begin_time = time.time()
-                        await async_send_msg(writer, data)
-                        send_size = len(data)
-                        mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
-                        log(f"[{idx}][{send_count}] send send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
-
-                        # # 等待回复
-                        # await wait_ack(reader)
-                        # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
-
-                        wait_time = time.time() - send_begin_time
-                        total_wait_time += wait_time
-
-                        send_count += 1
-                        total_count += 1
-                        # 14040
-                        log(f"[{idx}][{send_count}] grad handler done, cost time: {int((time.time() - begin_time)* 1000)}ms")
-
-                        if total_count % 10 == 0:
-                            # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
-                            # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
-
-                            # ROUND 0
-                            # avg grad send time: 925ms, avg wait time: 523ms, avg handle time: 171ms
-                            # 优化空间:
-                            #     平均等待梯度时间 = 925 -523-171 = 231ms > 取消强制参数同步的等待, 不断计算梯度，消除 平均等待梯度时间(只受限于梯度被处理的速度, 队列大小: GRAD_BATCH_SIZE)
-                            #     网络传输耗时 = 523 - 15 = 508ms
-                            #     压缩处理耗时 = 171ms
-
-                            # ROUND 4 GRAD_BATCH_SIZE=1
-                            # avg grad send time: 43ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 40511
-                            # 优化空间:
-                            #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
-                            #     网络传输耗时 = 0ms                    > 目标达成
-                            #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
-
-                            # ROUND 5 GRAD_BATCH_SIZE=1 同步训练
-                            # avg grad send time: 738ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 41529, mean version diff: 0.00
-                            # 优化空间:
-                            #     平均等待梯度时间 = 738 - 0 - 0 = 738ms (发送梯度/等待参数推送)
-                            log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
-
-                        # 清空
-                        batch_compressed_results.clear()
-
-                    # 统计耗时
-                    handle_cost_time = time.time() - begin_time 
-                    total_handle_time += handle_cost_time
-                    log(f"[{idx}][{send_count}] grad handler done, handle cost time: {int(handle_cost_time * 1000)}ms")
-
-            except Exception as e:
-                log(f"[{idx}] grad_coroutine connect to server failed: \n{get_exception_msg()}")
-                # 关闭连接
-                try:
-                    writer.close()
-                    await writer.wait_closed()
-                except:
-                    pass
+        log(f"[{idx}] grad_coroutine done")
 
     @staticmethod
-    async def param_coroutine(ip, train_title, info_data, params_dict, grad_params_value_shape):
+    async def param_coroutine(async_share_data, ip, train_title, info_data, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """
         log(f"param_coroutine start")
-
 
         # 参数解压器
         # params_keys = list(params_dict.keys())
@@ -723,72 +734,80 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         total_handle_time = 0
 
         log(f"param_coroutine init done")
-        while True:
-            try:
-                # 创建异步socket连接
-                log(f'param_coroutine connect to server')
-                # reader, writer = await asyncio.open_connection(HOST, PORT)
-                reader, writer = await connect_and_tune(HOST, PORT)
-                log(f'param_coroutine connect to server done')
-                # 发送连接验证
-                await async_send_msg(writer, f'{CODE}_{ip}')
-                log(f'param_coroutine send CODE_IP done')
-                # 发送指令类型
-                await async_send_msg(writer, f'{train_title}:wait_params')
-                log(f'param_coroutine send CMD done')
+        try:
+            # 创建异步socket连接
+            log(f'param_coroutine connect to server')
+            # reader, writer = await asyncio.open_connection(HOST, PORT)
+            reader, writer = await connect_and_tune(HOST, PORT)
+            log(f'param_coroutine connect to server done')
+            # 发送连接验证
+            await async_send_msg(writer, f'{CODE}_{ip}')
+            log(f'param_coroutine send CODE_IP done')
+            # 发送指令类型
+            await async_send_msg(writer, f'{train_title}:wait_params')
+            log(f'param_coroutine send CMD done')
 
-                while True:
-                    # 被动获取参数
-                    # log(f"[{total_count}] wait params")
-                    params_list, info, version, need_warn_up = await _async_wait_server_weights(reader)
-                    info_data.set(version=version, need_warn_up=need_warn_up)
+            while True:
+                # 停止事件
+                if async_share_data['stop']:
+                    break
 
-                    total_count += 1
-                    t = time.time()
-                    if begin_time == 0:
-
-                        begin_time = t
-                    log(f"[{total_count}] recv params push")
-
-                    # 需要完整的处理参数推送
-                    # # 当前是否处于训练阶段
-                    # if is_training_event.is_set():
-                    # 增量解压操作
-                    # log(f"[{total_count}] decompress params data")
-                    param_compressor.decompress(params_list, info, sync_params_dict)
-                    log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
-
-                    # 更新共享参数
-                    shared_param.set_param(sync_params_dict)
-                    log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
-
-                    # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
-                    # 触发共享参数更新事件
-                    shared_param.param_event.clear_reset(1)
-                    log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
-
-                    # # 处理完成回复
-                    # await ack(writer)
-
-                    # 统计耗时
-                    handle_cost_time = time.time() - t
-                    total_handle_time += handle_cost_time
-
-                    # 统计耗时
-                    if total_count % 30 == 0:
-                        # 本机接收后处理耗时(avg handle time)
-                        # avg param push time: 928ms, avg handle time: 0ms
-                        # avg param push time: 616ms, avg handle time: 1ms
-                        log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
-
-            except Exception as e:
-                log(f"param_coroutine connect to server failed: \n{get_exception_msg()}")
-                # 关闭连接
+                # 被动获取参数
+                # log(f"[{total_count}] wait params")
                 try:
-                    writer.close()
-                    await writer.wait_closed()
-                except:
-                    pass
+                    params_list, info, version, need_warn_up = await _async_wait_server_weights(reader, timeout=5)
+                    info_data.set(version=version, need_warn_up=need_warn_up)
+                except TimeoutError:
+                    continue
+
+                total_count += 1
+                t = time.time()
+                if begin_time == 0:
+
+                    begin_time = t
+                log(f"[{total_count}] recv params push")
+
+                # 需要完整的处理参数推送
+                # # 当前是否处于训练阶段
+                # if is_training_event.is_set():
+                # 增量解压操作
+                # log(f"[{total_count}] decompress params data")
+                param_compressor.decompress(params_list, info, sync_params_dict)
+                log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
+
+                # 更新共享参数
+                shared_param.set_param(sync_params_dict)
+                log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
+
+                # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
+                # 触发共享参数更新事件
+                shared_param.param_event.clear_reset(1)
+                log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
+
+                # # 处理完成回复
+                # await ack(writer)
+
+                # 统计耗时
+                handle_cost_time = time.time() - t
+                total_handle_time += handle_cost_time
+
+                # 统计耗时
+                if total_count % 30 == 0:
+                    # 本机接收后处理耗时(avg handle time)
+                    # avg param push time: 928ms, avg handle time: 0ms
+                    # avg param push time: 616ms, avg handle time: 1ms
+                    log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
+
+        except Exception as e:
+            log(f"param_coroutine connect to server failed: \n{get_exception_msg()}")
+            # 关闭连接
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except:
+                pass
+
+        log(f"param_coroutine done")
 
     # BENCHMARK 100 iter about 0.6H
     # compress data all use 100 iter about 4.35H -35%
