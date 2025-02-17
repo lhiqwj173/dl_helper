@@ -14,7 +14,12 @@ ALIST_UPLOAD_FOLDER = 'rl_learning_process'
 class TrainFolderManager:
     def __init__(self, train_folder):
         self.train_folder = train_folder
-        self.train_title = os.path.abspath(train_folder).split('\\')[-1]
+
+        abs_train_folder = os.path.abspath(train_folder)
+        if '\\' in abs_train_folder:
+            self.train_title = abs_train_folder.split('\\')[-1]
+        else:
+            self.train_title = abs_train_folder.split('/')[-1]
 
         # 创建检查点保存目录
         self.checkpoint_folder = os.path.join(os.path.abspath(train_folder), 'checkpoint')
