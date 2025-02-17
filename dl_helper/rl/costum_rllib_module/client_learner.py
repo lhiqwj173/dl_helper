@@ -748,8 +748,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         if self.client_id == 0:
             # report_memory_usage(f'[{self.update_count}]')
-            # 清空梯度事件
-            self.shared_param.grad_event.clear()
             # 清空learner参数同步事件
             self.sync_learner_param_event.clear()
             # 清空learner同步事件
