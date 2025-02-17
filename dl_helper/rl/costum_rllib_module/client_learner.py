@@ -253,51 +253,41 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"foreach_learner: init_param_thread, res: {get_results(res)}")
 
     def _sync_learner_weights(self):
-        # 获取服务器的参数，并更新到其他learner
-        log('request server weights')
-        params_list, info, version, need_warn_up = get_server_weights(self.train_title)
+        # for debug 单机测试
+        # # 获取服务器的参数，并更新到其他learner
+        # log('request server weights')
+        # params_list, info, version, need_warn_up = get_server_weights(self.train_title)
 
-        # 解压参数
-        # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
+        # # 解压参数
+        # # _params_dict = self.param_compressor.decompress_params_dict(params_list, info)
         _params_dict_np = self.get_weights()['default_policy']
         _params_dict = OrderedDict()
         for k, v in _params_dict_np.items():
             _params_dict[f'module.{k}'] = torch.from_numpy(v.copy())
-        self.param_compressor.decompress(params_list, info, _params_dict)
+        # self.param_compressor.decompress(params_list, info, _params_dict)
         
-        # 更新参数到所有learner
-        log(f"set weights to all learners, version: {version}")
-        if self.is_local:
-            self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
-        else:
-            state_ref = ray.put(_params_dict)
-            res = self.foreach_learner(
-                lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
-            )
+        # # 更新参数到所有learner
+        # log(f"set weights to all learners, version: {version}")
+        # if self.is_local:
+        #     self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
+        # else:
+        #     state_ref = ray.put(_params_dict)
+        #     res = self.foreach_learner(
+        #         lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
+        #     )
 
-        res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        log(f"set version to all learners, res: {get_results(res)}")
+        # res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
+        # log(f"set version to all learners, res: {get_results(res)}")
 
-        res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
-        log(f"set need_warn_up to all learners, res: {get_results(res)}")
-
-        # 获取一个learner的梯度字典
-        if self.is_local:
-            grad_params_dict = self._learner._params
-        else:
-            worker = self._worker_manager.healthy_actor_ids()[0]
-            results = self._worker_manager.foreach_actor(
-                lambda w: w._params,
-                remote_actor_ids=[worker],
-            )
-            grad_params_dict = self._get_results(results)[0]
+        # res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
+        # log(f"set need_warn_up to all learners, res: {get_results(res)}")
 
         # 创建共享参数
         self.shared_param = SharedParam(_params_dict, create=True)
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
-        self.foreach_learner(lambda learner: learner.init_shared_param())
+        res = self.foreach_learner(lambda learner: learner.init_shared_param())
         log(f"foreach_learner: init shared param, res: {get_results(res)}")
 
     def stop_extra_process(self):
