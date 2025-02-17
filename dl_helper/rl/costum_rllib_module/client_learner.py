@@ -788,12 +788,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # for debug 
             # 单机解压并应用, 准备参数
             decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
+            log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             for idx, (k, v) in enumerate(self._params.items()):
                 self._params[k].grad = decompress_grad_data[idx].to(self._device)
+            log(f'[{self.client_id}][{self.update_count}] replace grad done')
             super().apply_gradients({})
+            log(f'[{self.client_id}][{self.update_count}] apply grad done')
             weights = self.module._rl_modules['default_policy'].state_dict()
             self.shared_param.set_param(weights)
             self.shared_param.clear_reset(1)
+            log(f'[{self.client_id}][{self.update_count}] set param done')
 
             # # 加入队列
             # try:
