@@ -103,3 +103,20 @@ if __name__ == "__main__":
 
         log(f'{train_title} client all done')
 
+        # 强制结束所有非守护线程
+        for thread in threading.enumerate():
+            if thread != threading.current_thread() and not thread.daemon:
+                try:
+                    thread.join(timeout=1.0)
+                except Exception as e:
+                    log(f"无法关闭线程 {thread.name}: {e}")
+        
+        # 确保所有子进程被终止
+        for process in multiprocessing.active_children():
+            try:
+                process.terminate()
+                process.join(timeout=1.0)
+            except Exception as e:
+                log(f"无法终止进程 {process.name}: {e}")
+
+        log("所有资源清理完成")
