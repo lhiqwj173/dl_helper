@@ -356,10 +356,13 @@ class ExperimentHandler:
                     # 解压梯度
                     # log(f'decompress gradients')
                     info, version = gradients_cache_info_temp[idx]
-                    # pickle.dump((gs,info, version), open(f'wait_handle_gradients.pkl', 'wb'))
                     gs = gradient_compressor.decompress(gs, info)
                     gss.append(gs)
                     vs.append(version)
+
+                if total_count == 0:
+                    # 保存第一个梯度，验证梯度是否正确
+                    pickle.dump((gss, vs), open(f'decompress_gradient.pkl', 'wb'))
 
                 # 梯度平均
                 if len(gss) == 1:
@@ -563,6 +566,10 @@ class ExperimentHandler:
                         batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
                     else:
                         batch_g_info = [(pickle.loads(data[0]), data[1])]
+
+                    if push_count == 0:
+                        # 保存第一个梯度，验证梯度是否正确
+                        pickle.dump(batch_g_info[0], open(f'recv_gradient.pkl', 'wb'))
 
                     # g, compress_info, version = pickle.loads(data)
                     log(f'{msg_header} loads gradients, cost: {int(1000*(time.time() - t))}ms')
