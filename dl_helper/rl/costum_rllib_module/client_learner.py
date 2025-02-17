@@ -389,7 +389,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
-            self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
+            # self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
+            self.task_queue = multiprocessing.Queue()
             self.task_queue.clear()
 
             # 是否处于训练阶段
@@ -408,6 +409,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
                     self.version, self.need_warn_up,
                     _size,
+                    self.task_queue,
                 )
             )
             self.event_loop_process.start()
@@ -428,13 +430,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     @staticmethod
-    def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
+    def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size, task_queue):
         """在新进程中运行事件循环"""
         # 初始化日志
         init_logger(train_title, home=train_folder, timestamp=False)
 
         # 共享梯度队列
-        grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4, len(pickle.dumps(np.int64(0))))
+        # grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4, len(pickle.dumps(np.int64(0))))
+        grad_q = task_queue
 
         # 事件循环
         try:
@@ -533,16 +536,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 # 获取到1个发送数据
                 # (dump(bytes), extra_data(int64))
-                send_data = grad_q.get(block=False)
-                if send_data is None:
-                    if not last_None:
-                        log(f'[{idx}] grad_coroutine get None from queue')
-                        last_None = True
+                # send_data = grad_q.get(block=False)
+                # if send_data is None:
+                #     if not last_None:
+                #         log(f'[{idx}] grad_coroutine get None from queue')
+                #         last_None = True
+                #     await asyncio.sleep(0.001)
+                #     continue
+                # else:
+                #     if last_None:
+                #         last_None = False
+
+                try:
+                    send_data = grad_q.get(block=False)
+                except Empty:
                     await asyncio.sleep(0.001)
                     continue
-                else:
-                    if last_None:
-                        last_None = False
 
                 if send_count == 0:
                     # 保存第一个梯度，验证梯度是否正确
