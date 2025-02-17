@@ -90,28 +90,23 @@ class SharedParam:
     """
     共享参数类，用于多进程间的同步
     """
-    def __init__(self, params_dict, grad_params_dict, create=True):
+    def __init__(self, params_dict, create=True):
         """
         params_dict: 参数字典, 键为参数名, 值为 torch.Tensor
-        grad_params_dict: 梯度参数字典, 键为参数名, 值为 torch.Tensor
         create: 是否创建共享内存
         """
         self.create = create
         self._params_dict_np = {}
         self._params_dict = {}
-        self._grad_params_list_np = []
-        self._grad_params_list = []
         self.ssms = []
+
+        # 锁
+        self.lock = Lock(name=f'_SharedParam_lock')
 
         # 共享事件 - 参数更新完毕
         self.param_event = Event(name=f'_SharedParam_event')
         if create:
             self.param_event.clear()
-        
-        # 共享事件 - 汇聚梯度准备完毕
-        self.grad_event = Event(name=f'_SharedParam_grad_event')
-        if create:
-            self.grad_event.clear()
 
         # 共享参数内存 储存解压后的服务器参数 float32
         for k, v in params_dict.items():
@@ -123,16 +118,6 @@ class SharedParam:
             self._params_dict[k] = torch.from_numpy(_v)
             self.ssms.append(ssm)
 
-        # 共享梯度内存 储存主learner的聚合梯度 float32
-        for idx, v in enumerate(grad_params_dict.values()):
-            # v 是torch.Tensor
-            ssm = safe_share_memory(name=f'_SharedParam_grad_{idx}', size=v.numel() * v.element_size())
-            shm = ssm.get()
-            _v = np.ndarray(v.shape, dtype=np.float32, buffer=shm.buf)
-            self._grad_params_list_np.append(_v)
-            self._grad_params_list.append(torch.from_numpy(_v))
-            self.ssms.append(ssm)
-
     def get_weights(self):
         """
         返回共享参数字典
@@ -142,35 +127,18 @@ class SharedParam:
             ...
         }
         """
-        # 不需要拷贝数据，只读
-        return self._params_dict
+        with self.lock:
+            # 拷贝返回
+            return copy.deepcopy(self._params_dict)
 
     def set_param(self, params_dict):
         """
         参数:
         params_dict: 参数字典, 键为参数名, 值为torch.Tensor
         """
-        for k, v in params_dict.items():
-            self._params_dict[k][:] = v[:]
-
-    def set_grad(self, grad_params_list):
-        """
-        参数:
-        grad_params_list: 梯度参数字典, 键为参数名, 值为torch.Tensor
-        """
-        for i, v in enumerate(grad_params_list):
-            self._grad_params_list[i][:] = v[:]
-
-    def apply_grad_to_local(self, learner):
-        """
-        将共享梯度应用到本地learner
-        参数:
-        learner: 本地learner
-        """
-        # 不需要拷贝数据，只读
-        params = learner._params
-        for idx, k in enumerate(params.keys()):
-            params[k].grad = self._grad_params_list[idx].to(learner._device)
+        with self.lock:
+            for k, v in params_dict.items():
+                self._params_dict[k][:] = v[:]
 
 class share_info:
     """
@@ -325,7 +293,7 @@ class ClientLearnerGroup(LearnerGroup):
             grad_params_dict = self._get_results(results)[0]
 
         # 创建共享参数
-        self.shared_param = SharedParam(_params_dict, grad_params_dict, create=True)
+        self.shared_param = SharedParam(_params_dict, create=True)
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
@@ -407,7 +375,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self.grad_params_list.append(v.cpu())
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
         # 获取共享参数
-        self.shared_param = SharedParam(params_dict, grad_params_dict, create=False)
+        self.shared_param = SharedParam(params_dict, create=False)
         log(f"[{self.client_id}] init_shared_param done")
         return True
 
@@ -688,7 +656,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         grad_params_dict = OrderedDict()
         for idx, shape in enumerate(grad_params_value_shape):
             grad_params_dict[f'grad_{idx}'] = torch.zeros(shape)
-        shared_param = SharedParam(params_dict, grad_params_dict, create=False)
+        shared_param = SharedParam(params_dict, create=False)
 
         # 统计拉取参数耗时
         begin_time = 0
@@ -725,7 +693,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 total_count += 1
                 t = time.time()
                 if begin_time == 0:
-
                     begin_time = t
                 log(f"[{total_count}] recv params push, Version: {version}, need_warn_up: {need_warn_up}")
 
