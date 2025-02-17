@@ -607,15 +607,20 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             log(f'[{idx}] grad_coroutine send CMD done')
 
             send_count = 0
+            last_None = False
             while True:
                 # 停止事件
                 if async_share_data['stop']:
                     break
 
-                send_data = grad_q.get(block=False)# 获取到1个发送数据
+                # 获取到1个发送数据
+                # (dump(bytes), extra_data(int64))
+                send_data = grad_q.get(block=False)
                 if send_data is None:
-                    log(f'[{idx}] grad_coroutine get None from queue')
-                    await asyncio.sleep(0.1)
+                    if not last_None:
+                        log(f'[{idx}] grad_coroutine get None from queue')
+                        last_None = True
+                    await asyncio.sleep(0.001)
                     continue
 
                 begin_time = time.time()

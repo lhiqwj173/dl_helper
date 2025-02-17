@@ -128,6 +128,10 @@ if __name__ == "__main__":
             # 绘制训练曲线
             plot_training_curve(train_folder, time.time() - begin_time, y_axis_max=30)
 
+        # 停止算法
+        algo.stop()
+        log(f"algo.stop done")
+
     else:
         # 单机运行
         config = config.learners(    
@@ -149,7 +153,7 @@ if __name__ == "__main__":
             log(f"restore from {train_folder_manager.checkpoint_folder}")
             algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
-        out_file = os.path.join(train_folder, 'out.csv')
+        out_file = os.path.join(train_folder, f'out_{time.strftime("%Y%m%d")}.csv')
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
@@ -170,3 +174,6 @@ if __name__ == "__main__":
                 # 压缩并上传
                 train_folder_manager.push()
 
+        # 停止算法
+        algo.stop()
+        log(f"algo.stop done")

@@ -81,7 +81,7 @@ if __name__ == "__main__":
         # 训练循环
         # 标准训练 30 527.9s 
         rounds = 30
-        rounds = 5
+        # rounds = 5
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
@@ -101,16 +101,4 @@ if __name__ == "__main__":
             log(f"plot_training_curve done")
 
         log(f'{train_title} client all done')
-
-        # 打印活跃的线程
-        active_threads = threading.enumerate()
-        log(f"活跃线程数量: {len(active_threads)}")
-        for thread in active_threads:
-            log(f"活跃线程: {thread.name}, 守护线程: {thread.daemon}")
-
-        # 打印活跃的进程
-        active_processes = multiprocessing.active_children()
-        log(f"活跃进程数量: {len(active_processes)}")
-        for process in active_processes:
-            log(f"活跃进程: {process.name}, 进程ID: {process.pid}, 是否活跃: {process.is_alive()}")
 
