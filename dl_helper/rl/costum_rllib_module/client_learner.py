@@ -390,8 +390,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
             # self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
+            # self.task_queue.clear()
             self.task_queue = multiprocessing.Queue()
-            self.task_queue.clear()
 
             # 是否处于训练阶段
             self.is_training_event = Event(name=f'_is_training_event')
@@ -536,22 +536,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 # 获取到1个发送数据
                 # (dump(bytes), extra_data(int64))
-                # send_data = grad_q.get(block=False)
-                # if send_data is None:
-                #     if not last_None:
-                #         log(f'[{idx}] grad_coroutine get None from queue')
-                #         last_None = True
-                #     await asyncio.sleep(0.001)
-                #     continue
-                # else:
-                #     if last_None:
-                #         last_None = False
-
                 try:
                     send_data = grad_q.get(block=False)
                 except Empty:
+                    if not last_None:
+                        log(f'[{idx}] grad_coroutine get None from queue')
+                        last_None = True
                     await asyncio.sleep(0.001)
                     continue
+
+                if last_None:
+                    last_None = False
 
                 if send_count == 0:
                     # 保存第一个梯度，验证梯度是否正确
@@ -801,7 +796,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 加入队列
             try:
-                self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
+                # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
+                self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
                 log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
                 # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
