@@ -402,17 +402,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
 
-            # 在新进程中运行事件循环
-            self.event_loop_process = multiprocessing.Process(
-                target=self._run_event_loop_process, 
-                args=(
-                    self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
-                    self.version, self.need_warn_up,
-                    _size,
-                    self.task_queue,
-                )
-            )
-            self.event_loop_process.start()
+            # for debug 单机测试
+            # # 在新进程中运行事件循环
+            # self.event_loop_process = multiprocessing.Process(
+            #     target=self._run_event_loop_process, 
+            #     args=(
+            #         self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
+            #         self.version, self.need_warn_up,
+            #         _size,
+            #         self.task_queue,
+            #     )
+            # )
+            # self.event_loop_process.start()
         log(f"[{self.client_id}] init_param_thread done")
         return True
 
@@ -794,15 +795,25 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # compress gradients done, cost time: 17ms, avg cost: 17ms
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
-            # 加入队列
-            try:
-                # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
-                self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
-                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
-                # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
-                # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
-            except Exception as e:
-                log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
+            # for debug 
+            # 单机解压并应用, 准备参数
+            decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
+            for idx, (k, v) in enumerate(self._params.items()):
+                self._params[k].grad = decompress_grad_data[idx].to(self._device)
+            super().apply_gradients({})
+            weights = self.module._rl_modules['default_policy'].state_dict()
+            self.shared_param.set_param(weights)
+            self.shared_param.clear_reset(1)
+
+            # # 加入队列
+            # try:
+            #     # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
+            #     self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
+            #     log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+            # except Exception as e:
+            #     log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
 
             N = 0
             # 累计 N 个梯度后，需要强制等待新的参数就位
