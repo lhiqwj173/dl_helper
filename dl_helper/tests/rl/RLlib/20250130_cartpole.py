@@ -107,6 +107,7 @@ if __name__ == "__main__":
         for thread in threading.enumerate():
             if thread != threading.current_thread() and not thread.daemon:
                 try:
+                    log(f"尝试关闭线程 {thread.name}")
                     thread.join(timeout=1.0)
                 except Exception as e:
                     log(f"无法关闭线程 {thread.name}: {e}")
@@ -114,6 +115,7 @@ if __name__ == "__main__":
         # 确保所有子进程被终止
         for process in multiprocessing.active_children():
             try:
+                log(f"尝试终止进程 {process.name}")
                 process.terminate()
                 process.join(timeout=1.0)
             except Exception as e:
