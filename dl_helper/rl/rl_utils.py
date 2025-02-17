@@ -191,7 +191,7 @@ def plot_training_curve(train_folder, out_file, total_time=None, y_axis_max = No
     plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
         plt.ylim(0, y_axis_max)
-    plt.savefig(os.path.join(train_folder, 'training_curve.png'))
+    plt.savefig(os.path.join(train_folder, f'training_curve_{time.strftime("%Y%m%d")}.png'))
     
     plt.close()  # 关闭当前图形
 

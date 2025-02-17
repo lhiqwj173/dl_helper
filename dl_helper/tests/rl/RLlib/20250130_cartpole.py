@@ -86,6 +86,7 @@ if __name__ == "__main__":
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+        log(f'all rounds done')
 
         # 停止学习者额外的事件进程
         algo.learner_group.stop_extra_process()

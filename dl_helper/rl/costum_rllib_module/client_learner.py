@@ -337,56 +337,6 @@ class ClientLearnerGroup(LearnerGroup):
         res = self.foreach_learner(lambda learner: learner.stop_param_thread())
         log(f"foreach_learner: stop_param_thread, res: {get_results(res)}")
 
-class AsyncProcessQueueReader_grad_param(AsyncProcessQueueReader):
-    """
-    异步进程队列读取器
-    用于转发 进程任务 到 事件循环
-    """
-    def __init__(self, queue, grad_q):
-
-        self.queue = queue
-        self._loop = None
-        self._thread = None
-        self._running = False
-        self._stop = False
-
-        # 使用传入的队列
-        self.grad_q = grad_q
-
-    def _reader_thread(self):
-        """后台读取线程"""
-        while not self._stop:
-            try:
-                # 使用较短的超时以便能够响应停止信号
-                item = self.queue.get(timeout=0.1)
-
-                # 添加诊断信息
-                item_size = sys.getsizeof(item)
-                log(f'[apqr] Got item from queue, size: {item_size} bytes')
-
-                # 推送到队列
-                try:
-                    future = asyncio.run_coroutine_threadsafe(
-                        self.grad_q.put(item), 
-                        self._loop
-                    )
-                    # 等待操作完成
-                    future.result(timeout=1.0)
-                    log(f'[apqr] Successfully forwarded item to grad_q')
-                except Exception as e:
-                    log(f'[apqr] Failed to forward item: {str(e)}')
-                    raise e
-
-            except Empty:
-                continue
-            except Exception as e:
-                log(f"Reader thread error: {str(e)}\n{get_exception_msg()}")
-                # 检查系统资源
-                vm = psutil.virtual_memory()
-                log(f"System memory: {vm.available/1024/1024:.1f}MB available out of {vm.total/1024/1024:.1f}MB")
-                # 出错时短暂等待后继续
-                time.sleep(0.1)
-
 class ClientPPOTorchLearner(PPOTorchLearner):
     """
     每个客户端只需要有一个与参数服务器通信的learner
@@ -622,6 +572,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         last_None = True
                     await asyncio.sleep(0.001)
                     continue
+                else:
+                    if last_None:
+                        last_None = False
 
                 if send_count == 0:
                     # 保存第一个梯度，验证梯度是否正确

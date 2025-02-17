@@ -123,8 +123,12 @@ class DeepGradientCompression:
                     important_indices = topk.indices
 
                 elif important_indices.numel() > compressed_size:
-                    # 随机抽取降采样
-                    important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
+                    # # 随机抽取降采样
+                    # important_indices = important_indices[torch.randperm(len(important_indices))[:compressed_size]]
+                    
+                    # 取最大的 `compressed_size` 个元素，不做降采样
+                    topk = torch.topk(abs_grad, compressed_size)
+                    important_indices = topk.indices
 
                 # 获取重要梯度
                 important_grad = momentum_grad[important_indices]
