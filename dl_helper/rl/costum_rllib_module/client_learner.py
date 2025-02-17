@@ -795,9 +795,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             super().apply_gradients({})
             log(f'[{self.client_id}][{self.update_count}] apply grad done')
             weights = self.module._rl_modules['default_policy'].state_dict()
+            log(f'[{self.client_id}][{self.update_count}] get weights done')
             self.shared_param.set_param(weights)
+            log(f'[{self.client_id}][{self.update_count}] set_param done')
             self.shared_param.clear_reset(1)
-            log(f'[{self.client_id}][{self.update_count}] set param done')
+            log(f'[{self.client_id}][{self.update_count}] set event done')
 
             # # 加入队列
             # try:
