@@ -25,6 +25,10 @@ from py_ext.alist import alist
 rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
 
+def stop():
+    import signal
+    os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
+
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     important_metrics = {
         "env_runner": {},

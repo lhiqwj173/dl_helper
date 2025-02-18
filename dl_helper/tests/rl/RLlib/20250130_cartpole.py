@@ -9,7 +9,7 @@ from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearne
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
 
@@ -103,19 +103,4 @@ if __name__ == "__main__":
             plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
             log(f"plot_training_curve done")
 
-        log(f'{train_title} client all done')
-
-        # 打印活跃的线程
-        active_threads = threading.enumerate()
-        log(f"活跃线程数量: {len(active_threads)}")
-        for thread in active_threads:
-            log(f"活跃线程: {thread.name}, 守护线程: {thread.daemon}")
-
-        # 打印活跃的进程
-        active_processes = multiprocessing.active_children()
-        log(f"活跃进程数量: {len(active_processes)}")
-        for process in active_processes:
-            log(f"活跃进程: {process.name}, 进程ID: {process.pid}, 是否活跃: {process.is_alive()}")
-
-        import signal
-        os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
+        stop()

@@ -795,8 +795,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # compress gradients done, cost time: 17ms, avg cost: 17ms
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
+            # 加入队列
+            try:
+                # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
+                self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
+                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+                # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+                # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+            except Exception as e:
+                log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
+
             # for debug 单机测试
             # 解压并应用, 准备参数
+            (compressed_grads, compress_info), version = self.task_queue.get()# 队列中获取梯度
             decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
             log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             for idx, (k, v) in enumerate(self._params.items()):
@@ -809,16 +820,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.shared_param.set_param(self.params_dict)
             self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')
-
-            # # 加入队列
-            # try:
-            #     # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
-            #     self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
-            #     log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
-            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
-            #     # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
-            # except Exception as e:
-            #     log(f'[{self.client_id}][{self.update_count}] task_queue put failed: \n{get_exception_msg()}')
 
             N = 0
             # 累计 N 个梯度后，需要强制等待新的参数就位
