@@ -103,4 +103,16 @@ if __name__ == "__main__":
             plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
             log(f"plot_training_curve done")
 
+        import ray
+        ray.shutdown()
+        log(f"ray.shutdown()")
+
+        # 检查未完成的任务
+        pending_tasks = ray.tasks()
+        log(f"未完成的任务数量: {len(pending_tasks)}")
+
+        # 检查未完成的 Actor
+        actors = ray.util.list_named_actors()
+        log(f"未完成的 Actor 数量: {len(actors)}")
+
         stop()
