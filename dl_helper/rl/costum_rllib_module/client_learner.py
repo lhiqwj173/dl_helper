@@ -770,52 +770,52 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # nouse3 100 iter about 0.695H -89.66%
         if self.client_id == 0:
-            # 主learner
-            with torch.no_grad():
-                cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-                # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
+            # # 主learner
+            # with torch.no_grad():
+            #     cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
+            #     # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
-            if self.grads_count == 0:
-                # 保存第一个梯度，验证梯度是否正确
-                pickle.dump((cpu_gradients, self.info_data.need_warn_up), open(f'compute_gradient.pkl', 'wb'))
+            # if self.grads_count == 0:
+            #     # 保存第一个梯度，验证梯度是否正确
+            #     pickle.dump((cpu_gradients, self.info_data.need_warn_up), open(f'compute_gradient.pkl', 'wb'))
 
-            # 梯度压缩
-            t = time.time()
-            log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
-            # try:
-            #     # pickle.dump((cpu_gradients, self.gradient_compressor, self.info_data.need_warn_up), open(f'compress_bak.pkl', 'wb'))
-            #     compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
-            # except Exception as e:
-            #     log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
-            #     raise e
-            compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
-            cost = int((time.time() - t) * 1000)
-            self.tatal_compress_cost += cost
+            # # 梯度压缩
+            # t = time.time()
+            # log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
+            # # try:
+            # #     # pickle.dump((cpu_gradients, self.gradient_compressor, self.info_data.need_warn_up), open(f'compress_bak.pkl', 'wb'))
+            # #     compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+            # # except Exception as e:
+            # #     log(f'[{self.client_id}][{self.update_count}] compress gradients failed: \n{get_exception_msg()}')
+            # #     raise e
+            # compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+            # cost = int((time.time() - t) * 1000)
+            # self.tatal_compress_cost += cost
 
-            if self.grads_count == 0:
-                # 保存第一个压缩梯度，验证梯度是否正确
-                pickle.dump((compressed_grads, compress_info), open(f'compress_gradient.pkl', 'wb'))
+            # if self.grads_count == 0:
+            #     # 保存第一个压缩梯度，验证梯度是否正确
+            #     pickle.dump((compressed_grads, compress_info), open(f'compress_gradient.pkl', 'wb'))
 
-            self.grads_count += 1
-            # compress gradients done, cost time: 19ms, avg cost: 18ms
-            # compress gradients done, cost time: 17ms, avg cost: 17ms
-            log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
+            # self.grads_count += 1
+            # # compress gradients done, cost time: 19ms, avg cost: 18ms
+            # # compress gradients done, cost time: 17ms, avg cost: 17ms
+            # log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
-            # 加入队列
-            self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
-            # self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
-            log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
-            # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
-            # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
+            # # 加入队列
+            # self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
+            # # self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
+            # log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+            # # log(f'[{self.client_id}][{self.update_count}] sync_learner_event: {self.sync_learner_event.is_set()}')
+            # # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
-            # for debug 单机测试
-            # 解压并应用, 准备参数, 模拟
-            dump_data, version = self.task_queue.get()# 队列中获取梯度
-            compressed_grads, compress_info = pickle.loads(dump_data)
-            decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
-            log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
-            for idx, (k, v) in enumerate(self._params.items()):
-                self._params[k].grad = decompress_grad_data[idx].to(self._device)
+            # # for debug 单机测试
+            # # 解压并应用, 准备参数, 模拟
+            # dump_data, version = self.task_queue.get()# 队列中获取梯度
+            # compressed_grads, compress_info = pickle.loads(dump_data)
+            # decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
+            # log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
+            # for idx, (k, v) in enumerate(self._params.items()):
+            #     self._params[k].grad = decompress_grad_data[idx].to(self._device)
             super().apply_gradients({})
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(weights.values())[0]}')
