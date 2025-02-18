@@ -21,6 +21,7 @@ from dl_helper.train_param import is_kaggle
 from py_ext.tool import log, get_log_file
 from py_ext.lzma import compress_folder, decompress
 from py_ext.alist import alist
+from py_ext.datetime import beijing_time
 
 rl_folder = r'/root/rl_learning' if not is_kaggle() else r'/kaggle/working/rl_learning'
 root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl_folder))) else rl_folder
@@ -157,7 +158,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
 
     return important_metrics
 
-def plot_training_curve(train_folder, out_file, total_time=None, y_axis_max = None):
+def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, y_axis_max = None):
     """
     total_time: 训练总时间 sec
     """
@@ -195,7 +196,7 @@ def plot_training_curve(train_folder, out_file, total_time=None, y_axis_max = No
     plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
         plt.ylim(0, y_axis_max)
-    plt.savefig(os.path.join(train_folder, f'training_curve_{time.strftime("%Y%m%d")}.png'))
+    plt.savefig(os.path.join(train_folder, f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' if None is pic_name else pic_name))
     
     plt.close()  # 关闭当前图形
 

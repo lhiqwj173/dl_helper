@@ -12,6 +12,7 @@ from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
+from py_ext.datetime import beijing_time
 
 from dl_helper.train_folder_manager import TrainFolderManager
 
@@ -153,7 +154,6 @@ if __name__ == "__main__":
             log(f"restore from {train_folder_manager.checkpoint_folder}")
             algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
-        out_file = os.path.join(train_folder, f'out_{time.strftime("%Y%m%d")}.csv')
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
@@ -163,6 +163,7 @@ if __name__ == "__main__":
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
+            out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
             if i % 10 == 0 or i == rounds - 1:

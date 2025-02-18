@@ -881,6 +881,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 获取参数覆盖本地参数
             p = self.shared_param_between_learner.get_weights()
+            log(f'[{self.client_id}][{self.update_count}] p \n{list(p.keys())[0]}')
             self.module._rl_modules['default_policy'].load_state_dict(p)
             p = self.module._rl_modules['default_policy'].state_dict()
 
