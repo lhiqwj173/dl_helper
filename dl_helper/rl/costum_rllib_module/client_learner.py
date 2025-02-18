@@ -807,7 +807,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # for debug 单机测试
             # 解压并应用, 准备参数
-            (compressed_grads, compress_info), version = self.task_queue.get()# 队列中获取梯度
+            dump_data, version = self.task_queue.get()# 队列中获取梯度
+            compressed_grads, compress_info = pickle.loads(dump_data)
             decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
             log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             for idx, (k, v) in enumerate(self._params.items()):
