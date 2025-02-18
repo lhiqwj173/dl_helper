@@ -90,7 +90,7 @@ class SharedParam:
     """
     共享参数类，用于多进程间的同步
     """
-    def __init__(self, params_dict, create=True):
+    def __init__(self, name, params_dict, create=True):
         """
         params_dict: 参数字典, 键为参数名, 值为 torch.Tensor
         create: 是否创建共享内存
@@ -99,19 +99,20 @@ class SharedParam:
         self._params_dict_np = {}
         self._params_dict = {}
         self.ssms = []
+        self.name = name
 
         # 锁
-        self.lock = Lock(name=f'_SharedParam_lock')
+        self.lock = Lock(name=f'_{self.name}_SharedParam_lock')
 
         # 共享事件 - 参数更新完毕
-        self.param_event = Event(name=f'_SharedParam_event')
+        self.param_event = Event(name=f'_{self.name}_SharedParam_event')
         if create:
             self.param_event.clear()
 
         # 共享参数内存 储存解压后的服务器参数 float32
         for k, v in params_dict.items():
             # v 是 torch.Tensor
-            ssm = safe_share_memory(name=f'_SharedParam_{k}', size=v.numel() * v.element_size())
+            ssm = safe_share_memory(name=f'_{self.name}_SharedParam_{k}', size=v.numel() * v.element_size())
             shm = ssm.get()
             _v = np.ndarray(v.shape, dtype=np.float32, buffer=shm.buf)
             self._params_dict_np[k] = _v
@@ -286,7 +287,8 @@ class ClientLearnerGroup(LearnerGroup):
         # log(f"set need_warn_up to all learners, res: {get_results(res)}")
 
         # 创建共享参数
-        self.shared_param = SharedParam(_params_dict, create=True)
+        self.shared_param = SharedParam("param_coroutine", _params_dict, create=True)
+        self.shared_param_between_learner = SharedParam("learner", _params_dict, create=True)
         log(f"SharedParam init Done")
 
         # 初始化learner的共享参数
@@ -312,7 +314,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_accumulator = GradientAccumulator()
 
         # 共享参数
-        self.shared_param = None
+        self.shared_param_between_learner = None
 
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
@@ -349,6 +351,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_compressor = None
         self.info_data = None
         self.tatal_compress_cost = 0
+        # 共享参数
+        self.shared_param = None
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -367,8 +371,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             for k,v in grad_params_dict.items():
                 self.grad_params_list.append(v.cpu())
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
-        # 获取共享参数
-        self.shared_param = SharedParam(params_dict, create=False)
+            # 获取共享参数
+            self.shared_param = SharedParam("param_coroutine",params_dict, create=False)
+
+        self.shared_param_between_learner = SharedParam("learner",params_dict, create=False)
         log(f"[{self.client_id}] init_shared_param done")
         return True
 
@@ -661,7 +667,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         grad_params_dict = OrderedDict()
         for idx, shape in enumerate(grad_params_value_shape):
             grad_params_dict[f'grad_{idx}'] = torch.zeros(shape)
-        shared_param = SharedParam(params_dict, create=False)
+        shared_param = SharedParam("param_coroutine", params_dict, create=False)
 
         # 统计拉取参数耗时
         begin_time = 0
@@ -803,7 +809,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'[{self.client_id}][{self.update_count}] sync_learner_param_event: {self.sync_learner_param_event.is_set()}')
 
             # for debug 单机测试
-            # 解压并应用, 准备参数
+            # 解压并应用, 准备参数, 模拟
             dump_data, version = self.task_queue.get()# 队列中获取梯度
             compressed_grads, compress_info = pickle.loads(dump_data)
             decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
@@ -838,6 +844,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 if self.shared_param.param_event.is_set():
                     # 消耗掉事件
                     self.shared_param.param_event.wait()
+                    # 拷贝到 shared_param_between_learner
+                    self.shared_param_between_learner.set_param(self.shared_param.get_weights())
                     # 触发主learner的参数更新事件
                     self.sync_learner_param_event.set(1)
                     self.update_param_count += 1
@@ -871,7 +879,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 log(f'[{self.update_count}] apply new param to local')
 
             # 获取参数覆盖本地参数
-            p = self.shared_param.get_weights()
+            p = self.shared_param_between_learner.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
 
         # if self.client_id == 0:
