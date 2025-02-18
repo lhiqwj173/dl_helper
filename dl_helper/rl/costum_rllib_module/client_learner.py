@@ -774,11 +774,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return super().postprocess_gradients(gradients_dict)
     
     def apply_gradients(self, *args, **kwargs):
+        # 查看第一个梯度
+        g = list(self._params.values())[0].grad
+        log(f'[{self.client_id}][{self.update_count}] gard: \n{g}')
+
         if self.client_id == 0:
             # # 主learner
-            # with torch.no_grad():
-            #     cpu_gradients = [v.cpu() for _, v in gradients_dict.items()]
-            #     # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
+
+            # cpu_gradients = [v.grad.cpu() for _, v in self._params.items()]
+            # log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
             # if self.grads_count == 0:
             #     # 保存第一个梯度，验证梯度是否正确
