@@ -57,10 +57,10 @@ if __name__ == "__main__":
             learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
         )
 
-        config = config.learners(    
-            num_learners=num_learners,
-            num_gpus_per_learner=1,
-        )
+        # config = config.learners(    
+        #     num_learners=num_learners,
+        #     num_gpus_per_learner=1,
+        # )
 
         # for debug 单机测试
         # 询问服务器，本机是否需要验证环节

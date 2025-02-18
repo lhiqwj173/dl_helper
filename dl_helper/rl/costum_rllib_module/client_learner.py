@@ -222,9 +222,12 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"init_client_learner")
 
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
-        remote_actor_ids = self._worker_manager.actor_ids()[1:]
-        res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-        log(f"set set_client_id to not main learners, res: {get_results(res)}")
+        if self._worker_manager is not None:
+            all_ids = self._worker_manager.actor_ids()
+            if len(all_ids) > 1:
+                remote_actor_ids = all_ids[1:]
+            res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
+            log(f"set set_client_id to not main learners, res: {get_results(res)}")
 
         # 设置各个learner的 train_title 和 train_folder
         # !!! 字符串需要通过 ray.put 传递
@@ -795,7 +798,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             for idx, (k, v) in enumerate(self._params.items()):
                 self._params[k].grad = decompress_grad_data[idx].to(self._device)
             super().apply_gradients({})
-            weights = self.module._rl_modules['default_policy'].state_dict()
+            weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
             tensors = [v for _, v in weights.items()]
             compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
             self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
