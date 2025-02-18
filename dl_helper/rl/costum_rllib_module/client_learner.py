@@ -375,6 +375,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 梯度压缩器
             self.gradient_compressor = DeepGradientCompression()
 
+            # for debug 单机测试
+            self.params_compressor = IncrementalCompressor()
+
             # 获取一个梯度不压缩数据, 作为队列大小
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
             _size = len(pickle.dumps((_g, _info)))
@@ -785,15 +788,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # compress gradients done, cost time: 17ms, avg cost: 17ms
             log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
-            # for debug 
-            # 单机解压并应用, 准备参数
+            # for debug 单机测试
+            # 解压并应用, 准备参数
             decompress_grad_data = self.gradient_compressor.decompress(compressed_grads, compress_info)
             log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             for idx, (k, v) in enumerate(self._params.items()):
                 self._params[k].grad = decompress_grad_data[idx].to(self._device)
             super().apply_gradients({})
             weights = self.module._rl_modules['default_policy'].state_dict()
-            self.shared_param.set_param(weights)
+            tensors = [v for _, v in weights.items()]
+            compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
+            self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
+            self.shared_param.set_param(self.params_dict)
             self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')
 
