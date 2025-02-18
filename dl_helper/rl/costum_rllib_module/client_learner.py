@@ -418,6 +418,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 停止事件循环
             log(f"[{self.client_id}] stop_param_thread")
             self.stop_event.set()
+
+            # for debug 单机测试
+            return True 
+
             # 等待子进程退出
             self.event_loop_process.join(timeout=10)  # 给子进程一些时间来退出
             if self.event_loop_process.is_alive():
