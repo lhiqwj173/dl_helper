@@ -227,8 +227,8 @@ class ClientLearnerGroup(LearnerGroup):
             all_ids = self._worker_manager.actor_ids()
             if len(all_ids) > 1:
                 remote_actor_ids = all_ids[1:]
-            res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
-            log(f"set set_client_id to not main learners, res: {get_results(res)}")
+                res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
+                log(f"set set_client_id to not main learners, res: {get_results(res)}")
 
         # 设置各个learner的 train_title 和 train_folder
         # !!! 字符串需要通过 ray.put 传递
