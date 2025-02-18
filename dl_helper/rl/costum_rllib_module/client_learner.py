@@ -818,13 +818,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 self._params[k].grad = decompress_grad_data[idx].to(self._device)
             super().apply_gradients({})
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
-            log(f'[{self.client_id}][{self.update_count}] set_param done \n{list(weights.values())[0]}')
+            log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(weights.values())[0]}')
             tensors = [v for _, v in weights.items()]
             compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
             self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
             self.shared_param.set_param(self.params_dict)
             self.shared_param.param_event.clear_reset(1)
-            log(f'[{self.client_id}][{self.update_count}] set_param done \n{list(self.params_dict.values())[0]}')
+            log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(self.params_dict.values())[0]}')
 
             N = 0
             # 累计 N 个梯度后，需要强制等待新的参数就位
@@ -882,8 +882,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 获取参数覆盖本地参数
             p = self.shared_param_between_learner.get_weights()
             self.module._rl_modules['default_policy'].load_state_dict(p)
+            p = self.module._rl_modules['default_policy'].state_dict()
 
-            log(f'[{self.update_count}] apply new param to local \n{list(p.values())[0]}')
+            log(f'[{self.client_id}][{self.update_count}] apply new param to local \n{list(p.keys())[0]}\n{list(p.values())[0]}')
+
         # if self.client_id == 0:
         #     log(f'[{self.update_count}] apply_gradients done')
 
