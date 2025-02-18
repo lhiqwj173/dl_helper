@@ -105,22 +105,17 @@ if __name__ == "__main__":
 
         log(f'{train_title} client all done')
 
-        # 强制结束所有非守护线程
-        for thread in threading.enumerate():
-            if thread != threading.current_thread() and not thread.daemon:
-                try:
-                    log(f"尝试关闭线程 {thread.name}")
-                    thread.join(timeout=1.0)
-                except Exception as e:
-                    log(f"无法关闭线程 {thread.name}: {e}")
-        
-        # 确保所有子进程被终止
-        for process in multiprocessing.active_children():
-            try:
-                log(f"尝试终止进程 {process.name}")
-                process.terminate()
-                process.join(timeout=1.0)
-            except Exception as e:
-                log(f"无法终止进程 {process.name}: {e}")
+        # 打印活跃的线程
+        active_threads = threading.enumerate()
+        log(f"活跃线程数量: {len(active_threads)}")
+        for thread in active_threads:
+            log(f"活跃线程: {thread.name}, 守护线程: {thread.daemon}")
 
-        log("所有资源清理完成")
+        # 打印活跃的进程
+        active_processes = multiprocessing.active_children()
+        log(f"活跃进程数量: {len(active_processes)}")
+        for process in active_processes:
+            log(f"活跃进程: {process.name}, 进程ID: {process.pid}, 是否活跃: {process.is_alive()}")
+
+        import signal
+        os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
