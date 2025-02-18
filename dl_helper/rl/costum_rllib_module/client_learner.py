@@ -791,15 +791,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             for idx, (k, v) in enumerate(self._params.items()):
                 self._params[k].grad = decompress_grad_data[idx].to(self._device)
-            log(f'[{self.client_id}][{self.update_count}] replace grad done')
             super().apply_gradients({})
-            log(f'[{self.client_id}][{self.update_count}] apply grad done')
             weights = self.module._rl_modules['default_policy'].state_dict()
-            log(f'[{self.client_id}][{self.update_count}] get weights done')
             self.shared_param.set_param(weights)
+            self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')
-            self.shared_param.clear_reset(1)
-            log(f'[{self.client_id}][{self.update_count}] set event done')
 
             # # 加入队列
             # try:
