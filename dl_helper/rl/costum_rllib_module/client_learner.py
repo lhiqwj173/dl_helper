@@ -749,11 +749,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         log(f"param_coroutine done")
 
-    # BENCHMARK 100 iter about 0.6H
-    # compress data all use 100 iter about 4.35H -35%
-    # all use 100 iter about 6.73H 
-    # nouse5 100 iter about H
-    # nouse4 100 iter about H
+
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
 
@@ -765,10 +761,19 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.sync_learner_event.clear()
 
         # 计算梯度
-        gradients_dict = super().compute_gradients(*args, **kwargs)
-        # log(f'[{self.client_id}][{self.update_count}] gradients_dict ready')
+        g = super().compute_gradients(*args, **kwargs)
+        # if self.client_id == 0:
+        #     log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
+        return g
 
-        # nouse3 100 iter about 0.695H -89.66%
+    def postprocess_gradients(self, gradients_dict):
+        # 优化: 做一次过滤
+        if not gradients_dict:
+            return {}
+        return super().postprocess_gradients(gradients_dict)
+    
+    def apply_gradients(self, *args, **kwargs):
         if self.client_id == 0:
             # # 主learner
             # with torch.no_grad():
@@ -858,23 +863,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'[{self.client_id}][{self.update_count}] wait sync_learner_event: {self.sync_learner_event.is_set()}')
             self.sync_learner_event.wait()
 
-        # if self.client_id == 0:
-        #     log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
-        log(f'[{self.client_id}][{self.update_count}] compute_gradients done')
-
-        # nouse3
-        # 返回空
-        return {}
-
-    # nouse4
-
-    def postprocess_gradients(self, gradients_dict):
-        # 优化: 做一次过滤
-        if not gradients_dict:
-            return {}
-        return super().postprocess_gradients(gradients_dict)
-    
-    def apply_gradients(self, *args, **kwargs):
         if self.sync_learner_param_event.is_set():
             # if self.client_id == 0:
             #     log(f'[{self.update_count}] apply new param to local')
