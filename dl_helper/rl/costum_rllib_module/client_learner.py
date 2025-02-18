@@ -875,8 +875,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     
     def apply_gradients(self, *args, **kwargs):
         if self.sync_learner_param_event.is_set():
-            if self.client_id == 0:
-                log(f'[{self.update_count}] apply new param to local')
+            # if self.client_id == 0:
+            #     log(f'[{self.update_count}] apply new param to local')
+            log(f'[{self.update_count}] apply new param to local')
 
             # 获取参数覆盖本地参数
             p = self.shared_param_between_learner.get_weights()
