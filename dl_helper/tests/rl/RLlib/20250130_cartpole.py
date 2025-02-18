@@ -103,6 +103,18 @@ if __name__ == "__main__":
             plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
             log(f"plot_training_curve done")
 
+        # 打印活跃的线程
+        active_threads = threading.enumerate()
+        log(f"活跃线程数量: {len(active_threads)}")
+        for thread in active_threads:
+            log(f"活跃线程: {thread.name}, 守护线程: {thread.daemon}")
+
+        # 打印活跃的进程
+        active_processes = multiprocessing.active_children()
+        log(f"活跃进程数量: {len(active_processes)}")
+        for process in active_processes:
+            log(f"活跃进程: {process.name}, 进程ID: {process.pid}, 是否活跃: {process.is_alive()}")
+
         import ray
         ray.shutdown()
         log(f"ray.shutdown()")
