@@ -62,10 +62,8 @@ if __name__ == "__main__":
             num_gpus_per_learner=1,
         )
 
-        # for debug 单机测试
         # 询问服务器，本机是否需要验证环节
-        need_val = True
-        # need_val = request_need_val(train_title)
+        need_val = request_need_val(train_title)
         log(f"need_val: {need_val}")
         if need_val:
             config = config.evaluation(
