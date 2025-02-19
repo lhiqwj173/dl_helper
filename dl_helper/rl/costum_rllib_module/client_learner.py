@@ -825,7 +825,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # log(f'[{self.client_id}][{self.update_count}] decompress_grad_data')
             # for idx, (k, v) in enumerate(self._params.items()):
             #     self._params[k].grad = decompress_grad_data[idx].to(self._device)
-            super().apply_gradients({})
+            super().apply_gradients(*args, **kwargs)
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(weights.values())[0]}')
             tensors = [v for _, v in weights.items()]
@@ -873,10 +873,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 获取参数覆盖本地参数
             p = self.shared_param_between_learner.get_weights()
-            log(f'[{self.client_id}][{self.update_count}] p \n{list(p.keys())[0]}')
             self.module._rl_modules['default_policy'].load_state_dict(p)
             p = self.module._rl_modules['default_policy'].state_dict()
-
             log(f'[{self.client_id}][{self.update_count}] apply new param to local \n{list(p.keys())[0]}\n{list(p.values())[0]}')
 
         # if self.client_id == 0:
