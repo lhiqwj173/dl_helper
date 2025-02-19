@@ -10,7 +10,8 @@ if '__main__' == __name__:
         install_dl_helper = False
 
     # !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git
-    cmd = 'mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git'
+    # cmd = 'mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git'
+    cmd = 'mkdir 3rd && cd 3rd && git clone -b ps https://github.com/lhiqwj173/dl_helper.git'
     subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
     if install_dl_helper:
         # !cd /kaggle/working/3rd/dl_helper && pip install -e .
