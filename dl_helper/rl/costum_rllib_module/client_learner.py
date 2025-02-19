@@ -916,14 +916,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self._apply_gradients(*args, **kwargs)
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
 
-            # 增量更新参数
-            tensors = [v for _, v in weights.items()]
-            compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
-            self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
-            # # 完整更新参数
-            # self.shared_param.set_param(weights)
+            # # 增量更新参数
+            # tensors = [v for _, v in weights.items()]
+            # compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
+            # self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
+            # self.shared_param.set_param(self.params_dict)
+            # 完整更新参数
+            self.shared_param.set_param(weights)
 
-            self.shared_param.set_param(self.params_dict)
             self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(self.params_dict.values())[0]}')
 
