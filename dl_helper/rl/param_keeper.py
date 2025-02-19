@@ -168,7 +168,7 @@ class ExperimentHandler:
             # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
     
         # 增量参数压缩器
-        self.params_compressor = IncrementalCompressor()
+        self.params_compressor = IncrementalCompressor(1e-5)
 
         # 允许验证的客户端ip
         self.need_val_ip = 0
