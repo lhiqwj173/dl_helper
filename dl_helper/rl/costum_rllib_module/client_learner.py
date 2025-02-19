@@ -773,92 +773,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             return {}
         return super().postprocess_gradients(gradients_dict)
     
-    def _apply_gradients(self, gradients_dict) -> None:
-        # Set the gradient of the parameters.
-        for pid, grad in gradients_dict.items():
-            # If updates should not be skipped turn `nan` and `inf` gradients to zero.
-            if (
-                not torch.isfinite(grad).all()
-                and not self.config.torch_skip_nan_gradients
-            ):
-                # Warn the user about `nan` gradients.
-                log(f"Gradients {pid} contain `nan/inf` values.")
-                # If updates should be skipped, do not step the optimizer and return.
-                if not self.config.torch_skip_nan_gradients:
-                    log(
-                        "Setting `nan/inf` gradients to zero. If updates with "
-                        "`nan/inf` gradients should not be set to zero and instead "
-                        "the update be skipped entirely set `torch_skip_nan_gradients` "
-                        "to `True`."
-                    )
-                # If necessary turn `nan` gradients to zero. Note this can corrupt the
-                # internal state of the optimizer, if many `nan` gradients occur.
-                self._params[pid].grad = torch.nan_to_num(grad)
-            # Otherwise, use the gradient as is.
-            else:
-                self._params[pid].grad = grad
-
-        # For each optimizer call its step function.
-        for module_id, optimizer_names in self._module_optimizers.items():
-            for optimizer_name in optimizer_names:
-                # module_id: default_policy, optimizer_name: default_policy_default_optimizer
-                log(f'[{self.client_id}][{self.update_count}] module_id: {module_id}, optimizer_name: {optimizer_name}')
-
-                optim = self.get_optimizer(module_id, optimizer_name)
-                # If we have learning rate schedulers for a module add them, if
-                # necessary.
-                if self._lr_scheduler_classes is not None:
-                    if (
-                        module_id not in self._lr_schedulers
-                        or optimizer_name not in self._lr_schedulers[module_id]
-                    ):
-                        # Set for each module and optimizer a scheduler.
-                        self._lr_schedulers[module_id] = {optimizer_name: []}
-                        # If the classes are in a dictionary each module might have
-                        # a different set of schedulers.
-                        if isinstance(self._lr_scheduler_classes, dict):
-                            scheduler_classes = self._lr_scheduler_classes[module_id]
-                        # Else, each module has the same learning rate schedulers.
-                        else:
-                            scheduler_classes = self._lr_scheduler_classes
-                        # Initialize and add the schedulers.
-                        for scheduler_class in scheduler_classes:
-                            self._lr_schedulers[module_id][optimizer_name].append(
-                                scheduler_class(optim)
-                            )
-
-                # Step through the scaler (unscales gradients, if applicable).
-                if self._grad_scalers is not None:
-                    scaler = self._grad_scalers[module_id]
-                    scaler.step(optim)
-                    self.metrics.log_value(
-                        (module_id, "_torch_grad_scaler_current_scale"),
-                        scaler.get_scale(),
-                        window=1,  # snapshot in time, no EMA/mean.
-                    )
-                    # Update the scaler.
-                    scaler.update()
-                # `step` the optimizer (default), but only if all gradients are finite.
-                elif all(
-                    param.grad is None or torch.isfinite(param.grad).all()
-                    for group in optim.param_groups
-                    for param in group["params"]
-                ):
-                    optim.step()
-                # If gradients are not all finite warn the user that the update will be
-                # skipped.
-                elif not all(
-                    torch.isfinite(param.grad).all()
-                    for group in optim.param_groups
-                    for param in group["params"]
-                ):
-                    log(
-                        "Skipping this update. If updates with `nan/inf` gradients "
-                        "should not be skipped entirely and instead `nan/inf` "
-                        "gradients set to `zero` set `torch_skip_nan_gradients` to "
-                        "`False`."
-                    )
-
     def apply_gradients(self, *args, **kwargs):
         # # 查看第一个梯度
         # g = list(self._params.values())[0].grad
@@ -912,8 +826,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # for idx, (k, v) in enumerate(self._params.items()):
             #     self._params[k].grad = decompress_grad_data[idx].to(self._device)
 
-            # super().apply_gradients(*args, **kwargs)
-            self._apply_gradients(*args, **kwargs)
+            super().apply_gradients(*args, **kwargs)
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
 
             # 增量更新参数
