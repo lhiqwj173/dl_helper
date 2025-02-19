@@ -834,8 +834,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 增量更新参数
                 tensors = [v for _, v in weights.items()]
                 compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
+                log(f'[{self.client_id}][{self.update_count}] self.params_dict: {list(self.params_dict.values())[0].device}')
                 IncrementalCompressor.decompress(compressed_tensors, compress_info, self.params_dict)
+                log(f'[{self.client_id}][{self.update_count}] self.params_dict: {list(self.params_dict.values())[0].device}')
                 for compressor_t, t in zip(self.params_compressor.client_params[0], self.params_dict.values()):
+                    log(f'[{self.client_id}][{self.update_count}] compressor_t: {compressor_t.device}, t: {t.device}')
                     assert torch.allclose(compressor_t, t)
                 self.shared_param.set_param(self.params_dict)
 
