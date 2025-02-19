@@ -209,9 +209,6 @@ class ClientLearnerGroup(LearnerGroup):
         # self.param_compressor = ParamCompressor(param_keys)
         self.param_compressor = IncrementalCompressor()
 
-        # 共享参数
-        self.shared_param = None
-
         # 初始化客户端learner
         self._init_client_learner()
 
@@ -297,7 +294,6 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"set need_warn_up to all learners, res: {get_results(res)}")
 
         # 创建共享参数
-        self.shared_param = SharedParam("param_coroutine", _params_dict, create=True)
         self.shared_param_between_learner = SharedParam("learner", _params_dict, create=True)
         log(f"SharedParam init Done")
 
@@ -345,15 +341,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # learner 的个数(gpu数)
         self.num_learners = match_num_processes()
 
+        # 梯度计数
+        self.grads_count = 0
+
+        # 用于解压参数的临时参数字典 / 初始化共享dump队列
+        self.params_dict = None
+
         ####################
         # 只有主 learner 需要初始化
         ####################
         # 时间队列(与协程进程通讯)
         self.task_queue = None
-        self.grads_count = 0
-        self.update_param_count = 0
-        # 用于初始化共享参数
-        self.params_dict = None
         self.grad_params_list = None
         self.grad_params_value_shape = None
         # stop event
@@ -362,28 +360,42 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.gradient_compressor = None
         self.info_data = None
         self.tatal_compress_cost = 0
-        # 共享参数
-        self.shared_param = None
+        # 共享dump参数队列
+        self.params_dump_q = None
         ####################
         # 只有主 learner 需要初始化
         ####################
 
+        ####################
+        # 只有次 learner 需要初始化，
+        # 若只有一个learner，则次learner与主learner相同
+        ####################
+        self.update_param_count = 0
+        ####################
+        # 只有次 learner 需要初始化，
+        # 若只有一个learner，则次learner与主learner相同
+        ####################
     def init_shared_param(self):
         log(f"[{self.client_id}] init_shared_param")
         # 获取参数字典
         params_dict = self.module._rl_modules['default_policy'].state_dict()
+        # 解压用的临时参数字典 / 初始化共享dump队列
+        self.params_dict = OrderedDict()
+        for k,v in params_dict.items():
+            self.params_dict[k] = v.clone().detach().cpu()
+
         # 获取梯度字典
         grad_params_dict = self._params
         if self.client_id == 0:
-            self.params_dict = OrderedDict()
-            for k,v in params_dict.items():
-                self.params_dict[k] = v.clone().detach().cpu()
             self.grad_params_list = []
             for k,v in grad_params_dict.items():
                 self.grad_params_list.append(v.clone().detach().cpu())
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
-            # 获取共享参数
-            self.shared_param = SharedParam("param_coroutine",params_dict, create=False)
+
+        if self.ready_params_job:
+            _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
+            self.params_dump_q.clear()
 
         self.shared_param_between_learner = SharedParam("learner",params_dict, create=False)
         log(f"[{self.client_id}] init_shared_param done")
@@ -651,18 +663,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         log(f"param_coroutine start")
 
-        # 参数解压器
-        # params_keys = list(params_dict.keys())
-        # param_compressor = ParamCompressor(params_keys)
-        param_compressor = IncrementalCompressor()
-
-        sync_params_dict = copy.deepcopy(params_dict)
-
-        # 共享参数
-        grad_params_dict = OrderedDict()
-        for idx, shape in enumerate(grad_params_value_shape):
-            grad_params_dict[f'grad_{idx}'] = torch.zeros(shape)
-        shared_param = SharedParam("param_coroutine", params_dict, create=False)
+        # 共享队列
+        _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+        params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
 
         # 统计拉取参数耗时
         begin_time = 0
@@ -688,11 +691,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 if async_share_data['stop']:
                     break
 
-                # 被动获取参数
-                # log(f"[{total_count}] wait params")
                 try:
-                    params_list, info, version, need_warn_up = await _async_wait_server_weights(reader, timeout=5)
-                    info_data.set(version=version, need_warn_up=need_warn_up)
+                    dump_data = await _async_wait_server_weights(reader, timeout=5, loads=False)
                 except TimeoutError:
                     continue
 
@@ -700,24 +700,15 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 t = time.time()
                 if begin_time == 0:
                     begin_time = t
-                log(f"[{total_count}] recv params push, Version: {version}, need_warn_up: {need_warn_up}")
+                log(f"[{total_count}] recv params push")
 
-                # 增量解压操作
-                # log(f"[{total_count}] decompress params data")
-                param_compressor.decompress(params_list, info, sync_params_dict)
-                log(f"[{total_count}] decompress params done, cost: {int(1000*(time.time() - t))}ms")
-
-                # 更新共享参数
-                shared_param.set_param(sync_params_dict)
-                log(f"[{total_count}] set params to shared param, cost: {int(1000*(time.time() - t))}ms")
-
-                # log(f"[{total_count}] set params to shared param, sem_value: {shared_param.param_event.sem.value}")
-                # 触发共享参数更新事件
-                shared_param.param_event.clear_reset(1)
-                log(f"[{total_count}] update latest server weights done,  sem_value: {shared_param.param_event.sem.value}, cost: {int(1000*(time.time() - t))}ms")
-
-                # # 处理完成回复
-                # await ack(writer)
+                # 加入队列
+                while True:
+                    try:
+                        params_dump_q.put(dump_data, block=False)
+                        break
+                    except:
+                        await asyncio.sleep(0.001)
 
                 # 统计耗时
                 handle_cost_time = time.time() - t
@@ -745,8 +736,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
 
-        # TODO 次learner 检查参数更新（解压准备）
-
         if self.client_id == 0:
             # report_memory_usage(f'[{self.update_count}]')
             # 清空learner参数同步事件
@@ -760,14 +749,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return g
     
     def apply_gradients(self, *args, **kwargs):
-        # # 查看第一个梯度
-        # g = list(self._params.values())[0].grad
-        # log(f'[{self.client_id}][{self.update_count}] gard: \n{g}')
+        self.grads_count += 1
 
         try:
             if self.client_id == 0:
-                # 主learner
-
+                # 主learner，压缩梯度
                 cpu_gradients = [v.grad.cpu() for _, v in self._params.items()]
                 log(f'[{self.client_id}][{self.update_count}] cpu_gradients ready')
 
@@ -778,7 +764,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 梯度压缩
                 t = time.time()
                 log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
-                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+                # compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
+                # FOR DEBUG 全梯度测试
+                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, True)
                 cost = int((time.time() - t) * 1000)
                 self.tatal_compress_cost += cost
 
@@ -786,7 +774,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 #     # 保存第一个压缩梯度，验证梯度是否正确
                 #     pickle.dump((compressed_grads, compress_info), open(f'compress_gradient.pkl', 'wb'))
 
-                self.grads_count += 1
                 # compress gradients done, cost time: 19ms, avg cost: 18ms
                 # compress gradients done, cost time: 17ms, avg cost: 17ms
                 log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
@@ -796,36 +783,39 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
                 log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
 
+            if self.ready_params_job:
+                # 需要准备参数的learner，解压参数
                 N = 0
                 # 累计 N 个梯度后，需要强制等待新的参数就位
                 if N > 0 and self.grads_count % N == 0:
                     # 等待新的参数就位
                     t = time.time()
                     log(f'[{self.client_id}][{self.update_count}] force sync step, wait new params ready')
-                    self.shared_param.param_event.wait()
+                    dump_data = self.params_dump_q.get()
+                else:
+                    # 不需要强制同步参数的step
+                    try:
+                        dump_data = self.params_dump_q.get(block=False)
+                    except Empty:
+                        dump_data = None
+                    log(f'[{self.client_id}][{self.update_count}] not force sync step, check if param ready: {dump_data is not None}')
+                    
+                if dump_data is not None:
+                    # loads
+                    weights, info, version, need_warn_up = pickle.loads(dump_data)
+                    # 解压到 self.params_dict
+                    IncrementalCompressor.decompress(weights, info, self.params_dict)
+                    # 拷贝到 shared_param_between_learner
+                    self.shared_param_between_learner.set_param(self.params_dict)
                     # 触发主learner的参数更新事件
-                    log(f'[{self.client_id}][{self.update_count}] wait new params ready, cost: {int(1000*(time.time() - t))}ms')
                     self.sync_learner_param_event.set(1)
                     self.update_param_count += 1
-                else:
-                    # 不需要强制同步参数的step, 
-                    # 只检查是否有准备好的参数，而不强制等待
-                    params_ready = self.shared_param.param_event.is_set()
-                    log(f'[{self.client_id}][{self.update_count}] not force sync step, check if param ready: {params_ready}')
-                    if params_ready:
-                        # 消耗掉事件
-                        self.shared_param.param_event.wait()
-                        # 拷贝到 shared_param_between_learner
-                        self.shared_param_between_learner.set_param(self.shared_param.get_weights())
-                        # 触发主learner的参数更新事件
-                        self.sync_learner_param_event.set(1)
-                        self.update_param_count += 1
+                    log(f'[{self.client_id}][{self.update_count}] decompress and ready new params done')
 
-                # 触发主learner的梯度更新事件
+                # 等解压参数（检查参数更新）完毕，全部learner可以继续运行
                 self.sync_learner_event.set(self.num_learners - 1)
             else:
-                # 非主learner, 等待主learner的梯度更新事件
-                # log(f'[{self.client_id}][{self.update_count}] wait sync_learner_event: {self.sync_learner_event.is_set()}')
+                # 非解压参数的learner，等解压参数（检查参数更新）完毕
                 self.sync_learner_event.wait()
 
             if self.sync_learner_param_event.is_set():
@@ -835,13 +825,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 获取参数覆盖本地参数
                 p = self.shared_param_between_learner.get_weights()
                 self.module._rl_modules['default_policy'].load_state_dict(p)
+                log(f'[{self.client_id}][{self.update_count}] apply new param to local')
 
         except Exception as e:
             log(f'[{self.client_id}][{self.update_count}] apply_gradients failed: \n{get_exception_msg()}')
             raise e
-
-        # if self.client_id == 0:
-        #     log(f'[{self.update_count}] apply_gradients done')
 
     def after_gradient_based_update(self, *args, **kwargs):
         # 重置

@@ -243,10 +243,13 @@ def _get_server_weights(_socket, train_title, version):
     # 反序列化参数
     return _handle_response_params(response)
 
-async def _async_wait_server_weights(reader, timeout=-1):
+async def _async_wait_server_weights(reader, timeout=-1, loads=True):
     # 接收参数数据
     response = await async_recv_msg(reader, timeout)
-    return _handle_response_params(response)
+    if loads:
+        return _handle_response_params(response)
+    else:
+        return response
 
 def get_server_weights(train_title, version=-1):
     """

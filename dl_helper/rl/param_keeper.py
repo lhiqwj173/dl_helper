@@ -403,7 +403,6 @@ class ExperimentHandler:
                 report_memory_usage()
                 raise e
 
-
     async def _get_latest_raw_params(self):
         """获取最新参数(无压缩)"""
         # 获取参数
@@ -467,7 +466,6 @@ class ExperimentHandler:
                 self.version = v
                 log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
-                # if (v - last_send_v) >= self.push_params_interval:
                 # 每步都推送
                 last_send_v = v
 
