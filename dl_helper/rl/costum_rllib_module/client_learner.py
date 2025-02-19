@@ -801,6 +801,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # For each optimizer call its step function.
         for module_id, optimizer_names in self._module_optimizers.items():
             for optimizer_name in optimizer_names:
+                # module_id: default_policy, optimizer_name: default_policy_default_optimizer
                 log(f'[{self.client_id}][{self.update_count}] module_id: {module_id}, optimizer_name: {optimizer_name}')
 
                 optim = self.get_optimizer(module_id, optimizer_name)
@@ -912,8 +913,20 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             #     self._params[k].grad = decompress_grad_data[idx].to(self._device)
 
             # super().apply_gradients(*args, **kwargs)
-            self._apply_gradients(*args, **kwargs)
+            log(f'after apply gradients')
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
+            log(f'[{self.client_id}][{self.update_count}] self.module._rl_modules["default_policy"].state_dict(): \n{list(weights.values())[0]}')
+            optim = self.get_optimizer('default_policy', 'default_policy_default_optimizer')
+            p = optim.param_groups[0]["params"][0]
+            log(f'[{self.client_id}][{self.update_count}] optim.param_groups[0]["params"]: \n{p}')
+            self._apply_gradients(*args, **kwargs)
+            log(f'after apply gradients')
+            weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
+            log(f'[{self.client_id}][{self.update_count}] self.module._rl_modules["default_policy"].state_dict(): \n{list(weights.values())[0]}')
+            optim = self.get_optimizer('default_policy', 'default_policy_default_optimizer')
+            p = optim.param_groups[0]["params"][0]
+            log(f'[{self.client_id}][{self.update_count}] optim.param_groups[0]["params"]: \n{p}')
+
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(weights.values())[0]}')
             tensors = [v for _, v in weights.items()]
             compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
