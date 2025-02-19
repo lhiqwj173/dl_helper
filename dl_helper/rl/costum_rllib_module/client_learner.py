@@ -835,7 +835,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 tensors = [v for _, v in weights.items()]
                 compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
                 IncrementalCompressor.decompress(compressed_tensors, compress_info, self.params_dict)
-                for compressor_t, t in zip(self.params_compressor.client_params[0], self.param_dict.values()):
+                for compressor_t, t in zip(self.params_compressor.client_params[0], self.params_dict.values()):
                     assert torch.allclose(compressor_t, t)
                 self.shared_param.set_param(self.params_dict)
 
@@ -889,7 +889,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 # 确认参数
                 if self.client_id == 0:
-                    for compressor_t, t in zip(self.compressor.client_params[0], p.values()):
+                    for compressor_t, t in zip(self.params_compressor.client_params[0], p.values()):
                         assert torch.allclose(compressor_t, t)
 
         except Exception as e:
