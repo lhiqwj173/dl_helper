@@ -6,15 +6,19 @@ CompressInfo = Dict[str, List[torch.Tensor]]
 class IncrementalCompressor:
     def __init__(self, 
                  threshold: float = 1e-3,
-                 sparsity_threshold: float = 0.3
+                 sparsity_threshold: float = 0.3,
+                 min_sparsity_threshold: float = 0.01
                 ):
         """
         参数:
             threshold: 压缩阈值,只压缩变化大于此值的参数
             sparsity_threshold: 稀疏度阈值，当更新元素比例超过此值时切换为全量更新
+            min_sparsity_threshold: 最小稀疏度阈值，当更新元素比例小于此值时，取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
         """
         self.threshold = threshold
         self.sparsity_threshold = sparsity_threshold
+        self.min_sparsity_threshold = min_sparsity_threshold
+
         self.client_params = {}  # 存储不同客户端的参数 {client_id: List[tensor]}
         
     def _init_reference(self, 
@@ -32,7 +36,7 @@ class IncrementalCompressor:
                 tensors: List[torch.Tensor],
                 client_id: str,
                ) -> Tuple[List[torch.Tensor], CompressInfo]:
-        """压缩张量列表，确保压缩结果在CPU上"""
+        """压缩张量列表, 确保压缩结果在CPU上"""
         if self._init_reference(client_id, tensors):
             # 初始化时直接返回参考张量的克隆
             return [t.clone() for t in self.client_params[client_id]], {'full': True}
@@ -62,6 +66,12 @@ class IncrementalCompressor:
                     # 更新参考张量
                     ref_t.copy_(curr_t_cpu)
                 else:
+                    if update_ratio < self.min_sparsity_threshold:
+                        # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
+                        n = max(1, int(update_ratio * mask.numel()))
+                        # 修改 mask
+                        mask = torch.topk(diff, n)[1]
+
                     # 增量更新 - 只复制需要更新的值
                     update_indices = torch.where(mask)
                     # 直接使用索引获取更新值，无需额外克隆

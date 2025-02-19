@@ -385,7 +385,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.gradient_compressor = DeepGradientCompression()
 
             # for debug 单机测试
-            self.params_compressor = IncrementalCompressor(1e-5)
+            self.params_compressor = IncrementalCompressor()
 
             # 获取一个梯度不压缩数据, 作为队列大小
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
