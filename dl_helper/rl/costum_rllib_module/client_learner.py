@@ -860,9 +860,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     )
 
     def apply_gradients(self, *args, **kwargs):
-        # 查看第一个梯度
-        g = list(self._params.values())[0].grad
-        log(f'[{self.client_id}][{self.update_count}] gard: \n{g}')
+        # # 查看第一个梯度
+        # g = list(self._params.values())[0].grad
+        # log(f'[{self.client_id}][{self.update_count}] gard: \n{g}')
 
         if self.client_id == 0:
             # # 主learner
