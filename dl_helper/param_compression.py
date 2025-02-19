@@ -26,7 +26,7 @@ class IncrementalCompressor:
                        tensors: List[torch.Tensor],
                       ) -> bool:
         """初始化参考张量，统一在CPU上存储"""
-        if client_id not in self.client_params:
+        if 1 or client_id not in self.client_params:
             # 直接在CPU上创建参考张量，使用clone确保内存独立
             self.client_params[client_id] = [t.detach().cpu().clone() for t in tensors]
             return True

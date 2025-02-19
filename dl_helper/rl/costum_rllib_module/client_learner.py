@@ -223,12 +223,24 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"init_client_learner")
 
         # 设置 除第一个外 learner的 client_id > 不与参数服务器通信
+        # 若有大于1个learner，则第二个learner分配解压参数，准备参数，否则仍由主learner解压
+        second_learner_seted = False
         if self._worker_manager is not None:
             all_ids = self._worker_manager.actor_ids()
             if len(all_ids) > 1:
                 remote_actor_ids = all_ids[1:]
                 res = self.foreach_learner(lambda learner: learner.set_client_id(-1), remote_actor_ids = remote_actor_ids)
                 log(f"set set_client_id to not main learners, res: {get_results(res)}")
+
+                # 第二个learner分配解压参数，准备参数
+                res = self.foreach_learner(lambda learner: learner.set_params_job(), remote_actor_ids = all_ids[1:2])
+                log(f"set set_params_job to second learner, res: {get_results(res)}")
+                second_learner_seted = True
+
+        if not second_learner_seted:
+            # 只有一个learner
+            res = self.foreach_learner(lambda learner: learner.set_params_job())
+            log(f"set set_params_job to main learner, res: {get_results(res)}")
 
         # 设置各个learner的 train_title 和 train_folder
         # !!! 字符串需要通过 ray.put 传递
@@ -316,6 +328,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 客户端 id, 0表示与参数服务器通信
         self.client_id = 0
+
+        # 是否再本learner中进行参数解压准备
+        self.ready_params_job = False
 
         # 更新计数
         self.update_count = 0
@@ -838,6 +853,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
     def set_client_id(self, client_id):
         self.client_id = client_id
+        return True
+    
+    def set_params_job(self):
+        self.ready_params_job = True
         return True
 
     def set_train_title(self, train_title):
