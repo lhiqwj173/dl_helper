@@ -70,7 +70,9 @@ class IncrementalCompressor:
                         # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
                         n = max(1, int(update_ratio * mask.numel()))
                         # 修改 mask
-                        mask = torch.topk(diff, n)[1]
+                        _, top_indices = torch.topk(diff.flatten(), n)
+                        mask = torch.zeros_like(diff, dtype=torch.bool)
+                        mask.view(-1)[top_indices] = True
 
                     # 增量更新 - 只复制需要更新的值
                     update_indices = torch.where(mask)
