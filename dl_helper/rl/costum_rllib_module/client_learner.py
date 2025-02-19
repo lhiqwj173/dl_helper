@@ -916,13 +916,16 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self._apply_gradients(*args, **kwargs)
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
 
-            # # 增量更新参数
-            # tensors = [v for _, v in weights.items()]
-            # compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
-            # self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
-            # self.shared_param.set_param(self.params_dict)
-            # 完整更新参数
-            self.shared_param.set_param(weights)
+            # 增量更新参数
+            tensors = [v for _, v in weights.items()]
+            compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
+            IncrementalCompressor.decompress(compressed_tensors, compress_info, self.params_dict)
+            for compressor_t, t in zip(self.compressor.client_params[0], self.param_dict.values()):
+                assert torch.allclose(compressor_t, t)
+            self.shared_param.set_param(self.params_dict)
+
+            # # 完整更新参数
+            # self.shared_param.set_param(weights)
 
             self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(self.params_dict.values())[0]}')
@@ -968,6 +971,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.module._rl_modules['default_policy'].load_state_dict(p)
             p = self.module._rl_modules['default_policy'].state_dict()
             log(f'[{self.client_id}][{self.update_count}] apply new param to local \n{list(p.keys())[0]}\n{list(p.values())[0]}')
+
+            # 确认参数
+            if self.client_id == 0:
+                for compressor_t, t in zip(self.compressor.client_params[0], p.values()):
+                    assert torch.allclose(compressor_t, t)
 
         # if self.client_id == 0:
         #     log(f'[{self.update_count}] apply_gradients done')
