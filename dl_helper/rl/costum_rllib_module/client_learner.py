@@ -366,10 +366,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         if self.client_id == 0:
             self.params_dict = OrderedDict()
             for k,v in params_dict.items():
-                self.params_dict[k] = v.cpu()
+                self.params_dict[k] = v.clone().detach().cpu()
             self.grad_params_list = []
             for k,v in grad_params_dict.items():
-                self.grad_params_list.append(v.cpu())
+                self.grad_params_list.append(v.clone().detach().cpu())
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
             # 获取共享参数
             self.shared_param = SharedParam("param_coroutine",params_dict, create=False)
@@ -913,21 +913,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             #     self._params[k].grad = decompress_grad_data[idx].to(self._device)
 
             # super().apply_gradients(*args, **kwargs)
-            log(f'before apply gradients')
-            weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
-            log(f'[{self.client_id}][{self.update_count}] self.module._rl_modules["default_policy"].state_dict(): \n{list(weights.values())[0]}')
             self._apply_gradients(*args, **kwargs)
-            log(f'after apply gradients')
             weights = self.module._rl_modules['default_policy'].state_dict()# 获取最新的参数
-            log(f'[{self.client_id}][{self.update_count}] self.module._rl_modules["default_policy"].state_dict(): \n{list(weights.values())[0]}')
 
-            log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(weights.values())[0]}')
             # 增量更新参数
-            # tensors = [v for _, v in weights.items()]
-            # compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
-            # self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
-            # 完整更新参数
-            self.shared_param.set_param(weights)
+            tensors = [v for _, v in weights.items()]
+            compressed_tensors, compress_info = self.params_compressor.compress(tensors, 0)
+            self.params_compressor.decompress(compressed_tensors, compress_info, self.params_dict)
+            # # 完整更新参数
+            # self.shared_param.set_param(weights)
+
+            self.shared_param.set_param(self.params_dict)
             self.shared_param.param_event.clear_reset(1)
             log(f'[{self.client_id}][{self.update_count}] set_param done')# \n{list(self.params_dict.values())[0]}')
 
