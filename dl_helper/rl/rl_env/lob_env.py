@@ -599,7 +599,7 @@ class Account:
 
         # 额外数据 标准化
         # 持仓量 TODO
-        self.pos /= STD_POS
+        # self.pos /= STD_POS
         # 未实现收益率
         unrealized_profit /= 0.03043
 
