@@ -35,6 +35,14 @@ class BinCtablEncoder(TorchModel, Encoder):
         self.TABL = TABL_layer(d4, d3, t3, t4)
         self.dropout = nn.Dropout(0.1)
 
+        self.extra_fc = nn.Linear(self.extra_input_dims, d4)
+        # 新增：注意力机制
+        self.attn_fc = nn.Linear(d4 * 2, d4)  # 输入是 x 和 extra_x 的拼接
+
+        # 可选：归一化层
+        self.norm_x = nn.LayerNorm(d4)
+        self.norm_extra = nn.LayerNorm(d4)
+
         self.error_count = 0
 
     def _forward(self, inputs: dict, **kwargs) -> dict:
@@ -62,7 +70,20 @@ class BinCtablEncoder(TorchModel, Encoder):
 
         x = self.TABL(x)
 
-        x = torch.squeeze(x,dim=2)# 保留batch维度
+        x = torch.squeeze(x,dim=2)# 保留batch维度 d4
+
+        # 预处理 extra_x
+        extra_x = self.extra_fc(extra_x) # d4
+
+        # 可选：归一化
+        x = self.norm_x(x)
+        extra_x = self.norm_extra(extra_x)
+
+        # 注意力机制
+        combined = torch.cat([x, extra_x], dim=1)  # (batch_size, d4 * 2)
+        attn_weights = torch.sigmoid(self.attn_fc(combined))  # (batch_size, d4)
+        x = x * attn_weights + extra_x * (1 - attn_weights)  # 加权融合
+
         x = torch.cat([x, extra_x], dim=1)
 
         # 数值检查
@@ -99,7 +120,7 @@ class BinCtablEncoderConfig(ModelConfig):
     @property
     def output_dims(self):
         """Read-only `output_dims` are inferred automatically from other settings."""
-        return (int(self.ds[-1]+self.extra_input_dims),)# 注意返回的是维度，不是int
+        return (int(self.ds[-1] * 2),)# 注意返回的是维度，不是int
 
 
 class lob_PPOCatalog(PPOCatalog):

@@ -345,10 +345,6 @@ class ExperimentHandler:
                     dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
                     _q.put(dump_data, block=False, extra_data=np.int64(version))
 
-                if total_count > 0:
-                    log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: {total_client_version_diff / total_count :.2f}')
-                else:
-                    log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: 0.00')
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
@@ -356,7 +352,7 @@ class ExperimentHandler:
             
             loop_count += 1
 
-            if loop_count % 100 == 0:
+            if step_count % 60 == 0:
                 if total_count > 0:
                     log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
                 else:
