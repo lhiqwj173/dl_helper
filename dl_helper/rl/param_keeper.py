@@ -278,9 +278,8 @@ class ExperimentHandler:
                         # 1.2 过滤 / 解压 / 应用梯度
                         #####################################
                         t = time.time()
-                        log(f'[CG]{train_title} active')
-
                         # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                        log(f'[CG]{train_title} grad_dump_data: {grad_dump_data}')
                         data = pickle.loads(grad_dump_data)
                         if GRAD_BATCH_SIZE > 1:
                             batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
