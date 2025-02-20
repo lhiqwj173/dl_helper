@@ -219,10 +219,13 @@ class ExperimentHandler:
         # 1: 循环等待
         client_wait_state = {}
 
+        begin_time = time.time()
+        loop_count = 0
+
         log(f'{train_title} calculate most start')
         while True:
-
             try:
+                t = time.time()
                 ################################################
                 # 1.0 接收梯度dump/解压应用梯度
                 #   1.1 尝试get梯度，若获取成功继续处理
@@ -334,6 +337,11 @@ class ExperimentHandler:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
                 raise e
+            
+            loop_count += 1
+
+            if loop_count % 100 == 0:
+                log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
 
     def start(self, loop=None):
         self.aper.start(loop)
