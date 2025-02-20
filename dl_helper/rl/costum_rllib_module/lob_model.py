@@ -84,7 +84,8 @@ class BinCtablEncoder(TorchModel, Encoder):
         attn_weights = torch.sigmoid(self.attn_fc(combined))  # (batch_size, d4)
         x = x * attn_weights + extra_x * (1 - attn_weights)  # 加权融合
 
-        x = torch.cat([x, extra_x], dim=1)
+        # 输出维度为 d4 * 2
+        # x = torch.cat([x, extra_x], dim=1)
 
         # 数值检查
         if torch.isnan(x).any() or torch.isinf(x).any():
@@ -120,7 +121,7 @@ class BinCtablEncoderConfig(ModelConfig):
     @property
     def output_dims(self):
         """Read-only `output_dims` are inferred automatically from other settings."""
-        return (int(self.ds[-1] * 2),)# 注意返回的是维度，不是int
+        return (int(self.ds[-1]),)# 注意返回的是维度，不是int
 
 
 class lob_PPOCatalog(PPOCatalog):

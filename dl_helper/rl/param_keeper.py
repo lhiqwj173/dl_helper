@@ -339,6 +339,8 @@ class ExperimentHandler:
                     if _q.is_full():
                         continue
 
+                    log(f'[CG]{train_title} compress params for {_id}, version: {version}')
+                    
                     # 压缩
                     compress_data, compress_info = params_compressor.compress(weights, _id)
                     # dumps
