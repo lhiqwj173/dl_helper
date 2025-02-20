@@ -468,6 +468,7 @@ class Account:
         :param ask_price: 最优卖价 
         :param action: 0-买入 1-卖出 2-不操作
         :param need_close: 是否需要平仓
+        
         :return: (动作是否合法, 持仓量, 对数收益率, 评价指标)
         """
         # 重置fee记录
@@ -818,7 +819,7 @@ class LOB_trade_env(gym.Env):
             'period_done': self.period_done,
         }
 
-        # 计算奖励 TODO 标准化
+        # 计算奖励
         reward, acc_done, pos, profit = self._cal_reward(action, _need_close, info)
 
         if action == 1 or _need_close or info.get('act_criteria', None) == -1:

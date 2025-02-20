@@ -232,6 +232,7 @@ class ExperimentHandler:
 
                 # 检查是否有新的 等待参数 id
                 _q_size = wait_params_id_q.qsize()
+                log(f'[CG]{train_title} wait_params_id_q size: {_q_size}')
                 for _ in range(_q_size):
                     new_wait_params_id = wait_params_id_q.get(block=False)
                     if new_wait_params_id not in client_params_q:
@@ -243,6 +244,7 @@ class ExperimentHandler:
 
                 # 检查是否有新的 循环等待 id
                 _q_size = on_wait_params_id_q.qsize()
+                log(f'[CG]{train_title} on_wait_params_id_q size: {_q_size}')
                 for _ in range(_q_size):
                     new_wait_params_id = on_wait_params_id_q.get(block=False)
                     if new_wait_params_id not in client_wait_state:
