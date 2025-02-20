@@ -240,21 +240,27 @@ class ExperimentHandler:
                 # 检查是否有新的 等待参数 id
                 _q_size = wait_params_id_q.qsize()
                 for _ in range(_q_size):
-                    new_wait_params_id = wait_params_id_q.get(block=False)
-                    if new_wait_params_id not in client_params_q:
-                        # 初始化共享队列
-                        client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
-                        client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 4)
-                        # 单次状态
-                        client_wait_state[new_wait_params_id] = 0
+                    try:
+                        new_wait_params_id = wait_params_id_q.get(block=False)
+                        if new_wait_params_id not in client_params_q:
+                            # 初始化共享队列
+                            client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+                            client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 4)
+                            # 单次状态
+                            client_wait_state[new_wait_params_id] = 0
+                    except Empty:
+                        break
 
                 # 检查是否有新的 循环等待 id
                 _q_size = on_wait_params_id_q.qsize()
                 for _ in range(_q_size):
-                    new_wait_params_id = on_wait_params_id_q.get(block=False)
-                    if new_wait_params_id not in client_wait_state:
-                        # 循环状态
-                        client_wait_state[new_wait_params_id] = 1   
+                    try:
+                        new_wait_params_id = on_wait_params_id_q.get(block=False)
+                        if new_wait_params_id not in client_wait_state:
+                            # 循环状态
+                            client_wait_state[new_wait_params_id] = 1   
+                    except Empty:
+                        break
 
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
@@ -263,7 +269,10 @@ class ExperimentHandler:
                 for _id, _q in client_grad_q.items():
                     _q_size = _q.qsize()
                     for _ in range(_q_size):
-                        grad_dump_data = _q.get(block=False)
+                        try:
+                            grad_dump_data = _q.get(block=False)
+                        except Empty:
+                            break
 
                         #####################################
                         # 1.2 过滤 / 解压 / 应用梯度
