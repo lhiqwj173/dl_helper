@@ -220,8 +220,8 @@ class ExperimentHandler:
         # 计算最大梯度dump大小
         # 1.0 全梯度的压缩数据大小
         _grad_params_list = [v for _, v in _grad_params_dict.items()]
-        _compress_grad, _compress_grad_info = gradient_compressor.compress(_grad_params_list, True)# 全梯度
-        _single_grad_dump = pickle.dumps((_compress_grad, _compress_grad_info))
+        _compress_grad_info = [{'is_full_gradient': True,} for _ in _grad_params_list]
+        _single_grad_dump = pickle.dumps((_grad_params_list, _compress_grad_info))
         # 1.1 GRAD_BATCH_SIZE 多个数据的大小
         if GRAD_BATCH_SIZE >1:
             _g_dump = pickle.dumps(
@@ -390,7 +390,7 @@ class ExperimentHandler:
                     _q = client_params_q[_id]
                     if _q.is_full():
                         continue
-                    
+
                     # 压缩
                     compress_data, compress_info = params_compressor.compress(weights, _id)
                     # dumps
