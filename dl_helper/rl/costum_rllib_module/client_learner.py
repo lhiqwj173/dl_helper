@@ -451,7 +451,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     @staticmethod
     def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
         """在新进程中运行事件循环"""
-
+        log(f'_run_event_loop_process')
         # FOR DEBUG 
         # 训练配置
         try:
@@ -483,13 +483,18 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             else:
                 # gym 环境
                 env = gym.make(env_specifier)
+            log(f'_run_event_loop_process init env done')
             param_keeper = AsyncRLParameterServer(config, env)
+            log(f'_run_event_loop_process init param_keeper done')
             # 初始化模型参数
             param_keeper.load_weights(params_dict)
+            log(f'_run_event_loop_process init param_keeper done')
             # 参数压缩器
             param_compressor = IncrementalCompressor()
+            log(f'_run_event_loop_process init param_compressor done')
             # 梯度解压器
             gradient_decompressor = DeepGradientCompression()
+            log(f'_run_event_loop_process init gradient_decompressor done')
             # 打包数据
             debug_datas = {
                 'param_keeper': param_keeper,
