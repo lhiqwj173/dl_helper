@@ -47,6 +47,8 @@ USE_CODES = [
     '159636',
     '159659',
 ]
+MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
+STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
 
 ILLEGAL_REWARD = -10000
 # 扩大因子
@@ -404,6 +406,14 @@ class data_producer:
             _, self.plot_cur_pre = self.x[self.idxs[0][0]]
             self.plot_cur_pre -= 1
 
+        # 额外数据的标准化
+        # 距离收盘秒数
+        before_market_close_sec -= MEAN_SEC_BEFORE_CLOSE
+        before_market_close_sec /= STD_SEC_BEFORE_CLOSE
+        # id
+        symbol_id -= MEAN_CODE_ID
+        symbol_id /= STD_CODE_ID
+
         return symbol_id, before_market_close_sec, x, all_done, need_close, self.date_file_done
 
     def get_plot_data(self):
@@ -709,10 +719,6 @@ class LOB_trade_env(gym.Env):
         symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done = self.data_producer.get()
         x = x.reshape(-1)
 
-        # 标准化 距离收盘秒数
-        before_market_close_sec -= MEAN_SEC_BEFORE_CLOSE
-        before_market_close_sec /= STD_SEC_BEFORE_CLOSE
-
         return symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done
 
     def _cal_reward(self, action, need_close, info):
@@ -812,7 +818,7 @@ class LOB_trade_env(gym.Env):
             'period_done': self.period_done,
         }
 
-        # 计算奖励
+        # 计算奖励 TODO 标准化
         reward, acc_done, pos, profit = self._cal_reward(action, _need_close, info)
 
         if action == 1 or _need_close or info.get('act_criteria', None) == -1:

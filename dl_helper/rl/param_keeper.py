@@ -107,18 +107,12 @@ class ExperimentHandler:
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
-        # 梯度数据经过稀疏化，形状
-        self.gradients_info_share_q = multiprocessing.Queue()
-        # 共享梯度锁
-        self.share_gradients_lock = multiprocessing.Lock()
-
-        # 新梯度通知
-        self.new_gradients_event = multiprocessing.Event()
-
         # 等待参数 id 队列，用于传递等待 id/最大dumps大小，用于初始化共享参数队列
         self.wait_params_id_q = multiprocessing.Queue()
         # 客户端id 开始循环等待参数
         self.on_wait_params_id_q = multiprocessing.Queue()
+
+        # 初始化/储存共享队列
         self.share_params_dump_max_size = 0
         self.ip_params_dump_q = {}
         self.share_gradients_dump_max_size = 0
@@ -134,10 +128,7 @@ class ExperimentHandler:
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
             train_title, 
-            self.gradients_info_share_q, self.new_gradients_event, self.share_gradients_lock, 
             config,
-            self.debug,
-            self.grad_cache_size,
             self.grad_warm_up_steps,
             self.wait_params_id_q,self.on_wait_params_id_q,
         ))
@@ -146,27 +137,9 @@ class ExperimentHandler:
         # 等待回传的大小数据
         self.share_params_dump_max_size, self.share_gradients_dump_max_size = self.wait_params_id_q.get()
 
-        # 等待接受 参数的形状列表
-        # 用于初始化共享数据
-        _simple_params, _simple_grad_params = self.gradients_info_share_q.get()
-
-        # 共享梯度列表
-        self.gradients_cache_share_full = []# 全梯度
-        self.gradients_cache_share = []# 用于压缩的梯度使用
-        # 共享参数, 只需要维护一份最新的数据
-        self.params_cache_share = []
-        # 初始化共享梯度
-        for idx, (_shape_full, _shape) in enumerate(_simple_grad_params):
-            self.gradients_cache_share_full.append(share_tensor_list(f'{self.train_title}_gcsfull_{idx}', _shape_full, 'float32', self.grad_cache_size, debug=self.debug))
-            self.gradients_cache_share.append(share_tensor_list(f'{self.train_title}_gcs_{idx}', _shape, 'float32', self.grad_cache_size, debug=self.debug))
-        # 初始化共享参数
-        for idx, _shape in enumerate(_simple_params):
-            # for debug
-            self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
-            # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
-
         # 允许验证的客户端ip
         self.need_val_ip = 0
+
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
@@ -179,10 +152,7 @@ class ExperimentHandler:
     @staticmethod
     def gpu_most_task(
         train_title, 
-        gradients_info_share_q, new_gradients_event, share_gradients_lock, 
         config, 
-        debug,
-        grad_cache_size, 
         grad_warm_up_steps,
         wait_params_id_q,on_wait_params_id_q,
     ):
@@ -232,44 +202,6 @@ class ExperimentHandler:
         _g_size = len(_g_dump)
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
-
-        # 共享梯度
-        gradients_cache_share = []
-        gradients_cache_share_full = []
-        # 计算用临时梯度
-        gradients_cache_temp = []
-        gradients_cache_temp_full = []
-        # 计算用临时梯度信息
-        gradients_cache_info_temp = []
-        # 临时梯度的数量(待应用)
-        temp_length = 0
-
-        # 共享参数
-        params_cache_share = []
-        # 初始化共享参数
-        _simple_params = []
-        for idx, (k, v) in enumerate(_params_dict.items()):
-            log(f'{train_title} init params share, idx: {idx}, name: {k}, shape: {v.shape}')
-            _shape = v.shape
-            # for debug
-            params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', _shape, 'float32'))
-            # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
-            _simple_params.append(_shape)
-
-        # 初始化共享梯度 TODO 删除
-        _simple_grad_params = []
-        for idx, (k, v) in enumerate(_grad_params_dict.items()):
-            _compress_shape = gradient_compressor.compress_shape(v.shape)
-            log(f'{train_title} init gradients share, idx: {idx}, shape: {v.shape}, compress shape: {_compress_shape}')
-            gradients_cache_share.append(share_tensor_list(f'{train_title}_gcs_{idx}', _compress_shape, 'float32', grad_cache_size, debug=debug))
-            gradients_cache_share_full.append(share_tensor_list(f'{train_title}_gcsfull_{idx}', v.shape, 'float32', grad_cache_size, debug=debug))
-            gradients_cache_temp.append(gradients_cache_share[idx].get_blank_same_data_local())
-            gradients_cache_temp_full.append(gradients_cache_share_full[idx].get_blank_same_data_local())
-            _simple_grad_params.append((v.shape, _compress_shape))
-
-        # 回传 参数形状列表 
-        # 回传后，共享参数以及初始化完成
-        gradients_info_share_q.put((_simple_params, _simple_grad_params))
 
         # 版本差异统计
         total_client_version_diff = 0
@@ -478,16 +410,13 @@ class ExperimentHandler:
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 dump_data, dump_v = await self.get_params_dump_data(_id)
+                self.version = max(self.version, dump_v)
 
                 t = time.time()
                 if begin_time == 0:
                     begin_time = t
 
                 log(f'[{msg_header}] wait_params wait active, last_send_v: {last_send_v}')
-
-                # 获取最新参数
-                self.version = max(self.version, dump_v)
-                log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 每步都推送
                 last_send_v = dump_v
@@ -544,17 +473,6 @@ class ExperimentHandler:
             log(f'{msg_header} recv update_gradients request')
 
             # 客户端数据索引
-            client_idx = len(self.clients)
-            grad_begin_idx = GRAD_BATCH_SIZE * client_idx
-
-            # 临时梯度列表
-            temp_gradients = []
-            # 临时梯度info列表
-            temp_info_version = []
-            # 临时数据是否是 全梯度
-            temp_is_full_gradient = False
-
-            # 客户端数量
             self.clients.add(ip)
 
             total_handle_time = 0
