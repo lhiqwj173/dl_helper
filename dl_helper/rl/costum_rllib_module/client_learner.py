@@ -483,7 +483,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             param_keeper = AsyncRLParameterServer(config, env)
             log(f'_run_event_loop_process init param_keeper done')
             # 初始化模型参数
-            param_keeper.load_weights(params_dict)
+            _params_dict = OrderedDict()
+            for k, v in params_dict.items():
+                _params_dict[k.replace('module.', '')] = v
+            param_keeper.load_weights(_params_dict)
             log(f'_run_event_loop_process init param_keeper done')
             # 参数压缩器
             param_compressor = IncrementalCompressor()
