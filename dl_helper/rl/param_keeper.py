@@ -351,12 +351,8 @@ class ExperimentHandler:
                 raise e
             
             loop_count += 1
-
-            if step_count % 60 == 0:
-                if total_count > 0:
-                    log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
-                else:
-                    log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: 0.00')
+            if step_count % 60 == 0 and total_count > 0:
+                log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
 
     def start(self, loop=None):
         self.aper.start(loop)
