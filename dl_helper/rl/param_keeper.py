@@ -77,6 +77,10 @@ class AsyncRLParameterServer:
         # return (self.learner.get_state(components=COMPONENT_RL_MODULE)['rl_module']['default_policy'], self.ver)
         weights = self.learner.module._rl_modules['default_policy'].state_dict()
         return weights, self.ver
+    
+    def load_weights(self, weights):
+        """加载参数"""
+        self.learner.module._rl_modules['default_policy'].load_state_dict(weights)
 
     # def get_mean_version_diff(self):
     #     """获取平均版本差"""
@@ -299,7 +303,7 @@ class ExperimentHandler:
                             for idx in sorted(not_allow_idxs, reverse=True):
                                 log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
                                 batch_g_info.pop(idx)
-                                
+
                         # 数量检查
                         _update_gradients_length = len(batch_g_info)
                         if _update_gradients_length == 0:
