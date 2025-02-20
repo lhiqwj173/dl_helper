@@ -232,7 +232,6 @@ class ExperimentHandler:
 
                 # 检查是否有新的 等待参数 id
                 _q_size = wait_params_id_q.qsize()
-                log(f'[CG]{train_title} wait_params_id_q size: {_q_size}')
                 for _ in range(_q_size):
                     new_wait_params_id = wait_params_id_q.get(block=False)
                     if new_wait_params_id not in client_params_q:
@@ -244,7 +243,6 @@ class ExperimentHandler:
 
                 # 检查是否有新的 循环等待 id
                 _q_size = on_wait_params_id_q.qsize()
-                log(f'[CG]{train_title} on_wait_params_id_q size: {_q_size}')
                 for _ in range(_q_size):
                     new_wait_params_id = on_wait_params_id_q.get(block=False)
                     if new_wait_params_id not in client_wait_state:
@@ -254,51 +252,51 @@ class ExperimentHandler:
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
                 #####################################
-                try:
-                    grad_dump_data = client_grad_q[new_wait_params_id].get(block=False)
-                except Empty:
-                    grad_dump_data = None
-                if grad_dump_data is not None:
+                # 遍历所有的梯度队列，尝试获取 更新梯度
+                for _id, _q in client_grad_q.items():
+                    _q_size = _q.qsize()
+                    for _ in range(_q_size):
+                        grad_dump_data = _q.get(block=False)
 
-                    #####################################
-                    # 1.2 过滤 / 解压 / 应用梯度
-                    #####################################
-                    t = time.time()
-                    log(f'[CG]{train_title} active')
+                        #####################################
+                        # 1.2 过滤 / 解压 / 应用梯度
+                        #####################################
+                        t = time.time()
+                        log(f'[CG]{train_title} active')
 
-                    # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                    data = pickle.loads(grad_dump_data)
-                    if GRAD_BATCH_SIZE > 1:
-                        batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
-                    else:
-                        batch_g_info = [(pickle.loads(data[0]), data[1])]
-                    log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
+                        # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                        data = pickle.loads(grad_dump_data)
+                        if GRAD_BATCH_SIZE > 1:
+                            batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
+                        else:
+                            batch_g_info = [(pickle.loads(data[0]), data[1])]
+                        log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
-                    # version diff 过滤
-                    cur_version = param_server.ver
-                    version_diffs = [cur_version - i[1] for i in batch_g_info]
-                    # 记录版本差异
-                    total_client_version_diff += sum(version_diffs)
-                    total_count += len(version_diffs)
-                    not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
-                    if not_allow_idxs:
-                        # 倒序删除不允许的梯度
-                        for idx in sorted(not_allow_idxs, reverse=True):
-                            log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
-                            batch_g_info.pop(idx)
-                    # 数量检查
-                    _update_gradients_length = len(batch_g_info)
-                    if _update_gradients_length == 0:
-                        log(f'[CG]{train_title} version diff filt no gradients, keep wait')
-                        continue
-                    log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
+                        # version diff 过滤
+                        cur_version = param_server.ver
+                        version_diffs = [cur_version - i[1] for i in batch_g_info]
+                        # 记录版本差异
+                        total_client_version_diff += sum(version_diffs)
+                        total_count += len(version_diffs)
+                        not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                        if not_allow_idxs:
+                            # 倒序删除不允许的梯度
+                            for idx in sorted(not_allow_idxs, reverse=True):
+                                log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                                batch_g_info.pop(idx)
+                        # 数量检查
+                        _update_gradients_length = len(batch_g_info)
+                        if _update_gradients_length == 0:
+                            log(f'[CG]{train_title} version diff filt no gradients, keep wait')
+                            continue
+                        log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
-                    # 遍历剩下的梯度，逐个应用
-                    for idx, ((g, compress_info), v) in enumerate(batch_g_info):
-                        # 解压梯度
-                        g = DeepGradientCompression.decompress(g, compress_info)
-                        param_server.apply_gradients(g, v)
-                        step_count += 1
+                        # 遍历剩下的梯度，逐个应用
+                        for idx, ((g, compress_info), v) in enumerate(batch_g_info):
+                            # 解压梯度
+                            g = DeepGradientCompression.decompress(g, compress_info)
+                            param_server.apply_gradients(g, v)
+                            step_count += 1
 
                 #####################################
                 # 2.0 准备/压缩参数
