@@ -402,7 +402,9 @@ class ExperimentHandler:
             # 初始化共享参数队列
             assert _id not in self.ip_params_dump_q, f'{_id} already in ip_params_dump_q'
             self.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', self.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+            self.ip_params_dump_q[_id].clear()
             self.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', self.share_gradients_dump_max_size, 4)
+            self.ip_gradients_dump_q[_id].clear()
 
             # 通知需要等待的ip  
             self.wait_params_id_q.put(_id)
