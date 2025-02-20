@@ -459,6 +459,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             from dl_helper.rl.param_keeper import AsyncRLParameterServer
             from ray.tune.registry import _global_registry, ENV_CREATOR
             import gymnasium as gym
+            log(f'_run_event_loop_process import done')
             config = (
                 ClientPPOConfig()
                 .api_stack(
@@ -475,6 +476,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     },
                 )
             )        
+            log(f'_run_event_loop_process init config done')
             # 初始化参数服务器
             env_specifier = config.env
             if _global_registry.contains(ENV_CREATOR, env_specifier):
