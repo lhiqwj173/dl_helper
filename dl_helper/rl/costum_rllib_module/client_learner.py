@@ -454,38 +454,43 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # FOR DEBUG 
         # 训练配置
-        from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-        from dl_helper.rl.param_keeper import AsyncRLParameterServer
-        config = (
-            ClientPPOConfig()
-            .api_stack(
-                enable_rl_module_and_learner=True,
-                enable_env_runner_and_connector_v2=True,
-            )
-            .environment("CartPole-v1")
-            .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
-            .extra_config(
-                learner_group_class=ClientLearnerGroup,
-                learner_group_kwargs={
-                    'train_folder': train_folder,
-                    "train_title": train_title,
-                },
-            )
-        )        
-        # 初始化参数服务器
-        param_keeper = AsyncRLParameterServer(train_title, config)
-        # 初始化模型参数
-        param_keeper.load_weights(params_dict)
-        # 参数压缩器
-        param_compressor = IncrementalCompressor()
-        # 梯度解压器
-        gradient_decompressor = DeepGradientCompression()
-        # 打包数据
-        debug_datas = {
-            'param_keeper': param_keeper,
-            'param_compressor': param_compressor,
-            'gradient_decompressor': gradient_decompressor,
-        }
+        try:
+            from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
+            from dl_helper.rl.param_keeper import AsyncRLParameterServer
+            config = (
+                ClientPPOConfig()
+                .api_stack(
+                    enable_rl_module_and_learner=True,
+                    enable_env_runner_and_connector_v2=True,
+                )
+                .environment("CartPole-v1")
+                .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
+                .extra_config(
+                    learner_group_class=ClientLearnerGroup,
+                    learner_group_kwargs={
+                        'train_folder': train_folder,
+                        "train_title": train_title,
+                    },
+                )
+            )        
+            # 初始化参数服务器
+            param_keeper = AsyncRLParameterServer(train_title, config)
+            # 初始化模型参数
+            param_keeper.load_weights(params_dict)
+            # 参数压缩器
+            param_compressor = IncrementalCompressor()
+            # 梯度解压器
+            gradient_decompressor = DeepGradientCompression()
+            # 打包数据
+            debug_datas = {
+                'param_keeper': param_keeper,
+                'param_compressor': param_compressor,
+                'gradient_decompressor': gradient_decompressor,
+            }
+            log(f"[{client_id}] init debug_datas done")
+        except Exception as e:
+            log(f"[{client_id}] _run_event_loop_process failed: \n{get_exception_msg()}")
+            raise e
 
         # 初始化日志
         init_logger(train_title, home=train_folder, timestamp=False)
