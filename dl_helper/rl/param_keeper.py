@@ -377,7 +377,7 @@ class ExperimentHandler:
                 # 获取第一个数据，用于处理 get 请求，不一定是最新的
                 dump_data, dump_v = params_dump_q.get(block=False)
 
-        return dump_data, dump_v
+            return dump_data, dump_v
 
     async def put_gradients_dump_data(self, dump_data, _id):
         _q = self.ip_gradients_dump_q[_id]
