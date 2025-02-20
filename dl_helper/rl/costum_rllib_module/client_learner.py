@@ -732,7 +732,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         log(f"param_coroutine done")
 
-
     def compute_gradients(self, *args, **kwargs):
         self.update_count += 1
 

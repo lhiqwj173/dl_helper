@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 import pickle, requests
 from typing import Dict, Any
-from collections import deque
+from collections import deque, OrderedDict
 import copy
 from dl_helper.rl.socket_base import CODE, PORT, send_msg, recv_msg
 from dl_helper.rl.rl_utils import ParamCompressor
@@ -20,7 +20,9 @@ from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
 from ray.tune.registry import _global_registry, ENV_CREATOR
 
-from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg
+from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
+
+GRAD_ALLOW_VERSION_DIFF = 30
 
 class AsyncRLParameterServer:
     def __init__(self,
@@ -102,32 +104,25 @@ class ExperimentHandler:
         # 版本号
         self.version = 0
 
-        # grad allow version diff
-        self.grad_allow_version_diff = 30
-
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
-        # 参数推送频率
-        self.push_params_interval = GRAD_BATCH_SIZE # 每 push_params_interval 步推送一次参数
-
-        # 共享梯度队列
-        self.client_nums_q = multiprocessing.Queue()
         # 梯度数据经过稀疏化，形状
         self.gradients_info_share_q = multiprocessing.Queue()
-        # 共享参数信息
-        self.params_info_share = share_tensor(f'{train_title}_params_info_share', (2,), 'int64')
-        # 共享参数float32 ver 队列
-        self.params_float32_ver_share_q = multiprocessing.Queue()
         # 共享梯度锁
         self.share_gradients_lock = multiprocessing.Lock()
-        # 共享参数锁
-        self.share_params_lock = multiprocessing.Lock()
-        # 共享参数float32锁
-        self.share_params_float32_lock = multiprocessing.Lock()
 
-        # 共享数据新增通知
-        self.share_data_new_event = multiprocessing.Event()
+        # 新梯度通知
+        self.new_gradients_event = multiprocessing.Event()
+
+        # 等待参数 id 队列，用于传递等待 id/最大dumps大小，用于初始化共享参数队列
+        self.wait_params_id_q = multiprocessing.Queue()
+        # 客户端id 开始循环等待参数
+        self.on_wait_params_id_q = multiprocessing.Queue()
+        self.share_params_dump_max_size = 0
+        self.ip_params_dump_q = {}
+        self.share_gradients_dump_max_size = 0
+        self.ip_gradients_dump_q = {}
 
         # 添加梯度锁
         self.gradients_add_lock = asyncio.Lock()
@@ -138,15 +133,18 @@ class ExperimentHandler:
         
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
-            train_title, self.client_nums_q, self.gradients_info_share_q, self.params_float32_ver_share_q,self.share_data_new_event, 
-            self.share_gradients_lock, self.share_params_lock, self.share_params_float32_lock,
+            train_title, 
+            self.gradients_info_share_q, self.new_gradients_event, self.share_gradients_lock, 
             config,
             self.debug,
             self.grad_cache_size,
             self.grad_warm_up_steps,
-            self.ready_params_event,
+            self.wait_params_id_q,self.on_wait_params_id_q,
         ))
         self.p.start()
+
+        # 等待回传的大小数据
+        self.share_params_dump_max_size, self.share_gradients_dump_max_size = self.wait_params_id_q.get()
 
         # 等待接受 参数的形状列表
         # 用于初始化共享数据
@@ -166,9 +164,6 @@ class ExperimentHandler:
             # for debug
             self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', _shape, 'float32'))
             # self.params_cache_share.append(share_tensor(f'{self.train_title}_pcs_{idx}', (math.prod(_shape),), 'int8'))
-    
-        # 增量参数压缩器
-        self.params_compressor = IncrementalCompressor(1e-5)
 
         # 允许验证的客户端ip
         self.need_val_ip = 0
@@ -183,39 +178,22 @@ class ExperimentHandler:
 
     @staticmethod
     def gpu_most_task(
-        train_title, client_nums_q, gradients_info_share_q, params_float32_ver_share_q, share_data_new_event, 
-        share_gradients_lock, share_params_lock, share_params_float32_lock,
+        train_title, 
+        gradients_info_share_q, new_gradients_event, share_gradients_lock, 
         config, 
         debug,
         grad_cache_size, 
         grad_warm_up_steps,
-        ready_params_event,
+        wait_params_id_q,on_wait_params_id_q,
     ):
         """
-        负责 梯度解压/梯度应用更新参数
+        负责 梯度解压/梯度应用更新参数/参数压缩
         """
-        def ready_params(param_server, lock, params_cache_share, params_info_share, need_warn_up): 
-            """获取参数copy到共享参数中"""
-            log(f'[CG] ready params begin')
-            # 获取模型参数
-            # weights： 参数字典[torch.Tensor]
-            weights, version = param_server.get_weights()
-            with lock:
-                for idx, (k, v) in enumerate(weights.items()):
-                    params_cache_share[idx].data[:] = v[:]
-
-                params_info_share.data[0] = version
-                params_info_share.data[1] = need_warn_up
-
-            # 通知参数发送任务
-            ready_params_event.set()
-            log(f'[CG] ready params done v: {version}')
-
         log(f'[CG]{train_title} calculate gpu init')
-
-        # 共享参数信息
-        params_info_share = share_tensor(f'{train_title}_params_info_share', (2,), 'int64')
         
+        # 参数压缩器
+        params_compressor = IncrementalCompressor(1e-5)
+
         # 计算步数
         step_count = 0
 
@@ -236,8 +214,24 @@ class ExperimentHandler:
         _params_dict = param_server.get_weights()[0] 
         _grad_params_dict = param_server.get_gradients_params()
 
-        # 梯度压缩器
-        gradient_compressor = DeepGradientCompression()
+        # 计算最大参数dump大小
+        _p_dump = pickle.dumps(([v for _, v in _params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+        _p_size = len(_p_dump)
+        # 计算最大梯度dump大小
+        # 1.0 全梯度的压缩数据大小
+        _grad_params_list = [v for _, v in _grad_params_dict.items()]
+        _compress_grad, _compress_grad_info = gradient_compressor.compress(_grad_params_list, True)# 全梯度
+        _single_grad_dump = pickle.dumps((_compress_grad, _compress_grad_info))
+        # 1.1 GRAD_BATCH_SIZE 多个数据的大小
+        if GRAD_BATCH_SIZE >1:
+            _g_dump = pickle.dumps(
+                [(_single_grad_dump, np.int64(0)) for _ in range(GRAD_BATCH_SIZE)]
+            )
+        else:
+            _g_dump = pickle.dumps((_single_grad_dump, np.int64(0)))
+        _g_size = len(_g_dump)
+
+        wait_params_id_q.put(_p_size, _g_size)# 回传大小
 
         # 共享梯度
         gradients_cache_share = []
@@ -262,7 +256,7 @@ class ExperimentHandler:
             # params_cache_share.append(share_tensor(f'{train_title}_pcs_{idx}', (math.prod(v.shape),), 'int8'))
             _simple_params.append(_shape)
 
-        # 初始化共享梯度
+        # 初始化共享梯度 TODO 删除
         _simple_grad_params = []
         for idx, (k, v) in enumerate(_grad_params_dict.items()):
             _compress_shape = gradient_compressor.compress_shape(v.shape)
@@ -273,10 +267,6 @@ class ExperimentHandler:
             gradients_cache_temp_full.append(gradients_cache_share_full[idx].get_blank_same_data_local())
             _simple_grad_params.append((v.shape, _compress_shape))
 
-        # 初始化一个最新的参数/info
-        need_warn_up = grad_warm_up_steps > step_count
-        ready_params(param_server, share_params_lock, params_cache_share, params_info_share, need_warn_up)
-        
         # 回传 参数形状列表 
         # 回传后，共享参数以及初始化完成
         gradients_info_share_q.put((_simple_params, _simple_grad_params))
@@ -285,117 +275,127 @@ class ExperimentHandler:
         total_client_version_diff = 0
         total_count = 0
 
-        # 客户端数量
-        client_nums = 0
+        # 客户端共享队列, 用于发送参数 dump 数据
+        client_params_q = {}
+
+        # 客户端共享队列, 用于接收 grad dump 数据
+        client_grad_q = {}
+
+        # 客户端等待参数的状态 
+        # -1: 不需要等待
+        # 0: 一次等待
+        # 1: 循环等待
+        client_wait_state = {}
 
         log(f'{train_title} calculate most start')
         while True:
 
             try:
-                log(f'[CG]{train_title} wait gradients event')
-                share_data_new_event.wait()
-                share_data_new_event.clear()
-                t = time.time()
+                ################################################
+                # 1.0 接收梯度dump/解压应用梯度
+                #   1.1 尝试get梯度，若获取成功继续处理
+                #   1.2 解压梯度
+                # 2.0 准备/压缩参数
+                ################################################
 
-                # 获取最新客户端数量
+                # 检查是否有新的 等待参数 id
+                _q_size = wait_params_id_q.qsize()
+                for _ in range(_q_size):
+                    new_wait_params_id = wait_params_id_q.get(block=False)
+                    if new_wait_params_id not in client_params_q:
+                        # 初始化共享队列
+                        client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+                        client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 4)
+                        # 单次状态
+                        client_wait_state[new_wait_params_id] = 0
+
+                # 检查是否有新的 循环等待 id
+                _q_size = on_wait_params_id_q.qsize()
+                for _ in range(_q_size):
+                    new_wait_params_id = on_wait_params_id_q.get(block=False)
+                    if new_wait_params_id not in client_wait_state:
+                        # 循环状态
+                        client_wait_state[new_wait_params_id] = 1   
+
+                #####################################
+                # 1.1 尝试get梯度，若获取成功继续处理
+                #####################################
                 try:
-                    new_client_nums = client_nums_q.get(block=False)
-                    client_nums = new_client_nums
+                    grad_dump_data = client_grad_q[new_wait_params_id].get(block=False)
                 except Empty:
-                    pass
+                    grad_dump_data = None
+                if grad_dump_data is not None:
 
-                log(f'[CG]{train_title} active')
-                # with LockWithLog(share_gradients_lock, log, '[CG]'):
-                with share_gradients_lock:
-                    g_length = gradients_cache_share[0].size()
-                    fullg_length = gradients_cache_share_full[0].size()
-                    temp_length = g_length + fullg_length
+                    #####################################
+                    # 1.2 过滤 / 解压 / 应用梯度
+                    #####################################
+                    t = time.time()
+                    log(f'[CG]{train_title} active')
 
-                    data_client_nums = temp_length // GRAD_BATCH_SIZE
-                    if data_client_nums < client_nums:
-                        log(f'[CG]{train_title} not enough gradients, keep wait({client_nums - data_client_nums} clients, client_nums: {client_nums}, grad_client_nums: {data_client_nums})')
-                        continue
-
-                    # 拷贝梯度到临时梯度
-                    if g_length:
-                        for idx, _g in enumerate(gradients_cache_share):
-                            _g.all_copy_slice(gradients_cache_temp[idx], 0)
-                    if fullg_length:
-                        for idx, _g in enumerate(gradients_cache_share_full):
-                            _g.all_copy_slice(gradients_cache_temp_full[idx], 0)
-                    # 获取全部的梯度信息
-                    for idx in range(temp_length):
-                        gradients_cache_info_temp.append(gradients_info_share_q.get())  
-
-                log(f'[CG]{train_title} wait gradients: {temp_length}')
-
-                # 是否是full梯度
-                is_full_gradient = [i[0][0]['is_full_gradient'] for i in gradients_cache_info_temp]
-                use_full_gradient = any(is_full_gradient)
-
-                # 解压梯度
-                g_idx = 0
-                g_idx_full = 0
-                gss = []
-                vs = []
-                for idx in range(temp_length):
-                    # 获取梯度列表
-                    if use_full_gradient:
-                        # 使用全梯度(存在全梯度)，只获取 is_full_gradient 为True的梯度
-                        if is_full_gradient[idx]:
-                            gs = [i[g_idx_full] for i in gradients_cache_temp_full]
-                            g_idx_full += 1
-                        else:
-                            # 跳过
-                            continue
+                    # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                    data = pickle.loads(grad_dump_data)
+                    if GRAD_BATCH_SIZE > 1:
+                        batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
                     else:
-                        # 使用增量梯度(不存在全梯度)，全部获取
-                        gs = [i[g_idx] for i in gradients_cache_temp]
-                        g_idx += 1
+                        batch_g_info = [(pickle.loads(data[0]), data[1])]
+                    log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
-                    # 解压梯度
-                    # log(f'decompress gradients')
-                    info, version = gradients_cache_info_temp[idx]
-                    gs = gradient_compressor.decompress(gs, info)
-                    gss.append(gs)
-                    vs.append(version)
+                    # version diff 过滤
+                    cur_version = param_server.ver
+                    version_diffs = [cur_version - i[1] for i in batch_g_info]
+                    # 记录版本差异
+                    total_client_version_diff += sum(version_diffs)
+                    total_count += len(version_diffs)
+                    not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                    if not_allow_idxs:
+                        # 倒序删除不允许的梯度
+                        for idx in sorted(not_allow_idxs, reverse=True):
+                            log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                            batch_g_info.pop(idx)
+                    # 数量检查
+                    _update_gradients_length = len(batch_g_info)
+                    if _update_gradients_length == 0:
+                        log(f'[CG]{train_title} version diff filt no gradients, keep wait')
+                        continue
+                    log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
-                if total_count == 0:
-                    # 保存第一个梯度，验证梯度是否正确
-                    pickle.dump((gss, vs), open(f'decompress_gradient.pkl', 'wb'))
+                    # 遍历剩下的梯度，逐个应用
+                    for idx, ((g, compress_info), v) in enumerate(batch_g_info):
+                        # 解压梯度
+                        g = DeepGradientCompression.decompress(g, compress_info)
+                        param_server.apply_gradients(g, v)
+                        step_count += 1
 
-                # 梯度平均
-                if len(gss) == 1:
-                    gs = gss[0]
-                    version = vs[0]
-                else:
-                    # 初始化一个与第一个梯度列表相同形状的张量，用于存储总和
-                    total_sum = [torch.zeros_like(grad) for grad in gss[0]]
-                    for grads in gss:
-                        for i, grad in enumerate(grads):
-                            total_sum[i] += grad
-                    gs = [grad / len(gss) for grad in total_sum]
-                    # 取平均版本号
-                    version = sum(vs) // len(vs)
-
-                # 更新梯度
-                # log(f'update gradients')
-                param_server.apply_gradients(gs, version, client_nums)
-
+                #####################################
+                # 2.0 准备/压缩参数
+                #####################################
                 # 是否需要预热
                 need_warn_up = grad_warm_up_steps > step_count
-                step_count += 1
-                
-                if (idx + 1) % GRAD_BATCH_SIZE == 0:  
-                    ready_params(param_server, share_params_lock, params_cache_share, params_info_share, need_warn_up)
-                                        
-                # 记录版本差异
-                version_diff = param_server.ver -1 - version
-                total_client_version_diff += version_diff
-                total_count += 1
+                weights, version = param_server.get_weights()
+                # 转为列表
+                weights = [v for _, v in weights.items()]
 
-                # 清空梯度信息
-                gradients_cache_info_temp.clear()
+                # 遍历 client_params_q 压缩准备参数
+                for _id in client_wait_state:
+                    # 获取等待状态
+                    if client_wait_state[_id] == 0:
+                        # 一次 > -1
+                        client_wait_state[_id] = -1
+                    elif client_wait_state[_id] == -1:
+                        # 不在等待了
+                        continue
+
+                    # 检查队列是否满了，满了则跳过
+                    # 说明客户端可能已经断开
+                    _q = client_params_q[_id]
+                    if _q.is_full():
+                        continue
+                    
+                    # 压缩
+                    compress_data, compress_info = params_compressor.compress(weights, _id)
+                    # dumps
+                    dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
+                    _q.put(dump_data, block=False, extra_data=np.int64(version))
 
                 log(f'[CG]{train_title} done, cost: {int(1000*(time.time() - t))}ms, mean version diff: {total_client_version_diff / total_count :.2f}')   
             except Exception as e:
@@ -403,58 +403,82 @@ class ExperimentHandler:
                 report_memory_usage()
                 raise e
 
-    async def _get_latest_raw_params(self):
-        """获取最新参数(无压缩)"""
-        # 获取参数
-        params = []
-        v = 0
-        with self.share_params_lock:
-            # 交换
-            for i in self.params_cache_share:
-                params.append(i.data.clone())
-
-            # 获取参数版本号
-            v = self.params_info_share.data[0].item()
-            # 获取是否需要预热
-            need_warn_up = self.params_info_share.data[1].item()
-        return params, v, need_warn_up
-
     def start(self, loop=None):
         self.aper.start(loop)
+
+    async def get_params_dump_data(self, _id, latest=True):
+        params_dump_q = self.ip_params_dump_q[_id]
+        while True:
+            # 等待不为空
+            if params_dump_q.is_empty():
+                await asyncio.sleep(0.001)
+                continue
+
+            if latest:
+                # 获取队列长度
+                q_size = params_dump_q.qsize()
+                # 获取最后一个数据，最新的
+                for _ in range(q_size):
+                    dump_data, dump_v = params_dump_q.get(block=False)
+            else:
+                # 获取第一个数据，用于处理 get 请求，不一定是最新的
+                dump_data, dump_v = params_dump_q.get(block=False)
+
+        return dump_data, dump_v
+
+    async def put_gradients_dump_data(self, dump_data, _id):
+        _q = self.ip_gradients_dump_q[_id]
+        while True:
+            try:
+                _q.put(dump_data, block=False)
+                break
+            except Empty:
+                await asyncio.sleep(0.001)
+                continue
 
     async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
         """异步处理客户端请求
         """
+        _id = ip.replace('.', '')
         if cmd.startswith('get@'):
             t = time.time()
             # 单次请求参数
             _client_version = int(cmd.split('@')[1])# TODO 客户端版本号
             log(f'{msg_header} recv get request, client version: {_client_version}')
 
-            # 获取最新参数
-            params, v, need_warn_up = await self._get_latest_raw_params()
+            # 初始化共享参数队列
+            assert _id not in self.ip_params_dump_q, f'{_id} already in ip_params_dump_q'
+            self.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', self.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+            self.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', self.share_gradients_dump_max_size, 4)
 
-            # 计算更新增量
-            params, info = self.params_compressor.compress(params, ip)
+            # 通知需要等待的ip  
+            self.wait_params_id_q.put(_id)
+
+            # 等待获取参数 dump 数据
+            dump_data, dump_v = await self.get_params_dump_data(_id, latest=False)
 
             # 发送参数
-            await async_send_msg(writer, pickle.dumps((params, info, v, need_warn_up)))
-            log(f'{msg_header} send params, version: {v}, cost: {int(1000*(time.time() - t))}ms')
+            await async_send_msg(writer, dump_data)
+            log(f'{msg_header} send params, version: {dump_v}, cost: {int(1000*(time.time() - t))}ms')
 
         elif cmd == 'wait_params':
             # 长连接请求参数
-            log(f'{msg_header} recv wait_params request, push params interval: {self.push_params_interval}')
-            last_send_v = 0
+            log(f'{msg_header} recv wait_params request')
 
+            # 通知 开始循环等待
+            self.on_wait_params_id_q.put(_id)
+
+            last_send_v = 0
             begin_time = 0
             push_count = 0
             total_handle_time = 0
             total_wait_time = 0
             mean_send_size = 0
             while True:
-                # 等待参数更新事件
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
-                await self.aper.wait()
+                # 等待获取参数 dump 数据
+                dump_data, dump_v = await self.get_params_dump_data(_id)
+
                 t = time.time()
                 if begin_time == 0:
                     begin_time = t
@@ -462,21 +486,16 @@ class ExperimentHandler:
                 log(f'[{msg_header}] wait_params wait active, last_send_v: {last_send_v}')
 
                 # 获取最新参数
-                params, v, need_warn_up = await self._get_latest_raw_params()
-                self.version = v
+                self.version = max(self.version, dump_v)
                 log(f'[{msg_header}] wait_params prepare v: {v}, cost: {int(1000*(time.time() - t))}ms')
 
                 # 每步都推送
-                last_send_v = v
+                last_send_v = dump_v
 
-                # 计算更新增量
-                params, info = self.params_compressor.compress(params, ip)
-
-                log(f'[{msg_header}] compress params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                # 发送参数
                 send_begin_time = time.time()
-                data = pickle.dumps((params, info, v, need_warn_up))
-                await async_send_msg(writer, data)
-                send_size = len(data)
+                await async_send_msg(writer, dump_data)
+                send_size = len(dump_data)
                 mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
                 # 9909 
@@ -537,7 +556,6 @@ class ExperimentHandler:
 
             # 客户端数量
             self.clients.add(ip)
-            put_client_nums_q = False
 
             total_handle_time = 0
             begin_time = 0
@@ -552,133 +570,24 @@ class ExperimentHandler:
                         begin_time = t
                     log(f'{msg_header} recv gradients({len(data)})')
 
-                    # 在收到梯度后更新客户端数量，避免等待浪费
-                    if not put_client_nums_q:
-                        self.client_nums_q.put(len(self.clients))
-                        put_client_nums_q = True
+                    # 转发到队列中，不在这里处理
+                    await self.put_gradients_dump_data(data, _id)
 
-                    # batch_g_info, version = pickle.loads(data)
-                    # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                    data = pickle.loads(data)
-                    if GRAD_BATCH_SIZE > 1:
-                        batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
-                    else:
-                        batch_g_info = [(pickle.loads(data[0]), data[1])]
-
-                    if push_count == 0:
-                        # 保存第一个梯度，验证梯度是否正确
-                        pickle.dump(batch_g_info[0], open(f'recv_gradient.pkl', 'wb'))
-
-                    # g, compress_info, version = pickle.loads(data)
-                    log(f'{msg_header} loads gradients, cost: {int(1000*(time.time() - t))}ms')
-                    # 提交到共享梯度信息队列
-                    # log(f'put gradients info')
-
-                    # version diff 过滤
-                    version_diffs = [self.version - i[1] for i in batch_g_info]
-                    not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > self.grad_allow_version_diff]
-                    # 倒序删除不允许的梯度
-                    for idx in sorted(not_allow_idxs, reverse=True):
-                        log(f'{msg_header} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
-                        batch_g_info.pop(idx)
-                    _update_gradients_length = len(batch_g_info)
-                    if _update_gradients_length == 0:
-                        log(f'{msg_header} version diff filt no gradients, keep wait')
-                        continue
-                    log(f'{msg_header} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
-
-                    # 梯度类型过滤
-                    # 本次更新的数据中是否存在 全梯度
-                    has_full_gradient = any([i[0][1][0]['is_full_gradient'] for i in batch_g_info])
-                    if has_full_gradient:
-                        log(f'{msg_header} has_full_gradient, del not full gradient, temp_is_full_gradient: {temp_is_full_gradient}')
-                        # 删除增量的更新
-                        batch_g_info = [i for i in batch_g_info if i[0][1][0]['is_full_gradient']]
-                        # 检查是否清空临时数据
-                        if not temp_is_full_gradient:
-                            # 清空临时数据
-                            temp_gradients.clear()
-                            temp_info_version.clear()
-                            temp_is_full_gradient = True
-                    else:
-                        log(f'{msg_header} no full gradient, temp_is_full_gradient: {temp_is_full_gradient}')
-                        # 检查是否清空临时数据
-                        if temp_is_full_gradient:
-                            # 清空临时数据
-                            temp_gradients.clear()
-                            temp_info_version.clear()
-                            temp_is_full_gradient = False
-                    _update_gradients_length = len(batch_g_info)
-                    if _update_gradients_length == 0:
-                        log(f'{msg_header} grad type filt no gradients, keep wait, temp_is_full_gradient: {temp_is_full_gradient}')
-                        continue
-                    log(f'{msg_header} grad type filt done, left: {len(batch_g_info)}, temp_is_full_gradient: {temp_is_full_gradient}, cost: {int(1000*(time.time() - t))}ms')
-
-                    # 将剩下的梯度添加到 临时梯度列表 中, 将梯度info添加到 临时梯度info列表
-                    for idx, ((g, compress_info), v) in enumerate(batch_g_info):
-                        temp_gradients.append(g)
-                        temp_info_version.append((compress_info, v))
-                    log(f'{msg_header} add to temp list done, length: {len(temp_gradients)}, cost: {int(1000*(time.time() - t))}ms')
-
-                    # 若 临时梯度列表 大小 >= GRAD_BATCH_SIZE，
-                    #   临时梯度列表[-GRAD_BATCH_SIZE:] 拷贝到 共享梯度列表
-                    #   临时梯度info列表[-GRAD_BATCH_SIZE:] put 共享队列中, info中增加 对应梯度在 共享梯度列表 中的索引
-                    if len(temp_gradients) >= GRAD_BATCH_SIZE:
-                        log(f'{msg_header} move to share data begin, cost: {int(1000*(time.time() - t))}ms')
-                        # 是否是全梯度
-                        if temp_is_full_gradient:
-                            cache_share = self.gradients_cache_share_full
-                        else:
-                            cache_share = self.gradients_cache_share
-
-                        async with self.gradients_add_lock:
-                            with self.share_gradients_lock:
-                                for i in range(GRAD_BATCH_SIZE):
-                                    # 0, 1
-                                    _idx = -i-1# 取最新的梯度
-                                    g = temp_gradients[_idx]
-                                    info_data = temp_info_version[_idx]
-
-                                    share_idx = grad_begin_idx + i
-                                    # info_data = (info_data[0], info_data[1], share_idx)
-
-                                    # 拷贝到共享梯度
-                                    for idx, _g in enumerate(g):
-                                        cache_share[idx].set(share_idx, _g)
-                                    # 提交到共享梯度信息队列
-                                    self.gradients_info_share_q.put(info_data)
-
-                                log(f'{msg_header} move to share data done, share data length: {cache_share[0].size()}, cost: {int(1000*(time.time() - t))}ms')
-                    
-                    else:
-                        # TODO 过滤后数量不够
-                        raise Exception('don\'t have enough gradients')
-                        log(f'{msg_header} wait enough gradients, current: {len(temp_gradients)}')
-                        continue
-
-                    # 清空临时数据
-                    temp_gradients.clear()
-                    temp_info_version.clear()
-                    log(f'{msg_header} add gradients done, cost: {int(1000*(time.time() - t))}ms')
-
-                    # 通知新梯度
-                    self.share_data_new_event.set()
                     handle_cost_time = time.time() - t
                     total_handle_time += handle_cost_time
+
                     # 14015
-                    log(f'{msg_header} handle gradients done, cost: {int(1000*handle_cost_time)}ms')
+                    log(f'{msg_header} forward gradients done, cost: {int(1000*handle_cost_time)}ms')
 
                     push_count += 1
                     if push_count % 30 == 0:
                         # avg gradients recv time: 923ms, avg handle time: 15ms
                         # avg gradients recv time: 43ms, avg handle time: 9ms
-                        log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg handle time: {int(total_handle_time / push_count * 1000)}ms')
+                        log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg forward time: {int(total_handle_time / push_count * 1000)}ms')
 
             except Exception as e:
                 # 异常处理
-                # 客户端数量
                 self.clients.remove(ip)
-                self.client_nums_q.put(len(self.clients))
                 raise e
 
 

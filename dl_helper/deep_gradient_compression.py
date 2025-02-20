@@ -144,7 +144,8 @@ class DeepGradientCompression:
 
         return compressed_gradients, compression_infos
 
-    def decompress(self, compressed_grads, compression_infos):
+    @staticmethod
+    def decompress(compressed_grads, compression_infos):
         decompressed_gradients = []
 
         for compressed_grad, comp_info in zip(compressed_grads, compression_infos):
