@@ -203,6 +203,10 @@ class ExperimentHandler:
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
 
+        # 等待队列数据被取出
+        while not wait_params_id_q.empty():
+            time.sleep(0.01)
+
         # 版本差异统计
         total_client_version_diff = 0
         total_count = 0

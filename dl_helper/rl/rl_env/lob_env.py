@@ -468,7 +468,7 @@ class Account:
         :param ask_price: 最优卖价 
         :param action: 0-买入 1-卖出 2-不操作
         :param need_close: 是否需要平仓
-        
+
         :return: (动作是否合法, 持仓量, 对数收益率, 评价指标)
         """
         # 重置fee记录
@@ -597,8 +597,13 @@ class Account:
             # 不合法的操作，交易全部清空
             self.reset()
 
-        # print("acc::step",legal, res)
+        # 额外数据 标准化
+        # 持仓量 TODO
+        self.pos /= STD_POS
+        # 未实现收益率
+        unrealized_profit /= 0.03043
 
+        # print("acc::step",legal, res)
         return legal, self.pos, unrealized_profit, res
         
     def reset(self):
