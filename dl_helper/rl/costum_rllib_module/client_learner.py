@@ -478,13 +478,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             )        
             log(f'_run_event_loop_process init config done')
             # 初始化参数服务器
-            env_specifier = config.env
-            if _global_registry.contains(ENV_CREATOR, env_specifier):
-                # 注册的环境
-                env = _global_registry.get(ENV_CREATOR, env_specifier)()
-            else:
-                # gym 环境
-                env = gym.make(env_specifier)
+            env = gym.make("CartPole-v1")
             log(f'_run_event_loop_process init env done')
             param_keeper = AsyncRLParameterServer(config, env)
             log(f'_run_event_loop_process init param_keeper done')
