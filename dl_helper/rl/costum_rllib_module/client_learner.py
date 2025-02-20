@@ -457,6 +457,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         try:
             from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
             from dl_helper.rl.param_keeper import AsyncRLParameterServer
+            from ray.tune.registry import _global_registry, ENV_CREATOR
+            import gymnasium as gym
             config = (
                 ClientPPOConfig()
                 .api_stack(
@@ -474,7 +476,14 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 )
             )        
             # 初始化参数服务器
-            param_keeper = AsyncRLParameterServer(train_title, config)
+            env_specifier = config.env
+            if _global_registry.contains(ENV_CREATOR, env_specifier):
+                # 注册的环境
+                env = _global_registry.get(ENV_CREATOR, env_specifier)()
+            else:
+                # gym 环境
+                env = gym.make(env_specifier)
+            param_keeper = AsyncRLParameterServer(config, env)
             # 初始化模型参数
             param_keeper.load_weights(params_dict)
             # 参数压缩器

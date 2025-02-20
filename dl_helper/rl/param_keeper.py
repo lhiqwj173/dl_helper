@@ -171,12 +171,12 @@ class ExperimentHandler:
         # 计算步数
         step_count = 0
 
-        # 参数服务器
-        config = config.learners(    
-            num_learners=1,
-            num_gpus_per_learner=0,
-            num_cpus_per_learner=0.5,
-        )
+        # # 参数服务器
+        # config = config.learners(    
+        #     num_learners=1,
+        #     num_gpus_per_learner=0,
+        #     num_cpus_per_learner=0.5,
+        # )
         env_specifier = config.env
         if _global_registry.contains(ENV_CREATOR, env_specifier):
             # 注册的环境
