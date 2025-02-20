@@ -299,6 +299,7 @@ class ExperimentHandler:
                             for idx in sorted(not_allow_idxs, reverse=True):
                                 log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
                                 batch_g_info.pop(idx)
+                                
                         # 数量检查
                         _update_gradients_length = len(batch_g_info)
                         if _update_gradients_length == 0:
