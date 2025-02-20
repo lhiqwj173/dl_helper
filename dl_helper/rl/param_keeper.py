@@ -231,7 +231,7 @@ class ExperimentHandler:
             _g_dump = pickle.dumps((_single_grad_dump, np.int64(0)))
         _g_size = len(_g_dump)
 
-        wait_params_id_q.put(_p_size, _g_size)# 回传大小
+        wait_params_id_q.put((_p_size, _g_size))# 回传大小
 
         # 共享梯度
         gradients_cache_share = []
