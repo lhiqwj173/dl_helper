@@ -266,33 +266,32 @@ class ClientLearnerGroup(LearnerGroup):
         log(f"foreach_learner: init_param_thread, res: {get_results(res)}")
 
     def _sync_learner_weights(self):
-        # FOR DEBUG 
-        # # 获取服务器的参数，并更新到其他learner
-        # log('request server weights')
-        # params_list, info, version, need_warn_up = get_server_weights(self.train_title)
+        # 获取服务器的参数，并更新到其他learner
+        log('request server weights')
+        params_list, info, version, need_warn_up = get_server_weights(self.train_title)
 
         # 解压参数
         _params_dict_np = self.get_weights()['default_policy']
         _params_dict = OrderedDict()
         for k, v in _params_dict_np.items():
             _params_dict[f'module.{k}'] = torch.from_numpy(v.copy())
-        # self.param_compressor.decompress(params_list, info, _params_dict)
+        IncrementalCompressor.decompress(params_list, info, _params_dict)
         
-        # # 更新参数到所有learner
-        # log(f"set weights to all learners, version: {version}")
-        # if self.is_local:
-        #     self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
-        # else:
-        #     state_ref = ray.put(_params_dict)
-        #     res = self.foreach_learner(
-        #         lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
-        #     )
+        # 更新参数到所有learner
+        log(f"set weights to all learners, version: {version}")
+        if self.is_local:
+            self._learner.module._rl_modules['default_policy'].load_state_dict(_params_dict)
+        else:
+            state_ref = ray.put(_params_dict)
+            res = self.foreach_learner(
+                lambda _learner, _ref=state_ref: _learner.module._rl_modules['default_policy'].load_state_dict(ray.get(_ref))
+            )
 
-        # res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
-        # log(f"set version to all learners, res: {get_results(res)}")
+        res = self.foreach_learner(lambda learner: learner.set_weights_version(version))
+        log(f"set version to all learners, res: {get_results(res)}")
 
-        # res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
-        # log(f"set need_warn_up to all learners, res: {get_results(res)}")
+        res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
+        log(f"set need_warn_up to all learners, res: {get_results(res)}")
 
         # 创建共享参数
         self.shared_param_between_learner = SharedParam("learner", _params_dict, create=True)
@@ -453,63 +452,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
         """在新进程中运行事件循环"""
         log(f'_run_event_loop_process')
-        # FOR DEBUG 
-        # 训练配置
-        try:
-            from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-            from dl_helper.rl.param_keeper import AsyncRLParameterServer
-            from ray.tune.registry import _global_registry, ENV_CREATOR
-            import gymnasium as gym
-            log(f'_run_event_loop_process import done')
-            config = (
-                ClientPPOConfig()
-                .api_stack(
-                    enable_rl_module_and_learner=True,
-                    enable_env_runner_and_connector_v2=True,
-                )
-                .environment("CartPole-v1")
-                .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
-                .extra_config(
-                    learner_group_class=ClientLearnerGroup,
-                    learner_group_kwargs={
-                        'train_folder': train_folder,
-                        "train_title": train_title,
-                    },
-                )
-                .learners(    
-                    num_learners=1,
-                    num_gpus_per_learner=0,
-                    num_cpus_per_learner=0.5,
-                )
-            )        
-            log(f'_run_event_loop_process init config done')
-            # 初始化参数服务器
-            env = gym.make("CartPole-v1")
-            log(f'_run_event_loop_process init env done')
-            param_keeper = AsyncRLParameterServer(config, env)
-            log(f'_run_event_loop_process init param_keeper done')
-            # 初始化模型参数
-            _params_dict = OrderedDict()
-            for k, v in params_dict.items():
-                _params_dict[k.replace('module.', '')] = v
-            param_keeper.load_weights(_params_dict)
-            log(f'_run_event_loop_process init param_keeper done')
-            # 参数压缩器
-            param_compressor = IncrementalCompressor()
-            log(f'_run_event_loop_process init param_compressor done')
-            # 梯度解压器
-            gradient_decompressor = DeepGradientCompression()
-            log(f'_run_event_loop_process init gradient_decompressor done')
-            # 打包数据
-            debug_datas = {
-                'param_keeper': param_keeper,
-                'param_compressor': param_compressor,
-                'gradient_decompressor': gradient_decompressor,
-            }
-            log(f"[{client_id}] init debug_datas done")
-        except Exception as e:
-            log(f"[{client_id}] _run_event_loop_process failed: \n{get_exception_msg()}")
-            raise e
 
         # 初始化日志
         init_logger(train_title, home=train_folder, timestamp=False)
@@ -540,11 +482,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 启动协程任务
         tasks = []
         for _idx in range(grad_coroutine_num):
-            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(async_share_data, _ip, train_title, _idx, info_data, grad_q, debug_datas))
+            task = loop.create_task(ClientPPOTorchLearner.grad_coroutine(async_share_data, _ip, train_title, _idx, info_data, grad_q))
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(async_share_data, _ip, train_title, info_data, params_dict, grad_params_value_shape, debug_datas)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(async_share_data, _ip, train_title, info_data, params_dict, grad_params_value_shape)) 
         tasks.append(task)
 
         # 启动停止事件循环协程
@@ -576,7 +518,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"stop_loop_event done")
 
     @staticmethod
-    async def grad_coroutine(async_share_data, ip, train_title, idx, info_data, grad_q, debug_datas):
+    async def grad_coroutine(async_share_data, ip, train_title, idx, info_data, grad_q):
         """
         梯度协程
         """
@@ -593,18 +535,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 存储一个batch的压缩梯度，一起推送
         batch_compressed_results = []
         try:
-            # FOR DEBUG 
-            # # 创建异步socket连接
-            # log(f'[{idx}] grad_coroutine connect to server')
-            # # reader, writer = await asyncio.open_connection(HOST, PORT)
-            # reader, writer = await connect_and_tune(HOST, PORT)
-            # log(f'[{idx}] grad_coroutine connect to server done')
-            # # 发送连接验证
-            # await async_send_msg(writer, f'{CODE}_{ip}')
-            # log(f'[{idx}] grad_coroutine send CODE_IP done')
-            # # 发送指令类型
-            # await async_send_msg(writer, f'{train_title}:update_gradients')
-            # log(f'[{idx}] grad_coroutine send CMD done')
+            # 创建异步socket连接
+            log(f'[{idx}] grad_coroutine connect to server')
+            # reader, writer = await asyncio.open_connection(HOST, PORT)
+            reader, writer = await connect_and_tune(HOST, PORT)
+            log(f'[{idx}] grad_coroutine connect to server done')
+            # 发送连接验证
+            await async_send_msg(writer, f'{CODE}_{ip}')
+            log(f'[{idx}] grad_coroutine send CODE_IP done')
+            # 发送指令类型
+            await async_send_msg(writer, f'{train_title}:update_gradients')
+            log(f'[{idx}] grad_coroutine send CMD done')
 
             send_count = 0
             last_None = False
@@ -624,35 +565,22 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     await asyncio.sleep(0.001)
                     continue
 
-                # FOR DEBUG 
-                dump_data, v = send_data
-                compress_data, compress_info = pickle.loads(dump_data)
-                decompress_data = debug_datas['gradient_decompressor'].decompress(compress_data, compress_info)
-                debug_datas['param_keeper'].apply_gradients(decompress_data, v)
-                continue
-
                 if last_None:
                     last_None = False
-
-                if send_count == 0:
-                    # 保存第一个梯度，验证梯度是否正确
-                    pickle.dump(send_data, open(f'grad_coroutine.pkl', 'wb'))
 
                 begin_time = time.time()
                 if all_begin_time == 0:
                     all_begin_time = begin_time
                 q_size = grad_q.qsize()
-                log(f"[{idx}][{send_count}] grad handler begin, queue size: {q_size}")
                 batch_compressed_results.append(send_data)
-
                 _batch_size = len(batch_compressed_results)
-                log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}")
+                log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}, queue size: {q_size}")
 
                 if _batch_size == GRAD_BATCH_SIZE:
+                    # 达到GRAD_BATCH_SIZE个梯度，发送梯度
+
                     # 统计版本diff info_data.version
                     current_version = info_data.version
-
-                    # 达到GRAD_BATCH_SIZE个梯度，发送梯度
                     if GRAD_BATCH_SIZE > 1:
                         diff = [current_version - i[1] for i in batch_compressed_results]
                         diff = sum(diff)
@@ -660,10 +588,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     else:
                         data = pickle.dumps(batch_compressed_results[0])
                         diff = current_version - batch_compressed_results[0][1]
-
                     total_version_diff += diff
-                    log(f"[{idx}][{send_count}] send data prepare, cost time: {int((time.time() - begin_time) * 1000)}ms")
 
+                    # 发送梯度
                     send_begin_time = time.time()
                     await async_send_msg(writer, data)
                     send_size = len(data)
@@ -679,8 +606,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                     send_count += 1
                     total_count += 1
-                    # 14040
-                    log(f"[{idx}][{send_count}] grad handler done, cost time: {int((time.time() - begin_time)* 1000)}ms")
 
                     if total_count % 10 == 0:
                         # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
@@ -726,7 +651,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{idx}] grad_coroutine done")
 
     @staticmethod
-    async def param_coroutine(async_share_data, ip, train_title, info_data, params_dict, grad_params_value_shape, debug_datas):
+    async def param_coroutine(async_share_data, ip, train_title, info_data, params_dict, grad_params_value_shape):
         """
         获取服务器参数
         """
@@ -743,18 +668,17 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         log(f"param_coroutine init done")
         try:
-            # FOR DEBUG 
-            # # 创建异步socket连接
-            # log(f'param_coroutine connect to server')
-            # # reader, writer = await asyncio.open_connection(HOST, PORT)
-            # reader, writer = await connect_and_tune(HOST, PORT)
-            # log(f'param_coroutine connect to server done')
-            # # 发送连接验证
-            # await async_send_msg(writer, f'{CODE}_{ip}')
-            # log(f'param_coroutine send CODE_IP done')
-            # # 发送指令类型
-            # await async_send_msg(writer, f'{train_title}:wait_params')
-            # log(f'param_coroutine send CMD done')
+            # 创建异步socket连接
+            log(f'param_coroutine connect to server')
+            # reader, writer = await asyncio.open_connection(HOST, PORT)
+            reader, writer = await connect_and_tune(HOST, PORT)
+            log(f'param_coroutine connect to server done')
+            # 发送连接验证
+            await async_send_msg(writer, f'{CODE}_{ip}')
+            log(f'param_coroutine send CODE_IP done')
+            # 发送指令类型
+            await async_send_msg(writer, f'{train_title}:wait_params')
+            log(f'param_coroutine send CMD done')
             last_v = 0
             while True:
                 # 停止事件
@@ -762,22 +686,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     break
 
                 try:
-                    # FOR DEBUG TODO
-                    while True:
-                        v = debug_datas['param_keeper'].ver
-                        if v>last_v:
-                            last_v = v
-                            w, v = debug_datas['param_keeper'].get_weights()
-                            w = [i for k, i in w.items()]
-                            compress_data, compress_info = debug_datas['param_compressor'].compress(w, 0)
-                            dump_data = pickle.dumps((compress_data, compress_info, v, True))
-                            # 模拟网络耗时
-                            await asyncio.sleep(0.6)
-                            break
-                        else:
-                            await asyncio.sleep(0.001)
-                            continue
-                    # dump_data = await _async_wait_server_weights(reader, timeout=5, loads=False)
+                    dump_data = await _async_wait_server_weights(reader, timeout=5, loads=False)
                 except TimeoutError:
                     continue
 
@@ -848,9 +757,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 梯度压缩
                 t = time.time()
                 log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
-                # compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
-                # FOR DEBUG 压缩梯度测试
-                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, False)
+                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
                 cost = int((time.time() - t) * 1000)
                 self.tatal_compress_cost += cost
 

@@ -58,18 +58,18 @@ if __name__ == "__main__":
         )
 
         config = config.learners(    
-            num_learners=2,
-            # num_gpus_per_learner=1,
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
         )
 
-        # # 询问服务器，本机是否需要验证环节
-        # need_val = request_need_val(train_title)
-        # log(f"need_val: {need_val}")
-        # if need_val:
-        #     config = config.evaluation(
-        #         evaluation_interval=10,
-        #         evaluation_duration=3,
-        #     )
+        # 询问服务器，本机是否需要验证环节
+        need_val = request_need_val(train_title)
+        log(f"need_val: {need_val}")
+        if need_val:
+            config = config.evaluation(
+                evaluation_interval=10,
+                evaluation_duration=3,
+            )
 
         # 客户端运行
         # 构建算法

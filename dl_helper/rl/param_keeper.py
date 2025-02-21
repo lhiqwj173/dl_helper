@@ -105,9 +105,6 @@ class ExperimentHandler:
         # 梯度缓存数量
         self.grad_cache_size = GRAD_BATCH_SIZE * 10
 
-        # 版本号
-        self.version = 0
-
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
 
@@ -147,9 +144,6 @@ class ExperimentHandler:
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
-        # 客户端 ip 列表
-        self.clients = set()
-
     def __del__(self):
         self.p.terminate()
 
@@ -166,17 +160,16 @@ class ExperimentHandler:
         log(f'[CG]{train_title} calculate gpu init')
         
         # 参数压缩器
-        params_compressor = IncrementalCompressor(1e-5)
+        params_compressor = IncrementalCompressor()
 
         # 计算步数
         step_count = 0
 
-        # # 参数服务器
-        # config = config.learners(    
-        #     num_learners=1,
-        #     num_gpus_per_learner=0,
-        #     num_cpus_per_learner=0.5,
-        # )
+        # 参数服务器
+        config = config.learners(    
+            num_learners=1,
+            num_gpus_per_learner=1,
+        )
         env_specifier = config.env
         if _global_registry.contains(ENV_CREATOR, env_specifier):
             # 注册的环境
@@ -242,8 +235,7 @@ class ExperimentHandler:
                 ################################################
 
                 # 检查是否有新的 等待参数 id
-                _q_size = wait_params_id_q.qsize()
-                for _ in range(_q_size):
+                while True:
                     try:
                         new_wait_params_id = wait_params_id_q.get(block=False)
                         if new_wait_params_id not in client_params_q:
@@ -256,13 +248,11 @@ class ExperimentHandler:
                         break
 
                 # 检查是否有新的 循环等待 id
-                _q_size = on_wait_params_id_q.qsize()
-                for _ in range(_q_size):
+                while True:
                     try:
                         new_wait_params_id = on_wait_params_id_q.get(block=False)
-                        if new_wait_params_id not in client_wait_state:
-                            # 循环状态
-                            client_wait_state[new_wait_params_id] = 1   
+                        # 循环状态
+                        client_wait_state[new_wait_params_id] = 1   
                     except Empty:
                         break
 
@@ -283,7 +273,6 @@ class ExperimentHandler:
                         #####################################
                         t = time.time()
                         # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                        log(f'[CG]{train_title} grad_dump_data type: {type(grad_dump_data)} length: {len(grad_dump_data)}')
                         data = pickle.loads(grad_dump_data)
                         if GRAD_BATCH_SIZE > 1:
                             batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
@@ -343,13 +332,14 @@ class ExperimentHandler:
                     if _q.is_full():
                         continue
 
-                    log(f'[CG]{train_title} compress params for {_id}, version: {version}')
-                    
+                    log(f'[CG]{train_title} compress params for {_id}')
+
                     # 压缩
                     compress_data, compress_info = params_compressor.compress(weights, _id)
                     # dumps
                     dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
                     _q.put(dump_data, block=False, extra_data=np.int64(version))
+                    log(f'[CG]{train_title}  params for {_id}, version: {version}, done')
 
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
@@ -363,7 +353,7 @@ class ExperimentHandler:
     def start(self, loop=None):
         self.aper.start(loop)
 
-    async def get_params_dump_data(self, _id, latest=True):
+    async def get_params_dump_data(self, _id):
         params_dump_q = self.ip_params_dump_q[_id]
         while True:
             # 等待不为空
@@ -371,15 +361,8 @@ class ExperimentHandler:
                 await asyncio.sleep(0.001)
                 continue
 
-            if latest:
-                # 获取队列长度
-                q_size = params_dump_q.qsize()
-                # 获取最后一个数据，最新的
-                for _ in range(q_size):
-                    dump_data, dump_v = params_dump_q.get(block=False)
-            else:
-                # 获取第一个数据，用于处理 get 请求，不一定是最新的
-                dump_data, dump_v = params_dump_q.get(block=False)
+            # 获取第一个数据，用于处理 get 请求，不一定是最新的
+            dump_data, dump_v = params_dump_q.get(block=False)
 
             return dump_data, dump_v
 
@@ -414,7 +397,7 @@ class ExperimentHandler:
             self.wait_params_id_q.put(_id)
 
             # 等待获取参数 dump 数据
-            dump_data, dump_v = await self.get_params_dump_data(_id, latest=False)
+            dump_data, dump_v = await self.get_params_dump_data(_id)
 
             # 发送参数
             await async_send_msg(writer, dump_data)
@@ -437,7 +420,6 @@ class ExperimentHandler:
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 dump_data, dump_v = await self.get_params_dump_data(_id)
-                self.version = max(self.version, dump_v)
 
                 t = time.time()
                 if begin_time == 0:
@@ -499,9 +481,6 @@ class ExperimentHandler:
             # 梯度传递一定是长连接，不断的接收
             log(f'{msg_header} recv update_gradients request')
 
-            # 客户端数据索引
-            self.clients.add(ip)
-
             total_handle_time = 0
             begin_time = 0
             push_count = 0
@@ -532,7 +511,6 @@ class ExperimentHandler:
 
             except Exception as e:
                 # 异常处理
-                self.clients.remove(ip)
                 raise e
 
 
