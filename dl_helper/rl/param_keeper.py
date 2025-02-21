@@ -1,6 +1,6 @@
 import torch, time, math
 import multiprocessing
-from multiprocessing.queues import Empty
+from multiprocessing.queues import Empty, Full
 import asyncio
 import gymnasium as gym
 
@@ -372,7 +372,7 @@ class ExperimentHandler:
             try:
                 _q.put(dump_data, block=False)
                 break
-            except Empty:
+            except Full:
                 await asyncio.sleep(0.001)
                 continue
 
