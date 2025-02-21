@@ -57,7 +57,8 @@ def get_gpu_info():
             except:
                 pass
 
-    elif 'CUDA_VERSION' in os.environ:
+    # elif 'CUDA_VERSION' in os.environ:
+    elif os.environ.get('CUDA_VISIBLE_DEVICES', ''):
         # 执行 nvidia-smi 命令，并捕获输出
         result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         # 解析输出，去掉标题行
