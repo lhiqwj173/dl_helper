@@ -305,7 +305,7 @@ def main():
     algo = config.build()
     params_dict_np = algo.get_weights()
     params_dict = OrderedDict()
-    for k, v in params_dict_np.items():
+    for k, v in params_dict_np['default_policy'].items():
         params_dict[k] = torch.from_numpy(v)
     # 获取 handler 上的参数
     handler.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', handler.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
@@ -320,7 +320,7 @@ def main():
     compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
     IncrementalCompressor.decompress(compress_data, compress_info, params_dict)
     # 更新 algo 参数
-    algo.set_weights(params_dict)
+    algo.set_weights({"default_policy":params_dict})
     for i in range(15):
         result = algo.train()
         simplify_rllib_metrics(result, out_func=log, out_file='out.csv')
