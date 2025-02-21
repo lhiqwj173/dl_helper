@@ -475,6 +475,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         "train_title": train_title,
                     },
                 )
+                .learners(    
+                    num_learners=1,
+                    num_gpus_per_learner=0,
+                    num_cpus_per_learner=0.5,
+                )
             )        
             log(f'_run_event_loop_process init config done')
             # 初始化参数服务器
