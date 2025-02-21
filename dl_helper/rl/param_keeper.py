@@ -259,6 +259,7 @@ class ExperimentHandler:
                 # 1.1 尝试get梯度，若获取成功继续处理
                 #####################################
                 # 遍历所有的梯度队列，尝试获取 更新梯度
+                update_count = 0
                 for _id, _q in client_grad_q.items():
                     _q_size = _q.qsize()
                     for _ in range(_q_size):
@@ -305,6 +306,7 @@ class ExperimentHandler:
                             g = DeepGradientCompression.decompress(g, compress_info)
                             param_server.apply_gradients(g, v)
                             step_count += 1
+                            update_count += 1
 
                 #####################################
                 # 2.0 准备/压缩参数
@@ -324,6 +326,10 @@ class ExperimentHandler:
                     elif client_wait_state[_id] == -1:
                         # 不在等待了
                         continue
+                    elif client_wait_state[_id] == 1:
+                        # 循环等待, 只推送有更新的参数
+                        if update_count == 0:
+                            continue
 
                     # 检查队列是否满了，满了则跳过
                     # 说明客户端可能已经断开
