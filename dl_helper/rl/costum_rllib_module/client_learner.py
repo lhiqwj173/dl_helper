@@ -452,6 +452,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
     def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
         """在新进程中运行事件循环"""
         log(f'_run_event_loop_process')
+        os.environ["CUDA_VISIBLE_DEVICES"]
         # FOR DEBUG 
         # 训练配置
         try:
