@@ -96,9 +96,8 @@ if __name__ == "__main__":
         algo.stop()
         log(f"algo.stop done")
 
-        if need_val:
-            # 绘制训练曲线
-            plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
-            log(f"plot_training_curve done")
+        # 绘制训练曲线
+        plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
+        log(f"plot_training_curve done")
 
         stop()

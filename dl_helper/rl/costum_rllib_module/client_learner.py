@@ -770,9 +770,12 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                             w = [i for k, i in w.items()]
                             compress_data, compress_info = debug_datas['param_compressor'].compress(w, 0)
                             dump_data = pickle.dumps((compress_data, compress_info, v, True))
+                            # 模拟网络耗时
+                            await asyncio.sleep(0.6)
                             break
                         else:
                             await asyncio.sleep(0.001)
+                            continue
                     # dump_data = await _async_wait_server_weights(reader, timeout=5, loads=False)
                 except TimeoutError:
                     continue
