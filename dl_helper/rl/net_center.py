@@ -303,7 +303,8 @@ def main():
         )
     )
     algo = config.build()
-    params_dict_np = algo.get_weights()
+    log(f'algo learnergroup: {algo.learner_group}')
+    params_dict_np = algo.learner_group.get_weights()
     params_dict = OrderedDict()
     for k, v in params_dict_np['default_policy'].items():
         params_dict[k] = torch.from_numpy(v)
@@ -320,7 +321,7 @@ def main():
     compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
     IncrementalCompressor.decompress(compress_data, compress_info, params_dict)
     # 更新 algo 参数
-    algo.set_weights({"default_policy":params_dict})
+    algo.learner_group.set_weights({"default_policy":params_dict})
     for i in range(15):
         result = algo.train()
         simplify_rllib_metrics(result, out_func=log, out_file='out.csv')
