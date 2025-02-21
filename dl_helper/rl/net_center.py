@@ -325,6 +325,8 @@ def main():
         result = algo.train()
         simplify_rllib_metrics(result, out_func=log, out_file='out.csv')
 
+    plot_training_curve('', 'out.csv', y_axis_max=500)
+
     # FOR DEBUG 单机测试
     # try:
     #     # 运行服务器
