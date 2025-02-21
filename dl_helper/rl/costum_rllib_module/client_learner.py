@@ -395,6 +395,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         if self.ready_params_job:
             _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+            log(f"[{self.client_id}] init params_dump_q, buffer size: {len(_temp_dump_data)}")
             self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
             self.params_dump_q.clear()
 
@@ -415,6 +416,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
             _size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
+            log(f"[{self.client_id}] init grad_q, buffer size: {_size}")
             self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
             self.task_queue.clear()
 
@@ -457,6 +459,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         init_logger(train_title, home=train_folder, timestamp=False)
 
         # 共享梯度队列
+        log(f"[{client_id}] init grad_q, buffer size: {grad_q_size}")
         grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4, len(pickle.dumps(np.int64(0))))
 
         # 事件循环
@@ -659,6 +662,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享队列
         _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+        log(f"[{info_data.client_id}] init params_dump_q, buffer size: {len(_temp_dump_data)}")
         params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
 
         # 统计拉取参数耗时
