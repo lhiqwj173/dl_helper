@@ -767,6 +767,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         if v>last_v:
                             last_v = v
                             w, v = debug_datas['param_keeper'].get_weights()
+                            w = [i for k, i in w.items()]
                             compress_data, compress_info = debug_datas['param_compressor'].compress(w, 0)
                             dump_data = pickle.dumps((compress_data, compress_info, v, True))
                             break
