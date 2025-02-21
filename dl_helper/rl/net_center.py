@@ -210,11 +210,6 @@ class AsyncSocketServer:
         )
         
         log(f"Server started on {self.host}:{self.port}")
-        
-        # 启动所有处理器
-        loop = asyncio.get_event_loop()
-        for handler in self.handlers.values():
-            handler.start(loop)
 
         # 启动超时检查
         timeout_task = asyncio.create_task(self.check_timeout())
@@ -245,6 +240,17 @@ class AsyncSocketServer:
         log("Server shutdown complete")
         # 强制退出程序
         os._exit(0)
+
+# FOR DEBUG 单机测试
+from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
+from dl_helper.deep_gradient_compression import DeepGradientCompression
+from dl_helper.param_compression import IncrementalCompressor
+from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
+from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
+from collections import OrderedDict
+import torch
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
+
 def main():
     # 使用uvloop替换默认事件循环
     uvloop.install()
@@ -252,15 +258,81 @@ def main():
     # 创建服务器实例
     server = AsyncSocketServer()
     
-    try:
-        # 运行服务器
-        asyncio.run(server.start(), debug=True)
-    except KeyboardInterrupt:
-        log("Received keyboard interrupt")
-    except Exception as e:
-        log(f'ERROR:\n{get_exception_msg()}')
-    finally:
-        log("Server stopped")
+    # FOR DEBUG 单机测试
+    handler = list(server.handlers.values())[0]
+    _id = 0
+    # 自定义学习者
+    class DebugLearner(PPOTorchLearner):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            # 梯度压缩器
+            self.grad_compressor = DeepGradientCompression()
+            self.params_dict = OrderedDict()
+            for k, v in self.module._rl_modules['default_policy'].state_dict().items():
+                self.params_dict[k] = v.clone().detach().cpu()
+
+        def apply_gradients(self, *args, **kwargs):
+            # 1. 获取梯度
+            gs = [v.grad.clone().cpu() for v in self._params]
+            # 2. 压缩梯度
+            gs, info = self.grad_compressor.compress(gs, False)
+            # 3. 交给server应用梯度
+            dump_data = pickle.dumps((gs, info))
+            dump_data = pickle.dumps((dump_data, 0))
+            handler.ip_gradients_dump_q[_id].put(dump_data)
+            # 4. 获取server参数
+            dump_data, dump_v = handler.ip_params_dump_q[_id].get()
+            # 5. 更新本地参数
+            compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
+            IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
+            self.module._rl_modules['default_policy'].load_state_dict(self.params_dict)
+
+    # 初始化一个训练对象
+    config = (
+        ClientPPOConfig()
+        .api_stack(
+            enable_rl_module_and_learner=True,
+            enable_env_runner_and_connector_v2=True,
+        )
+        .environment("CartPole-v1")
+        .env_runners(num_env_runners=0)
+        .training(
+            learner_class=DebugLearner,
+        )
+    )
+    algo = config.build()
+    params_dict_np = algo.get_weights()
+    params_dict = OrderedDict()
+    for k, v in params_dict_np.items():
+        params_dict[k] = torch.from_numpy(v)
+    # 获取 handler 上的参数
+    handler.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', handler.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+    handler.ip_params_dump_q[_id].clear()
+    handler.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', handler.share_gradients_dump_max_size, 4)
+    handler.ip_gradients_dump_q[_id].clear()
+    # 通知需要等待的ip  
+    handler.wait_params_id_q.put(_id)
+    # 等待参数
+    dump_data, dump_v = handler.ip_params_dump_q[_id].get()
+    # 解压参数
+    compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
+    IncrementalCompressor.decompress(compress_data, compress_info, params_dict)
+    # 更新 algo 参数
+    algo.set_weights(params_dict)
+    for i in range(15):
+        result = algo.train()
+        simplify_rllib_metrics(result, out_func=log, out_file='out.csv')
+
+    # FOR DEBUG 单机测试
+    # try:
+    #     # 运行服务器
+    #     asyncio.run(server.start(), debug=True)
+    # except KeyboardInterrupt:
+    #     log("Received keyboard interrupt")
+    # except Exception as e:
+    #     log(f'ERROR:\n{get_exception_msg()}')
+    # finally:
+    #     log("Server stopped")
 
 if __name__ == '__main__':
     # 初始化实验处理器

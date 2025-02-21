@@ -639,6 +639,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                         # avg grad send time: 738ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 41529, mean version diff: 0.00
                         # 优化空间:
                         #     平均等待梯度时间 = 738 - 0 - 0 = 738ms (发送梯度/等待参数推送)
+
+                        # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
                         log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
 
                     # 清空
@@ -718,6 +720,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 本机接收后处理耗时(avg handle time)
                     # avg param push time: 928ms, avg handle time: 0ms
                     # avg param push time: 616ms, avg handle time: 1ms
+                    # [720] avg param push time: 485ms, avg handle time: 87ms
                     log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
         except Exception as e:

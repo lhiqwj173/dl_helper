@@ -124,7 +124,6 @@ class ExperimentHandler:
 
         # 独立线程转发 进程任务
         self.ready_params_event = multiprocessing.Event()
-        self.aper = AsyncProcessEventReader(self.ready_params_event)
         
         # 启动计算进程
         self.p = multiprocessing.Process(target=ExperimentHandler.gpu_most_task, args=(
@@ -349,9 +348,6 @@ class ExperimentHandler:
             loop_count += 1
             if step_count % 60 == 0 and total_count > 0:
                 log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
-
-    def start(self, loop=None):
-        self.aper.start(loop)
 
     async def get_params_dump_data(self, _id):
         params_dump_q = self.ip_params_dump_q[_id]
