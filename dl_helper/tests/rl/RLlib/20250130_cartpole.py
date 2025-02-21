@@ -28,6 +28,7 @@ if __name__ == "__main__":
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
+    log(f"num_learners: {num_learners}")
 
     # 训练配置
     config = (
