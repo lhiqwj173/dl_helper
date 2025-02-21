@@ -348,6 +348,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 用于解压参数的临时参数字典 / 初始化共享dump队列
         self.params_dict = None
 
+        self.info_data = None
+
         ####################
         # 只有主 learner 需要初始化
         ####################
@@ -359,7 +361,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         self.stop_event = None
         # 梯度压缩器
         self.gradient_compressor = None
-        self.info_data = None
         self.tatal_compress_cost = 0
         # 共享dump参数队列
         self.params_dump_q = None
@@ -403,6 +404,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     def init_param_thread(self):
+        # 共享信息
+        self.info_data = share_info()
+
         if self.client_id == 0:
             # 主learner
             # 梯度压缩器
@@ -414,9 +418,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.gradient_compressor.clear()# 清理
             self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
             self.task_queue.clear()
-
-            # 共享信息
-            self.info_data = share_info()
 
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
@@ -848,8 +849,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 t = time.time()
                 log(f'[{self.client_id}][{self.update_count}] compress gradients begin, need_warn_up: {self.info_data.need_warn_up}')
                 # compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, self.info_data.need_warn_up)
-                # FOR DEBUG 全梯度测试
-                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, True)
+                # FOR DEBUG 压缩梯度测试
+                compressed_grads, compress_info = self.gradient_compressor.compress(cpu_gradients, False)
                 cost = int((time.time() - t) * 1000)
                 self.tatal_compress_cost += cost
 
@@ -886,6 +887,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 if dump_data is not None:
                     # loads
                     weights, info, version, need_warn_up = pickle.loads(dump_data)
+                    # 更新共享信息
+                    self.info_data.set(version, need_warn_up)
                     # 解压到 self.params_dict
                     IncrementalCompressor.decompress(weights, info, self.params_dict)
                     # 拷贝到 shared_param_between_learner

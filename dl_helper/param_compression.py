@@ -37,9 +37,6 @@ class IncrementalCompressor:
                 client_id: str,
                ) -> Tuple[List[torch.Tensor], CompressInfo]:
         """压缩张量列表, 确保压缩结果在CPU上"""
-        # # FOR DEBUG 全参数测试
-        # return [t.clone() for t in self.client_params[client_id]], {'full': True}
-    
         if self._init_reference(client_id, tensors):
             # 初始化时直接返回参考张量的克隆
             return [t.clone() for t in self.client_params[client_id]], {'full': True}
