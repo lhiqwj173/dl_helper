@@ -245,7 +245,7 @@ class AsyncSocketServer:
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
-from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
+from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue, Empty
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from collections import OrderedDict
 import torch
@@ -284,12 +284,16 @@ def main():
             handler.ip_gradients_dump_q[_id].put(dump_data)
             log(f'send gradients to server')
             # 4. 获取server参数
-            dump_data, dump_v = handler.ip_params_dump_q[_id].get()
-            log(f'recv params from server')
-            # 5. 更新本地参数
-            compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
-            IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
-            self.module._rl_modules['default_policy'].load_state_dict(self.params_dict)
+            try:
+                dump_data, dump_v = handler.ip_params_dump_q[_id].get(block=False)
+                log(f'recv params from server')
+                # 5. 更新本地参数
+                compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
+                IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
+                self.module._rl_modules['default_policy'].load_state_dict(self.params_dict)
+            except Empty:
+                log(f'no params update')
+                return
 
     # 初始化一个训练对象
     config = (
