@@ -268,10 +268,12 @@ def main():
             # 梯度压缩器
             self.grad_compressor = DeepGradientCompression()
             self.params_dict = OrderedDict()
-            for k, v in self.module._rl_modules['default_policy'].state_dict().items():
-                self.params_dict[k] = v.clone().detach().cpu()
 
         def apply_gradients(self, *args, **kwargs):
+            # 0. 初始化 params_dict
+            if len(self.params_dict) == 0:
+                for k, v in self.module._rl_modules['default_policy'].state_dict().items():
+                    self.params_dict[k] = v.clone().detach().cpu()
             # 1. 获取梯度
             gs = [v.grad.clone().cpu() for v in self._params]
             # 2. 压缩梯度
