@@ -394,9 +394,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
 
         if self.ready_params_job:
-            _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
-            log(f"[{self.client_id}] init params_dump_q, buffer size: {len(_temp_dump_data)}")
-            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
+            _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+            _params_dump_q_buffer_size = len(_temp_dump_data)
+            log(f"[{self.client_id}] init params_dump_q, buffer size: {_params_dump_q_buffer_size}")
+            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 4)
             self.params_dump_q.clear()
 
         self.shared_param_between_learner = SharedParam("learner",params_dict, create=False)
@@ -414,11 +415,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 获取一个梯度不压缩数据, 作为队列大小
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
-            _size = len(pickle.dumps((_g, _info)))
+            _g_q_size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
-            log(f"[{self.client_id}] init grad_q, buffer size: {_size}")
-            self.task_queue = safe_share_memory_queue('grad_data_info_q', _size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
+            log(f"[{self.client_id}] init grad_q, buffer size: {_g_q_size}")
+            self.task_queue = safe_share_memory_queue('grad_data_info_q', _g_q_size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
             self.task_queue.clear()
+
+            _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0))))
 
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
@@ -429,7 +432,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 args=(
                     self.train_title, self.train_folder, self.client_id, self.params_dict, self.grad_params_value_shape,
                     self.version, self.need_warn_up,
-                    _size,
+                    _g_q_size,_p_q_size,
                 )
             )
             self.event_loop_process.start()
@@ -451,7 +454,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     @staticmethod
-    def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size):
+    def _run_event_loop_process(train_title, train_folder, client_id, params_dict, grad_params_value_shape, version, need_warn_up, grad_q_size, param_q_size):
         """在新进程中运行事件循环"""
         log(f'_run_event_loop_process')
 
@@ -461,6 +464,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         # 共享梯度队列
         log(f"[{client_id}] init grad_q, buffer size: {grad_q_size}")
         grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4, len(pickle.dumps(np.int64(0))))
+
+        # 共享参数队列
+        log(f"[{client_id}] init param_q, buffer size: {param_q_size}")
+        params_q = safe_share_memory_queue('param_coroutine_dump_q', param_q_size, 4)
 
         # 事件循环
         try:
@@ -489,7 +496,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             tasks.append(task)
 
         # 启动参数协程
-        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(async_share_data, _ip, train_title, info_data, params_dict, grad_params_value_shape)) 
+        task = loop.create_task(ClientPPOTorchLearner.param_coroutine(async_share_data, _ip, train_title, info_data, params_dict, grad_params_value_shape, params_q)) 
         tasks.append(task)
 
         # 启动停止事件循环协程
@@ -654,16 +661,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"[{idx}] grad_coroutine done")
 
     @staticmethod
-    async def param_coroutine(async_share_data, ip, train_title, info_data, params_dict, grad_params_value_shape):
+    async def param_coroutine(async_share_data, ip, train_title, info_data, params_dict, grad_params_value_shape, params_dump_q):
         """
         获取服务器参数
         """
         log(f"param_coroutine start")
-
-        # 共享队列
-        _temp_dump_data = pickle.dumps(([v for _, v in params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
-        log(f"[{info_data.client_id}] init params_dump_q, buffer size: {len(_temp_dump_data)}")
-        params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', len(_temp_dump_data), 4)
 
         # 统计拉取参数耗时
         begin_time = 0
@@ -683,7 +685,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             # 发送指令类型
             await async_send_msg(writer, f'{train_title}:wait_params')
             log(f'param_coroutine send CMD done')
-            last_v = 0
             while True:
                 # 停止事件
                 if async_share_data['stop']:
