@@ -145,39 +145,32 @@ class share_info:
     """
     共享信息类
     """
-    def __init__(self, client_id=None, version=None, need_warn_up=None):
-        self.CLIENT_ID, self.VERSION, self.NEED_WARN_UP = range(3)
-        self._data = share_tensor(name=f'_share_info_data', shape=(3,), dtype='int64')
+    VERSION, NEED_WARN_UP = range(2)
+    def __init__(self, version=None, need_warn_up=None):
+        self._data = share_tensor(name=f'_share_info_data', shape=(2,), dtype='int64')
         self._lock = Lock(name=f'_share_info_lock_event')
 
-        self.set(client_id, version, need_warn_up)
+        self.set(version, need_warn_up)
 
     def _get(self, idx):
         with self._lock:
             return self._data.data_np[idx]
 
-    def set(self, client_id=None, version=None, need_warn_up=None):
-        if client_id is not None:
-            with self._lock:
-                self._data.data_np[self.CLIENT_ID] = client_id
+    def set(self, version=None, need_warn_up=None):
         if version is not None:
             with self._lock:
-                self._data.data_np[self.VERSION] = version
+                self._data.data_np[share_info.VERSION] = version
         if need_warn_up is not None:
             with self._lock:
-                self._data.data_np[self.NEED_WARN_UP] = need_warn_up
-
-    @ property
-    def client_id(self):
-        return self._get(self.CLIENT_ID)
+                self._data.data_np[share_info.NEED_WARN_UP] = need_warn_up
 
     @ property
     def version(self):
-        return self._get(self.VERSION)
+        return self._get(share_info.VERSION)
 
     @ property
     def need_warn_up(self):
-        return self._get(self.NEED_WARN_UP)
+        return self._get(share_info.NEED_WARN_UP)
 
 def get_results(RemoteCallResults):
     res = []
@@ -292,6 +285,9 @@ class ClientLearnerGroup(LearnerGroup):
 
         res = self.foreach_learner(lambda learner: learner.set_need_warn_up(int(need_warn_up)))
         log(f"set need_warn_up to all learners, res: {get_results(res)}")
+
+        # 初始化共享数据
+        self.info_data = share_info(version, need_warn_up)
 
         # 创建共享参数
         self.shared_param_between_learner = SharedParam("learner", _params_dict, create=True)
@@ -477,7 +473,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
     
-        info_data = share_info(client_id, version, need_warn_up)
+        info_data = share_info()
 
         async_share_data = {
             'stop': False,
@@ -532,7 +528,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         """
         梯度协程
         """
-        log(f"[{info_data.client_id}] grad_coroutine {idx} start")
+        log(f"grad_coroutine {idx} start")
 
         # 统计耗时
         all_begin_time = 0
@@ -780,7 +776,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 加入队列
                 self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
                 # self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
-                log(f'[{self.client_id}][{self.update_count}] task_queue: {self.task_queue.qsize()} / {self.task_queue._maxsize}')
+                log(f'[{self.client_id}][{self.update_count}] put to grad_q: {self.task_queue.qsize()} / {self.task_queue._maxsize}, version: {self.info_data.version}')
 
             if self.ready_params_job:
                 # 需要准备参数的learner，解压参数
@@ -811,7 +807,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # 触发主learner的参数更新事件
                     self.sync_learner_param_event.set(1)
                     self.update_param_count += 1
-                    log(f'[{self.client_id}][{self.update_count}] decompress and ready new params done')
+                    log(f'[{self.client_id}][{self.update_count}] decompress and ready new params done, version: {version}, need_warn_up: {need_warn_up}')
 
                 # 等解压参数（检查参数更新）完毕，全部learner可以继续运行
                 self.sync_learner_event.set(self.num_learners - 1)
