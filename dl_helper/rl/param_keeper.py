@@ -23,6 +23,7 @@ from ray.tune.registry import _global_registry, ENV_CREATOR
 from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
 
 GRAD_ALLOW_VERSION_DIFF = 30
+GRAD_ALLOW_VERSION_DIFF = 0
 
 class AsyncRLParameterServer:
     def __init__(self,
@@ -286,19 +287,20 @@ class ExperimentHandler:
                         # 记录版本差异
                         total_client_version_diff += sum(version_diffs)
                         total_count += len(version_diffs)
-                        not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
-                        if not_allow_idxs:
-                            # 倒序删除不允许的梯度
-                            for idx in sorted(not_allow_idxs, reverse=True):
-                                log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
-                                batch_g_info.pop(idx)
+                        if GRAD_ALLOW_VERSION_DIFF > 0:
+                            not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                            if not_allow_idxs:
+                                # 倒序删除不允许的梯度
+                                for idx in sorted(not_allow_idxs, reverse=True):
+                                    log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                                    batch_g_info.pop(idx)
 
-                        # 数量检查
-                        _update_gradients_length = len(batch_g_info)
-                        if _update_gradients_length == 0:
-                            log(f'[CG]{train_title} version diff filt no gradients, keep wait')
-                            continue
-                        log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
+                            # 数量检查
+                            _update_gradients_length = len(batch_g_info)
+                            if _update_gradients_length == 0:
+                                log(f'[CG]{train_title} version diff filt no gradients, keep wait')
+                                continue
+                            log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
                         # 遍历剩下的梯度，逐个应用
                         for idx, ((g, compress_info), v) in enumerate(batch_g_info):
