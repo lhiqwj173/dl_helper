@@ -350,8 +350,6 @@ class ExperimentHandler:
                     compress_data, compress_info = params_compressor.compress(weights, _id)
                     # dumps
                     dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
-                    # FOR DEBUG 模拟网络延时
-                    time.sleep(0.7)
                     _q.put(dump_data, block=False, extra_data=np.int64(version))
                     log(f'[CG]{train_title}  params for {_id}, version: {version}, done')
 
