@@ -250,6 +250,11 @@ from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from collections import OrderedDict
 import torch
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
+def print_1st_params(params_dict, msg):
+    for k, v in params_dict.items():
+        log(f'{msg} k: {k}')
+        log(f'{msg} p: {v}')
+        break
 
 def main():
     # 使用uvloop替换默认事件循环
@@ -291,6 +296,7 @@ def main():
                 compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
                 IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
                 self.module._rl_modules['default_policy'].load_state_dict(self.params_dict)
+                print_1st_params(self.module._rl_modules['default_policy'].state_dict(), 'algo update params')
             except Empty:
                 log(f'no params update')
                 return
@@ -314,6 +320,7 @@ def main():
     params_dict = OrderedDict()
     for k, v in params_dict_np['default_policy'].items():
         params_dict[k] = torch.from_numpy(v)
+    print_1st_params(params_dict, 'algo init')
     # 获取 handler 上的参数
     handler.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', handler.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
     handler.ip_params_dump_q[_id].clear()
@@ -328,6 +335,7 @@ def main():
     IncrementalCompressor.decompress(compress_data, compress_info, params_dict)
     # 更新 algo 参数
     algo.learner_group.set_weights({"default_policy":params_dict})
+    print_1st_params(algo.learner_group.get_weights()['default_policy'], 'algo set weights')
     # 通知需要等待的ip  
     handler.on_wait_params_id_q.put(_id)
     for i in range(15):

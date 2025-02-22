@@ -1,5 +1,6 @@
 
-
+import os
+from dl_helper.train_param import in_kaggle
 
 class data_producer:
     """
@@ -16,31 +17,14 @@ class data_producer:
         ]
         TODO
     """
-    def __init__(self, data_type='train', his_len=100, file_num=0, simple_test=False, need_cols=[]):
+    def __init__(self, data_type='train', need_cols=[]):
         """
         'data_type': 'train',# 训练/测试
-        'his_len': 100,# 每个样本的 历史数据长度
-        'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
-        'simple_test': False,# 是否为简单测试
-        """
-        # 快速测试
-        self.simple_test = simple_test
-        if self.simple_test:
-            file_num = 5
-
-        self.his_len = his_len
-        self.file_num = file_num
-        
+        'need_cols': []# 需要的特征列名,默认所有列
+        """        
         # 需要的特征列名
         self.need_cols = need_cols
         self.need_cols_idx = []
-        # 添加必须的列
-        # if self.need_cols:
-        #     for must_col in ['mid_pct', 'mid_price', 'mid_vol']:
-        #         if must_col not in self.need_cols:
-        #             self.need_cols.append(must_col)
-
-        self.cols_num = 130 if not self.need_cols else len(self.need_cols)
 
         # 训练数据
         if in_kaggle:
@@ -49,16 +33,17 @@ class data_producer:
             data_folder_name = os.listdir(input_folder)[0]
             self.data_folder = os.path.join(input_folder, data_folder_name)
         else:
-            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data'
+            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_match_data'
 
         self.data_type = data_type
         self.files = []
 
         # 当前数据日期/code
         self.date = ''
-        self.code = ''
+        self.code1 = ''
+        self.code2 = ''
         
-        # 数据内容
+        # 数据内容 TODO
         # ids, mean_std, x, all_self.all_raw_data_data
         self.ids = []
         self.mean_std = []
