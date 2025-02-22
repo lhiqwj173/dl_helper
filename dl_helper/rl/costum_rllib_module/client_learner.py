@@ -393,7 +393,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
             _params_dump_q_buffer_size = len(_temp_dump_data)
             log(f"[{self.client_id}] init params_dump_q, buffer size: {_params_dump_q_buffer_size}")
-            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 4)
+            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 10)
             self.params_dump_q.clear()
 
         self.shared_param_between_learner = SharedParam("learner",params_dict, create=False)
@@ -463,7 +463,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享参数队列
         log(f"[{client_id}] init param_q, buffer size: {param_q_size}")
-        params_q = safe_share_memory_queue('param_coroutine_dump_q', param_q_size, 4)
+        params_q = safe_share_memory_queue('param_coroutine_dump_q', param_q_size, 10)
 
         # 事件循环
         try:
@@ -614,29 +614,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     total_count += 1
 
                     if total_count % 10 == 0:
-                        # 每次发送梯度耗时(avg grad send time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待梯度耗时
-                        # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 服务端处理耗时(服务端统计)
-
-                        # ROUND 0
-                        # avg grad send time: 925ms, avg wait time: 523ms, avg handle time: 171ms
-                        # 优化空间:
-                        #     平均等待梯度时间 = 925 -523-171 = 231ms > 取消强制参数同步的等待, 不断计算梯度，消除 平均等待梯度时间(只受限于梯度被处理的速度, 队列大小: GRAD_BATCH_SIZE)
-                        #     网络传输耗时 = 523 - 15 = 508ms
-                        #     压缩处理耗时 = 171ms
-
-                        # ROUND 4 GRAD_BATCH_SIZE=1
-                        # avg grad send time: 43ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 40511
-                        # 优化空间:
-                        #     平均等待梯度时间 = 43 - 0 - 0 = 43ms  > 目标达成
-                        #     网络传输耗时 = 0ms                    > 目标达成
-                        #     压缩处理耗时 = 17ms(主learner完成)      > 目标达成
-
-                        # ROUND 5 GRAD_BATCH_SIZE=1 同步训练
-                        # avg grad send time: 738ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 41529, mean version diff: 0.00
-                        # 优化空间:
-                        #     平均等待梯度时间 = 738 - 0 - 0 = 738ms (发送梯度/等待参数推送)
-
                         # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
+                        # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                         log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
 
                     # 清空
@@ -714,9 +693,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 统计耗时
                 if total_count % 30 == 0:
                     # 本机接收后处理耗时(avg handle time)
-                    # avg param push time: 928ms, avg handle time: 0ms
-                    # avg param push time: 616ms, avg handle time: 1ms
-                    # [720] avg param push time: 485ms, avg handle time: 87ms
+                    # [900] avg param push time: 456ms, avg handle time: 97ms
                     log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
         except Exception as e:

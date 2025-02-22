@@ -9,11 +9,13 @@ class data_producer:
 
     特征列:
         [
+            time,
             code1_p4_ask,code1_p4_bid,code1_p3_ask,code1_p3_bid,code1_p2_ask,code1_p2_bid,code1_p1_ask,code1_p1_bid,code1_p0_ask,code1_p0_bid,
             code2_p4_ask,code2_p4_bid,code2_p3_ask,code2_p3_bid,code2_p2_ask,code2_p2_bid,code2_p1_ask,code2_p1_bid,code2_p0_ask,code2_p0_bid,
+            spread_p0,spread_p1,spread_p2,spread_p3,spread_p4,
             code1_p5_close,code1_p4_close,code1_p3_close,code1_p2_close,code1_p1_close,
             code2_p5_close,code2_p4_close,code2_p3_close,code2_p2_close,code2_p1_close,
-            seconds_to_close
+            seconds_to_close,id
         ]
         TODO
     """

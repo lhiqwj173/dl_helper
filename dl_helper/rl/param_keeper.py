@@ -22,7 +22,7 @@ from ray.tune.registry import _global_registry, ENV_CREATOR
 
 from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
 
-GRAD_ALLOW_VERSION_DIFF = 30
+GRAD_ALLOW_VERSION_DIFF = 60
 # GRAD_ALLOW_VERSION_DIFF = 0
 
 class AsyncRLParameterServer:
