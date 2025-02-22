@@ -23,7 +23,7 @@ from ray.tune.registry import _global_registry, ENV_CREATOR
 from py_ext.tool import log, share_tensor_list, share_tensor, get_exception_msg, safe_share_memory_queue
 
 GRAD_ALLOW_VERSION_DIFF = 30
-GRAD_ALLOW_VERSION_DIFF = 0
+# GRAD_ALLOW_VERSION_DIFF = 0
 
 class AsyncRLParameterServer:
     def __init__(self,
@@ -284,6 +284,8 @@ class ExperimentHandler:
                         # version diff 过滤
                         cur_version = param_server.ver
                         version_diffs = [cur_version - i[1] for i in batch_g_info]
+                        log(f'[CG]{train_title} grad versions: \n{[i[1] for i in batch_g_info]}')
+                        log(f'[CG]{train_title} version diffs: \n{version_diffs}')
                         # 记录版本差异
                         total_client_version_diff += sum(version_diffs)
                         total_count += len(version_diffs)
@@ -309,6 +311,7 @@ class ExperimentHandler:
                             param_server.apply_gradients(g, v)
                             step_count += 1
                             update_count += 1
+                        log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数

@@ -291,7 +291,7 @@ def main():
             # 4. 获取server参数
             try:
                 dump_data, dump_v = handler.ip_params_dump_q[_id].get(block=False)
-                log(f'recv params from server')
+                log(f'recv params from server, version: {dump_v}')
                 # 5. 更新本地参数
                 compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
                 IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
