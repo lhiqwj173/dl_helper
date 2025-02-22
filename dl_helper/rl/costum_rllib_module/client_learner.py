@@ -393,7 +393,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
             _params_dump_q_buffer_size = len(_temp_dump_data)
             log(f"[{self.client_id}] init params_dump_q, buffer size: {_params_dump_q_buffer_size}")
-            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 10)
+            self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 30)
             self.params_dump_q.clear()
 
         self.shared_param_between_learner = SharedParam("learner",params_dict, create=False)
@@ -463,7 +463,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享参数队列
         log(f"[{client_id}] init param_q, buffer size: {param_q_size}")
-        params_q = safe_share_memory_queue('param_coroutine_dump_q', param_q_size, 10)
+        params_q = safe_share_memory_queue('param_coroutine_dump_q', param_q_size, 30)
 
         # 事件循环
         try:
@@ -616,6 +616,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     if total_count % 10 == 0:
                         # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
                         # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
+                        # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                         log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
 
                     # 清空
@@ -676,7 +677,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 t = time.time()
                 if begin_time == 0:
                     begin_time = t
-                log(f"[{total_count}] recv params push")
+                log(f"[{total_count}] recv params push, current params_q: {params_dump_q.qsize()}")
 
                 # 加入队列
                 while True:
@@ -694,6 +695,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 if total_count % 30 == 0:
                     # 本机接收后处理耗时(avg handle time)
                     # [900] avg param push time: 456ms, avg handle time: 97ms
+                    # [810] avg param push time: 402ms, avg handle time: 39ms
                     log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
         except Exception as e:
@@ -708,6 +710,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f"param_coroutine done")
 
     def compute_gradients(self, *args, **kwargs):
+        self.step_begin = time.time()
         self.update_count += 1
 
         if self.client_id == 0:
@@ -748,6 +751,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
                 # compress gradients done, cost time: 19ms, avg cost: 18ms
                 # compress gradients done, cost time: 17ms, avg cost: 17ms
+                # compress gradients done, cost time: 19ms, avg cost: 20ms
                 log(f'[{self.client_id}][{self.update_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.grads_count)}ms')
 
                 # 加入队列
@@ -787,9 +791,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f'[{self.client_id}][{self.update_count}] decompress and ready new params done, version: {version}, need_warn_up: {need_warn_up}')
 
                 # 等解压参数（检查参数更新）完毕，全部learner可以继续运行
+                log(f'[{self.client_id}][{self.update_count}] set sync learner event, cost time: {int((time.time() - self.step_begin) * 1000)}ms')
                 self.sync_learner_event.set(self.num_learners - 1)
             else:
                 # 非解压参数的learner，等解压参数（检查参数更新）完毕
+                log(f'[{self.client_id}][{self.update_count}] wait for sync learner event, cost time: {int((time.time() - self.step_begin) * 1000)}ms')
                 self.sync_learner_event.wait()
 
             if self.sync_learner_param_event.is_set():
