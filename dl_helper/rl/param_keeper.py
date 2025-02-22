@@ -311,7 +311,9 @@ class ExperimentHandler:
                             param_server.apply_gradients(g, v)
                             step_count += 1
                             update_count += 1
-                log(f'[CG]{train_title} latest_version: {param_server.ver}')
+
+                if update_count:
+                    log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数
@@ -349,7 +351,7 @@ class ExperimentHandler:
                     # dumps
                     dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
                     # FOR DEBUG 模拟网络延时
-                    time.sleep(0.5)
+                    time.sleep(0.7)
                     _q.put(dump_data, block=False, extra_data=np.int64(version))
                     log(f'[CG]{train_title}  params for {_id}, version: {version}, done')
 
