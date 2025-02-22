@@ -311,7 +311,7 @@ class ExperimentHandler:
                             param_server.apply_gradients(g, v)
                             step_count += 1
                             update_count += 1
-                        log(f'[CG]{train_title} latest_version: {param_server.ver}')
+                log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数

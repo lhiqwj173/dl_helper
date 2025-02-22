@@ -273,6 +273,7 @@ def main():
             # 梯度压缩器
             self.grad_compressor = DeepGradientCompression()
             self.params_dict = OrderedDict()
+            self.version = 0
 
         def apply_gradients(self, *args, **kwargs):
             # 0. 初始化 params_dict
@@ -285,13 +286,14 @@ def main():
             gs, info = self.grad_compressor.compress(gs, False)
             # 3. 交给server应用梯度
             dump_data = pickle.dumps((gs, info))
-            dump_data = pickle.dumps((dump_data, 0))
+            dump_data = pickle.dumps((dump_data, self.version))
             handler.ip_gradients_dump_q[_id].put(dump_data)
             log(f'send gradients to server')
             # 4. 获取server参数
             try:
                 dump_data, dump_v = handler.ip_params_dump_q[_id].get(block=False)
                 log(f'recv params from server, version: {dump_v}')
+                self.version = dump_v
                 # 5. 更新本地参数
                 compress_data, compress_info, version, need_warn_up = pickle.loads(dump_data)
                 IncrementalCompressor.decompress(compress_data, compress_info, self.params_dict)
