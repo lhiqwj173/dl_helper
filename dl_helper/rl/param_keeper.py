@@ -258,6 +258,10 @@ class ExperimentHandler:
                     except Empty:
                         break
 
+                if not client_grad_q:
+                    time.sleep(0.001)
+                    continue
+
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
                 #####################################
@@ -271,6 +275,9 @@ class ExperimentHandler:
                             grad_dump_data_list.append(grad_dump_data)
                         except Empty:
                             break
+                if not grad_dump_data_list:
+                    time.sleep(0.001)
+                    continue
 
                 #####################################
                 # 1.2 过滤 / 解压 / 应用梯度
