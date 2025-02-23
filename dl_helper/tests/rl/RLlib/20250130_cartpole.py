@@ -1,5 +1,3 @@
-import threading
-import multiprocessing
 import sys, os, time
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
@@ -12,17 +10,21 @@ from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
+from py_ext.datetime import beijing_time
 
 train_folder = 'cartpole'
 init_logger('20250130_cartpole', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
-    is_server = False
+    run_type = 'self'
+
     # 获取参数
     if len(sys.argv) > 1:
         for arg in sys.argv:
             if arg == "server":
-                is_server = True
+                run_type = 'server'
+            elif arg == "client":
+                run_type = 'client'
 
     train_title = f'20250130_cartpole'
 
@@ -39,20 +41,21 @@ if __name__ == "__main__":
         )
         .environment("CartPole-v1")
         .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
-        .extra_config(
+    )
+
+    if run_type == 'server':
+        config = config.extra_config(
             learner_group_class=ClientLearnerGroup,
             learner_group_kwargs={
                 'train_folder': train_folder,
                 "train_title": train_title,
             },
         )
-    )
 
-    if is_server:
         # dump config
         add_train_title_item(train_title, config)
 
-    else:
+    elif run_type == 'client':
         # 客户端配置
         config = config.training(
             learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
@@ -61,6 +64,14 @@ if __name__ == "__main__":
         config = config.learners(    
             num_learners=num_learners,
             num_gpus_per_learner=1,
+        )
+
+        config = config.extra_config(
+            learner_group_class=ClientLearnerGroup,
+            learner_group_kwargs={
+                'train_folder': train_folder,
+                "train_title": train_title,
+            },
         )
 
         # 询问服务器，本机是否需要验证环节
@@ -102,3 +113,41 @@ if __name__ == "__main__":
         log(f"plot_training_curve done")
 
         stop()
+
+    else:
+        # 单机运行
+        config = config.learners(    
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
+        )
+        config = config.evaluation(
+            evaluation_interval=10,
+            evaluation_duration=3,
+        )
+
+        # 构建算法
+        algo = config.build()
+        # print(algo.learner_group._learner.module._rl_modules['default_policy'])
+
+        # # 训练文件夹管理 TODO
+        # train_folder_manager = TrainFolderManager(train_folder)
+        # if train_folder_manager.exists():
+        #     log(f"restore from {train_folder_manager.checkpoint_folder}")
+        #     algo.restore_from_path(train_folder_manager.checkpoint_folder)
+
+        begin_time = time.time()
+        # 训练循环
+        rounds = 15
+        for i in range(rounds):
+            log(f"\nTraining iteration {i+1}/{rounds}")
+            result = algo.train()
+            out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
+            simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+
+        # 绘制训练曲线
+        plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
+        log(f"plot_training_curve done")
+        
+        # 停止算法
+        algo.stop()
+        log(f"algo.stop done")
