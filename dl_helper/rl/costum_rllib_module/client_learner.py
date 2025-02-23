@@ -745,7 +745,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             if self.ready_params_job:
                 # 需要准备参数的learner，解压参数
-                N = 0
+                N = 6
                 # 累计 N 个梯度后，需要强制等待新的参数就位
                 if N > 0 and self.grads_count % N == 0:
                     # 等待新的参数就位
