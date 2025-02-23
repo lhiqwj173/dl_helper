@@ -352,7 +352,7 @@ class ExperimentHandler:
                         continue
                     elif client_wait_state[_id] == 1:
                         # 循环等待, 只推送有更新的参数
-                        if update_count == 0:
+                        if len(grad_dump_data_list) == 0:
                             continue
 
                     # 检查队列是否满了，满了则跳过
