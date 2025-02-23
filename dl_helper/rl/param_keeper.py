@@ -275,64 +275,62 @@ class ExperimentHandler:
                             grad_dump_data_list.append(grad_dump_data)
                         except Empty:
                             break
-                if not grad_dump_data_list:
-                    time.sleep(0.001)
-                    continue
 
                 #####################################
                 # 1.2 过滤 / 解压 / 应用梯度
                 #####################################
-                batch_g_info = []
-                t = time.time()
-                # load 数据
-                # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                for grad_dump_data in grad_dump_data_list:
-                    data = pickle.loads(grad_dump_data)
-                    batch_g_info.append((pickle.loads(data[0]), data[1]))
-                log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
+                if grad_dump_data_list:
+                    batch_g_info = []
+                    t = time.time()
+                    # load 数据
+                    # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                    for grad_dump_data in grad_dump_data_list:
+                        data = pickle.loads(grad_dump_data)
+                        batch_g_info.append((pickle.loads(data[0]), data[1]))
+                    log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
-                # version diff 过滤
-                cur_version = param_server.ver
-                version_diffs = [cur_version - i[1] for i in batch_g_info]
-                log(f'[CG]{train_title} grad versions: {[i[1] for i in batch_g_info]}')
-                log(f'[CG]{train_title} version diffs: {version_diffs}')
-                # 记录版本差异
-                total_client_version_diff += sum(version_diffs)
-                total_count += len(version_diffs)
-                if GRAD_ALLOW_VERSION_DIFF > 0:
-                    not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
-                    if not_allow_idxs:
-                        # 倒序删除不允许的梯度
-                        for idx in sorted(not_allow_idxs, reverse=True):
-                            log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
-                            batch_g_info.pop(idx)
+                    # version diff 过滤
+                    cur_version = param_server.ver
+                    version_diffs = [cur_version - i[1] for i in batch_g_info]
+                    log(f'[CG]{train_title} grad versions: {[i[1] for i in batch_g_info]}')
+                    log(f'[CG]{train_title} version diffs: {version_diffs}')
+                    # 记录版本差异
+                    total_client_version_diff += sum(version_diffs)
+                    total_count += len(version_diffs)
+                    if GRAD_ALLOW_VERSION_DIFF > 0:
+                        not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                        if not_allow_idxs:
+                            # 倒序删除不允许的梯度
+                            for idx in sorted(not_allow_idxs, reverse=True):
+                                log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                                batch_g_info.pop(idx)
 
-                    # 数量检查
-                    _update_gradients_length = len(batch_g_info)
-                    if _update_gradients_length == 0:
-                        log(f'[CG]{train_title} version diff filt no gradients, keep wait')
-                        continue
-                    log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
+                        # 数量检查
+                        _update_gradients_length = len(batch_g_info)
+                        if _update_gradients_length == 0:
+                            log(f'[CG]{train_title} version diff filt no gradients, keep wait')
+                            continue
+                        log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
-                # 遍历剩下的梯度，取平均后应用
-                # 解压所有梯度
-                all_grads = []
-                for ((g, compress_info), v) in batch_g_info:
-                    # 解压梯度
-                    g = DeepGradientCompression.decompress(g, compress_info)
-                    all_grads.append(g)
-                # 计算平均梯度
-                avg_grads = []
-                for grad_idx in range(len(all_grads[0])):
-                    # 使用 torch.stack 将同位置的梯度堆叠后求平均
-                    stacked_grads = torch.stack([grads[grad_idx] for grads in all_grads])
-                    avg_grad = torch.mean(stacked_grads, dim=0)
-                    avg_grads.append(avg_grad)
-                # 应用平均梯度
-                param_server.apply_gradients(avg_grads)
-                step_count += 1
+                    # 遍历剩下的梯度，取平均后应用
+                    # 解压所有梯度
+                    all_grads = []
+                    for ((g, compress_info), v) in batch_g_info:
+                        # 解压梯度
+                        g = DeepGradientCompression.decompress(g, compress_info)
+                        all_grads.append(g)
+                    # 计算平均梯度
+                    avg_grads = []
+                    for grad_idx in range(len(all_grads[0])):
+                        # 使用 torch.stack 将同位置的梯度堆叠后求平均
+                        stacked_grads = torch.stack([grads[grad_idx] for grads in all_grads])
+                        avg_grad = torch.mean(stacked_grads, dim=0)
+                        avg_grads.append(avg_grad)
+                    # 应用平均梯度
+                    param_server.apply_gradients(avg_grads)
+                    step_count += 1
 
-                log(f'[CG]{train_title} latest_version: {param_server.ver}')
+                    log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数
