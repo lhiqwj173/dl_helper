@@ -1,5 +1,6 @@
 import torch
 from typing import List, Tuple, Dict
+from py_ext import log 
 
 CompressInfo = Dict[str, List[torch.Tensor]]
 
@@ -39,6 +40,7 @@ class IncrementalCompressor:
         """压缩张量列表, 确保压缩结果在CPU上"""
         if self._init_reference(client_id, tensors):
             # 初始化时直接返回参考张量的克隆
+            log(f'compress: init reference')
             return [t.clone() for t in self.client_params[client_id]], {'full': True}
         
         compressed_tensors = []
@@ -65,6 +67,7 @@ class IncrementalCompressor:
                     compress_info['update_indices'].append(None)
                     # 更新参考张量
                     ref_t.copy_(curr_t_cpu)
+                    log(f'compress: full update')
                 else:
                     if update_ratio < self.min_sparsity_threshold:
                         # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
@@ -73,6 +76,9 @@ class IncrementalCompressor:
                         _, top_indices = torch.topk(diff.flatten(), n)
                         mask = torch.zeros_like(diff, dtype=torch.bool)
                         mask.view(-1)[top_indices] = True
+                        log(f'compress: top {n} update')
+                    else:
+                        log(f'compress: update {update_ratio}')
 
                     # 增量更新 - 只复制需要更新的值
                     update_indices = torch.where(mask)
@@ -88,7 +94,6 @@ class IncrementalCompressor:
                     
                     # 更新参考张量中变化的部分
                     ref_t[mask] = update_values
-            
         return compressed_tensors, compress_info
     
     @staticmethod

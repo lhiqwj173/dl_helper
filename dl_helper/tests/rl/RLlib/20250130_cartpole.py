@@ -115,6 +115,10 @@ if __name__ == "__main__":
         stop()
 
     else:
+        from dl_helper.param_compression import IncrementalCompressor
+        import pickle, torch
+        params_compressor = IncrementalCompressor()
+
         # 单机运行
         config = config.learners(    
             num_learners=num_learners,
@@ -143,6 +147,12 @@ if __name__ == "__main__":
             result = algo.train()
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+
+            w = algo.learner_group.get_weights()
+            p_d = [torch.from_numpy(v) for k, v in w['default_policy'].items()]
+            d, info = params_compressor.compress(p_d, '3417369155')
+            dump = pickle.dumps((d, info))
+            log(f'compress size: {len(dump)}')
 
         # 绘制训练曲线
         plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)

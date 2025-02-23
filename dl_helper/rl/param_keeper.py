@@ -497,6 +497,7 @@ class ExperimentHandler:
                     #     平均等待参数时间 = 616 - 417 - 4 = 195ms
                     #     网络传输耗时 = 417 - 0 = 417ms
 
+                    # avg param push time: 1307ms, avg wait time: 1307ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 543904
                     log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
