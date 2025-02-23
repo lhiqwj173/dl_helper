@@ -14,7 +14,7 @@ from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage, AsyncProcessEventReader
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, GRAD_BATCH_SIZE, ack, wait_ack
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, ack, wait_ack
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -43,7 +43,7 @@ class AsyncRLParameterServer:
 
         self.last_lr_times = 1
 
-    def apply_gradients(self, gradients_list, client_version, lr_times=1):
+    def apply_gradients(self, gradients_list, lr_times=1):
         """
         更新参数
         gradients_list: 梯度列表, 键为参数名, 值为torch.Tensor
@@ -104,7 +104,7 @@ class ExperimentHandler:
         self.client_ip_ids = {}
 
         # 梯度缓存数量
-        self.grad_cache_size = GRAD_BATCH_SIZE * 10
+        self.grad_cache_size = 10
 
         # 梯度预热步数
         self.grad_warm_up_steps = grad_warm_up_steps
@@ -189,13 +189,7 @@ class ExperimentHandler:
         _grad_params_list = [v for _, v in _grad_params_dict.items()]
         _compress_grad_info = [{'is_full_gradient': True,} for _ in _grad_params_list]
         _single_grad_dump = pickle.dumps((_grad_params_list, _compress_grad_info))
-        # 1.1 GRAD_BATCH_SIZE 多个数据的大小
-        if GRAD_BATCH_SIZE >1:
-            _g_dump = pickle.dumps(
-                [(_single_grad_dump, np.int64(0)) for _ in range(GRAD_BATCH_SIZE)]
-            )
-        else:
-            _g_dump = pickle.dumps((_single_grad_dump, np.int64(0)))
+        _g_dump = pickle.dumps((_single_grad_dump, np.int64(0)))
         _g_size = len(_g_dump)
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
@@ -229,12 +223,17 @@ class ExperimentHandler:
                 t = time.time()
                 ################################################
                 # A 方案
-                # 1.0 遍历现有的梯度队列 接收所有梯度dump/解压应用梯度
+                # 1.0 遍历所有的客户id梯度队列 接收所有梯度dump/解压应用梯度
                 #   遍历梯度:
-                #       1.1 尝试get梯度，若获取成功继续处理
-                #       1.2 解压梯度
-                #       1.3 应用梯度
-                # 2.0 遍历所有的参数队列，准备/压缩/推送参数
+                #       1.1 解压梯度
+                #       1.2 应用梯度
+                # 2.0 遍历所有的客户id参数队列，准备/压缩/推送参数
+                # 
+                # B 方案 choose
+                # 1.0 遍历所有的客户id梯度队列 接收所有梯度dump/解压应用梯度
+                #   1.1 遍历梯度 解压
+                #   1.2 平均梯度后应用
+                # 2.0 遍历所有的客户id参数队列，准备/压缩/推送参数
                 ################################################
 
                 # 检查是否有新的 等待参数 id
@@ -262,61 +261,71 @@ class ExperimentHandler:
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
                 #####################################
-                # 遍历所有的梯度队列，尝试获取 更新梯度
-                update_count = 0
+                # 遍历所有的梯度队列，获取梯度 > 梯度列表
+                grad_dump_data_list = []
                 for _id, _q in client_grad_q.items():
                     _q_size = _q.qsize()
                     for _ in range(_q_size):
                         try:
                             grad_dump_data = _q.get(block=False)
+                            grad_dump_data_list.append(grad_dump_data)
                         except Empty:
                             break
 
-                        #####################################
-                        # 1.2 过滤 / 解压 / 应用梯度
-                        #####################################
-                        t = time.time()
-                        # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                        data = pickle.loads(grad_dump_data)
-                        if GRAD_BATCH_SIZE > 1:
-                            batch_g_info = [(pickle.loads(i[0]), i[1]) for i in data]
-                        else:
-                            batch_g_info = [(pickle.loads(data[0]), data[1])]
-                        log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
+                #####################################
+                # 1.2 过滤 / 解压 / 应用梯度
+                #####################################
+                batch_g_info = []
+                t = time.time()
+                # load 数据
+                # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
+                for grad_dump_data in grad_dump_data_list:
+                    data = pickle.loads(grad_dump_data)
+                    batch_g_info.append((pickle.loads(data[0]), data[1]))
+                log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
-                        # version diff 过滤
-                        cur_version = param_server.ver
-                        version_diffs = [cur_version - i[1] for i in batch_g_info]
-                        log(f'[CG]{train_title} grad versions: \n{[i[1] for i in batch_g_info]}')
-                        log(f'[CG]{train_title} version diffs: \n{version_diffs}')
-                        # 记录版本差异
-                        total_client_version_diff += sum(version_diffs)
-                        total_count += len(version_diffs)
-                        if GRAD_ALLOW_VERSION_DIFF > 0:
-                            not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
-                            if not_allow_idxs:
-                                # 倒序删除不允许的梯度
-                                for idx in sorted(not_allow_idxs, reverse=True):
-                                    log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
-                                    batch_g_info.pop(idx)
+                # version diff 过滤
+                cur_version = param_server.ver
+                version_diffs = [cur_version - i[1] for i in batch_g_info]
+                log(f'[CG]{train_title} grad versions: {[i[1] for i in batch_g_info]}')
+                log(f'[CG]{train_title} version diffs: {version_diffs}')
+                # 记录版本差异
+                total_client_version_diff += sum(version_diffs)
+                total_count += len(version_diffs)
+                if GRAD_ALLOW_VERSION_DIFF > 0:
+                    not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                    if not_allow_idxs:
+                        # 倒序删除不允许的梯度
+                        for idx in sorted(not_allow_idxs, reverse=True):
+                            log(f'[CG]{train_title} skip gradients idx: {idx}, version diff: {version_diffs[idx]}')
+                            batch_g_info.pop(idx)
 
-                            # 数量检查
-                            _update_gradients_length = len(batch_g_info)
-                            if _update_gradients_length == 0:
-                                log(f'[CG]{train_title} version diff filt no gradients, keep wait')
-                                continue
-                            log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
+                    # 数量检查
+                    _update_gradients_length = len(batch_g_info)
+                    if _update_gradients_length == 0:
+                        log(f'[CG]{train_title} version diff filt no gradients, keep wait')
+                        continue
+                    log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
-                        # 遍历剩下的梯度，逐个应用
-                        for idx, ((g, compress_info), v) in enumerate(batch_g_info):
-                            # 解压梯度
-                            g = DeepGradientCompression.decompress(g, compress_info)
-                            param_server.apply_gradients(g, v)
-                            step_count += 1
-                            update_count += 1
+                # 遍历剩下的梯度，取平均后应用
+                # 解压所有梯度
+                all_grads = []
+                for ((g, compress_info), v) in batch_g_info:
+                    # 解压梯度
+                    g = DeepGradientCompression.decompress(g, compress_info)
+                    all_grads.append(g)
+                # 计算平均梯度
+                avg_grads = []
+                for grad_idx in range(len(all_grads[0])):
+                    # 使用 torch.stack 将同位置的梯度堆叠后求平均
+                    stacked_grads = torch.stack([grads[grad_idx] for grads in all_grads])
+                    avg_grad = torch.mean(stacked_grads, dim=0)
+                    avg_grads.append(avg_grad)
+                # 应用平均梯度
+                param_server.apply_gradients(avg_grads)
+                step_count += 1
 
-                if update_count:
-                    log(f'[CG]{train_title} latest_version: {param_server.ver}')
+                log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数

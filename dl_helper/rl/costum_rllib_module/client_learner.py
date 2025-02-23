@@ -32,7 +32,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
-from dl_helper.rl.socket_base import HOST, PORT, CODE, GRAD_BATCH_SIZE, CHUNK_SIZE, connect_and_tune
+from dl_helper.rl.socket_base import HOST, PORT, CODE, CHUNK_SIZE, connect_and_tune
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights, ack, wait_ack
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
@@ -538,8 +538,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         mean_send_size = 0
         total_version_diff = 0
 
-        # 存储一个batch的压缩梯度，一起推送
-        batch_compressed_results = []
         try:
             # 创建异步socket连接
             log(f'[{idx}] grad_coroutine connect to server')
@@ -577,50 +575,36 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 begin_time = time.time()
                 if all_begin_time == 0:
                     all_begin_time = begin_time
-                q_size = grad_q.qsize()
-                batch_compressed_results.append(send_data)
-                _batch_size = len(batch_compressed_results)
-                log(f"[{idx}][{send_count}] add send data to batch, batch size: {_batch_size}, queue size: {q_size}")
+                log(f"[{idx}][{send_count}] handle grad dump data, grad_q size: {grad_q.qsize()}")
 
-                if _batch_size == GRAD_BATCH_SIZE:
-                    # 达到GRAD_BATCH_SIZE个梯度，发送梯度
+                # 统计版本diff info_data.version
+                current_version = info_data.version
+                data = pickle.dumps(send_data)
+                diff = current_version - send_data[1]
+                total_version_diff += diff
 
-                    # 统计版本diff info_data.version
-                    current_version = info_data.version
-                    if GRAD_BATCH_SIZE > 1:
-                        diff = [current_version - i[1] for i in batch_compressed_results]
-                        diff = sum(diff)
-                        data = pickle.dumps(batch_compressed_results)
-                    else:
-                        data = pickle.dumps(batch_compressed_results[0])
-                        diff = current_version - batch_compressed_results[0][1]
-                    total_version_diff += diff
+                # 发送梯度
+                send_begin_time = time.time()
+                await async_send_msg(writer, data)
+                send_size = len(data)
+                mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
+                log(f"[{idx}][{send_count}] send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
-                    # 发送梯度
-                    send_begin_time = time.time()
-                    await async_send_msg(writer, data)
-                    send_size = len(data)
-                    mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
-                    log(f"[{idx}][{send_count}] send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
+                # # 等待回复
+                # await wait_ack(reader)
+                # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
 
-                    # # 等待回复
-                    # await wait_ack(reader)
-                    # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
+                wait_time = time.time() - send_begin_time
+                total_wait_time += wait_time
 
-                    wait_time = time.time() - send_begin_time
-                    total_wait_time += wait_time
+                send_count += 1
+                total_count += 1
 
-                    send_count += 1
-                    total_count += 1
-
-                    if total_count % 10 == 0:
-                        # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
-                        # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
-                        # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
-                        log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / (total_count * GRAD_BATCH_SIZE)):.2f}")
-
-                    # 清空
-                    batch_compressed_results.clear()
+                if total_count % 10 == 0:
+                    # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
+                    # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
+                    # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
+                    log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / total_count):.2f}")
 
                 # 统计耗时
                 handle_cost_time = time.time() - begin_time 
