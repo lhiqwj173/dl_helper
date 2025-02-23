@@ -44,7 +44,7 @@ class data_producer:
         
         # 数据内容 TODO
         # ids, mean_std, x, all_self.all_raw_data_data
-        self.ids = []
+        self.idx = 0
         self.x = []
         self.all_raw_data = None
 
@@ -100,19 +100,33 @@ class data_producer:
         for col in ['code1_p0_ask', 'code1_p0_bid', 'code2_p0_ask', 'code2_p0_bid']:
             self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
        
-        # 标准化数据 TODO
+        # 标准化数据
+        all_cols = list(self.all_raw_data)
+        code1_ask_cols = [i for i in all_cols if 'code1' in i and 'ask' in i]
+        code1_bid_cols = [i for i in all_cols if 'code1' in i and 'bid' in i]
+        code1_close_cols = [i for i in all_cols if 'code1' in i and 'close' in i]
+        code2_ask_cols = [i for i in all_cols if 'code2' in i and 'ask' in i]
+        code2_bid_cols = [i for i in all_cols if 'code2' in i and 'bid' in i]
+        code2_close_cols = [i for i in all_cols if 'code2' in i and 'close' in i]
+        spread_cols = [i for i in all_cols if 'spread' in i]
 
+        # 标准化 - 使用向量化操作
+        self.all_raw_data.loc[:, code1_ask_cols] = (self.all_raw_data.loc[:, code1_ask_cols] - self.mean_std['code1']['ask_mean']) / self.mean_std['code1']['ask_std']
+        self.all_raw_data.loc[:, code1_bid_cols] = (self.all_raw_data.loc[:, code1_bid_cols] - self.mean_std['code1']['bid_mean']) / self.mean_std['code1']['bid_std']
+        close_mean = (self.mean_std['code1']['ask_mean'] + self.mean_std['code1']['bid_mean']) / 2
+        close_std = (self.mean_std['code1']['ask_std'] + self.mean_std['code1']['bid_std']) / 2
+        self.all_raw_data.loc[:, code1_close_cols] = (self.all_raw_data.loc[:, code1_close_cols] - close_mean) / close_std
+        
+        self.all_raw_data.loc[:, code2_ask_cols] = (self.all_raw_data.loc[:, code2_ask_cols] - self.mean_std['code2']['ask_mean']) / self.mean_std['code2']['ask_std']
+        self.all_raw_data.loc[:, code2_bid_cols] = (self.all_raw_data.loc[:, code2_bid_cols] - self.mean_std['code2']['bid_mean']) / self.mean_std['code2']['bid_std']
+        close_mean = (self.mean_std['code2']['ask_mean'] + self.mean_std['code2']['bid_mean']) / 2
+        close_std = (self.mean_std['code2']['ask_std'] + self.mean_std['code2']['bid_std']) / 2
+        self.all_raw_data.loc[:, code2_close_cols] = (self.all_raw_data.loc[:, code2_close_cols] - close_mean) / close_std
+        
+        self.all_raw_data.loc[:, spread_cols] = (self.all_raw_data.loc[:, spread_cols] - self.mean_std['spread']['mean']) / self.mean_std['spread']['std']
 
         # self.all_raw_data 转为 numpy
         self.all_raw_data = self.all_raw_data.values
-
-        # 初始化绘图索引
-        self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
-        self.plot_cur -= 1
-        self.plot_cur_pre = -1
-        _, self.plot_end = self.x[self.idxs[0][1]]
-        # 准备绘图数据
-        self.pre_plot_data()
 
         # # 测试用
         # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
@@ -120,79 +134,44 @@ class data_producer:
         # 载入了新的日期文件数据
         # 重置日期文件停止标志
         self.date_file_done = False
+        self.idx = 0
 
     def set_data_type(self, data_type):
         self.data_type = data_type
 
     def data_size(self):
         # 运行只获取部分列， 简化数据
-        return self.cols_num*self.his_len
-
-    def use_data_split(self, raw, ms):
-        """
-        使用数据分割
-        raw 是完整的 pickle 切片
-        ms 是标准化数据df
-        都是 numpy 数组
-        TODO 运行只获取部分列， 简化数据
-        """
-        if self.need_cols:
-            return raw, ms.iloc[self.need_cols_idx, :].values
-        else:
-            return raw[:, :130], ms.iloc[:130, :].values
+        return 41 if not self.need_cols else len(self.need_cols)
 
     def store_bid_ask_1st_data(self, raw):
         """
         存储买卖1档数据 用于撮合交易
-        raw 是完整的 pickle 切片
         """
-        last_row = raw[-1]  # 最后一个数据
-        self.bid_price = last_row[self.col_idx['BASE买1价']]
-        self.ask_price = last_row[self.col_idx['BASE卖1价']]
+        self.code1_bid_price = raw[self.col_idx['code1_p0_bid']]
+        self.code1_ask_price = raw[self.col_idx['code1_p0_ask']]
+        self.code2_bid_price = raw[self.col_idx['code2_p0_bid']]
+        self.code2_ask_price = raw[self.col_idx['code2_p0_ask']]
 
     def get(self):
         """
         输出观察值
-        返回 symbol_id, before_market_close_sec, x, done, need_close, period_done
+        返回 x, done, need_close, period_done
         """
-        # # 测试用
-        # print(self.idxs[0])
-
-        if self.plot_cur_pre != -1:
-            # 更新绘图数据
-            self.plot_cur = self.plot_cur_pre
-
         # 检查日期文件结束
         if self.date_file_done:
             # load 下一个日期文件的数据
             self._load_data()
 
         # 准备观察值
-        a, b = self.x[self.idxs[0][0]]
-        if b-a > self.his_len:# 修正历史数据长度
-            a = b - self.his_len
-        raw = self.all_raw_data[a: b, :].copy()
-        # 记录 买卖1档 的价格
-        self.store_bid_ask_1st_data(raw)
-        # 数据标准化
-        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
-        x, ms = self.use_data_split(raw, ms)
-        x -= ms[:, 0]
-        x /= ms[:, 1]
-
-        # 标的id
-        symbol_id = self.idxs[0][2]
-
-        # 当前标的
-        self.code = USE_CODES[int(symbol_id)]
-
-        # 距离市场关闭的秒数
-        before_market_close_sec = self.before_market_close_sec[self.idxs[0][0]]
+        x = self.all_raw_data[self.idx, :-1]
+        self.store_bid_ask_1st_data(x)
+        x = x[1:]
+        self.idx += 1
 
         # 记录数据id
-        self.id = self.ids[self.idxs[0][0]]
+        self.id = self.all_raw_data[self.idx, -1]
 
-        # 检查下一个数据是否是最后一个数据
+        # 检查下一个数据是否是最后一个数据 TODO
         all_done = False
         need_close = False
         if self.idxs[0][0] == self.idxs[0][1]:

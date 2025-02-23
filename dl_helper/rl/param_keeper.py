@@ -164,6 +164,8 @@ class ExperimentHandler:
 
         # 计算步数
         step_count = 0
+        # 上次输出的步数
+        last_print_step = 0
 
         # 参数服务器
         config = config.learners(    
@@ -215,7 +217,8 @@ class ExperimentHandler:
         client_wait_state = {}
 
         begin_time = time.time()
-        loop_count = 0
+        update_count = 0
+        total_update_time = 0
 
         log(f'{train_title} calculate most start')
         while True:
@@ -342,6 +345,7 @@ class ExperimentHandler:
                 weights = [v for _, v in weights.items()]
 
                 # 遍历 client_params_q 压缩准备参数
+                push = False
                 for _id in client_wait_state:
                     # 获取等待状态
                     if client_wait_state[_id] == 0:
@@ -368,16 +372,21 @@ class ExperimentHandler:
                     # dumps
                     dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
                     _q.put(dump_data, block=False, extra_data=np.int64(version))
-                    log(f'[CG]{train_title}  params for {_id}, version: {version}, done')
+                    log(f'[CG]{train_title}  params for {_id}, version: {version}, size: {len(dump_data)}, done')
+                    push = True
+
+                if push:
+                    total_update_time += time.time() - t
+                    update_count += 1
 
             except Exception as e:
                 log(f'ERROR: \n{get_exception_msg()}')
                 report_memory_usage()
                 raise e
             
-            loop_count += 1
-            if step_count % 60 == 0 and total_count > 0:
-                log(f'[CG]{train_title} avg cost: {int(1000*(time.time() - begin_time)) / loop_count}ms, version diff: {total_client_version_diff / total_count :.2f}')
+            if step_count % 60 == 0 and total_count > 0 and step_count > last_print_step:
+                log(f'[CG]{train_title} avg cost: {(total_update_time * 1000 / update_count):.2f}ms, version diff: {total_client_version_diff / total_count :.2f}')
+                last_print_step = step_count
 
     async def get_params_dump_data(self, _id):
         params_dump_q = self.ip_params_dump_q[_id]
@@ -440,18 +449,21 @@ class ExperimentHandler:
             begin_time = 0
             push_count = 0
             total_handle_time = 0
+            total_net_time = 0
             total_wait_time = 0
             mean_send_size = 0
             while True:
+                t = time.time()
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 dump_data, dump_v = await self.get_params_dump_data(_id)
+                wait_time = time.time() - t
+                total_wait_time += wait_time
+                log(f'[{msg_header}] wait_params wait active, wait time: {int(1000*wait_time)}ms')
 
                 t = time.time()
                 if begin_time == 0:
                     begin_time = t
-
-                log(f'[{msg_header}] wait_params wait active, last_send_v: {last_send_v}')
 
                 # 每步都推送
                 last_send_v = dump_v
@@ -467,8 +479,8 @@ class ExperimentHandler:
                 # # 等待回复
                 # await wait_ack(reader)
                 # log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
-                wait_time = time.time() - send_begin_time
-                total_wait_time += wait_time
+                net_time = time.time() - send_begin_time
+                total_net_time += net_time
 
                 push_count += 1
 
@@ -485,7 +497,7 @@ class ExperimentHandler:
                     #     平均等待参数时间 = 616 - 417 - 4 = 195ms
                     #     网络传输耗时 = 417 - 0 = 417ms
 
-                    log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
+                    log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
                 total_handle_time += handle_cost_time
