@@ -1,6 +1,6 @@
 import torch
 from typing import List, Tuple, Dict
-from py_ext.tool import log 
+# from py_ext.tool import log 
 
 CompressInfo = Dict[str, List[torch.Tensor]]
 
@@ -27,7 +27,7 @@ class IncrementalCompressor:
                        tensors: List[torch.Tensor],
                       ) -> bool:
         """初始化参考张量，统一在CPU上存储"""
-        if 1 or client_id not in self.client_params:
+        if client_id not in self.client_params:
             # 直接在CPU上创建参考张量，使用clone确保内存独立
             self.client_params[client_id] = [t.detach().cpu().clone() for t in tensors]
             return True
@@ -40,7 +40,7 @@ class IncrementalCompressor:
         """压缩张量列表, 确保压缩结果在CPU上"""
         if self._init_reference(client_id, tensors):
             # 初始化时直接返回参考张量的克隆
-            log(f'compress: init reference')
+            # log(f'compress: init reference')
             return [t.clone() for t in self.client_params[client_id]], {'full': True}
         
         compressed_tensors = []
@@ -67,7 +67,7 @@ class IncrementalCompressor:
                     compress_info['update_indices'].append(None)
                     # 更新参考张量
                     ref_t.copy_(curr_t_cpu)
-                    log(f'compress: full update')
+                    # log(f'compress: full update')
                 else:
                     if update_ratio < self.min_sparsity_threshold:
                         # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
@@ -76,9 +76,9 @@ class IncrementalCompressor:
                         _, top_indices = torch.topk(diff.flatten(), n)
                         mask = torch.zeros_like(diff, dtype=torch.bool)
                         mask.view(-1)[top_indices] = True
-                        log(f'compress: top {n} update')
-                    else:
-                        log(f'compress: update {update_ratio}')
+                    #     log(f'compress: top {n} update')
+                    # else:
+                    #     log(f'compress: update {update_ratio}')
 
                     # 增量更新 - 只复制需要更新的值
                     update_indices = torch.where(mask)
