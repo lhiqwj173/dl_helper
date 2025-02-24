@@ -1,6 +1,6 @@
 import torch
 from typing import List, Tuple, Dict
-from py_ext import log 
+from py_ext.tool import log 
 
 CompressInfo = Dict[str, List[torch.Tensor]]
 
