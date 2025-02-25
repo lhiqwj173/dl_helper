@@ -219,6 +219,9 @@ class ExperimentHandler:
         # 客户端推送梯度计数
         client_push_grad_count = {}
 
+        # 客户端最近一次更新的计数
+        client_last_update_count = {}
+
         begin_time = time.time()
         update_count = 0
         total_update_time = 0
@@ -254,6 +257,8 @@ class ExperimentHandler:
                             client_wait_state[new_wait_params_id] = 0
                             # 推送梯度计数
                             client_push_grad_count[new_wait_params_id] = 0
+                            # 最近一次更新的计数
+                            client_last_update_count[new_wait_params_id] = 0
                     except Empty:
                         break
 
@@ -367,7 +372,8 @@ class ExperimentHandler:
                             continue
 
                         # 检查该客户端是否需要推送参数
-                        if client_push_grad_count[_id] % PUSH_INTERVAL != 0:
+                        if client_push_grad_count[_id] - client_last_update_count[_id] >= PUSH_INTERVAL:
+                            client_last_update_count[_id] += PUSH_INTERVAL
                             continue
 
                     # 检查队列是否满了，满了则跳过
