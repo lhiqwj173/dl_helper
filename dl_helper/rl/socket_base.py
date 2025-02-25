@@ -14,6 +14,8 @@ CODE = '0QYg9Ky17dWnN4eK'
 HOST = '217.142.135.154'
 PORT = 12346
 CHUNK_SIZE = 8 * 1024 * 1024
+# 参数推送间隔
+PUSH_INTERVAL = 4
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
     """TCP协议调优"""

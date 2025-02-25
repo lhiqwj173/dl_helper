@@ -14,7 +14,7 @@ from dl_helper.rl.rl_utils import ParamCompressor
 from dl_helper.deep_gradient_compression import DeepGradientCompression
 from dl_helper.param_compression import IncrementalCompressor
 from dl_helper.tool import AsyncLockWithLog, LockWithLog, report_memory_usage, AsyncProcessEventReader
-from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, ack, wait_ack
+from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, ack, wait_ack, PUSH_INTERVAL
 
 from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core import COMPONENT_RL_MODULE
@@ -216,6 +216,9 @@ class ExperimentHandler:
         # 1: 循环等待
         client_wait_state = {}
 
+        # 客户端推送梯度计数
+        client_push_grad_count = {}
+
         begin_time = time.time()
         update_count = 0
         total_update_time = 0
@@ -249,6 +252,8 @@ class ExperimentHandler:
                             client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 4)
                             # 单次状态
                             client_wait_state[new_wait_params_id] = 0
+                            # 推送梯度计数
+                            client_push_grad_count[new_wait_params_id] = 0
                     except Empty:
                         break
 
@@ -272,6 +277,8 @@ class ExperimentHandler:
                 grad_dump_data_list = []
                 for _id, _q in client_grad_q.items():
                     _q_size = _q.qsize()
+                    # 更新推送梯度计数
+                    client_push_grad_count[_id] += _q_size
                     for _ in range(_q_size):
                         try:
                             grad_dump_data = _q.get(block=False)
@@ -357,6 +364,10 @@ class ExperimentHandler:
                     elif client_wait_state[_id] == 1:
                         # 循环等待, 只推送有更新的参数
                         if len(grad_dump_data_list) == 0:
+                            continue
+
+                        # 检查该客户端是否需要推送参数
+                        if client_push_grad_count[_id] % PUSH_INTERVAL != 0:
                             continue
 
                     # 检查队列是否满了，满了则跳过

@@ -32,7 +32,7 @@ from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_excepti
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
 from dl_helper.rl.socket_base import get_server_weights
-from dl_helper.rl.socket_base import HOST, PORT, CODE, CHUNK_SIZE, connect_and_tune
+from dl_helper.rl.socket_base import HOST, PORT, CODE, CHUNK_SIZE, connect_and_tune, PUSH_INTERVAL
 from dl_helper.rl.socket_base import async_send_msg, async_recv_msg, _async_wait_server_weights, ack, wait_ack
 
 from dl_helper.rl.rl_utils import ParamCompressor, GradientAccumulator
@@ -737,9 +737,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             if self.ready_params_job:
                 # 需要准备参数的learner，解压参数
-                N = 1
                 # 累计 N 个梯度后，需要强制等待新的参数就位
-                if N > 0 and self.step_count - self.last_update_step >= N:
+                if PUSH_INTERVAL > 0 and self.step_count - self.last_update_step >= PUSH_INTERVAL:
                     # 等待新的参数就位
                     t = time.time()
                     log(f'[{self.client_id}][{self.step_count}] force sync step, wait new params ready')
@@ -751,7 +750,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     except Empty:
                         dump_data = None
                     log(f'[{self.client_id}][{self.step_count}] not force sync step, check if param ready: {dump_data is not None}')
-                    
+                        
                 if dump_data is not None:
                     self.last_update_step = self.step_count
                     # loads
