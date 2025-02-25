@@ -3,11 +3,6 @@ from ray.rllib.algorithms.ppo.torch.ppo_torch_learner import PPOTorchLearner
 from ray.rllib.core.learner.learner_group import LearnerGroup
 from ray.rllib.algorithms.impala.impala import IMPALA
 from ray.rllib.algorithms.appo.appo import APPO
-from ray.rllib.core import (
-    COMPONENT_LEARNER,
-    COMPONENT_MULTI_RL_MODULE_SPEC,
-    COMPONENT_RL_MODULE,
-)
 
 from collections import OrderedDict
 import numpy as np
