@@ -50,6 +50,7 @@ if __name__ == "__main__":
                 'his_len': 10,# 每个样本的 历史数据长度
                 'file_num': 5,# 数据生产器 限制最多使用的文件（日期）数量
                 'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+                'use_symbols': ['513050'],
             }
         )# 直接使用
         .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器

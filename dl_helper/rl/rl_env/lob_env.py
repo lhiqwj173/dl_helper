@@ -50,7 +50,12 @@ USE_CODES = [
 MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
 STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
 
-ILLEGAL_REWARD = -10000
+# 非法操作奖励
+ILLEGAL_REWARD = -100
+
+# 积极操作奖励
+POSITIVE_REWARD = 0.1
+
 # 扩大因子
 SCALE_FACTOR = 1e6
 MEAN_SEC_BEFORE_CLOSE = 10024.17
@@ -74,12 +79,14 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, file_num=0, simple_test=False, need_cols=[]):
+    def __init__(self, data_type='train', his_len=100, file_num=0, simple_test=False, need_cols=[], use_symbols=[]):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
         'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
         'simple_test': False,# 是否为简单测试
+        'need_cols': [],# 需要的特征列名
+        'use_symbols': []# 只使用指定的标的
         """
         # 快速测试
         self.simple_test = simple_test
@@ -88,6 +95,8 @@ class data_producer:
 
         self.his_len = his_len
         self.file_num = file_num
+
+        self.use_symbols = use_symbols
         
         # 需要的特征列名
         self.need_cols = need_cols
@@ -171,137 +180,147 @@ class data_producer:
         按照文件列表读取数据
         每次完成后从文件列表中剔除
         """
-        file = self.files.pop(0)
-        log(f'load date file({self.data_type}): {file}')
-        self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
+        while self.files:
+            file = self.files.pop(0)
+            log(f'load date file({self.data_type}): {file}')
+            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
-        # 列过滤
-        if self.need_cols:
-            self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
-            # 只保留需要的列
-            self.all_raw_data = self.all_raw_data.loc[:, self.need_cols]
+            # 列过滤
+            if self.need_cols:
+                self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
+                # 只保留需要的列
+                self.all_raw_data = self.all_raw_data.loc[:, self.need_cols]
 
-        if self.simple_test:
-            self.ids = self.ids[:8000]
-            self.mean_std = self.mean_std[:8000]
-            self.x = self.x[:8000]
+            if self.simple_test:
+                self.ids = self.ids[:8000]
+                self.mean_std = self.mean_std[:8000]
+                self.x = self.x[:8000]
 
-        # 距离市场关闭的秒数
-        self.date = file[:8]
-        dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
-        dt = pytz.timezone('Asia/Shanghai').localize(dt)
-        close_ts = int(dt.timestamp())
-        self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
-        self.before_market_close_sec = close_ts - self.before_market_close_sec
+            # 距离市场关闭的秒数
+            self.date = file[:8]
+            dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
+            dt = pytz.timezone('Asia/Shanghai').localize(dt)
+            close_ts = int(dt.timestamp())
+            self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
+            self.before_market_close_sec = close_ts - self.before_market_close_sec
 
-        # 解析标的 随机挑选一个标的数据
-        symbols = np.array([i.split('_')[0] for i in self.ids])
-        unique_symbols = [i for i in np.unique(symbols) if i != '159941']
-        # 获取所有标的的起止索引
-        self.idxs = []
-        for symbol in unique_symbols:
-            symbol_mask = symbols == symbol
-            symbol_indices = np.where(symbol_mask)[0]
-            self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
-    
-        # 训练数据随机选择一个标的
-        # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
-        if self.data_type == 'train':
-            self.idxs = [random.choice(self.idxs)]
+            # 解析标的 随机挑选一个标的数据
+            symbols = np.array([i.split('_')[0] for i in self.ids])
+            unique_symbols = [i for i in np.unique(symbols) if i != '159941']
 
-        log(f'init idxs: {self.idxs}')
+            if self.use_symbols:
+                unique_symbols = [i for i in unique_symbols if i in self.use_symbols]
 
-        # 调整数据
-        # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
-        all_cols = list(self.all_raw_data)
-        if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
-            # 订单数据
-            order_cols = [i for i in all_cols if i.startswith('OS') or i.startswith('OB')]
-            order_raw = self.all_raw_data.loc[:, order_cols]
-            self.all_raw_data.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
-        if 'OF买10量' in all_cols and 'OF卖10量' in all_cols:
-            # OF数据
-            OF_cols = [i for i in all_cols if i.startswith('OF')]
-            OF_raw = self.all_raw_data.loc[:, OF_cols]
-            self.all_raw_data.loc[(OF_raw == 0).all(axis=1), ['OF买10量', 'OF卖10量']] = 1
-        if '卖10量' in all_cols and '卖10价' not in all_cols:
-            # 深度数据
-            depth_cols = ['卖10量',
-                '卖9量',
-                '卖8量',
-                '卖7量',
-                '卖6量',
-                '卖5量',
-                '卖4量',
-                '卖3量',
-                '卖2量',
-                '卖1量',
-                '买1量',
-                '买2量',
-                '买3量',
-                '买4量',
-                '买5量',
-                '买6量',
-                '买7量',
-                '买8量',
-                '买9量',
-                '买10量']
-            depth_raw = self.all_raw_data.loc[:, depth_cols]
-            wait_fix_index = depth_raw[(depth_raw == 0).all(axis=1)].index.to_list()
-            if wait_fix_index and wait_fix_index[0] == 0:
-                # 若第一个数据就为0，填充 卖10量/买10量 为1，最小化影响
-                self.all_raw_data.loc[0, '卖10量'] = 1
-                self.all_raw_data.loc[0, '买10量'] = 1
-                # 去掉第一个记录
-                wait_fix_index = wait_fix_index[1:]
+            # 获取所有标的的起止索引
+            self.idxs = []
+            for symbol in unique_symbols:
+                symbol_mask = symbols == symbol
+                symbol_indices = np.where(symbol_mask)[0]
+                self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
 
-            self.all_raw_data.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
-            for col in depth_cols:
-                self.all_raw_data[col] = self.all_raw_data[col].ffill()
-        if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
-            # 成交数据
-            deal_cols = [i for i in all_cols if i.startswith('D')]
-            deal_raw = self.all_raw_data.loc[:, deal_cols]
-            self.all_raw_data.loc[(deal_raw == 0).all(axis=1), ['DB卖1量', 'DS买1量']] = 1
-        # 40档位价量数据nan处理
-        if 'BASE卖1量' in all_cols and 'BASE买1量' in all_cols:
-            # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
-            for i in range(2, 11):
-                if f'BASE买{i}价' not in all_cols or f'BASE买{i-1}价' not in all_cols:
-                    continue
+            if not self.idxs:
+                log(f'no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                continue
 
-                # 买价
-                self.all_raw_data.loc[:, f'BASE买{i}价'] = self.all_raw_data[f'BASE买{i}价'].fillna(self.all_raw_data[f'BASE买{i-1}价'] - 0.001)
+            # 训练数据随机选择一个标的
+            # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
+            if self.data_type == 'train':
+                self.idxs = [random.choice(self.idxs)]
 
-                # 卖价
-                self.all_raw_data.loc[:, f'BASE卖{i}价'] = self.all_raw_data[f'BASE卖{i}价'].fillna(self.all_raw_data[f'BASE卖{i-1}价'] + 0.001)
+            log(f'init idxs: {self.idxs}')
 
-            # 量nan用0填充
-            vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
-            self.all_raw_data[vol_cols] = self.all_raw_data[vol_cols].fillna(0)
+            # 调整数据
+            # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
+            all_cols = list(self.all_raw_data)
+            if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
+                # 订单数据
+                order_cols = [i for i in all_cols if i.startswith('OS') or i.startswith('OB')]
+                order_raw = self.all_raw_data.loc[:, order_cols]
+                self.all_raw_data.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
+            if 'OF买10量' in all_cols and 'OF卖10量' in all_cols:
+                # OF数据
+                OF_cols = [i for i in all_cols if i.startswith('OF')]
+                OF_raw = self.all_raw_data.loc[:, OF_cols]
+                self.all_raw_data.loc[(OF_raw == 0).all(axis=1), ['OF买10量', 'OF卖10量']] = 1
+            if '卖10量' in all_cols and '卖10价' not in all_cols:
+                # 深度数据
+                depth_cols = ['卖10量',
+                    '卖9量',
+                    '卖8量',
+                    '卖7量',
+                    '卖6量',
+                    '卖5量',
+                    '卖4量',
+                    '卖3量',
+                    '卖2量',
+                    '卖1量',
+                    '买1量',
+                    '买2量',
+                    '买3量',
+                    '买4量',
+                    '买5量',
+                    '买6量',
+                    '买7量',
+                    '买8量',
+                    '买9量',
+                    '买10量']
+                depth_raw = self.all_raw_data.loc[:, depth_cols]
+                wait_fix_index = depth_raw[(depth_raw == 0).all(axis=1)].index.to_list()
+                if wait_fix_index and wait_fix_index[0] == 0:
+                    # 若第一个数据就为0，填充 卖10量/买10量 为1，最小化影响
+                    self.all_raw_data.loc[0, '卖10量'] = 1
+                    self.all_raw_data.loc[0, '买10量'] = 1
+                    # 去掉第一个记录
+                    wait_fix_index = wait_fix_index[1:]
 
-        # 记录需要的索引，供后续转为numpy时使用
-        # BASE买1价 / BASE卖1价
-        for col in ['BASE买1价', 'BASE卖1价']:
-            self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
-       
-        # self.all_raw_data 转为 numpy
-        self.all_raw_data = self.all_raw_data.values
+                self.all_raw_data.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
+                for col in depth_cols:
+                    self.all_raw_data[col] = self.all_raw_data[col].ffill()
+            if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
+                # 成交数据
+                deal_cols = [i for i in all_cols if i.startswith('D')]
+                deal_raw = self.all_raw_data.loc[:, deal_cols]
+                self.all_raw_data.loc[(deal_raw == 0).all(axis=1), ['DB卖1量', 'DS买1量']] = 1
+            # 40档位价量数据nan处理
+            if 'BASE卖1量' in all_cols and 'BASE买1量' in all_cols:
+                # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
+                for i in range(2, 11):
+                    if f'BASE买{i}价' not in all_cols or f'BASE买{i-1}价' not in all_cols:
+                        continue
 
-        # 初始化绘图索引
-        self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
-        self.plot_cur -= 1
-        self.plot_cur_pre = -1
-        _, self.plot_end = self.x[self.idxs[0][1]]
-        # 准备绘图数据
-        self.pre_plot_data()
+                    # 买价
+                    self.all_raw_data.loc[:, f'BASE买{i}价'] = self.all_raw_data[f'BASE买{i}价'].fillna(self.all_raw_data[f'BASE买{i-1}价'] - 0.001)
 
-        # # 测试用
-        # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
+                    # 卖价
+                    self.all_raw_data.loc[:, f'BASE卖{i}价'] = self.all_raw_data[f'BASE卖{i}价'].fillna(self.all_raw_data[f'BASE卖{i-1}价'] + 0.001)
 
-        # 载入了新的日期文件数据
-        # 重置日期文件停止标志
-        self.date_file_done = False
+                # 量nan用0填充
+                vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
+                self.all_raw_data[vol_cols] = self.all_raw_data[vol_cols].fillna(0)
+
+            # 记录需要的索引，供后续转为numpy时使用
+            # BASE买1价 / BASE卖1价
+            for col in ['BASE买1价', 'BASE卖1价']:
+                self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
+        
+            # self.all_raw_data 转为 numpy
+            self.all_raw_data = self.all_raw_data.values
+
+            # 初始化绘图索引
+            self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
+            self.plot_cur -= 1
+            self.plot_cur_pre = -1
+            _, self.plot_end = self.x[self.idxs[0][1]]
+            # 准备绘图数据
+            self.pre_plot_data()
+
+            # # 测试用
+            # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
+
+            # 载入了新的日期文件数据
+            # 重置日期文件停止标志
+            self.date_file_done = False
+            break
 
     def set_data_type(self, data_type):
         self.data_type = data_type
@@ -635,6 +654,8 @@ class LOB_trade_env(gym.Env):
                 'his_len': 100,# 每个样本的 历史数据长度
                 'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
                 'simple_test': False,# 是否为简单测试
+                'need_cols': [],# 需要读取的列
+                'use_symbols': [],# 只使用某些标的
 
                 'period_done': False,
                 'need_close': False,
@@ -650,6 +671,7 @@ class LOB_trade_env(gym.Env):
             'file_num': 0,# 数据生产器 限制最多使用的文件（日期）数量
             'simple_test': False,# 是否为简单测试
             'need_cols': [],# 需要读取的列
+            'use_symbols': [],# 只使用某些标的
 
             'period_done': False,
             'need_close': False,
@@ -665,7 +687,7 @@ class LOB_trade_env(gym.Env):
             os.makedirs(self.save_folder)
         
         # 数据生产器
-        self.data_producer = data_producer(config['data_type'], config['his_len'], config['file_num'], config['simple_test'], config['need_cols'])
+        self.data_producer = data_producer(config['data_type'], config['his_len'], config['file_num'], config['simple_test'], config['need_cols'], config['use_symbols'])
         self.period_done = config['period_done']
 
         # 账户数据
@@ -731,7 +753,10 @@ class LOB_trade_env(gym.Env):
         """
         计算奖励
         非法动作 reward=ILLEGAL_REWARD
-        只有平仓 reward=收益率 + 最大回撤
+        积极动作 reward=POSITIVE_REWARD
+        平仓 reward= 收益率 + 最大回撤 + (POSITIVE_REWARD | -2*POSITIVE_REWARD) 
+            收益率 + 最大回撤 为正则 +POSITIVE_REWARD
+            收益率 + 最大回撤 为负 -2*POSITIVE_REWARD
         其他 reward=0
 
         平仓标志: info['close'] = True
@@ -746,7 +771,7 @@ class LOB_trade_env(gym.Env):
             info['act_criteria'] = -1
             return ILLEGAL_REWARD, False, pos, profit
 
-        # 只有平仓才给与reward
+        # 只有平仓才给与 交易reward
         # 同时记录评价指标
         if need_close or action==1:
             info['close'] = True
@@ -755,7 +780,7 @@ class LOB_trade_env(gym.Env):
             info['act_criteria'] = 0 if res['total_return'] > 0 else 1
 
             #########################################################
-            # 计算奖励 范围: [ILLEGAL_REWARD, -ILLEGAL_REWARD] 
+            # 交易计算奖励 范围: [ILLEGAL_REWARD, -ILLEGAL_REWARD] 
             
             # 1.0 res['trade_return']平均了所有时间步,通常很小,导致虽有收益但奖励为负 -> 可能会倾向于不发生交易(reward=0)
             # reward = res['trade_return'] + res['max_drawdown']
@@ -777,21 +802,26 @@ class LOB_trade_env(gym.Env):
             if reward == 0:
                 punish = res['max_drawup_ticks_bm'] >= 2
                 reward = -res['trade_return_bm'] * SCALE_FACTOR * punish
-
-            # 限制范围
-            reward = max(min(reward, -ILLEGAL_REWARD*0.5), ILLEGAL_REWARD*0.5)
-            # reward 校正
-            if info['act_criteria'] == 1:
-                # loss: reward 一定为负数
-                reward = min(reward, -1e-5)
-            elif info['act_criteria'] == 0:
-                # win: reward 一定为正数
-                reward = max(reward, 1e-5)
             #########################################################
+
             for k, v in res.items():
                 info[k] = v
         else:
             reward = 0
+
+        # 积极操作奖励 买入 / 卖出
+        if action == 0:
+            reward += POSITIVE_REWARD
+        elif action == 1:
+            if info['act_criteria'] == 1:
+                assert reward < 0, f'交易亏损 reward<0 ({reward})'
+                reward -= 2*POSITIVE_REWARD
+            elif info['act_criteria'] == 0:
+                assert reward > 0, f'交易盈利 reward>0 ({reward})'
+                reward += POSITIVE_REWARD
+
+        # 奖励限制范围
+        reward = max(min(reward, -ILLEGAL_REWARD*0.5), ILLEGAL_REWARD*0.5)
 
         return reward, False, pos, profit
 
