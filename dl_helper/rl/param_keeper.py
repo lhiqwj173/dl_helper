@@ -323,29 +323,29 @@ class ExperimentHandler:
                         # 数量检查
                         _update_gradients_length = len(batch_g_info)
                         if _update_gradients_length == 0:
-                            log(f'[CG]{train_title} version diff filt no gradients, keep wait')
-                            continue
+                            log(f'[CG]{train_title} version diff filt no gradients')
                         log(f'[CG]{train_title} version diff filt done, left: {_update_gradients_length}, cost: {int(1000*(time.time() - t))}ms')
 
                     # 遍历剩下的梯度，取平均后应用
                     # 解压所有梯度
-                    all_grads = []
-                    for ((g, compress_info), v, _id) in batch_g_info:
-                        # 解压梯度
-                        g = DeepGradientCompression.decompress(g, compress_info)
-                        all_grads.append(g)
-                    # 计算平均梯度
-                    avg_grads = []
-                    for grad_idx in range(len(all_grads[0])):
-                        # 使用 torch.stack 将同位置的梯度堆叠后求平均
-                        stacked_grads = torch.stack([grads[grad_idx] for grads in all_grads])
-                        avg_grad = torch.mean(stacked_grads, dim=0)
-                        avg_grads.append(avg_grad)
-                    # 应用平均梯度
-                    param_server.apply_gradients(avg_grads)
-                    step_count += 1
+                    if batch_g_info:
+                        all_grads = []
+                        for ((g, compress_info), v, _id) in batch_g_info:
+                            # 解压梯度
+                            g = DeepGradientCompression.decompress(g, compress_info)
+                            all_grads.append(g)
+                        # 计算平均梯度
+                        avg_grads = []
+                        for grad_idx in range(len(all_grads[0])):
+                            # 使用 torch.stack 将同位置的梯度堆叠后求平均
+                            stacked_grads = torch.stack([grads[grad_idx] for grads in all_grads])
+                            avg_grad = torch.mean(stacked_grads, dim=0)
+                            avg_grads.append(avg_grad)
+                        # 应用平均梯度
+                        param_server.apply_gradients(avg_grads)
+                        step_count += 1
 
-                    log(f'[CG]{train_title} latest_version: {param_server.ver}')
+                        log(f'[CG]{train_title} latest_version: {param_server.ver}')
 
                 #####################################
                 # 2.0 准备/压缩参数
@@ -372,9 +372,12 @@ class ExperimentHandler:
                             continue
 
                         # 检查该客户端是否需要推送参数
-                        if client_push_grad_count[_id] - client_last_update_count[_id] >= PUSH_INTERVAL:
-                            client_last_update_count[_id] += PUSH_INTERVAL
+                        log(f'[CG]{train_title} id:{_id} client_push_grad_count: {client_push_grad_count[_id]} client_last_update_count: {client_last_update_count[_id]}')
+                        if client_push_grad_count[_id] - client_last_update_count[_id] < PUSH_INTERVAL:
                             continue
+
+                    client_last_update_count[_id] += PUSH_INTERVAL
+                    log(f'[CG]{train_title} id:{_id} client_last_update_count > {client_last_update_count[_id]}')
 
                     # 检查队列是否满了，满了则跳过
                     # 说明客户端可能已经断开
