@@ -481,6 +481,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         
         # 获取设备ip
         _ip = requests.get('https://api.ipify.org').text
+        log(f'ip: {_ip}')
 
         # 启动协程任务
         tasks = []
@@ -735,7 +736,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 累计 N 个梯度后，需要强制等待新的参数就位
                 if PUSH_INTERVAL > 0 and self.step_count - self.last_update_step >= PUSH_INTERVAL:
                     # 等待新的参数就位
-                    t = time.time()
                     log(f'[{self.client_id}][{self.step_count}] force sync step, wait new params ready')
                     dump_data = self.params_dump_q.get()
                 else:
