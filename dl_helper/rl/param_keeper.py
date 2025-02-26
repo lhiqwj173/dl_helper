@@ -310,7 +310,7 @@ class ExperimentHandler:
                     log(f'[CG]{train_title} grad versions: {[(i[2],i[1]) for i in batch_g_info]}')
                     log(f'[CG]{train_title} version diffs: {version_diffs}')
                     # 记录版本差异
-                    total_client_version_diff += sum(version_diffs)
+                    total_client_version_diff += sum([i[1] for i in version_diffs])
                     total_count += len(version_diffs)
                     if GRAD_ALLOW_VERSION_DIFF > 0:
                         not_allow_idxs = [i for i, (_id, v) in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
