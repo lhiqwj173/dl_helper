@@ -17,8 +17,7 @@ CHUNK_SIZE = 8 * 1024 * 1024
 # 参数推送间隔
 # PUSH_INTERVAL = 4
 # PUSH_INTERVAL = 8
-# PUSH_INTERVAL = 6
-PUSH_INTERVAL = 5
+PUSH_INTERVAL = 6
 
 def tune_tcp_socket(sock, buffer_size=CHUNK_SIZE):
     """TCP协议调优"""
