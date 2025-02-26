@@ -375,9 +375,9 @@ class ExperimentHandler:
                         log(f'[CG]{train_title} id:{_id} client_push_grad_count: {client_push_grad_count[_id]} client_last_update_count: {client_last_update_count[_id]}')
                         if client_push_grad_count[_id] - client_last_update_count[_id] < PUSH_INTERVAL:
                             continue
-
-                    client_last_update_count[_id] += PUSH_INTERVAL
-                    log(f'[CG]{train_title} id:{_id} client_last_update_count > {client_last_update_count[_id]}')
+                        else:
+                            client_last_update_count[_id] += PUSH_INTERVAL
+                            log(f'[CG]{train_title} id:{_id} client_last_update_count > {client_last_update_count[_id]}')
 
                     # 检查队列是否满了，满了则跳过
                     # 说明客户端可能已经断开
