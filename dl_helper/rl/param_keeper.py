@@ -287,7 +287,7 @@ class ExperimentHandler:
                     for _ in range(_q_size):
                         try:
                             grad_dump_data = _q.get(block=False)
-                            grad_dump_data_list.append(grad_dump_data)
+                            grad_dump_data_list.append((_id, grad_dump_data))
                         except Empty:
                             break
 
@@ -299,21 +299,21 @@ class ExperimentHandler:
                     t = time.time()
                     # load 数据
                     # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
-                    for grad_dump_data in grad_dump_data_list:
+                    for (_id, grad_dump_data) in grad_dump_data_list:
                         data = pickle.loads(grad_dump_data)
-                        batch_g_info.append((pickle.loads(data[0]), data[1]))
+                        batch_g_info.append((pickle.loads(data[0]), data[1], _id))
                     log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
                     # version diff 过滤
                     cur_version = param_server.ver
-                    version_diffs = [cur_version - i[1] for i in batch_g_info]
-                    log(f'[CG]{train_title} grad versions: {[i[1] for i in batch_g_info]}')
+                    version_diffs = [(i[2],cur_version - i[1]) for i in batch_g_info]
+                    log(f'[CG]{train_title} grad versions: {[(i[2],i[1]) for i in batch_g_info]}')
                     log(f'[CG]{train_title} version diffs: {version_diffs}')
                     # 记录版本差异
                     total_client_version_diff += sum(version_diffs)
                     total_count += len(version_diffs)
                     if GRAD_ALLOW_VERSION_DIFF > 0:
-                        not_allow_idxs = [i for i, v in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
+                        not_allow_idxs = [i for i, (_id, v) in enumerate(version_diffs) if v > GRAD_ALLOW_VERSION_DIFF]
                         if not_allow_idxs:
                             # 倒序删除不允许的梯度
                             for idx in sorted(not_allow_idxs, reverse=True):
@@ -330,7 +330,7 @@ class ExperimentHandler:
                     # 遍历剩下的梯度，取平均后应用
                     # 解压所有梯度
                     all_grads = []
-                    for ((g, compress_info), v) in batch_g_info:
+                    for ((g, compress_info), v, _id) in batch_g_info:
                         # 解压梯度
                         g = DeepGradientCompression.decompress(g, compress_info)
                         all_grads.append(g)
