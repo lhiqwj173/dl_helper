@@ -411,7 +411,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             _g_q_size = len(pickle.dumps((_g, _info)))
             self.gradient_compressor.clear()# 清理
             log(f"[{self.client_id}] init grad_q, buffer size: {_g_q_size}")
-            self.task_queue = safe_share_memory_queue('grad_data_info_q', _g_q_size, 4, len(pickle.dumps(np.int64(0))))# 额外一个 np.int64 用于保存梯度版本
+            self.task_queue = safe_share_memory_queue('grad_data_info_q', _g_q_size, 4)
             self.task_queue.clear()
 
             _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0))))
@@ -456,7 +456,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
         # 共享梯度队列
         log(f"[{client_id}] init grad_q, buffer size: {grad_q_size}")
-        grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4, len(pickle.dumps(np.int64(0))))
+        grad_q = safe_share_memory_queue('grad_data_info_q', grad_q_size, 4)
 
         # 共享参数队列
         log(f"[{client_id}] init param_q, buffer size: {param_q_size}")
@@ -534,7 +534,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         total_wait_time = 0
         total_handle_time = 0
         mean_send_size = 0
-        total_version_diff = 0
 
         try:
             # 创建异步socket连接
@@ -557,7 +556,6 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     break
 
                 # 获取到1个发送数据
-                # (dump(bytes), extra_data(int64))
                 try:
                     send_data = grad_q.get(block=False)
                 except Empty:
@@ -575,16 +573,9 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     all_begin_time = begin_time
                 log(f"[{idx}][{send_count}] handle grad dump data, grad_q size: {grad_q.qsize()}")
 
-                # 统计版本diff info_data.version
-                current_version = info_data.version
-                data = pickle.dumps(send_data)
-                diff = current_version - send_data[1]
-                total_version_diff += diff
-
                 # 发送梯度
-                send_begin_time = time.time()
-                await async_send_msg(writer, data)
-                send_size = len(data)
+                await async_send_msg(writer, send_data)
+                send_size = len(send_data)
                 mean_send_size = (mean_send_size * send_count + send_size) / (send_count + 1)
                 log(f"[{idx}][{send_count}] send data done({send_size}), cost time: {int((time.time() - begin_time) * 1000)}ms")
 
@@ -592,7 +583,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # await wait_ack(reader)
                 # log(f"[{idx}][{send_count}] recv response done, cost time: {int((time.time() - begin_time) * 1000)}ms, wait time: {int(wait_time * 1000)}ms")
 
-                wait_time = time.time() - send_begin_time
+                wait_time = time.time() - begin_time
                 total_wait_time += wait_time
 
                 send_count += 1
@@ -727,8 +718,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 log(f'[{self.client_id}][{self.step_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.step_count)}ms')
 
                 # 加入队列
-                self.task_queue.put(pickle.dumps((compressed_grads, compress_info)), extra_data=np.int64(self.info_data.version))
-                # self.task_queue.put((pickle.dumps((compressed_grads, compress_info)), np.int64(self.info_data.version)))
+                self.task_queue.put(pickle.dumps((compressed_grads, compress_info, self.info_data.version)))
                 log(f'[{self.client_id}][{self.step_count}] put to grad_q: {self.task_queue.qsize()} / {self.task_queue._maxsize}, version: {self.info_data.version}')
 
             if self.ready_params_job:

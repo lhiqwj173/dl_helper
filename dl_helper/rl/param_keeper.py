@@ -294,24 +294,24 @@ class ExperimentHandler:
                             grad_dump_data_list.append((_id, grad_dump_data))
                         except Empty:
                             break
-                # log(f'[CG]{train_title} collect grads, cost: {int(1000*(time.time() - t))}ms')
 
                 #####################################
                 # 1.2 过滤 / 解压 / 应用梯度
                 #####################################
                 if grad_dump_data_list:
+                    log(f'[CG]{train_title} collect grads, cost: {int(1000*(time.time() - t))}ms')
                     batch_g_info = []
                     # load 数据
                     # data: [((compressed_grads, compress_info), version), ...] / ((compressed_grads, compress_info), version)
                     for (_id, grad_dump_data) in grad_dump_data_list:
-                        data = pickle.loads(grad_dump_data)
-                        batch_g_info.append((pickle.loads(data[0]), data[1], _id))
+                        compress_data, compress_info, version = pickle.loads(grad_dump_data)
+                        batch_g_info.append((compress_data, compress_info, version, _id))
                     log(f'[CG]{train_title} loads gradients, cost: {int(1000*(time.time() - t))}ms')
 
                     # version diff 过滤
                     cur_version = param_server.ver
-                    version_diffs = [(i[2],cur_version - i[1]) for i in batch_g_info]
-                    log(f'[CG]{train_title} grad versions: {[(i[2],i[1]) for i in batch_g_info]}')
+                    version_diffs = [(i[3],cur_version - i[2]) for i in batch_g_info]
+                    log(f'[CG]{train_title} grad versions: {[(i[3],i[2]) for i in batch_g_info]}')
                     log(f'[CG]{train_title} version diffs: {version_diffs}')
                     # 记录版本差异
                     total_client_version_diff += sum([i[1] for i in version_diffs])
@@ -334,7 +334,7 @@ class ExperimentHandler:
                     # 解压所有梯度
                     if batch_g_info:
                         all_grads = []
-                        for ((g, compress_info), v, _id) in batch_g_info:
+                        for (g, compress_info, v, _id) in batch_g_info:
                             # 解压梯度
                             g = DeepGradientCompression.decompress(g, compress_info)
                             all_grads.append(g)
@@ -553,7 +553,6 @@ class ExperimentHandler:
             push_count = 0
             try:
                 while True:
-
                     # 获取梯度数据
                     data = await async_recv_msg(reader)
                     t = time.time()
