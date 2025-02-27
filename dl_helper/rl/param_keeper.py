@@ -516,7 +516,7 @@ class ExperimentHandler:
                     num = p.numel()
                     num = min(int(num * 0.2), 1)
                     # 按值从大到小排序，并获取索引
-                    values, indices = torch.sort(tensor, descending=True)
+                    values, indices = torch.sort(p, descending=True)
                     # 获取前 20% 元素的索引
                     indices = indices[:num]
                     compress_info['update_indices'].append(indices)
