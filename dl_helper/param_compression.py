@@ -47,8 +47,8 @@ class IncrementalCompressor:
         """
         # 预先将所有张量都移至CPU，减少各个id重复操作
         tensors = [t.detach().cpu().clone() for t in raw_tensors]
-        if not isinstance(client_id, list):
-            client_ids = [client_id]
+        if not isinstance(client_ids, list):
+            client_ids = [client_ids]
 
         res = {}
         for client_id in client_ids:
