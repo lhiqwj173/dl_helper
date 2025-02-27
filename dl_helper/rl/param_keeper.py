@@ -474,6 +474,9 @@ class ExperimentHandler:
             await async_send_msg(writer, dump_data)
             log(f'{msg_header} send params, version: {dump_v}, cost: {int(1000*(time.time() - t))}ms')
 
+            #FOR DEBUG
+            self.revc_grad_id_dict[_id] = 0
+
         elif cmd == 'wait_params':
             # 长连接请求参数
             log(f'{msg_header} recv wait_params request')
@@ -592,8 +595,6 @@ class ExperimentHandler:
             total_handle_time = 0
             begin_time = 0
             push_count = 0
-            #FOR DEBUG
-            self.revc_grad_id_dict[_id] = 0
             try:
                 while True:
                     # 获取梯度数据
