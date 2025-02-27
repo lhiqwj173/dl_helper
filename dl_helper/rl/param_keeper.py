@@ -273,7 +273,7 @@ class ExperimentHandler:
 
 
                 if not client_grad_q:
-                    log(f'[CG]{train_title} not client_grad_q, keep wait')
+                    # log(f'[CG]{train_title} not client_grad_q, keep wait')
                     time.sleep(0.001)
                     continue
                 else:
