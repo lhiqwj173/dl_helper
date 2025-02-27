@@ -593,7 +593,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
                     # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                     # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
-                    log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}, mean version diff: {(total_version_diff / total_count):.2f}")
+                    log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
 
                 # 统计耗时
                 handle_cost_time = time.time() - begin_time 
