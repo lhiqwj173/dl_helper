@@ -55,7 +55,7 @@ class IncrementalCompressor:
             if self._init_reference(client_id, tensors):
                 # 初始化时直接返回参考张量的克隆
                 # log(f'compress: init reference')
-                if need_clone:
+                if return_need_clone:
                     res[client_id] = ([t.clone() for t in self.client_params[client_id]], {'full': True})
                 else:
                     res[client_id] = (self.client_params[client_id], {'full': True})
