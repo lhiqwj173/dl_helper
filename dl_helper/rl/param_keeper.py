@@ -138,11 +138,17 @@ class ExperimentHandler:
         # 等待回传的大小数据
         self.share_params_dump_max_size, self.share_gradients_dump_max_size = self.wait_params_id_q.get()
 
+        # FOR DEBUG
+        self.params_list = self.wait_params_id_q.get()
+
         # 允许验证的客户端ip
         self.need_val_ip = 0
 
         # 允许验证的时间戳
         self.need_val_timestamp = 0
+
+        # FOR DEBUG
+        self.revc_grad_id_dict = {}
 
     def __del__(self):
         self.p.terminate()
@@ -195,6 +201,9 @@ class ExperimentHandler:
         _g_size = len(_g_dump)
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
+
+        # FOR DEBUG
+        wait_params_id_q.put([v for _, v in _params_dict.items()])
 
         # 等待队列数据被取出
         while not wait_params_id_q.empty():
@@ -470,7 +479,8 @@ class ExperimentHandler:
             log(f'{msg_header} recv wait_params request')
 
             # 通知 开始循环等待
-            self.on_wait_params_id_q.put(_id)
+            # FOR DEBUG
+            # self.on_wait_params_id_q.put(_id)
 
             last_send_v = 0
             begin_time = 0
@@ -479,11 +489,42 @@ class ExperimentHandler:
             total_net_time = 0
             total_wait_time = 0
             mean_send_size = 0
+            # FOR DEBUG
+            last_push_grad_count = 0
+            async def wait_need_push(self, last_push_grad_count):
+                while True:
+                    if self.revc_grad_id_dict[_id] - last_push_grad_count >= PUSH_INTERVAL:
+                        last_push_grad_count += PUSH_INTERVAL
+                        return last_push_grad_count
+                    else:
+                        await asyncio.sleep(0.001)
+                        continue
             while True:
                 t = time.time()
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
-                dump_data, dump_v = await self.get_params_dump_data(_id)
+                # FOR DEBUG
+                # dump_data, dump_v = await self.get_params_dump_data(_id)
+                # 伪造参数增量更新
+                last_push_grad_count = await wait_need_push(self, last_push_grad_count)
+                compressed_tensors = []
+                compress_info = {
+                    'update_indices': [],
+                    'full': []
+                }
+                for p in self.params_list:
+                    num = p.numel()
+                    num = min(int(num * 0.2), 1)
+                    # 按值从大到小排序，并获取索引
+                    values, indices = torch.sort(tensor, descending=True)
+                    # 获取前 20% 元素的索引
+                    indices = indices[:num]
+                    compress_info['update_indices'].append(indices)
+                    compress_info['full'].append(False)
+                    compressed_tensors.append(p[indices])
+                dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
+                dump_v = 1
+
                 wait_time = time.time() - t
                 total_wait_time += wait_time
                 log(f'[{msg_header}] wait_params wait active, wait time: {int(1000*wait_time)}ms')
@@ -551,6 +592,8 @@ class ExperimentHandler:
             total_handle_time = 0
             begin_time = 0
             push_count = 0
+            #FOR DEBUG
+            self.revc_grad_id_dict[_id] = 0
             try:
                 while True:
                     # 获取梯度数据
@@ -561,7 +604,9 @@ class ExperimentHandler:
                     log(f'{msg_header} recv gradients({len(data)})')
 
                     # 转发到队列中，不在这里处理
-                    await self.put_gradients_dump_data(data, _id)
+                    # FOR DEBUG
+                    # await self.put_gradients_dump_data(data, _id)
+                    self.revc_grad_id_dict[_id] += 1
 
                     handle_cost_time = time.time() - t
                     total_handle_time += handle_cost_time
