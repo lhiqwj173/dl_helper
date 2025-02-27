@@ -513,15 +513,15 @@ class ExperimentHandler:
                     'full': []
                 }
                 for p in self.params_list:
-                    num = p.numel()
-                    num = min(int(num * 0.2), 1)
-                    # 按值从大到小排序，并获取索引
-                    values, indices = torch.sort(p, descending=True)
-                    # 获取前 20% 元素的索引
-                    indices = indices[:num]
-                    compress_info['update_indices'].append(indices)
+                    num = max(int(p.numel() * 0.2), 1)
+                    flat_indices = torch.topk(p.flatten(), num).indices
+                    row_col_indices = torch.unravel_index(flat_indices, p.shape)
+                    # 正确堆叠行和列
+                    stacked_indices = torch.stack((row_col_indices[0], row_col_indices[1]), dim=1)
+                    selected_elements = p[tuple(stacked_indices.T)]
+                    compress_info['update_indices'].append(stacked_indices)
                     compress_info['full'].append(False)
-                    compressed_tensors.append(p[indices])
+                    compressed_tensors.append(selected_elements)
                 dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
                 dump_v = 1
 
