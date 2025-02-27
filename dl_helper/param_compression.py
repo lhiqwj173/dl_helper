@@ -1,6 +1,7 @@
 import torch
 from typing import List, Tuple, Dict
-# from py_ext.tool import log 
+import concurrent.futures
+from functools import partial
 
 CompressInfo = Dict[str, List[torch.Tensor]]
 
@@ -8,19 +9,24 @@ class IncrementalCompressor:
     def __init__(self, 
                  threshold: float = 1e-3,
                  sparsity_threshold: float = 0.3,
-                 min_sparsity_threshold: float = 0.01
+                 min_sparsity_threshold: float = 0.01,
+                 max_workers: int = None  # 添加并行工作线程数参数
                 ):
         """
         参数:
             threshold: 压缩阈值,只压缩变化大于此值的参数
             sparsity_threshold: 稀疏度阈值，当更新元素比例超过此值时切换为全量更新
             min_sparsity_threshold: 最小稀疏度阈值，当更新元素比例小于此值时，取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
+            max_workers: 最大并行工作线程数，None表示使用默认值(CPU核心数)
         """
         self.threshold = threshold
         self.sparsity_threshold = sparsity_threshold
         self.min_sparsity_threshold = min_sparsity_threshold
+        self.max_workers = max_workers
 
         self.client_params = {}  # 存储不同客户端的参数 {client_id: List[tensor]}
+        # 创建一个持久化的线程池
+        self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
         
     def _init_reference(self, 
                        client_id: str,
@@ -31,14 +37,76 @@ class IncrementalCompressor:
             self.client_params[client_id] = [t.clone() for t in tensors]
             return True
         return False
+    
+    def _compress_single_client(self,
+                              client_id: str,
+                              tensors: List[torch.Tensor],
+                              return_need_clone: bool = False
+                             ) -> Tuple[str, List[torch.Tensor], CompressInfo]:
+        """处理单个客户端的压缩操作"""
+        if self._init_reference(client_id, tensors):
+            # 初始化时直接返回参考张量的克隆
+            if return_need_clone:
+                return client_id, [t.clone() for t in self.client_params[client_id]], {'full': True}
+            else:
+                return client_id, self.client_params[client_id], {'full': True}
+        
+        compressed_tensors = []
+        compress_info = {
+            'update_indices': [],
+            'full': []
+        }
+        
+        for curr_t_cpu, ref_t in zip(tensors, self.client_params[client_id]):
+            with torch.no_grad():  # 使用no_grad减少内存使用
+                diff = torch.abs(curr_t_cpu - ref_t)
+                mask = diff > self.threshold
+                
+                # 计算更新比例
+                update_ratio = mask.sum().item() / mask.numel()
+                
+                if update_ratio > self.sparsity_threshold:
+                    # 全量更新 - 使用clone确保数据独立性
+                    compressed_t = curr_t_cpu.clone()
+                    compressed_tensors.append(compressed_t)
+                    compress_info['full'].append(True)
+                    compress_info['update_indices'].append(None)
+                    # 更新参考张量
+                    ref_t.copy_(curr_t_cpu)
+                else:
+                    if update_ratio < self.min_sparsity_threshold:
+                        # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
+                        n = max(1, int(self.min_sparsity_threshold * mask.numel()))
+                        # 修改 mask
+                        _, top_indices = torch.topk(diff.flatten(), n)
+                        mask = torch.zeros_like(diff, dtype=torch.bool)
+                        mask.view(-1)[top_indices] = True
+
+                    # 增量更新 - 只复制需要更新的值
+                    update_indices = torch.where(mask)
+                    # 直接使用索引获取更新值，无需额外克隆
+                    update_values = curr_t_cpu[mask]
+                    
+                    compressed_tensors.append(update_values)
+                    # 将索引信息存储在CPU上
+                    compress_info['update_indices'].append(
+                        torch.stack(update_indices, dim=1)
+                    )
+                    compress_info['full'].append(False)
+                    
+                    # 更新参考张量中变化的部分
+                    ref_t[mask] = update_values
+    
+        # 返回结果
+        return client_id, compressed_tensors, compress_info
         
     def compress(self, 
                 raw_tensors: List[torch.Tensor],
                 client_ids: str | List[str],
-                return_need_clone = False,
-               ) -> Tuple[List[torch.Tensor], CompressInfo]:
+                return_need_clone: bool = False,
+               ) -> Dict[str, Tuple[List[torch.Tensor], CompressInfo]]:
         """
-        压缩张量列表, 确保压缩结果在CPU上
+        并行压缩张量列表, 确保压缩结果在CPU上
         返回一个字典
         {
             id: (compressed_tensors, compress_info),
@@ -50,72 +118,39 @@ class IncrementalCompressor:
         if not isinstance(client_ids, list):
             client_ids = [client_ids]
 
-        res = {}
-        for client_id in client_ids:
-            if self._init_reference(client_id, tensors):
-                # 初始化时直接返回参考张量的克隆
-                # log(f'compress: init reference')
-                if return_need_clone:
-                    res[client_id] = ([t.clone() for t in self.client_params[client_id]], {'full': True})
-                else:
-                    res[client_id] = (self.client_params[client_id], {'full': True})
-                continue
-            
-            compressed_tensors = []
-            compress_info = {
-                'update_indices': [],
-                'full': []
-            }
-            
-            for curr_t_cpu, ref_t in zip(tensors, self.client_params[client_id]):
-                with torch.no_grad():  # 使用no_grad减少内存使用
-                    diff = torch.abs(curr_t_cpu - ref_t)
-                    mask = diff > self.threshold
-                    
-                    # 计算更新比例
-                    update_ratio = mask.sum().item() / mask.numel()
-                    
-                    if update_ratio > self.sparsity_threshold:
-                        # 全量更新 - 使用clone确保数据独立性
-                        compressed_t = curr_t_cpu.clone()
-                        compressed_tensors.append(compressed_t)
-                        compress_info['full'].append(True)
-                        compress_info['update_indices'].append(None)
-                        # 更新参考张量
-                        ref_t.copy_(curr_t_cpu)
-                        # log(f'compress: full update')
-                    else:
-                        if update_ratio < self.min_sparsity_threshold:
-                            # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
-                            n = max(1, int(update_ratio * mask.numel()))
-                            # 修改 mask
-                            _, top_indices = torch.topk(diff.flatten(), n)
-                            mask = torch.zeros_like(diff, dtype=torch.bool)
-                            mask.view(-1)[top_indices] = True
-                        #     log(f'compress: top {n} update')
-                        # else:
-                        #     log(f'compress: update {update_ratio}')
-
-                        # 增量更新 - 只复制需要更新的值
-                        update_indices = torch.where(mask)
-                        # 直接使用索引获取更新值，无需额外克隆
-                        update_values = curr_t_cpu[mask]
-                        
-                        compressed_tensors.append(update_values)
-                        # 将索引信息存储在CPU上
-                        compress_info['update_indices'].append(
-                            torch.stack(update_indices, dim=1)
-                        )
-                        compress_info['full'].append(False)
-                        
-                        # 更新参考张量中变化的部分
-                        ref_t[mask] = update_values
+        # 如果只有一个客户端，直接处理无需并行
+        if len(client_ids) == 1:
+            client_id, compressed_tensors, compress_info = self._compress_single_client(
+                client_ids[0], tensors, return_need_clone
+            )
+            return {client_id: (compressed_tensors, compress_info)}
         
-            # 将压缩后的张量列表添加到结果中
+        # 使用持久化的线程池并行处理多个客户端
+        res = {}
+        # 创建一个部分应用的函数，固定tensors和return_need_clone参数
+        process_func = partial(
+            self._compress_single_client, 
+            tensors=tensors, 
+            return_need_clone=return_need_clone
+        )
+        
+        # 并行提交所有客户端的压缩任务
+        future_to_client = {
+            self.thread_pool.submit(process_func, client_id): client_id 
+            for client_id in client_ids
+        }
+        
+        # 收集结果
+        for future in concurrent.futures.as_completed(future_to_client):
+            client_id, compressed_tensors, compress_info = future.result()
             res[client_id] = (compressed_tensors, compress_info)
         
-        # 返回结果
         return res
+    
+    def __del__(self):
+        """析构函数，确保线程池正确关闭"""
+        if hasattr(self, 'thread_pool'):
+            self.thread_pool.shutdown()
     
     @staticmethod
     def decompress(

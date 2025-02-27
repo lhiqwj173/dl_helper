@@ -276,8 +276,8 @@ class ExperimentHandler:
                     # log(f'[CG]{train_title} not client_grad_q, keep wait')
                     time.sleep(0.001)
                     continue
-                else:
-                    log(f'[CG]{train_title} check new client, cost: {int(1000*(time.time() - t))}ms')
+                # else:
+                #     log(f'[CG]{train_title} check new client, cost: {int(1000*(time.time() - t))}ms')
 
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
@@ -294,7 +294,7 @@ class ExperimentHandler:
                             grad_dump_data_list.append((_id, grad_dump_data))
                         except Empty:
                             break
-                log(f'[CG]{train_title} collect grads, cost: {int(1000*(time.time() - t))}ms')
+                # log(f'[CG]{train_title} collect grads, cost: {int(1000*(time.time() - t))}ms')
 
                 #####################################
                 # 1.2 过滤 / 解压 / 应用梯度
