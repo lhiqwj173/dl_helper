@@ -192,10 +192,15 @@ class ExperimentHandler:
         last_print_step = 0
 
         # 参数服务器
-        config = config.learners(    
-            num_learners=1,
-            num_gpus_per_learner=1,
-        )
+        if torch.cuda.is_available():
+            config = config.learners(    
+                num_learners=1,
+                num_gpus_per_learner=1,
+            )
+        else:
+            config = config.learners(    
+                num_learners=1
+            )  
         env_specifier = config.env
         if _global_registry.contains(ENV_CREATOR, env_specifier):
             # 注册的环境
