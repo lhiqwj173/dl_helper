@@ -190,14 +190,14 @@ class ExperimentHandler:
         _grad_params_dict = param_server.get_gradients_params()
 
         # 计算最大参数dump大小
-        _p_dump = pickle.dumps(([v for _, v in _params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+        _p_dump = pickle.dumps(([v for _, v in _params_dict.items()], {'full': True}, 0, False))
         _p_size = len(_p_dump)
         # 计算最大梯度dump大小
         # 1.0 全梯度的压缩数据大小
         _grad_params_list = [v for _, v in _grad_params_dict.items()]
         _compress_grad_info = [{'is_full_gradient': True,} for _ in _grad_params_list]
         _single_grad_dump = pickle.dumps((_grad_params_list, _compress_grad_info))
-        _g_dump = pickle.dumps((_single_grad_dump, np.int64(0)))
+        _g_dump = pickle.dumps((_single_grad_dump, 0))
         _g_size = len(_g_dump)
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
@@ -516,7 +516,7 @@ class ExperimentHandler:
                     'full': []
                 }
                 for p in self.params_list:
-                    n = max(int(p.numel() * 0.2), 1)
+                    n = max(int(p.numel() * 0.1), 1)
                     _, top_indices = torch.topk(p.flatten(), n)
                     mask = torch.zeros_like(p, dtype=torch.bool)
                     mask.view(-1)[top_indices] = True

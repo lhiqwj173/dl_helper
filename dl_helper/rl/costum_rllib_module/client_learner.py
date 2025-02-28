@@ -387,7 +387,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
 
         if self.ready_params_job:
-            _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0)))
+            _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, 0, False))
             _params_dump_q_buffer_size = len(_temp_dump_data)
             log(f"[{self.client_id}] init params_dump_q, buffer size: {_params_dump_q_buffer_size}")
             self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 30)
@@ -414,7 +414,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.task_queue = safe_share_memory_queue('grad_data_info_q', _g_q_size, 4)
             self.task_queue.clear()
 
-            _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.int64(0), np.int64(0))))
+            _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, 0, False)))
 
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
