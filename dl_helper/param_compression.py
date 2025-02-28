@@ -5,75 +5,6 @@ from functools import partial
 import pickle
 import numpy as np
 
-def calibrate_sparsity_threshold(self, tensors: List[torch.Tensor], default=0.3) -> float:
-    """
-    Dynamically calibrates the sparsity threshold by measuring the serialized size
-    of incremental vs full updates across various update ratios.
-    
-    Args:
-        tensors: List of tensors to use for calibration
-        
-    Returns:
-        optimal_threshold: The update ratio at which incremental updates become
-                          less efficient than full updates
-    """
-    # Create sample tensor with same shape as the first tensor for testing
-    sample_tensor = tensors[0].clone()
-    ref_tensor = sample_tensor.clone()
-    
-    # Define update ratios to test (from 0.01 to 0.6)
-    update_ratios = np.linspace(0.01, 0.6, 20)
-    
-    # Store sizes for each update ratio
-    incremental_sizes = []
-    
-    # Get full update size once
-    full_update = sample_tensor.clone()
-    full_size = len(pickle.dumps((full_update, {'full': True})))
-    
-    print(f"Full update size: {full_size} bytes")
-    
-    # Test each update ratio
-    for ratio in update_ratios:
-        # Create a random mask with the specified update ratio
-        mask = torch.zeros_like(sample_tensor, dtype=torch.bool)
-        num_elements = sample_tensor.numel()
-        num_updates = int(ratio * num_elements)
-        
-        # Randomly select indices to update
-        flat_indices = torch.randperm(num_elements)[:num_updates]
-        mask.view(-1)[flat_indices] = True
-        
-        # Create incremental update
-        updated_tensor = ref_tensor.clone()
-        updated_tensor[mask] += torch.randn_like(updated_tensor[mask]) * 0.1  # Small random updates
-        
-        # Get update values and indices
-        update_indices = torch.where(mask)
-        update_values = updated_tensor[mask]
-        
-        # Measure serialized size
-        compress_info = {
-            'update_indices': [torch.stack(update_indices, dim=1)],
-            'full': [False]
-        }
-        incremental_size = len(pickle.dumps((update_values, compress_info)))
-        incremental_sizes.append(incremental_size)
-        
-        print(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
-    
-    # Find the threshold where incremental updates are still smaller than full updates
-    threshold_indices = np.where(np.array(incremental_sizes) <= full_size * 0.8)[0]
-    
-    if len(threshold_indices) > 0:
-        # Get the last update ratio where incremental update is still efficient
-        optimal_threshold = update_ratios[threshold_indices[-1]]
-    else:
-        optimal_threshold = default
-    
-    print(f"Optimal sparsity threshold: {optimal_threshold:.4f}")
-    return optimal_threshold
-
 CompressInfo = Dict[str, List[torch.Tensor]]
 class IncrementalCompressor:
     def __init__(self, 
@@ -98,13 +29,83 @@ class IncrementalCompressor:
         # 创建一个持久化的线程池
         self.thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
         
+    def _calibrate_sparsity_threshold(self, tensors: List[torch.Tensor], default=0.3) -> float:
+        """
+        Dynamically calibrates the sparsity threshold by measuring the serialized size
+        of incremental vs full updates across various update ratios.
+        
+        Args:
+            tensors: List of tensors to use for calibration
+            
+        Returns:
+            optimal_threshold: The update ratio at which incremental updates become
+                            less efficient than full updates
+        """
+        # Create sample tensor with same shape as the first tensor for testing
+        sample_tensor = tensors[0].clone()
+        ref_tensor = sample_tensor.clone()
+        
+        # Define update ratios to test (from 0.01 to 0.6)
+        update_ratios = np.linspace(0.01, 0.6, 20)
+        
+        # Store sizes for each update ratio
+        incremental_sizes = []
+        
+        # Get full update size once
+        full_update = sample_tensor.clone()
+        full_size = len(pickle.dumps((full_update, {'full': True})))
+        
+        print(f"Full update size: {full_size} bytes")
+        
+        # Test each update ratio
+        for ratio in update_ratios:
+            # Create a random mask with the specified update ratio
+            mask = torch.zeros_like(sample_tensor, dtype=torch.bool)
+            num_elements = sample_tensor.numel()
+            num_updates = int(ratio * num_elements)
+            
+            # Randomly select indices to update
+            flat_indices = torch.randperm(num_elements)[:num_updates]
+            mask.view(-1)[flat_indices] = True
+            
+            # Create incremental update
+            updated_tensor = ref_tensor.clone()
+            updated_tensor[mask] += torch.randn_like(updated_tensor[mask]) * 0.1  # Small random updates
+            
+            # Get update values and indices
+            update_indices = torch.where(mask)
+            update_values = updated_tensor[mask]
+            
+            # Measure serialized size
+            compress_info = {
+                'update_indices': [torch.stack(update_indices, dim=1)],
+                'full': [False]
+            }
+            incremental_size = len(pickle.dumps((update_values, compress_info)))
+            incremental_sizes.append(incremental_size)
+            
+            print(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
+        
+        # Find the threshold where incremental updates are still smaller than full updates
+        threshold_indices = np.where(np.array(incremental_sizes) <= full_size * 0.8)[0]
+        
+        if len(threshold_indices) > 0:
+            # Get the last update ratio where incremental update is still efficient
+            optimal_threshold = update_ratios[threshold_indices[-1]]
+        else:
+            optimal_threshold = default
+        
+        print(f"Optimal sparsity threshold: {optimal_threshold:.4f}")
+        return optimal_threshold
+
+
     def _init_reference(self, 
                        client_id: str,
                        tensors: List[torch.Tensor],
                       ) -> bool:
         if len(self.client_params) == 0:
             # 动态校准稀疏度阈值
-            self.sparsity_threshold = calibrate_sparsity_threshold(tensors)
+            self.sparsity_threshold = self._calibrate_sparsity_threshold(tensors)
             log(f"Calibrated sparsity threshold: {self.sparsity_threshold}")
 
         if client_id not in self.client_params:
