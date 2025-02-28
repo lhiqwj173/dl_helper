@@ -5,6 +5,8 @@ from functools import partial
 import pickle
 import numpy as np
 
+from py_ext.tool import log
+
 CompressInfo = Dict[str, List[torch.Tensor]]
 class IncrementalCompressor:
     def __init__(self, 
