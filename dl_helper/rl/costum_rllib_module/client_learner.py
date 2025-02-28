@@ -660,6 +660,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     except:
                         await asyncio.sleep(0.001)
 
+                log(f"[{total_count}] put params done, current params_q: {params_dump_q.qsize()}")
+                
                 # 统计耗时
                 handle_cost_time = time.time() - t
                 total_handle_time += handle_cost_time
