@@ -44,8 +44,7 @@ class IncrementalCompressor:
                             less efficient than full updates
         """
         # Create sample tensor with same shape as the first tensor for testing
-        sample_tensor = tensors[0].clone()
-        ref_tensor = sample_tensor.clone()
+        sample_tensor = [i.clone() for i in tensors]
         
         # Define update ratios to test (from 0.01 to 0.6)
         update_ratios = np.linspace(0.01, 0.6, 20)
@@ -54,36 +53,36 @@ class IncrementalCompressor:
         incremental_sizes = []
         
         # Get full update size once
-        full_update = sample_tensor.clone()
-        full_size = len(pickle.dumps((full_update, {'full': True}, 0, False)))
-        
+        full_size = len(pickle.dumps((sample_tensor, {'full': True}, 0, False)))
         log(f"Full update size: {full_size} bytes")
         
         # Test each update ratio
         for ratio in update_ratios:
-            # Create a random mask with the specified update ratio
-            mask = torch.zeros_like(sample_tensor, dtype=torch.bool)
-            num_elements = sample_tensor.numel()
-            num_updates = int(ratio * num_elements)
-            
-            # Randomly select indices to update
-            flat_indices = torch.randperm(num_elements)[:num_updates]
-            mask.view(-1)[flat_indices] = True
-            
-            # Create incremental update
-            updated_tensor = ref_tensor.clone()
-            updated_tensor[mask] += torch.randn_like(updated_tensor[mask]) * 0.1  # Small random updates
-            
-            # Get update values and indices
-            update_indices = torch.where(mask)
-            update_values = updated_tensor[mask]
-            
-            # Measure serialized size
+            compress_data = []
             compress_info = {
-                'update_indices': [torch.stack(update_indices, dim=1)],
-                'full': [False]
+                'update_indices': [],
+                'full': []
             }
-            incremental_size = len(pickle.dumps((update_values, compress_info)))
+
+            for p in sample_tensor:
+                # Create a random mask with the specified update ratio
+                mask = torch.zeros_like(p, dtype=torch.bool)
+                num_elements = p.numel()
+                num_updates = max(int(ratio * num_elements), 1)
+                
+                # Randomly select indices to update
+                flat_indices = torch.randperm(num_elements)[:num_updates]
+                mask.view(-1)[flat_indices] = True
+
+                # Get update values and indices
+                update_indices = torch.where(mask)
+                update_values = p[mask]
+
+                compress_data.append(update_values)
+                compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
+                compress_info['full'].append(False)
+                
+            incremental_size = len(pickle.dumps((compress_data, compress_info, 1, False)))
             incremental_sizes.append(incremental_size)
             
             log(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
