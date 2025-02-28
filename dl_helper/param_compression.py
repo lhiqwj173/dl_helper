@@ -55,9 +55,9 @@ class IncrementalCompressor:
         
         # Get full update size once
         full_update = sample_tensor.clone()
-        full_size = len(pickle.dumps((full_update, {'full': True})))
+        full_size = len(pickle.dumps((full_update, {'full': True}, 0, False)))
         
-        print(f"Full update size: {full_size} bytes")
+        log(f"Full update size: {full_size} bytes")
         
         # Test each update ratio
         for ratio in update_ratios:
@@ -86,10 +86,10 @@ class IncrementalCompressor:
             incremental_size = len(pickle.dumps((update_values, compress_info)))
             incremental_sizes.append(incremental_size)
             
-            print(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
+            log(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
         
         # Find the threshold where incremental updates are still smaller than full updates
-        threshold_indices = np.where(np.array(incremental_sizes) <= full_size * 0.8)[0]
+        threshold_indices = np.where(np.array(incremental_sizes) <= full_size * 0.9)[0]
         
         if len(threshold_indices) > 0:
             # Get the last update ratio where incremental update is still efficient
