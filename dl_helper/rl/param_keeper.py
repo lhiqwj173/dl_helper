@@ -150,7 +150,6 @@ class ExperimentHandler:
         # FOR DEBUG
         self.revc_grad_id_dict = {}
         # 伪造参数增量更新
-        last_push_grad_count = await wait_need_push(self, last_push_grad_count)
         compressed_tensors = []
         compress_info = {
             'update_indices': [],
@@ -527,6 +526,7 @@ class ExperimentHandler:
                 # 等待获取参数 dump 数据
                 # FOR DEBUG
                 # dump_data, dump_v = await self.get_params_dump_data(_id)
+                last_push_grad_count = await wait_need_push(self, last_push_grad_count)
                 dump_data, dump_v = self.dump_data, self.dump_v
 
                 wait_time = time.time() - t
