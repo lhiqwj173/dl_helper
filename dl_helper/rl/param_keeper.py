@@ -494,6 +494,8 @@ class ExperimentHandler:
             mean_send_size = 0
             # FOR DEBUG
             last_push_grad_count = 0
+            dump_data = None
+            dump_v = 1
             async def wait_need_push(self, last_push_grad_count):
                 while True:
                     if self.revc_grad_id_dict[_id] - last_push_grad_count >= PUSH_INTERVAL:
@@ -510,23 +512,23 @@ class ExperimentHandler:
                 # dump_data, dump_v = await self.get_params_dump_data(_id)
                 # 伪造参数增量更新
                 last_push_grad_count = await wait_need_push(self, last_push_grad_count)
-                compressed_tensors = []
-                compress_info = {
-                    'update_indices': [],
-                    'full': []
-                }
-                for p in self.params_list:
-                    n = max(int(p.numel() * 0.1), 1)
-                    _, top_indices = torch.topk(p.flatten(), n)
-                    mask = torch.zeros_like(p, dtype=torch.bool)
-                    mask.view(-1)[top_indices] = True
-                    update_indices = torch.where(mask)
-                    update_values = p[mask]
-                    compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
-                    compress_info['full'].append(False)
-                    compressed_tensors.append(update_values)
-                dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
-                dump_v = 1
+                if None is dump_data:
+                    compressed_tensors = []
+                    compress_info = {
+                        'update_indices': [],
+                        'full': []
+                    }
+                    for p in self.params_list:
+                        n = max(int(p.numel() * 0.1), 1)
+                        _, top_indices = torch.topk(p.flatten(), n)
+                        mask = torch.zeros_like(p, dtype=torch.bool)
+                        mask.view(-1)[top_indices] = True
+                        update_indices = torch.where(mask)
+                        update_values = p[mask]
+                        compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
+                        compress_info['full'].append(False)
+                        compressed_tensors.append(update_values)
+                    dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
 
                 wait_time = time.time() - t
                 total_wait_time += wait_time
