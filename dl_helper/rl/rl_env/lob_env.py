@@ -175,6 +175,8 @@ class data_producer:
 
         if self.file_num:
             self.files = self.files[:self.file_num]
+
+        log(f'[{{self.data_type}}] prepare files: {self.files}')
             
     def _load_data(self):
         """
@@ -183,7 +185,7 @@ class data_producer:
         """
         while self.files:
             file = self.files.pop(0)
-            log(f'load date file({self.data_type}): {file}')
+            log(f'[{{self.data_type}}] load date file: {file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
 
             # 列过滤
@@ -220,7 +222,7 @@ class data_producer:
                 self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
 
             if not self.idxs:
-                log(f'no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                log(f'[{{self.data_type}}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
                 continue
 
             # 训练数据随机选择一个标的
@@ -228,7 +230,7 @@ class data_producer:
             if self.data_type == 'train':
                 self.idxs = [random.choice(self.idxs)]
 
-            log(f'init idxs: {self.idxs}')
+            log(f'[{{self.data_type}}] init idxs: {self.idxs}')
 
             # 调整数据
             # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
@@ -400,18 +402,18 @@ class data_producer:
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
             need_close = True
-            log(f'need_close {self.idxs[0][0]} {self.idxs[0][1]}')
+            log(f'[{{self.data_type}}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
-            log(f'idxs: {self.idxs}')
+            log(f'[{{self.data_type}}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                log(f'date done')
+                log(f'[{{self.data_type}}] date done')
                 self.date_file_done = True
-                log(f'len(files): {len(self.files)}')
+                log(f'[{{self.data_type}}] len(files): {len(self.files)}')
                 if not self.files:
                     # 没有下一个可以读取的日期数据文件
-                    log('all date files done')
+                    log(f'[{{self.data_type}}] all date files done')
                     all_done = True
             else:
                 # 重置绘图索引

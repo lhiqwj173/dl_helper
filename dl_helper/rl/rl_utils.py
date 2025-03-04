@@ -175,7 +175,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
 
     return important_metrics
 
-def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, y_axis_max = None):
+def plot_training_curve_0(train_folder, out_file, total_time=None, pic_name=None, y_axis_max = None):
     """
     total_time: 训练总时间 sec
     """
@@ -216,6 +216,109 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     plt.savefig(os.path.join(train_folder, f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' if None is pic_name else pic_name))
     
     plt.close()  # 关闭当前图形
+
+class BaseCustomPlotter:
+    def get_additional_plot_count(self):
+        """
+        子类必须实现
+        返回需要额外绘制的图表数量
+        """
+        raise NotImplementedError("子类必须实现 get_additional_plot_count 方法")
+    
+        return 2
+    
+    def plot(self, out_data, axes_list):
+        """
+        子类必须实现
+        绘制额外图表
+        """
+        raise NotImplementedError("子类必须实现 plot 方法")
+
+        # axes_list will contain 2 axes since we requested 2 additional plots
+        datetime = pd.to_datetime(out_data['datetime'])
+        
+        # Plot on first additional subplot (axes_list[0])
+        axes_list[0].plot(datetime, out_data['some_column'], 'g-', label='Custom Data 1')
+        axes_list[0].legend()
+        
+        # Plot on second additional subplot (axes_list[1])
+        axes_list[1].plot(datetime, out_data['another_column'], 'r-', label='Custom Data 2')
+        axes_list[1].legend()
+
+def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, y_axis_max=None, custom_plotter=None):
+    """
+    total_time: 训练总时间 sec
+    custom_plotter: Object with two methods:
+        - get_additional_plot_count(): Returns number of additional plots needed
+        - plot(out_data, axes_list): Performs custom plotting across given list of axes
+    """
+    out_data = pd.read_csv(out_file)
+    
+    # Extract data
+    datetime = pd.to_datetime(out_data['datetime'])  # Convert to datetime objects
+    mean_reward = out_data['env_runner_episode_return_mean'].tolist()
+    max_reward = out_data['env_runner_episode_return_max'].tolist()
+    val_mean_reward = out_data['val_episode_return_mean'].tolist()
+    val_max_reward = out_data['val_episode_return_max'].tolist()
+    
+    if len(mean_reward) == 0:
+        log('No mean_reward data found')
+        return
+
+    # Filter out NaN values
+    _mean_reward = [x for x in mean_reward if not np.isnan(x)]
+    _max_reward = [x for x in max_reward if not np.isnan(x)]
+    _val_mean_reward = [x for x in val_mean_reward if not np.isnan(x)]
+    _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
+    
+    # Calculate maximums
+    mean_reward_max = max(_mean_reward) if len(_mean_reward) > 0 else 0
+    max_reward_max = max(_max_reward) if len(_max_reward) > 0 else 0
+    val_mean_reward_max = max(_val_mean_reward) if len(_val_mean_reward) > 0 else 0
+    val_max_reward_max = max(_val_max_reward) if len(_val_max_reward) > 0 else 0
+
+    # Determine number of subplots
+    additional_plots = custom_plotter.get_additional_plot_count() if custom_plotter else 0
+    total_plots = 1 + additional_plots
+
+    # Create figure with subplots
+    fig, axes = plt.subplots(total_plots, 1, figsize=(10, 6 * total_plots), sharex=True)
+    if total_plots == 1:
+        axes = [axes]  # Ensure axes is always a list
+    
+    # Main training curves plot (first subplot)
+    ax = axes[0]
+    ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
+    ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
+    ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
+    ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    
+    ax.legend()
+    ax.set_title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
+    if y_axis_max is not None:
+        ax.set_ylim(0, y_axis_max)
+    
+    # Add custom plots if provided
+    if custom_plotter and additional_plots > 0:
+        # Pass the list of additional axes (excluding the first one used for main plot)
+        custom_plotter.plot(out_data, axes[1:])
+
+    # Set x-label only on bottom plot
+    axes[-1].set_xlabel('Time')
+    
+    # Rotate x-axis labels for better readability
+    plt.setp(axes[-1].xaxis.get_majorticklabels(), rotation=45)
+    
+    # Adjust layout to prevent overlap
+    plt.tight_layout()
+    
+    # Save figure
+    save_path = os.path.join(train_folder, 
+                           f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' 
+                           if pic_name is None else pic_name)
+    plt.savefig(save_path)
+    
+    plt.close(fig)  # Close the figure
 
 class GradientAccumulator:
     def __init__(self, momentum=0.9, eps=1e-5):
@@ -1179,6 +1282,5 @@ def calculate_importance_loss(loss: torch.Tensor) -> float:
     importance = np.clip(importance / 10.0, 0, 1)
     return importance
 
-
 if __name__ == "__main__":
-    plot_training_curve(r"D:\code\dl_helper\lob", log_file=r"D:\code\dl_helper\lob\logs\20250213_lob.log")
+    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"D:\code\dl_helper\lob\logs\20250213_lob.log")
