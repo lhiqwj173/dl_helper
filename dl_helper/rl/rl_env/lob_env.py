@@ -790,6 +790,9 @@ class LOB_trade_env(gym.Env):
         for k, v in res.items():
             info[k] = v
 
+        #数据类型
+        info['data_type'] = self.data_producer.data_type
+
         # 只有平仓才给与 act_criteria
         # 同时记录评价指标
         if need_close or action==1:

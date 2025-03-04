@@ -282,7 +282,11 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     total_plots = 1 + additional_plots
 
     # Create figure with subplots
-    fig, axes = plt.subplots(total_plots, 1, figsize=(10, 6 * total_plots), sharex=True)
+    # 主图高度6，其他子图高度为2
+    heights = [6] + [2] * (total_plots-1)  # 第一个图高度6，其余图高度2
+    fig = plt.figure(figsize=(10, sum(heights)))
+    gs = plt.GridSpec(total_plots, 1, height_ratios=heights)
+    axes = [plt.subplot(gs[i]) for i in range(total_plots)]
     if total_plots == 1:
         axes = [axes]  # Ensure axes is always a list
     
@@ -1283,4 +1287,4 @@ def calculate_importance_loss(loss: torch.Tensor) -> float:
     return importance
 
 if __name__ == "__main__":
-    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"D:\code\dl_helper\lob\logs\20250213_lob.log")
+    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv")

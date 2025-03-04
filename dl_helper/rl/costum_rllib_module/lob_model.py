@@ -213,20 +213,37 @@ class LobCallbacks(DefaultCallbacks):
         # 从环境的 info 中提取自定义指标
         info = episode.get_infos(-1)
         if info is not None and 'act_criteria' in info:
-            metrics_logger.log_value("all_num", 1, reduce="sum")
-            metrics_logger.log_value("illegal_num", int(info['act_criteria'] == -1), reduce="sum")
+            if info['data_type'] == 'train':
+                metrics_logger.log_value("all_num", 1, reduce="sum")
+                metrics_logger.log_value("illegal_num", int(info['act_criteria'] == -1), reduce="sum")
+            else:
+                metrics_logger.log_value("val_all_num", 1, reduce="sum")
+                metrics_logger.log_value("val_illegal_num", int(info['act_criteria'] == -1), reduce="sum")
 
             if info['act_criteria'] != -1:
-                metrics_logger.log_value("trade_num", 1, reduce="sum")
-                metrics_logger.log_value("win_num", int(info['act_criteria'] == 0), reduce="sum")
-                metrics_logger.log_value("win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
-                metrics_logger.log_value("loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
+                if info['data_type'] == 'train':
+                    metrics_logger.log_value("trade_num", 1, reduce="sum")
+                    metrics_logger.log_value("win_num", int(info['act_criteria'] == 0), reduce="sum")
+                    metrics_logger.log_value("win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
+                    metrics_logger.log_value("loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
 
-                metrics_logger.log_value("sharpe_ratio", info['sharpe_ratio'])
-                metrics_logger.log_value("max_drawdown", info['max_drawdown'])
-                metrics_logger.log_value("trade_return", info['trade_return'])
-                metrics_logger.log_value("hold_length", info['hold_length'])
-                metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
+                    metrics_logger.log_value("sharpe_ratio", info['sharpe_ratio'])
+                    metrics_logger.log_value("max_drawdown", info['max_drawdown'])
+                    metrics_logger.log_value("trade_return", info['trade_return'])
+                    metrics_logger.log_value("hold_length", info['hold_length'])
+                    metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
+                else:
+                    metrics_logger.log_value("val_trade_num", 1, reduce="sum")
+                    metrics_logger.log_value("val_win_num", int(info['act_criteria'] == 0), reduce="sum")
+                    metrics_logger.log_value("val_win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
+                    metrics_logger.log_value("val_loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
+
+                    metrics_logger.log_value("val_sharpe_ratio", info['sharpe_ratio'])
+                    metrics_logger.log_value("val_max_drawdown", info['max_drawdown'])
+                    metrics_logger.log_value("val_trade_return", info['trade_return'])
+                    metrics_logger.log_value("val_hold_length", info['hold_length'])
+                    metrics_logger.log_value("val_excess_return", info['trade_return'] - info['trade_return_bm'])
+            
 
     def on_train_result(
         self, *, algorithm, result, metrics_logger, **kwargs
@@ -242,6 +259,16 @@ class LobCallbacks(DefaultCallbacks):
             "trade_return": float('nan'),
             "hold_length": float('nan'),
             "excess_return": float('nan'),
+
+            "val_trade_num": float('nan'),
+            "val_win_num": float('nan'),
+            "val_win_ret": float('nan'),
+            "val_loss_ret": float('nan'),
+            "val_sharpe_ratio": float('nan'),
+            "val_max_drawdown": float('nan'),
+            "val_trade_return": float('nan'),
+            "val_hold_length": float('nan'),
+            "val_excess_return": float('nan'),
         })
 
         if 'env_runners' in result:
@@ -256,15 +283,16 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
                 result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
                 result["custom_metrics"]["excess_return"] = result["env_runners"]["excess_return"]
-            else:
-                result["custom_metrics"]["trade_num"] = float('nan')
-                result["custom_metrics"]["win_ratio"] = float('nan')
-                result["custom_metrics"]["profit_loss_ratio"] = float('nan')
-                result["custom_metrics"]["sharpe_ratio"] = float('nan')
-                result["custom_metrics"]["max_drawdown"] = float('nan')
-                result["custom_metrics"]["trade_return"] = float('nan')
-                result["custom_metrics"]["hold_length"] = float('nan')
-                result["custom_metrics"]["excess_return"] = float('nan')
+
+            if 'val_trade_num' in result["env_runners"]:
+                result["custom_metrics"]["val_trade_num"] = result["env_runners"]["val_trade_num"]
+                result["custom_metrics"]["val_win_ratio"] = result["env_runners"]["val_win_num"] / result["env_runners"]["val_trade_num"]
+                result["custom_metrics"]["val_profit_loss_ratio"] = result["env_runners"]["val_win_ret"] / result["env_runners"]["val_loss_ret"]
+                result["custom_metrics"]["val_sharpe_ratio"] = result["env_runners"]["val_sharpe_ratio"]
+                result["custom_metrics"]["val_max_drawdown"] = result["env_runners"]["val_max_drawdown"]
+                result["custom_metrics"]["val_trade_return"] = result["env_runners"]["val_trade_return"]
+                result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
+                result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
 
 if __name__ == "__main__":
     net = BinCtablEncoderConfig(input_dims=(20, 10), extra_input_dims=4, ds=(20, 40, 40, 3), ts=(10, 6, 3, 1)).build()
