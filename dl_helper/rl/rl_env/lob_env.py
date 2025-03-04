@@ -885,6 +885,7 @@ class LOB_trade_env(gym.Env):
             plt.close(self.fig)
             del self.fig
         # 数据
+        log(f'[{self.data_producer.data_type}] reset')
         self.data_producer.reset()
         symbol_id, before_market_close_sec, x, _, self.need_close, self.period_done = self._get_data()
         # 账户
