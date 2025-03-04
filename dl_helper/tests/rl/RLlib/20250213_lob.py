@@ -108,7 +108,7 @@ if __name__ == "__main__":
         log(f"need_val: {need_val}")
         if need_val:
             config = config.evaluation(
-                evaluation_interval=10,
+                evaluation_interval=15,
                 evaluation_duration=3,
             )
 
@@ -145,7 +145,7 @@ if __name__ == "__main__":
             num_gpus_per_learner=1,
         )
         config = config.evaluation(
-            evaluation_interval=30,
+            evaluation_interval=15,
             evaluation_duration=3,
         )
 
@@ -161,8 +161,7 @@ if __name__ == "__main__":
 
         begin_time = time.time()
         # rounds = 2000
-        rounds = 100
-        # rounds = 5
+        rounds = 30
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
