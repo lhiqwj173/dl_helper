@@ -1,4 +1,4 @@
-import sys, os, time, json
+import sys, os, time, pickle
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
@@ -17,19 +17,8 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 train_folder = 'lob'
-init_logger(f'20250213_lob_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
-
-def plot_trade_info(res_dict):
-    """
-    绘制交易信息
-        episode.custom_metrics["sharpe_ratio"]
-        episode.custom_metrics["max_drawdown"]
-        episode.custom_metrics["trade_return"]
-        episode.custom_metrics["hold_length"]
-        episode.custom_metrics["excess_return"]
-    
-    """
-    pass
+log_name = f'20250213_lob_{beijing_time().strftime("%Y%m%d")}'
+init_logger(log_name, home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
     run_type = 'self'
@@ -63,9 +52,12 @@ if __name__ == "__main__":
                 'file_num': 10,# 数据生产器 限制最多使用的文件（日期）数量
                 'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
                 'use_symbols': ['513050'],
+
+                'train_folder' :train_folder,
+                'log_name': log_name,
             }
         )# 直接使用
-        .env_runners(num_env_runners=1)# 4核cpu，暂时选择1个环境运行器
+        .env_runners(num_env_runners=0)# 4核cpu，暂时选择1个环境运行器
         # 自定义模型
         .rl_module(
             rl_module_spec=RLModuleSpec(catalog_class=lob_PPOCatalog),# 使用自定义配置
@@ -153,7 +145,7 @@ if __name__ == "__main__":
             num_gpus_per_learner=1,
         )
         config = config.evaluation(
-            evaluation_interval=5,
+            evaluation_interval=30,
             evaluation_duration=3,
         )
 
@@ -161,36 +153,35 @@ if __name__ == "__main__":
         algo = config.build()
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
 
-        # # 训练文件夹管理
-        # train_folder_manager = TrainFolderManager(train_folder)
-        # if train_folder_manager.exists():
-        #     log(f"restore from {train_folder_manager.checkpoint_folder}")
-        #     algo.restore_from_path(train_folder_manager.checkpoint_folder)
-
+        # 训练文件夹管理
+        train_folder_manager = TrainFolderManager(train_folder)
+        if train_folder_manager.exists():
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
         begin_time = time.time()
-        # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
         # rounds = 2000
-        # rounds = 100
-        rounds = 5
+        rounds = 100
+        # rounds = 5
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
-            # 保存result为json
-            json_file = os.path.join(train_folder, f'result_{i}.json')
-            with open(json_file, 'w') as f:
-                json.dump(result, f, indent=2)
+            # 保存result
+            result_file = os.path.join(train_folder, f'result_{i}.pkl')
+            with open(result_file, 'wb') as f:
+                pickle.dump(result, f)
+
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
             if i>0 and (i % 10 == 0 or i == rounds - 1):
-                # # 保存检查点
-                # checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
-                # log(f"Checkpoint saved in directory {checkpoint_dir}")
+                # 保存检查点
+                checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
+                log(f"Checkpoint saved in directory {checkpoint_dir}")
                 # 绘制训练曲线
                 plot_training_curve(train_folder, out_file, time.time() - begin_time)
-                # # 压缩并上传
-                # train_folder_manager.push()
+                # 压缩并上传
+                train_folder_manager.push()
 
         # 停止算法
         algo.stop()

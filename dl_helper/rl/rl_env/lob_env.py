@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
-from py_ext.tool import log
+from py_ext.tool import log, init_logger
+from py_ext.datetime import beijing_time
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
 from dl_helper.train_param import in_kaggle
@@ -58,7 +59,7 @@ ILLEGAL_REWARD = -STD_REWARD
 # 积极操作奖励
 POSITIVE_REWARD = STD_REWARD
 
-# 扩大因子
+# 时间标准化
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
 
@@ -690,6 +691,10 @@ class LOB_trade_env(gym.Env):
             'period_done': False,
             'need_close': False,
             'save_folder': LOB_trade_env.REG_NAME,
+
+            # 用于日志初始化
+            'train_folder': 'lob',
+            'log_name': f'20250213_lob_{beijing_time().strftime("%Y%m%d")}',
         }
         # 用户配置更新
         for k, v in defult_config.items():
@@ -699,6 +704,9 @@ class LOB_trade_env(gym.Env):
         self.save_folder = os.path.join(config['save_folder'], 'env_output')
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
+
+        # 初始化日志
+        init_logger(config['log_name'], home=config['train_folder'], timestamp=False)
         
         # 数据生产器
         self.data_producer = data_producer(config['data_type'], config['his_len'], config['file_num'], config['simple_test'], config['need_cols'], config['use_symbols'])
