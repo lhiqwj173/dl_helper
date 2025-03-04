@@ -131,9 +131,9 @@ class Plotter(BaseCustomPlotter):
 
 if __name__ == "__main__":
 
-    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv", custom_plotter=Plotter())
-    import sys
-    sys.exit()
+    # plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv", custom_plotter=Plotter())
+    # import sys
+    # sys.exit()
 
     run_type = 'self'
 
