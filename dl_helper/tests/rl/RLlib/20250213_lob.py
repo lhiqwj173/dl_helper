@@ -1,4 +1,4 @@
-import sys, os, time
+import sys, os, time, json
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
@@ -176,6 +176,10 @@ if __name__ == "__main__":
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
+            # 保存result为json
+            json_file = os.path.join(train_folder, f'result_{i}.json')
+            with open(json_file, 'w') as f:
+                json.dump(result, f, indent=2)
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
