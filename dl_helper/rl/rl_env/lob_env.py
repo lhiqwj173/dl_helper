@@ -780,6 +780,9 @@ class LOB_trade_env(gym.Env):
             # 重置账户
             self.acc.reset()
 
+        #数据类型
+        info['data_type'] = self.data_producer.data_type
+
         # 合法性检查
         if not legal:
             # 非法动作, 本轮结束
@@ -789,9 +792,6 @@ class LOB_trade_env(gym.Env):
         # 拷贝 res > info
         for k, v in res.items():
             info[k] = v
-
-        #数据类型
-        info['data_type'] = self.data_producer.data_type
 
         # 只有平仓才给与 act_criteria
         # 同时记录评价指标

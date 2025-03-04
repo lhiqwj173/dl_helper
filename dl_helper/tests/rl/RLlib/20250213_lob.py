@@ -277,7 +277,7 @@ if __name__ == "__main__":
         # rounds = 2000
         rounds = 30
         for i in range(rounds):
-            log(f"\nTraining iteration {i+1}/{rounds}")
+            log(f"Training iteration {i+1}/{rounds}")
             result = algo.train()
             # 保存result
             result_file = os.path.join(train_folder, f'result_{i}.pkl')
