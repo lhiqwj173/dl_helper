@@ -161,11 +161,11 @@ if __name__ == "__main__":
         algo = config.build()
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
 
-        # 训练文件夹管理
-        train_folder_manager = TrainFolderManager(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            algo.restore_from_path(train_folder_manager.checkpoint_folder)
+        # # 训练文件夹管理
+        # train_folder_manager = TrainFolderManager(train_folder)
+        # if train_folder_manager.exists():
+        #     log(f"restore from {train_folder_manager.checkpoint_folder}")
+        #     algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
 
         begin_time = time.time()
@@ -183,7 +183,7 @@ if __name__ == "__main__":
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
-            if i % 10 == 0 or i == rounds - 1:
+            if i>0 and (i % 10 == 0 or i == rounds - 1):
                 # 保存检查点
                 checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
