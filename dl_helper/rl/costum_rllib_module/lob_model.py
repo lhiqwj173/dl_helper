@@ -9,6 +9,7 @@ from ray.rllib.core.columns import Columns
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -178,6 +179,66 @@ class LobCallbacks(DefaultCallbacks):
             for env in eval_env_runner.env.unwrapped.envs:
                 _env = _get_env(env)
                 _env.train()
+
+    def on_episode_step(
+        self,
+        *,
+        episode,
+        env_runner=None,
+        metrics_logger=None,
+        env=None,
+        env_index,
+        rl_module=None,
+        worker=None,
+        base_env=None,
+        policies=None,
+        **kwargs,
+    ) -> None:
+        # res = {
+        #     'sortino_ratio': 0.0,
+        #     'sharpe_ratio': 0.0,
+        #     'max_drawdown': 0.0,
+        #     'max_drawdown_ticks': 0.0,
+        #     'trade_return': 0.0,
+        #     'step_return': 0.0,
+        #     'hold_length': 0.0,
+        #     'sortino_ratio_bm': 0.0,
+        #     'sharpe_ratio_bm': 0.0,
+        #     'max_drawdown_bm': 0.0,
+        #     'max_drawdown_ticks_bm': 0.0,
+        #     'max_drawup_ticks_bm': 0.0,
+        #     'trade_return_bm': 0.0,
+        #     'step_return_bm': 0.0,
+        # }
+        # 从环境的 info 中提取自定义指标
+        info = episode.get_infos(-1)
+        if info is not None and 'act_criteria' in info:
+            metrics_logger.log_value("win_num", int(data['act_criteria'] == 0), reduce="sum")
+            metrics_logger.log_value("illegal_num", int(data['act_criteria'] == -1), reduce="sum")
+            metrics_logger.log_value("win_ret", data['trade_return'] if data['act_criteria'] == 0 else 0, reduce="sum")
+            metrics_logger.log_value("loss_ret", abs(data['trade_return']) if data['act_criteria'] == 1 else 0, reduce="sum")
+
+            metrics_logger.log_value("trade_num", 1, reduce="sum")
+            metrics_logger.log_value("sharpe_ratio", info['sharpe_ratio'])
+            metrics_logger.log_value("max_drawdown", info['max_drawdown'])
+            metrics_logger.log_value("trade_return", info['trade_return'])
+            metrics_logger.log_value("hold_length", info['hold_length'])
+            metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
+
+    def on_train_result(
+        self, *, algorithm, result, metrics_logger, **kwargs
+    ):
+        # 提取自定义指标并添加到训练结果中
+        result.setdefault("custom_metrics", {})
+        result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"]
+        result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"]
+        result["custom_metrics"]["illegal_ratio"] = result["env_runners"]["illegal_num"] / result["env_runners"]["trade_num"]
+        result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"]
+        result["custom_metrics"]["sharpe_ratio"] = result["env_runners"]["sharpe_ratio"]
+        result["custom_metrics"]["max_drawdown"] = result["env_runners"]["max_drawdown"]
+        result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
+        result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
+        result["custom_metrics"]["excess_return"] = result["env_runners"]["excess_return"]
 
 if __name__ == "__main__":
     net = BinCtablEncoderConfig(input_dims=(20, 10), extra_input_dims=4, ds=(20, 40, 40, 3), ts=(10, 6, 3, 1)).build()

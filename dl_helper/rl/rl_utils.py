@@ -31,6 +31,10 @@ def stop():
     os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
 
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
+    """
+    自定义指标统一放在 custom_metrics 下
+
+    """
     important_metrics = {
         "env_runner": {},
         "val": {},
@@ -57,9 +61,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         'training_iteration',
     ]
 
-    data_dict = OrderedDict()
-    for k in ks:
-        data_dict[k] = ''
+    data_dict = OrderedDict.fromkeys(ks, '')
 
     if 'counters' in data:
         if 'num_env_steps_sampled' in data["counters"]:
@@ -108,6 +110,13 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         important_metrics["num_training_step_calls_per_iteration"] = data["num_training_step_calls_per_iteration"]
     if 'training_iteration' in data:
         important_metrics["training_iteration"] = data["training_iteration"]
+
+    # 搜集自定义指标
+    if 'custom_metrics' in data:
+        important_metrics['custom_metrics'] = {}
+        for k, v in data['custom_metrics'].items():
+            ks.append(f'custom_metrics_{k}')
+            important_metrics['custom_metrics'][k] = v
             
     out_func(f"--------- training iteration: {important_metrics['training_iteration']} ---------")
     out_func("env_runner:")
@@ -134,12 +143,19 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         out_func(f"time_this_iter_s: {important_metrics['time_this_iter_s']:.4f}")
     if 'num_training_step_calls_per_iteration' in important_metrics:
         out_func(f"num_training_step_calls_per_iteration: {important_metrics['num_training_step_calls_per_iteration']}")
+
+    if 'custom_metrics' in important_metrics:
+        out_func(f"custom_metrics:")
+        for k, v in important_metrics['custom_metrics'].items():
+            out_func(f"  {k}: {v}")
+
     out_func('-'*30)
 
     if out_file:
         # 写入列名
         if not os.path.exists(out_file):
             with open(out_file, 'w') as f:
+                f.write('datetime,')
                 f.write(','.join(ks) + '\n')
         
         # 遍历提取数值
@@ -154,6 +170,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
 
         # 写入数据
         with open(out_file, 'a') as f:
+            f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ',')
             f.write(','.join(data_dict.values()) + '\n')
 
     return important_metrics
@@ -199,7 +216,6 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     plt.savefig(os.path.join(train_folder, f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' if None is pic_name else pic_name))
     
     plt.close()  # 关闭当前图形
-
 
 class GradientAccumulator:
     def __init__(self, momentum=0.9, eps=1e-5):

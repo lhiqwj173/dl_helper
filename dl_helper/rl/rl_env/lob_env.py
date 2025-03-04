@@ -50,14 +50,15 @@ USE_CODES = [
 MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
 STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
 
+STD_REWARD = 100
+
 # 非法操作奖励
-ILLEGAL_REWARD = -100
+ILLEGAL_REWARD = -STD_REWARD
 
 # 积极操作奖励
-POSITIVE_REWARD = 0.1
+POSITIVE_REWARD = STD_REWARD
 
 # 扩大因子
-SCALE_FACTOR = 1e6
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
 
@@ -466,6 +467,8 @@ class Account:
         self.net = []
         self.net_bm = []
         self.bm_next_open = True
+        # 年内周期个数
+        self.num_per_year = int(250*(4*60*60/3))
         # 净值文件
         self.net_file = net_file
         # 若已经存在 则删除
@@ -480,16 +483,32 @@ class Account:
         with open(self.net_file, 'a') as f:
             f.write(','.join(map(str, net)) + '\n')
 
-    def step(self, bid_price, ask_price, action, need_close):
+    def step(self, bid_price, ask_price, action):
         """
         执行交易
         :param bid_price: 最优买价
         :param ask_price: 最优卖价 
         :param action: 0-买入 1-卖出 2-不操作
-        :param need_close: 是否需要平仓
 
         :return: (动作是否合法, 持仓量, 对数收益率, 评价指标)
+            评价指标(年化):
+                'sortino_ratio'
+                'sharpe_ratio'
+                'max_drawdown'
+                'max_drawdown_ticks'
+                'trade_return'
+                'hold_length'
+                'sortino_ratio_bm'
+                'sharpe_ratio_bm'
+                'max_drawdown_bm'
+                'max_drawdown_ticks_bm'
+                'max_drawup_ticks_bm'
+                'trade_return_bm'
         """
+        # nan 检查
+        assert not np.isnan(bid_price), f'bid_price is nan, {bid_price}'
+        assert not np.isnan(ask_price), f'ask_price is nan, {ask_price}'
+
         # 重置fee记录
         if self.pos == 0:
             self.buy_fee = 0
@@ -552,69 +571,61 @@ class Account:
             self.net_raw.append(bid_price)
         
         # 评价指标
-        res = {}
+        res = {
+            'sortino_ratio': 0.0,
+            'sharpe_ratio': 0.0,
+            'max_drawdown': 0.0,
+            'max_drawdown_ticks': 0.0,
+            'trade_return': 0.0,
+            'step_return': 0.0,
+            'hold_length': 0.0,
+            'sortino_ratio_bm': 0.0,
+            'sharpe_ratio_bm': 0.0,
+            'max_drawdown_bm': 0.0,
+            'max_drawdown_ticks_bm': 0.0,
+            'max_drawup_ticks_bm': 0.0,
+            'trade_return_bm': 0.0,
+            'step_return_bm': 0.0,
+        }
         if legal:
             # 数据足够 > 1
-            # 需要平仓 或 卖出， 需要计算评价指标， 储存在info中
-            if need_close or action==1:
-                if (len(self.net_raw) > 1):
-                    # 计算策略净值的评价指标
-                    # 平均税费(买入卖出)到每一步
-                    # 第一步买入，等价较好，不平均税费
-                    step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                    self.net = np.array(self.net_raw)
-                    self.net[1:] -= step_fee
-                    # 储存净值序列到文件
-                    self.save_net(self.net)
-                    # 计算对数收益率序列
-                    log_returns = np.diff(np.log(self.net))
-                    # 计算指标
-                    res['sortino_ratio'] = calc_sortino_ratio(log_returns)
-                    res['sharpe_ratio'] = calc_sharpe_ratio(log_returns)
-                    res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(self.net)
-                    res['total_return'] = calc_return(log_returns)
-                    res['trade_return'] = res['total_return'] / len(log_returns)
-                    res['hold_length'] = len(self.net)# 持仓时间
-                else:
-                    # 策略净值
-                    res['sortino_ratio'] = 0
-                    res['sharpe_ratio'] = 0
-                    res['max_drawdown'] = 0
-                    res['max_drawdown_ticks'] = 0
-                    res['total_return'] = 0
-                    res['trade_return'] = 0
-                    res['hold_length'] = 0
+            # 需要计算评价指标， 储存在info中
+            if (len(self.net_raw) > 1):
+                # 计算策略净值的评价指标
+                # 平均税费(买入卖出)到每一步
+                # 第一步买入，等价较好，不平均税费 TODO
+                step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
+                self.net = np.array(self.net_raw)
+                self.net[1:] -= step_fee
+                # 储存净值序列到文件
+                self.save_net(self.net)
+                # 计算对数收益率序列
+                log_returns = np.diff(np.log(self.net))
+                # 计算指标
+                res['sortino_ratio'] = calc_sortino_ratio(log_returns, 0, num_per_year=self.num_per_year)
+                res['sharpe_ratio'] = calc_sharpe_ratio(log_returns, 0, num_per_year=self.num_per_year)
+                res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(self.net)
+                res['trade_return'] = calc_return(log_returns, num_per_year=self.num_per_year)
+                res['step_return'] = calc_return(log_returns[-2:], num_per_year=self.num_per_year)
+                # 从第一个非0值开始计算持仓长度
+                first_nonzero = next((i for i, x in enumerate(log_returns) if x != 0), len(log_returns))
+                res['hold_length'] = len(log_returns) - first_nonzero + 1
 
-                if (len(self.net_raw_bm) > 1):
-                    # 计算基准净值的评价指标
-                    buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
-                    sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
-                    step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
-                    self.net_bm = np.array(self.net_raw_bm)
-                    self.net_bm[1:] -= step_fee_bm
-                    # 计算对数收益率序列
-                    log_returns_bm = np.diff(np.log(self.net_bm))
-                    res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm)
-                    res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm)
-                    res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(self.net_bm)
-                    res['max_drawup_ticks_bm'] = calc_drawup_ticks(self.net_bm)
-                    res['total_return_bm'] = calc_return(log_returns_bm)
-                    res['trade_return_bm'] = res['total_return_bm'] / len(log_returns_bm)
-                else:
-                    # 基准净值
-                    res['sortino_ratio_bm'] = 0
-                    res['sharpe_ratio_bm'] = 0
-                    res['max_drawdown_bm'] = 0
-                    res['max_drawdown_ticks_bm'] = 0
-                    res['max_drawup_ticks_bm'] = 0
-                    res['total_return_bm'] = 0
-                    res['trade_return_bm'] = 0
-
-                # 平仓后，重置净值
-                self.reset()
-        else:
-            # 不合法的操作，交易全部清空
-            self.reset()
+            if (len(self.net_raw_bm) > 1):
+                # 计算基准净值的评价指标
+                buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
+                sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
+                step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
+                self.net_bm = np.array(self.net_raw_bm)
+                self.net_bm[1:] -= step_fee_bm
+                # 计算对数收益率序列
+                log_returns_bm = np.diff(np.log(self.net_bm))
+                res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm, 0, num_per_year=self.num_per_year)
+                res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm, 0, num_per_year=self.num_per_year)
+                res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(self.net_bm)
+                res['max_drawup_ticks_bm'] = calc_drawup_ticks(self.net_bm)
+                res['trade_return_bm'] = calc_return(log_returns_bm, num_per_year=self.num_per_year)
+                res['step_return_bm'] = calc_return(log_returns_bm[-2:], num_per_year=self.num_per_year)
 
         # 额外数据 标准化
         # 持仓量 TODO
@@ -634,6 +645,7 @@ class Account:
         self.profit = 0
         self.net_raw = []
         self.net_raw_bm = []
+        self.bm_next_open = True
         return self.pos, 0
 
 class LOB_trade_env(gym.Env):
@@ -720,7 +732,7 @@ class LOB_trade_env(gym.Env):
         self.notification_window = None
 
     def no_need_track_info_item(self):
-        return ['close', 'act_criteria', 'period_done']
+        return ['act_criteria', 'period_done']
 
     def need_wait_close(self):
         return True
@@ -752,76 +764,67 @@ class LOB_trade_env(gym.Env):
     def _cal_reward(self, action, need_close, info):
         """
         计算奖励
-        非法动作 reward=ILLEGAL_REWARD
-        积极动作 reward=POSITIVE_REWARD
-        平仓 reward= 收益率 + 最大回撤 + (POSITIVE_REWARD | -2*POSITIVE_REWARD) 
-            收益率 + 最大回撤 为正则 +POSITIVE_REWARD
-            收益率 + 最大回撤 为负 -2*POSITIVE_REWARD
-        其他 reward=0
-
-        平仓标志: info['close'] = True
-        需要在平仓后回溯属于本次交易的所有时间步, 修改 reward=收益率
         """
-        legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action, need_close)
+        legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
+        if need_close or action==1 or not legal:
+            # 重置账户
+            self.acc.reset()
 
         # 合法性检查
         if not legal:
-            # 非法动作
-            info['close'] = True
+            # 非法动作, 本轮结束
             info['act_criteria'] = -1
-            return ILLEGAL_REWARD, False, pos, profit
+            return ILLEGAL_REWARD, True, pos, profit# TODO
 
-        # 只有平仓才给与 交易reward
+        # 拷贝 res > info
+        for k, v in res.items():
+            info[k] = v
+
+        # 只有平仓才给与 act_criteria
         # 同时记录评价指标
         if need_close or action==1:
-            info['close'] = True
             # 增加操作交易评价结果
             # 体现 非法/win/loss
-            info['act_criteria'] = 0 if res['total_return'] > 0 else 1
+            info['act_criteria'] = 0 if res['trade_return'] > 0 else 1
 
-            #########################################################
-            # 交易计算奖励 范围: [ILLEGAL_REWARD, -ILLEGAL_REWARD] 
-            
-            # 1.0 res['trade_return']平均了所有时间步,通常很小,导致虽有收益但奖励为负 -> 可能会倾向于不发生交易(reward=0)
-            # reward = res['trade_return'] + res['max_drawdown']
+        #########################################################
+        # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
 
-            # # 2.0 res['total_return']交易对的绝对收益，强调收益加大权重
-            # reward = res['total_return']*1e4 + res['max_drawdown']
-
-            # 3.0 sortino_ratio
-            # reward = res['sortino_ratio']
-
-            # 4.0 sharpe_ratio 
-            # reward = res['sharpe_ratio']
-
-            # 5.0 
-            # 交易奖励: 平均收益 * 放大因子 - 做空可盈利的回撤惩罚 
-            # 若交易奖励为0，基准净值做多可盈利的收益惩罚
-            punish = res['max_drawdown_ticks'] >= 2
-            reward = res['trade_return'] * SCALE_FACTOR + punish * res['max_drawdown']
-            if reward == 0:
-                punish = res['max_drawup_ticks_bm'] >= 2
-                reward = -res['trade_return_bm'] * SCALE_FACTOR * punish
-            #########################################################
-
-            for k, v in res.items():
-                info[k] = v
+        # 1.0 基础奖励 平仓年化收益率 / 持仓每步年化收益率
+        # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
+        if need_close or action==1:
+            base_reward = res['trade_return'] * (STD_REWARD / 1)
         else:
-            reward = 0
+            base_reward = res['step_return'] * (STD_REWARD / 1)
 
-        # 积极操作奖励 买入 / 卖出
-        if action == 0:
-            reward += POSITIVE_REWARD
-        elif action == 1:
-            if info['act_criteria'] == 1:
-                assert reward < 0, f'交易亏损 reward<0 ({reward})'
-                reward -= 2*POSITIVE_REWARD
-            elif info['act_criteria'] == 0:
-                assert reward > 0, f'交易盈利 reward>0 ({reward})'
-                reward += POSITIVE_REWARD
+        # 2.0 平仓回撤惩罚(回撤2个最小tick变动价格)
+        # # 假设最大容忍5 ticks的回撤
+        # 计算超过2 tick的部分
+        excess_drawdown = max(0, res['max_drawdown_ticks'] - 2)
+        # 非线性惩罚
+        dropdown_punish = -(excess_drawdown**2) * (STD_REWARD / (5**2))
+
+        # 3.0 超额奖励
+        # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
+        if need_close or action==1:
+            excess_reward = (res['trade_return'] - res['trade_return_bm']) * (STD_REWARD / 1)
+        else:
+            excess_reward = (res['step_return'] - res['step_return_bm']) * (STD_REWARD / 1)
+
+        # # 4.0 持仓长度惩罚
+        # # 暂定范围为 [0, 4800] > [-STD_REWARD, 0]
+        # hold_length_punish = -((res['hold_length']**3) * (STD_REWARD / (4800**3)))
+
+        # # 5.0 积极操作奖励 买入 / 卖出
+        # if action in [0, 1]:
+        #     positive_reward += POSITIVE_REWARD
+        #########################################################
+
+        # 组成奖励
+        reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
 
         # 奖励限制范围
-        reward = max(min(reward, -ILLEGAL_REWARD*0.5), ILLEGAL_REWARD*0.5)
+        reward = np.clip(reward, -STD_REWARD, STD_REWARD)
 
         return reward, False, pos, profit
 
@@ -850,7 +853,6 @@ class LOB_trade_env(gym.Env):
         symbol_id, before_market_close_sec, observation, data_done, self.need_close, self.period_done = self._get_data()
 
         info = {
-            'close': False,# 若为True, 需要回溯属于本次交易的所有时间步, 修改 reward=收益率
             'period_done': self.period_done,
         }
 

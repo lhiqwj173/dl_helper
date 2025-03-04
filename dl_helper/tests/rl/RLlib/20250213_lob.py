@@ -17,7 +17,19 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 train_folder = 'lob'
-init_logger('20250213_lob', home=train_folder, timestamp=False)
+init_logger(f'20250213_lob_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
+
+def plot_trade_info(res_dict):
+    """
+    绘制交易信息
+        episode.custom_metrics["sharpe_ratio"]
+        episode.custom_metrics["max_drawdown"]
+        episode.custom_metrics["trade_return"]
+        episode.custom_metrics["hold_length"]
+        episode.custom_metrics["excess_return"]
+    
+    """
+    pass
 
 if __name__ == "__main__":
     run_type = 'self'
@@ -48,7 +60,7 @@ if __name__ == "__main__":
             env_config={
                 'data_type': 'train',# 训练/测试
                 'his_len': 10,# 每个样本的 历史数据长度
-                'file_num': 5,# 数据生产器 限制最多使用的文件（日期）数量
+                'file_num': 10,# 数据生产器 限制最多使用的文件（日期）数量
                 'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
                 'use_symbols': ['513050'],
             }
@@ -158,9 +170,9 @@ if __name__ == "__main__":
 
         begin_time = time.time()
         # 训练循环 TODO 拉取参数/同步参数/同步训练记录/日志
-        rounds = 2000
+        # rounds = 2000
         # rounds = 100
-        # rounds = 30
+        rounds = 30
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
