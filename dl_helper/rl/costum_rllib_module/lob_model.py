@@ -260,10 +260,10 @@ class LobCallbacks(DefaultCallbacks):
             "hold_length": float('nan'),
             "excess_return": float('nan'),
 
+            "val_illegal_ratio": float('nan'),
             "val_trade_num": float('nan'),
-            "val_win_num": float('nan'),
-            "val_win_ret": float('nan'),
-            "val_loss_ret": float('nan'),
+            "val_win_ratio": float('nan'),
+            "val_profit_loss_ratio": float('nan'),
             "val_sharpe_ratio": float('nan'),
             "val_max_drawdown": float('nan'),
             "val_trade_return": float('nan'),
