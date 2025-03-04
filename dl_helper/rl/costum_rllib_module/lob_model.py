@@ -213,10 +213,10 @@ class LobCallbacks(DefaultCallbacks):
         # 从环境的 info 中提取自定义指标
         info = episode.get_infos(-1)
         if info is not None and 'act_criteria' in info:
-            metrics_logger.log_value("win_num", int(data['act_criteria'] == 0), reduce="sum")
-            metrics_logger.log_value("illegal_num", int(data['act_criteria'] == -1), reduce="sum")
-            metrics_logger.log_value("win_ret", data['trade_return'] if data['act_criteria'] == 0 else 0, reduce="sum")
-            metrics_logger.log_value("loss_ret", abs(data['trade_return']) if data['act_criteria'] == 1 else 0, reduce="sum")
+            metrics_logger.log_value("win_num", int(info['act_criteria'] == 0), reduce="sum")
+            metrics_logger.log_value("illegal_num", int(info['act_criteria'] == -1), reduce="sum")
+            metrics_logger.log_value("win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
+            metrics_logger.log_value("loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
 
             metrics_logger.log_value("trade_num", 1, reduce="sum")
             metrics_logger.log_value("sharpe_ratio", info['sharpe_ratio'])
