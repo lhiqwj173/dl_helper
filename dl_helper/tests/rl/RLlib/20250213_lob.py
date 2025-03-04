@@ -184,13 +184,13 @@ if __name__ == "__main__":
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
             if i>0 and (i % 10 == 0 or i == rounds - 1):
-                # 保存检查点
-                checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
-                log(f"Checkpoint saved in directory {checkpoint_dir}")
+                # # 保存检查点
+                # checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
+                # log(f"Checkpoint saved in directory {checkpoint_dir}")
                 # 绘制训练曲线
                 plot_training_curve(train_folder, out_file, time.time() - begin_time)
-                # 压缩并上传
-                train_folder_manager.push()
+                # # 压缩并上传
+                # train_folder_manager.push()
 
         # 停止算法
         algo.stop()
