@@ -264,7 +264,7 @@ if __name__ == "__main__":
             num_gpus_per_learner=1,
         )
         config = config.evaluation(
-            evaluation_interval=10,
+            evaluation_interval=15,
             evaluation_duration=3,
         )
 
@@ -280,14 +280,15 @@ if __name__ == "__main__":
 
         begin_time = time.time()
         # rounds = 2000
-        rounds = 10
+        rounds = 30
         for i in range(rounds):
             log(f"Training iteration {i+1}/{rounds}")
             result = algo.train()
-            # 保存result
-            result_file = os.path.join(train_folder, f'result_{i}.pkl')
-            with open(result_file, 'wb') as f:
-                pickle.dump(result, f)
+
+            # # 保存result
+            # result_file = os.path.join(train_folder, f'result_{i}.pkl')
+            # with open(result_file, 'wb') as f:
+            #     pickle.dump(result, f)
 
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
