@@ -212,7 +212,7 @@ class LobCallbacks(DefaultCallbacks):
         # }
         # 从环境的 info 中提取自定义指标
         info = episode.get_infos(-1)
-        print(f'info: \n{info}')
+        # print(f'info: \n{info}')
         if info is not None and 'act_criteria' in info:
             if info['data_type'] == 'train':
                 metrics_logger.log_value("all_num", 1, reduce="sum")
