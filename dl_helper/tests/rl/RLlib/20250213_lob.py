@@ -132,6 +132,11 @@ class Plotter(BaseCustomPlotter):
 if __name__ == "__main__":
 
     # plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv", custom_plotter=Plotter())
+
+    # result_file = r"C:\Users\lh\Desktop\temp\lob\result_14.pkl"
+    # with open(result_file, 'rb') as f:
+    #     result = pickle.load(f)
+
     # import sys
     # sys.exit()
 
@@ -259,7 +264,7 @@ if __name__ == "__main__":
             num_gpus_per_learner=1,
         )
         config = config.evaluation(
-            evaluation_interval=15,
+            evaluation_interval=10,
             evaluation_duration=3,
         )
 
@@ -275,7 +280,7 @@ if __name__ == "__main__":
 
         begin_time = time.time()
         # rounds = 2000
-        rounds = 30
+        rounds = 10
         for i in range(rounds):
             log(f"Training iteration {i+1}/{rounds}")
             result = algo.train()

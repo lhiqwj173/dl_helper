@@ -170,7 +170,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
 
         # 写入数据
         with open(out_file, 'a') as f:
-            f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ',')
+            f.write(beijing_time().strftime('%Y-%m-%d %H:%M:%S') + ',')
             f.write(','.join(data_dict.values()) + '\n')
 
     return important_metrics
