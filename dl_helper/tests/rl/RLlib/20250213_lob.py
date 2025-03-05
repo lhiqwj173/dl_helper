@@ -279,8 +279,8 @@ if __name__ == "__main__":
             algo.restore_from_path(train_folder_manager.checkpoint_folder)
 
         begin_time = time.time()
-        # rounds = 2000
-        rounds = 30
+        rounds = 5000
+        # rounds = 30
         for i in range(rounds):
             log(f"Training iteration {i+1}/{rounds}")
             result = algo.train()
