@@ -1201,3 +1201,5 @@ class LOB_trade_env(gym.Env):
             
         return self.selected_action
 
+if __name__ == '__main__':
+    pass

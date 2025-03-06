@@ -52,6 +52,8 @@ class BinCtablEncoder(TorchModel, Encoder):
 
         extra_x = inputs[Columns.OBS][:,self.split_index:]
         x = inputs[Columns.OBS][:,:self.split_index].reshape(-1, *self.input_dims)
+
+        x = torch.transpose(x, 1, 2)
         x = self.BiN(x)
 
         with torch.no_grad():
@@ -296,7 +298,7 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
 
 if __name__ == "__main__":
-    net = BinCtablEncoderConfig(input_dims=(20, 10), extra_input_dims=4, ds=(20, 40, 40, 3), ts=(10, 6, 3, 1)).build()
+    net = BinCtablEncoderConfig(input_dims=(10, 20), extra_input_dims=4, ds=(20, 40, 40, 3), ts=(10, 6, 3, 1)).build()
     print(net)
 
     batch_size = 2
@@ -306,3 +308,6 @@ if __name__ == "__main__":
     # 前向传播
     output = net({Columns.OBS: input_tensor})# 与默认编码器一致输入/输出
     print(output)
+
+
+

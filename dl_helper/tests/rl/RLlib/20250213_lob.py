@@ -55,77 +55,77 @@ class Plotter(BaseCustomPlotter):
 
         # 1. illegal_ratio 和 win_ratio
         ax = axes_list[0]
-        illegal_ratio_max = max(out_data['custom_metrics_illegal_ratio'])
-        win_ratio_max = max(out_data['custom_metrics_win_ratio'])
-        val_illegal_ratio_max = max(out_data['custom_metrics_val_illegal_ratio'])
-        val_win_ratio_max = max(out_data['custom_metrics_val_win_ratio'])
-        ax.plot(datetime, out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_max:.2f})')
-        ax.plot(datetime, out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_max:.2f})')
+        illegal_ratio_last = out_data['custom_metrics_illegal_ratio'].iloc[-1]
+        win_ratio_last = out_data['custom_metrics_win_ratio'].iloc[-1]
+        val_illegal_ratio_last = out_data['custom_metrics_val_illegal_ratio'].iloc[-1]
+        val_win_ratio_last = out_data['custom_metrics_val_win_ratio'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_last:.2f})')
         ax.set_title('Illegal Ratio & Win Ratio')
         ax.legend()
 
         # 2. trade_num
         ax = axes_list[1]
-        trade_num_max = max(out_data['custom_metrics_trade_num'])
-        val_trade_num_max = max(out_data['custom_metrics_val_trade_num'])
-        ax.plot(datetime, out_data['custom_metrics_trade_num'], 'b-', label=f'trade_num({trade_num_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_num'], 'b-', label=f'val_trade_num({val_trade_num_max:.2f})')
+        trade_num_last = out_data['custom_metrics_trade_num'].iloc[-1]
+        val_trade_num_last = out_data['custom_metrics_val_trade_num'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_trade_num'], 'b-', label=f'trade_num({trade_num_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_trade_num'], 'b-', label=f'val_trade_num({val_trade_num_last:.2f})')
         ax.set_title('Trade Number')
         ax.legend()
 
         # 3. profit_loss_ratio
         ax = axes_list[2]
-        profit_loss_ratio_max = max(out_data['custom_metrics_profit_loss_ratio'])
-        val_profit_loss_ratio_max = max(out_data['custom_metrics_val_profit_loss_ratio'])
-        ax.plot(datetime, out_data['custom_metrics_profit_loss_ratio'], 'g-', label=f'profit_loss_ratio({profit_loss_ratio_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_profit_loss_ratio'], 'g-', label=f'val_profit_loss_ratio({val_profit_loss_ratio_max:.2f})')
+        profit_loss_ratio_last = out_data['custom_metrics_profit_loss_ratio'].iloc[-1]
+        val_profit_loss_ratio_last = out_data['custom_metrics_val_profit_loss_ratio'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_profit_loss_ratio'], 'g-', label=f'profit_loss_ratio({profit_loss_ratio_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_profit_loss_ratio'], 'g-', label=f'val_profit_loss_ratio({val_profit_loss_ratio_last:.2f})')
         ax.set_title('Profit Loss Ratio')
         ax.legend()
 
         # 4. sharpe_ratio
         ax = axes_list[3]
-        sharpe_ratio_max = max(out_data['custom_metrics_sharpe_ratio'])
-        val_sharpe_ratio_max = max(out_data['custom_metrics_val_sharpe_ratio'])
-        ax.plot(datetime, out_data['custom_metrics_sharpe_ratio'], 'r-', label=f'sharpe_ratio({sharpe_ratio_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_sharpe_ratio'], 'r-', label=f'val_sharpe_ratio({val_sharpe_ratio_max:.2f})')
+        sharpe_ratio_last = out_data['custom_metrics_sharpe_ratio'].iloc[-1]
+        val_sharpe_ratio_last = out_data['custom_metrics_val_sharpe_ratio'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_sharpe_ratio'], 'r-', label=f'sharpe_ratio({sharpe_ratio_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_sharpe_ratio'], 'r-', label=f'val_sharpe_ratio({val_sharpe_ratio_last:.2f})')
         ax.set_title('Sharpe Ratio')
         ax.legend()
 
         # 5. max_drawdown
         ax = axes_list[4]
-        max_drawdown_max = max(out_data['custom_metrics_max_drawdown'])
-        val_max_drawdown_max = max(out_data['custom_metrics_val_max_drawdown'])
-        ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_max_drawdown'], 'r-', label=f'val_max_drawdown({val_max_drawdown_max:.2f})')
+        max_drawdown_last = out_data['custom_metrics_max_drawdown'].iloc[-1]
+        val_max_drawdown_last = out_data['custom_metrics_val_max_drawdown'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_max_drawdown'], 'r-', label=f'val_max_drawdown({val_max_drawdown_last:.2f})')
         ax.set_title('Max Drawdown')
         ax.legend()
 
         # 6. trade_return
         ax = axes_list[5]
-        trade_return_max = max(out_data['custom_metrics_trade_return'])
-        val_trade_return_max = max(out_data['custom_metrics_val_trade_return'])
-        ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_return'], 'g-', label=f'val_trade_return({val_trade_return_max:.2f})')
+        trade_return_last = out_data['custom_metrics_trade_return'].iloc[-1]
+        val_trade_return_last = out_data['custom_metrics_val_trade_return'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_trade_return'], 'g-', label=f'val_trade_return({val_trade_return_last:.2f})')
         ax.set_title('Trade Return')
         ax.legend()
 
         # 7. hold_length
         ax = axes_list[6]
-        hold_length_max = max(out_data['custom_metrics_hold_length'])
-        val_hold_length_max = max(out_data['custom_metrics_val_hold_length'])
-        ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_hold_length'], 'b-', label=f'val_hold_length({val_hold_length_max:.2f})')
+        hold_length_last = out_data['custom_metrics_hold_length'].iloc[-1]
+        val_hold_length_last = out_data['custom_metrics_val_hold_length'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_hold_length'], 'b-', label=f'val_hold_length({val_hold_length_last:.2f})')
         ax.set_title('Hold Length')
         ax.legend()
 
         # 8. excess_return
         ax = axes_list[7]
-        excess_return_max = max(out_data['custom_metrics_excess_return'])
-        val_excess_return_max = max(out_data['custom_metrics_val_excess_return'])
-        ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_max:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_excess_return'], 'g-', label=f'val_excess_return({val_excess_return_max:.2f})')
+        excess_return_last = out_data['custom_metrics_excess_return'].iloc[-1]
+        val_excess_return_last = out_data['custom_metrics_val_excess_return'].iloc[-1]
+        ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.2f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_excess_return'], 'g-', label=f'val_excess_return({val_excess_return_last:.2f})')
         ax.set_title('Excess Return')
         ax.legend()
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
             rl_module_spec=RLModuleSpec(catalog_class=lob_PPOCatalog),# 使用自定义配置
             model_config={
                 # 自定义编码器参数
-                'input_dims' : (20, 10),
+                'input_dims' : (10, 20),
                 'extra_input_dims' : 4,
                 'ds' : (20, 40, 40, 3),
                 'ts' : (10, 6, 3, 1),
