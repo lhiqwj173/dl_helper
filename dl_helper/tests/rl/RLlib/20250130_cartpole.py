@@ -75,6 +75,7 @@ if __name__ == "__main__":
         )
 
         # 询问服务器，本机是否需要验证环节
+        log(f"request_need_val")
         need_val = request_need_val(train_title)
         log(f"need_val: {need_val}")
         if need_val:
