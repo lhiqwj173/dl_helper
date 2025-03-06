@@ -149,6 +149,8 @@ if __name__ == "__main__":
                 run_type = 'server'
             elif arg == "client":
                 run_type = 'client'
+            elif arg == "single":
+                run_type = 'single'
 
     train_title = f'20250213_lob'
 
@@ -176,7 +178,7 @@ if __name__ == "__main__":
                 'log_name': log_name,
             }
         )# 直接使用
-        .env_runners(num_env_runners=0)# 4核cpu，暂时选择1个环境运行器
+        .env_runners(num_env_runners=int(os.cpu_count() - num_learners))# 设置成核心数减去gpu数
         # 自定义模型
         .rl_module(
             rl_module_spec=RLModuleSpec(catalog_class=lob_PPOCatalog),# 使用自定义配置
@@ -253,6 +255,35 @@ if __name__ == "__main__":
             # 绘制训练曲线
             plot_training_curve(train_folder, time.time() - begin_time, y_axis_max=30)
 
+        # 停止算法
+        algo.stop()
+        log(f"algo.stop done")
+
+    elif run_type == 'single':
+        # 单机测试
+        config = config.learners(    
+            num_learners=num_learners,
+            num_gpus_per_learner=1,
+        )
+        config = config.evaluation(
+            evaluation_interval=15,
+            evaluation_duration=3,
+        )
+
+        # 构建算法
+        algo = config.build()
+
+        begin_time = time.time()
+        rounds = 30
+        for i in range(rounds):
+            log(f"Training iteration {i+1}/{rounds}")
+            result = algo.train()
+
+            out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
+            simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+
+        # 绘制训练曲线
+        plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=Plotter())
         # 停止算法
         algo.stop()
         log(f"algo.stop done")
