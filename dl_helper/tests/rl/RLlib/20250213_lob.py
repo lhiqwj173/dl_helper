@@ -17,7 +17,7 @@ from py_ext.datetime import beijing_time
 
 from dl_helper.train_folder_manager import TrainFolderManager
 
-train_folder = 'lob'
+train_folder = 'lob_BinCtabl'
 log_name = f'20250213_lob_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
