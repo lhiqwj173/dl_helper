@@ -562,6 +562,7 @@ class ExperimentHandler:
                 push_count += 1
 
                 if push_count % 30 == 0:
+                    # TIME
                     # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
                     # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
                     # avg param push time: 925ms, avg wait time: 447ms, avg handle time: 3ms
@@ -576,6 +577,7 @@ class ExperimentHandler:
 
                     # avg param push time: 1307ms, avg wait time: 1307ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 543904
                     # avg param push time: 651ms, avg wait time: 660ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 43248
+                    # avg param push time: 834ms, avg wait time: 841ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
                     log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
@@ -623,8 +625,10 @@ class ExperimentHandler:
 
                     push_count += 1
                     if push_count % 30 == 0:
+                        # TIME
                         # avg gradients recv time: 923ms, avg handle time: 15ms
                         # avg gradients recv time: 43ms, avg handle time: 9ms
+                        # avg gradients recv time: 116ms, avg forward time: 0ms
                         log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg forward time: {int(total_handle_time / push_count * 1000)}ms')
 
             except Exception as e:

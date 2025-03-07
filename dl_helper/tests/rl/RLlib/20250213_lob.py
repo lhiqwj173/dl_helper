@@ -7,10 +7,11 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
-from dl_helper.rl.costum_rllib_module.lob_model import lob_PPOCatalog, LobCallbacks
+from dl_helper.rl.costum_rllib_module.lob.lob_model import LobCallbacks, LobPlotter
+from dl_helper.rl.costum_rllib_module.lob.binctabl import BinCtablPPOCatalog
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
-from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, BaseCustomPlotter
+from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
 from py_ext.datetime import beijing_time
@@ -18,128 +19,11 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 train_folder = 'lob_BinCtabl'
-log_name = f'20250213_lob_{beijing_time().strftime("%Y%m%d")}'
+train_title = f'20250213_lob_BinCtabl'
+log_name = f'20250213_lob_BinCtabl_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
-class Plotter(BaseCustomPlotter):
-    def get_additional_plot_count(self):
-        """
-        返回需要额外绘制的图表数量
-        custom_metrics_illegal_ratio,
-        custom_metrics_trade_num,
-        custom_metrics_win_ratio,
-        custom_metrics_profit_loss_ratio,
-        custom_metrics_sharpe_ratio,
-        custom_metrics_max_drawdown,
-        custom_metrics_trade_return,
-        custom_metrics_hold_length,
-        custom_metrics_excess_return
-
-        custom_metrics_val_illegal_ratio,
-        custom_metrics_val_trade_num,
-        custom_metrics_val_win_ratio,
-        custom_metrics_val_profit_loss_ratio,
-        custom_metrics_val_sharpe_ratio,
-        custom_metrics_val_max_drawdown,
-        custom_metrics_val_trade_return,
-        custom_metrics_val_hold_length,
-        custom_metrics_val_excess_return
-        """
-        return 8
-    def plot(self, out_data, axes_list):
-        """
-        子类必须实现
-        绘制额外图表
-        """
-        datetime = pd.to_datetime(out_data['datetime'])
-
-        # 1. illegal_ratio 和 win_ratio
-        ax = axes_list[0]
-        illegal_ratio_last = out_data['custom_metrics_illegal_ratio'].iloc[-1]
-        win_ratio_last = out_data['custom_metrics_win_ratio'].iloc[-1]
-        val_illegal_ratio_last = out_data['custom_metrics_val_illegal_ratio'].iloc[-1]
-        val_win_ratio_last = out_data['custom_metrics_val_win_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_last:.2f})')
-        ax.plot(datetime, out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_last:.2f})')
-        ax.set_title('Illegal Ratio & Win Ratio')
-        ax.legend()
-
-        # 2. trade_num
-        ax = axes_list[1]
-        trade_num_last = out_data['custom_metrics_trade_num'].iloc[-1]
-        val_trade_num_last = out_data['custom_metrics_val_trade_num'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_trade_num'], 'b-', label=f'trade_num({trade_num_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_num'], 'b-', label=f'val_trade_num({val_trade_num_last:.2f})')
-        ax.set_title('Trade Number')
-        ax.legend()
-
-        # 3. profit_loss_ratio
-        ax = axes_list[2]
-        profit_loss_ratio_last = out_data['custom_metrics_profit_loss_ratio'].iloc[-1]
-        val_profit_loss_ratio_last = out_data['custom_metrics_val_profit_loss_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_profit_loss_ratio'], 'g-', label=f'profit_loss_ratio({profit_loss_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_profit_loss_ratio'], 'g-', label=f'val_profit_loss_ratio({val_profit_loss_ratio_last:.2f})')
-        ax.set_title('Profit Loss Ratio')
-        ax.legend()
-
-        # 4. sharpe_ratio
-        ax = axes_list[3]
-        sharpe_ratio_last = out_data['custom_metrics_sharpe_ratio'].iloc[-1]
-        val_sharpe_ratio_last = out_data['custom_metrics_val_sharpe_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_sharpe_ratio'], 'r-', label=f'sharpe_ratio({sharpe_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_sharpe_ratio'], 'r-', label=f'val_sharpe_ratio({val_sharpe_ratio_last:.2f})')
-        ax.set_title('Sharpe Ratio')
-        ax.legend()
-
-        # 5. max_drawdown
-        ax = axes_list[4]
-        max_drawdown_last = out_data['custom_metrics_max_drawdown'].iloc[-1]
-        val_max_drawdown_last = out_data['custom_metrics_val_max_drawdown'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_max_drawdown'], 'r-', label=f'val_max_drawdown({val_max_drawdown_last:.2f})')
-        ax.set_title('Max Drawdown')
-        ax.legend()
-
-        # 6. trade_return
-        ax = axes_list[5]
-        trade_return_last = out_data['custom_metrics_trade_return'].iloc[-1]
-        val_trade_return_last = out_data['custom_metrics_val_trade_return'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_return'], 'g-', label=f'val_trade_return({val_trade_return_last:.2f})')
-        ax.set_title('Trade Return')
-        ax.legend()
-
-        # 7. hold_length
-        ax = axes_list[6]
-        hold_length_last = out_data['custom_metrics_hold_length'].iloc[-1]
-        val_hold_length_last = out_data['custom_metrics_val_hold_length'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_hold_length'], 'b-', label=f'val_hold_length({val_hold_length_last:.2f})')
-        ax.set_title('Hold Length')
-        ax.legend()
-
-        # 8. excess_return
-        ax = axes_list[7]
-        excess_return_last = out_data['custom_metrics_excess_return'].iloc[-1]
-        val_excess_return_last = out_data['custom_metrics_val_excess_return'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_excess_return'], 'g-', label=f'val_excess_return({val_excess_return_last:.2f})')
-        ax.set_title('Excess Return')
-        ax.legend()
-
 if __name__ == "__main__":
-
-    # plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv", custom_plotter=Plotter())
-
-    # result_file = r"C:\Users\lh\Desktop\temp\lob\result_14.pkl"
-    # with open(result_file, 'rb') as f:
-    #     result = pickle.load(f)
-
-    # import sys
-    # sys.exit()
-
     run_type = 'self'
 
     # 获取参数
@@ -149,10 +33,8 @@ if __name__ == "__main__":
                 run_type = 'server'
             elif arg == "client":
                 run_type = 'client'
-            elif arg == "single":
-                run_type = 'single'
-
-    train_title = f'20250213_lob'
+            elif arg == "test":
+                run_type = 'test'
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
@@ -181,7 +63,7 @@ if __name__ == "__main__":
         .env_runners(num_env_runners=int(os.cpu_count() - num_learners))# 设置成核心数减去gpu数
         # 自定义模型
         .rl_module(
-            rl_module_spec=RLModuleSpec(catalog_class=lob_PPOCatalog),# 使用自定义配置
+            rl_module_spec=RLModuleSpec(catalog_class=BinCtablPPOCatalog),# 使用自定义配置
             model_config={
                 # 自定义编码器参数
                 'input_dims' : (10, 20),
@@ -259,7 +141,7 @@ if __name__ == "__main__":
         algo.stop()
         log(f"algo.stop done")
 
-    elif run_type == 'single':
+    elif run_type == 'test':
         # 单机测试
         config = config.learners(    
             num_learners=num_learners,
@@ -283,7 +165,7 @@ if __name__ == "__main__":
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
         # 绘制训练曲线
-        plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=Plotter())
+        plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter())
         # 停止算法
         algo.stop()
         log(f"algo.stop done")
@@ -329,7 +211,7 @@ if __name__ == "__main__":
                 checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
                 # 绘制训练曲线
-                plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=Plotter())
+                plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter())
                 # 压缩并上传
                 train_folder_manager.push()
 

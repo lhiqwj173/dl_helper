@@ -590,9 +590,11 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 total_count += 1
 
                 if total_count % 10 == 0:
+                    # TIME
                     # [0] avg grad send time: 49ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39829, mean version diff: 0.00
                     # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                     # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
+                    # [0] avg grad send time: 125ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 39809
                     log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
 
                 # 统计耗时
@@ -669,8 +671,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 统计耗时
                 if total_count % 30 == 0:
                     # 本机接收后处理耗时(avg handle time)
+                    # TIME
                     # [900] avg param push time: 456ms, avg handle time: 97ms
                     # [810] avg param push time: 402ms, avg handle time: 39ms
+                    # [1140] avg param push time: 752ms, avg handle time: 0ms
                     log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
         except Exception as e:
@@ -753,6 +757,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     log(f'[{self.client_id}][{self.step_count}] decompress and ready new params done, version: {version}, need_warn_up: {need_warn_up}')
 
                 # 等解压参数（检查参数更新）完毕，全部learner可以继续运行
+                # TIME
+                # [-1][306] set sync learner event, cost time: 450ms
                 log(f'[{self.client_id}][{self.step_count}] set sync learner event, cost time: {int((time.time() - self.step_begin) * 1000)}ms')
                 self.sync_learner_event.set(self.num_learners - 1)
             else:

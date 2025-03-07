@@ -287,8 +287,6 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     fig = plt.figure(figsize=(10, sum(heights)))
     gs = plt.GridSpec(total_plots, 1, height_ratios=heights)
     axes = [plt.subplot(gs[i]) for i in range(total_plots)]
-    if total_plots == 1:
-        axes = [axes]  # Ensure axes is always a list
     
     # Main training curves plot (first subplot)
     ax = axes[0]
@@ -1287,4 +1285,5 @@ def calculate_importance_loss(loss: torch.Tensor) -> float:
     return importance
 
 if __name__ == "__main__":
-    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv")
+    # plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv")
+    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out.csv")
