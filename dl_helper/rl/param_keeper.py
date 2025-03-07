@@ -314,18 +314,33 @@ class ExperimentHandler:
                 #####################################
                 # 1.1 尝试get梯度，若获取成功继续处理
                 #####################################
+                # 一次获取当前的所有队列中的所有梯度
+                # # 遍历所有的梯度队列，获取梯度 > 梯度列表
+                # grad_dump_data_list = []
+                # for _id, _q in client_grad_q.items():
+                #     _q_size = _q.qsize()
+                #     # 更新推送梯度计数
+                #     client_push_grad_count[_id] += _q_size
+                #     for _ in range(_q_size):
+                #         try:
+                #             grad_dump_data = _q.get(block=False)
+                #             grad_dump_data_list.append((_id, grad_dump_data))
+                #         except Empty:
+                #             break
+
+                # 一次获取当前的所有队列中一个梯度
                 # 遍历所有的梯度队列，获取梯度 > 梯度列表
                 grad_dump_data_list = []
                 for _id, _q in client_grad_q.items():
                     _q_size = _q.qsize()
-                    # 更新推送梯度计数
-                    client_push_grad_count[_id] += _q_size
-                    for _ in range(_q_size):
+                    if _q_size > 0:
+                        # 更新推送梯度计数
                         try:
                             grad_dump_data = _q.get(block=False)
                             grad_dump_data_list.append((_id, grad_dump_data))
+                            client_push_grad_count[_id] += 1
                         except Empty:
-                            break
+                            pass
 
                 #####################################
                 # 1.2 过滤 / 解压 / 应用梯度
