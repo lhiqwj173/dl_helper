@@ -595,6 +595,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # [0] avg grad send time: 60ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                     # [0] avg grad send time: 48ms, avg wait time: 1ms, avg handle time: 0ms, mean send size: 39830, mean version diff: 0.00
                     # [0] avg grad send time: 125ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 39809
+                    # [0] avg grad send time: 128ms, avg wait time: 0ms, avg handle time: 0ms, mean send size: 39810
                     log(f"[{idx}] avg grad send time: {int(((time.time() - all_begin_time) / total_count) * 1000)}ms, avg wait time: {int(total_wait_time / total_count * 1000)}ms, avg handle time: {int((total_handle_time - total_wait_time) / total_count * 1000)}ms, mean send size: {int(mean_send_size)}")
 
                 # 统计耗时
@@ -675,6 +676,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                     # [900] avg param push time: 456ms, avg handle time: 97ms
                     # [810] avg param push time: 402ms, avg handle time: 39ms
                     # [1140] avg param push time: 752ms, avg handle time: 0ms
+                    # [1170] avg param push time: 771ms, avg handle time: 0ms
                     log(f"[{total_count}] avg param push time: {int(((time.time() - begin_time) / total_count) * 1000)}ms, avg handle time: {int(total_handle_time / total_count * 1000)}ms")
 
         except Exception as e:
@@ -759,6 +761,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # 等解压参数（检查参数更新）完毕，全部learner可以继续运行
                 # TIME
                 # [-1][306] set sync learner event, cost time: 450ms
+                # [-1][306] set sync learner event, cost time: 490ms
                 log(f'[{self.client_id}][{self.step_count}] set sync learner event, cost time: {int((time.time() - self.step_begin) * 1000)}ms')
                 self.sync_learner_event.set(self.num_learners - 1)
             else:

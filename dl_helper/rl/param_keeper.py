@@ -138,8 +138,8 @@ class ExperimentHandler:
         # 等待回传的大小数据
         self.share_params_dump_max_size, self.share_gradients_dump_max_size = self.wait_params_id_q.get()
 
-        # FOR DEBUG
-        self.params_list = self.wait_params_id_q.get()
+        # # FOR DEBUG
+        # self.params_list = self.wait_params_id_q.get()
 
         # 允许验证的客户端ip
         self.need_val_ip = 0
@@ -147,26 +147,26 @@ class ExperimentHandler:
         # 允许验证的时间戳
         self.need_val_timestamp = 0
 
-        # FOR DEBUG
-        self.revc_grad_id_dict = {}
-        # 伪造参数增量更新
-        compressed_tensors = []
-        compress_info = {
-            'update_indices': [],
-            'full': []
-        }
-        for p in self.params_list:
-            n = max(int(p.numel() * 0.1), 1)
-            _, top_indices = torch.topk(p.flatten(), n)
-            mask = torch.zeros_like(p, dtype=torch.bool)
-            mask.view(-1)[top_indices] = True
-            update_indices = torch.where(mask)
-            update_values = p[mask]
-            compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
-            compress_info['full'].append(False)
-            compressed_tensors.append(update_values)
-        self.dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
-        self.dump_v = 1
+        # # FOR DEBUG
+        # self.revc_grad_id_dict = {}
+        # # 伪造参数增量更新
+        # compressed_tensors = []
+        # compress_info = {
+        #     'update_indices': [],
+        #     'full': []
+        # }
+        # for p in self.params_list:
+        #     n = max(int(p.numel() * 0.1), 1)
+        #     _, top_indices = torch.topk(p.flatten(), n)
+        #     mask = torch.zeros_like(p, dtype=torch.bool)
+        #     mask.view(-1)[top_indices] = True
+        #     update_indices = torch.where(mask)
+        #     update_values = p[mask]
+        #     compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
+        #     compress_info['full'].append(False)
+        #     compressed_tensors.append(update_values)
+        # self.dump_data = pickle.dumps((compressed_tensors, compress_info, 1, 0))
+        # self.dump_v = 1
 
     def __del__(self):
         self.p.terminate()
@@ -225,8 +225,8 @@ class ExperimentHandler:
 
         wait_params_id_q.put((_p_size, _g_size))# 回传大小
 
-        # FOR DEBUG
-        wait_params_id_q.put([v for _, v in _params_dict.items()])
+        # # FOR DEBUG
+        # wait_params_id_q.put([v for _, v in _params_dict.items()])
 
         # 等待队列数据被取出
         while not wait_params_id_q.empty():
@@ -497,8 +497,8 @@ class ExperimentHandler:
             await async_send_msg(writer, dump_data)
             log(f'{msg_header} send params, version: {dump_v}, cost: {int(1000*(time.time() - t))}ms')
 
-            #FOR DEBUG
-            self.revc_grad_id_dict[_id] = 0
+            # #FOR DEBUG
+            # self.revc_grad_id_dict[_id] = 0
 
         elif cmd == 'wait_params':
             # 长连接请求参数
@@ -506,7 +506,7 @@ class ExperimentHandler:
 
             # 通知 开始循环等待
             # FOR DEBUG
-            # self.on_wait_params_id_q.put(_id)
+            self.on_wait_params_id_q.put(_id)
 
             last_send_v = 0
             begin_time = 0
@@ -515,24 +515,24 @@ class ExperimentHandler:
             total_net_time = 0
             total_wait_time = 0
             mean_send_size = 0
-            # FOR DEBUG
-            last_push_grad_count = 0
-            async def wait_need_push(self, last_push_grad_count):
-                while True:
-                    if self.revc_grad_id_dict[_id] - last_push_grad_count >= PUSH_INTERVAL:
-                        last_push_grad_count += PUSH_INTERVAL
-                        return last_push_grad_count
-                    else:
-                        await asyncio.sleep(0.001)
-                        continue
+            # # FOR DEBUG
+            # last_push_grad_count = 0
+            # async def wait_need_push(self, last_push_grad_count):
+            #     while True:
+            #         if self.revc_grad_id_dict[_id] - last_push_grad_count >= PUSH_INTERVAL:
+            #             last_push_grad_count += PUSH_INTERVAL
+            #             return last_push_grad_count
+            #         else:
+            #             await asyncio.sleep(0.001)
+            #             continue
             while True:
                 t = time.time()
                 log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 # FOR DEBUG
-                # dump_data, dump_v = await self.get_params_dump_data(_id)
-                last_push_grad_count = await wait_need_push(self, last_push_grad_count)
-                dump_data, dump_v = self.dump_data, self.dump_v
+                dump_data, dump_v = await self.get_params_dump_data(_id)
+                # last_push_grad_count = await wait_need_push(self, last_push_grad_count)
+                # dump_data, dump_v = self.dump_data, self.dump_v
 
                 wait_time = time.time() - t
                 total_wait_time += wait_time
@@ -578,6 +578,7 @@ class ExperimentHandler:
                     # avg param push time: 1307ms, avg wait time: 1307ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 543904
                     # avg param push time: 651ms, avg wait time: 660ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 43248
                     # avg param push time: 834ms, avg wait time: 841ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
+                    # avg param push time: 822ms, avg wait time: 829ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
                     log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
@@ -614,8 +615,8 @@ class ExperimentHandler:
 
                     # 转发到队列中，不在这里处理
                     # FOR DEBUG
-                    # await self.put_gradients_dump_data(data, _id)
-                    self.revc_grad_id_dict[_id] += 1
+                    await self.put_gradients_dump_data(data, _id)
+                    # self.revc_grad_id_dict[_id] += 1
 
                     handle_cost_time = time.time() - t
                     total_handle_time += handle_cost_time
@@ -629,6 +630,7 @@ class ExperimentHandler:
                         # avg gradients recv time: 923ms, avg handle time: 15ms
                         # avg gradients recv time: 43ms, avg handle time: 9ms
                         # avg gradients recv time: 116ms, avg forward time: 0ms
+                        # avg gradients recv time: 137ms, avg forward time: 0ms
                         log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg forward time: {int(total_handle_time / push_count * 1000)}ms')
 
             except Exception as e:
