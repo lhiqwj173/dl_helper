@@ -11,35 +11,52 @@ from ray.rllib.core.columns import Columns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dl_helper.models.binctabl import BiN, BL_layer, TABL_layer
 
 import numpy as np
 
-class BinCtablEncoder(TorchModel, Encoder):
+class HSTAEncoder(TorchModel, Encoder):
     def __init__(self, config):
         TorchModel.__init__(self, config)
         Encoder.__init__(self, config)
 
-        d1, d2, d3, d4 = config.ds
-        t1, t2, t3, t4 = config.ts
-
         self.input_dims = config.input_dims
+        self.feature_per_step = self.input_dims[1]
         self.extra_input_dims = config.extra_input_dims
+        self.output_dims = config._output_dims
         self.split_index = np.prod(self.input_dims)
 
-        self.BiN = BiN(d1, t1)
-        self.BL = BL_layer(d2, d1, t1, t2)
-        self.BL2 = BL_layer(d3, d2, t2, t3)
-        self.TABL = TABL_layer(d4, d3, t3, t4)
-        self.dropout = nn.Dropout(0.1)
-
-        self.extra_fc = nn.Linear(self.extra_input_dims, d4)
-        # 新增：注意力机制
-        self.attn_fc = nn.Linear(d4 * 2, d4)  # 输入是 x 和 extra_x 的拼接
-
-        # 可选：归一化层
-        self.norm_x = nn.LayerNorm(d4)
-        self.norm_extra = nn.LayerNorm(d4)
+        # 层次化时空注意力
+        self.spatial_attn = nn.MultiheadAttention(
+            embed_dim=self.feature_per_step,
+            num_heads=4,
+            dropout=0.1
+        )
+        self.temporal_attn = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(
+                d_model=self.feature_per_step,
+                nhead=4,
+                dim_feedforward=64,
+                dropout=0.1
+            ),
+            num_layers=3
+        )
+        
+        # 静态特征处理
+        self.static_net = nn.Sequential(
+            nn.Linear(self.extra_input_dims, 16),
+            nn.LayerNorm(16),
+            nn.LeakyReLU(),
+            nn.Dropout(0.1)
+        )
+        
+        # 融合层
+        self.fusion = nn.Sequential(
+            nn.Linear(self.feature_per_step * 2 + 16, 32),
+            nn.LayerNorm(32),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(32, self.output_dims)
+        )
 
         self.error_count = 0
 
@@ -50,69 +67,49 @@ class BinCtablEncoder(TorchModel, Encoder):
         extra_x = inputs[Columns.OBS][:,self.split_index:]
         x = inputs[Columns.OBS][:,:self.split_index].reshape(-1, *self.input_dims)
 
-        x = torch.transpose(x, 1, 2)
-        x = self.BiN(x)
+        # 空间注意力（特征维度）
+        spatial_in = x.permute(1, 0, 2)  # [10,B,20]
+        spatial_attn_out, _ = self.spatial_attn(spatial_in, spatial_in, spatial_in)
+        spatial_attn_out = spatial_attn_out.permute(1, 0, 2)  # [B,10,20]
 
-        with torch.no_grad():
-            self.max_norm_(self.BL.W1)
-            self.max_norm_(self.BL.W2)
-            self.max_norm_(self.BL2.W1)
-            self.max_norm_(self.BL2.W2)
-            self.max_norm_(self.TABL.W1)
-            self.max_norm_(self.TABL.W)
-            self.max_norm_(self.TABL.W2)
+        # 时间注意力
+        temporal_in = x.permute(1, 0, 2)  # [10,B,20]
+        temporal_attn_out = self.temporal_attn(temporal_in)
+        temporal_attn_out = temporal_attn_out.permute(1, 0, 2)  # [B,10,20]
 
-        x = self.BL(x)
-        x = self.dropout(x)
+        # 时空特征融合
+        fused_time = torch.cat([
+            spatial_attn_out.mean(dim=1),  # [B,20]
+            temporal_attn_out.mean(dim=1)   # [B,20]
+        ], dim=1)  # [B,40]
 
-        x = self.BL2(x)
-        x = self.dropout(x)
+        # 静态特征处理
+        static_out = self.static_net(extra_x)  # [B,16]
 
-        x = self.TABL(x)
-
-        x = torch.squeeze(x,dim=2)# 保留batch维度 d4
-
-        # 预处理 extra_x
-        extra_x = self.extra_fc(extra_x) # d4
-
-        # 可选：归一化
-        x = self.norm_x(x)
-        extra_x = self.norm_extra(extra_x)
-
-        # 注意力机制
-        combined = torch.cat([x, extra_x], dim=1)  # (batch_size, d4 * 2)
-        attn_weights = torch.sigmoid(self.attn_fc(combined))  # (batch_size, d4)
-        x = x * attn_weights + extra_x * (1 - attn_weights)  # 加权融合
-
-        # 输出维度为 d4 * 2
-        # x = torch.cat([x, extra_x], dim=1)
+        # 融合层
+        fused_out = torch.cat([fused_time, static_out], dim=1)  # [B,56]
+        fused_out = self.fusion(fused_out)  # [B,self.output_dims]
 
         # 数值检查
-        if torch.isnan(x).any() or torch.isinf(x).any():
+        if torch.isnan(fused_out).any() or torch.isinf(fused_out).any():
             self.error_count += 1
 
-        return {ENCODER_OUT: x}
-
-    def max_norm_(self, p):
-        norm = torch.linalg.matrix_norm(p.data)
-        desired = torch.clamp(norm, min=0.0, max=10.0)
-        p.data.mul_(torch.where(norm > 10.0, desired / (1e-8 + norm), torch.tensor(1., device=p.data.device)) )
+        return {ENCODER_OUT: fused_out}
 
 @dataclass
-class BinCtablEncoderConfig(ModelConfig):
+class HSTAEncoderConfig(ModelConfig):
     """
     output_dims函数 返回编码器输出的维度，用于其他构造 head模型 的输入
     """
     # 默认: his_len = 100, cols = 40
     input_dims: Union[List[int], Tuple[int]] = (100, 40)
     extra_input_dims: int = 4
+    _output_dims: int = 6
     always_check_shapes: bool = True
-    ds: tuple = (40, 60, 120, 3)
-    ts: tuple = (100, 40, 12, 1)
 
     def build(self, framework: str = "torch"):
         if framework == "torch":
-            return BinCtablEncoder(self)
+            return HSTAEncoder(self)
 
         else:
             raise ValueError(f'only torch ModelConfig')
@@ -120,20 +117,19 @@ class BinCtablEncoderConfig(ModelConfig):
     @property
     def output_dims(self):
         """Read-only `output_dims` are inferred automatically from other settings."""
-        return (int(self.ds[-1]),)# 注意返回的是维度，不是int
+        return (int(self._output_dims),)# 注意返回的是维度，不是int
 
-class BinCtablPPOCatalog(PPOCatalog):
+class HSTAPPOCatalog(PPOCatalog):
     """
     - 重写 _determine_components_hook 生成配置
     """
     def _determine_components_hook(self):
         # 获取输入参数 可设置参数 ds / ts
-        ds = tuple(self._model_config_dict["ds"])
-        ts = tuple(self._model_config_dict["ts"])
         input_dims = tuple(self._model_config_dict["input_dims"])   
         extra_input_dims = self._model_config_dict["extra_input_dims"]
+        output_dims = self._model_config_dict["output_dims"]
         # 生成配置
-        self._encoder_config = BinCtablEncoderConfig(input_dims=input_dims, extra_input_dims=extra_input_dims, ds=ds, ts=ts)
+        self._encoder_config = HSTAEncoderConfig(input_dims=input_dims, extra_input_dims=extra_input_dims, _output_dims=output_dims)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the
@@ -149,7 +145,7 @@ class BinCtablPPOCatalog(PPOCatalog):
 
 
 if __name__ == "__main__":
-    net = BinCtablEncoderConfig(input_dims=(10, 20), extra_input_dims=4, ds=(20, 40, 40, 3), ts=(10, 6, 3, 1)).build()
+    net = HSTAEncoderConfig(input_dims=(10, 20), extra_input_dims=4, _output_dims=6).build()
     print(net)
 
     # 模型参数量

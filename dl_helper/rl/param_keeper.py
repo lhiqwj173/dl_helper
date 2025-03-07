@@ -290,7 +290,11 @@ class ExperimentHandler:
                             # 推送梯度计数
                             client_push_grad_count[new_wait_params_id] = 0
                             # 最近一次更新的计数
-                            client_last_update_count[new_wait_params_id] = 0
+                            # 初始化为 1 : 
+                            #   会提前一个step推送给客户端，节约客户端等待参数的时间
+                            #   缺点是客户端接收到的参数会延迟一个step
+                            # 可尝试: 1, 2, 3 查看效果
+                            client_last_update_count[new_wait_params_id] = 1
                     except Empty:
                         break
 
