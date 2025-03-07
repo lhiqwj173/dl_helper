@@ -284,7 +284,7 @@ class ExperimentHandler:
                         if new_wait_params_id not in client_params_q:
                             # 初始化共享队列
                             client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
-                            client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 4)
+                            client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 30)
                             # 单次状态
                             client_wait_state[new_wait_params_id] = 0
                             # 推送梯度计数
@@ -484,7 +484,7 @@ class ExperimentHandler:
             assert _id not in self.ip_params_dump_q, f'{_id} already in ip_params_dump_q'
             self.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', self.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
             self.ip_params_dump_q[_id].clear()
-            self.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', self.share_gradients_dump_max_size, 4)
+            self.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', self.share_gradients_dump_max_size, 30)
             self.ip_gradients_dump_q[_id].clear()
 
             # 通知需要等待的ip  
@@ -563,22 +563,10 @@ class ExperimentHandler:
 
                 if push_count % 30 == 0:
                     # TIME
-                    # 每次参数推送耗时(avg param push time): 本机处理耗时(avg handle time) + 等待耗时(发送，确认返回, avg wait time) + 等待参数耗时
-                    # 网络传输耗时: 等待耗时(发送，确认返回, avg wait time) - 客户端接收后处理耗时(客户端统计)
-                    # avg param push time: 925ms, avg wait time: 447ms, avg handle time: 3ms
-                    # 优化空间:
-                    #     平均等待参数时间 = 925 - 447 - 3 = 475ms
-                    #     网络传输耗时 = 447 - 0 = 447ms
-
-                    # avg param push time: 616ms, avg wait time: 417ms, avg handle time: 4ms
-                    # 优化空间:
-                    #     平均等待参数时间 = 616 - 417 - 4 = 195ms
-                    #     网络传输耗时 = 417 - 0 = 417ms
-
-                    # avg param push time: 1307ms, avg wait time: 1307ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 543904
-                    # avg param push time: 651ms, avg wait time: 660ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 43248
-                    # avg param push time: 834ms, avg wait time: 841ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
+                    # 服务端只处理网络传输，返回的是模拟的数据 5C
                     # avg param push time: 822ms, avg wait time: 829ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
+                    # 服务端完整处理数据 5C 计算耗时约500ms
+                    # avg param push time: 1323ms, avg wait time: 1321ms, avg net time: 6ms, avg handle time: 0ms, mean send size: 47731
                     log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
@@ -627,10 +615,10 @@ class ExperimentHandler:
                     push_count += 1
                     if push_count % 30 == 0:
                         # TIME
-                        # avg gradients recv time: 923ms, avg handle time: 15ms
-                        # avg gradients recv time: 43ms, avg handle time: 9ms
-                        # avg gradients recv time: 116ms, avg forward time: 0ms
+                        # 服务端只处理网络传输，返回的是模拟的数据 5C   
                         # avg gradients recv time: 137ms, avg forward time: 0ms
+                        # 服务端完整处理数据 5C
+                        # avg gradients recv time: 221ms, avg forward time: 3ms
                         log(f'{msg_header} avg gradients recv time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg forward time: {int(total_handle_time / push_count * 1000)}ms')
 
             except Exception as e:
