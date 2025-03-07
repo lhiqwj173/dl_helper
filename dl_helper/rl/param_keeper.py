@@ -294,7 +294,7 @@ class ExperimentHandler:
                             #   会提前一个step推送给客户端，节约客户端等待参数的时间, 假设3step推送，step2时，2-(-1) = 3, 会提前一个step推送
                             #   缺点是客户端接收到的参数会延迟一个step
                             # 可尝试: -1, -2, -3 查看效果
-                            client_last_update_count[new_wait_params_id] = -1
+                            client_last_update_count[new_wait_params_id] = 0
                     except Empty:
                         break
 
@@ -474,9 +474,7 @@ class ExperimentHandler:
                 await asyncio.sleep(0.001)
                 continue
 
-            # 获取第一个数据，用于处理 get 请求，不一定是最新的
             dump_data, dump_v = params_dump_q.get(block=False)
-
             return dump_data, dump_v
 
     async def put_gradients_dump_data(self, dump_data, _id):
@@ -489,10 +487,10 @@ class ExperimentHandler:
                 await asyncio.sleep(0.001)
                 continue
 
-    async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
+    async def async_handle_request(self, ip, port, msg_header, cmd, writer, reader):
         """异步处理客户端请求
         """
-        _id = ip.replace('.', '')
+        _id = ip.replace('.', '') + f'_{port}'
         if cmd.startswith('get@'):
             t = time.time()
             # 单次请求参数
@@ -546,7 +544,7 @@ class ExperimentHandler:
             #             continue
             while True:
                 t = time.time()
-                log(f'[{msg_header}] wait_params prepare wait, last_send_v: {last_send_v}')
+                log(f'{msg_header} wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 # FOR DEBUG
                 dump_data, dump_v = await self.get_params_dump_data(_id)
@@ -555,7 +553,7 @@ class ExperimentHandler:
 
                 wait_time = time.time() - t
                 total_wait_time += wait_time
-                log(f'[{msg_header}] wait_params wait active, wait time: {int(1000*wait_time)}ms')
+                log(f'{msg_header} wait_params wait active, wait time: {int(1000*wait_time)}ms')
 
                 t = time.time()
                 if begin_time == 0:
@@ -571,7 +569,7 @@ class ExperimentHandler:
                 mean_send_size = (mean_send_size * push_count + send_size) / (push_count + 1)
 
                 # 9909 
-                log(f'[{msg_header}] send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
+                log(f'{msg_header} send params, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
                 # # 等待回复
                 # await wait_ack(reader)
                 # log(f'[{msg_header}] recv check, version: {last_send_v}, cost: {int(1000*(time.time() - t))}ms')
@@ -586,7 +584,7 @@ class ExperimentHandler:
                     # avg param push time: 822ms, avg wait time: 829ms, avg net time: 0ms, avg handle time: 0ms, mean send size: 277300
                     # 服务端完整处理数据 5C 计算耗时约500ms
                     # avg param push time: 1323ms, avg wait time: 1321ms, avg net time: 6ms, avg handle time: 0ms, mean send size: 47731
-                    log(f'[{msg_header}] avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
+                    log(f'{msg_header} avg param push time: {int(((time.time() - begin_time) / push_count) * 1000)}ms, avg wait time: {int(total_wait_time / push_count * 1000)}ms, avg net time: {int(total_net_time / push_count * 1000)}ms, avg handle time: {int((total_handle_time - total_net_time) / push_count * 1000)}ms, mean send size: {int(mean_send_size)}')
 
                 handle_cost_time = time.time() - t
                 total_handle_time += handle_cost_time

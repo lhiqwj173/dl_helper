@@ -763,6 +763,10 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 # [-1][306] set sync learner event, cost time: 490ms
                 # 服务端完整处理数据 5C
                 # [-1][288] set sync learner event, cost time: 2680ms
+                # 一次对一个队列只取一个数据
+                # [-1][462] set sync learner event, cost time: 1089ms
+                # 提前一个step推送参数
+                # [-1][462] set sync learner event, cost time: 2372ms
                 log(f'[{self.client_id}][{self.step_count}] set sync learner event, cost time: {int((time.time() - self.step_begin) * 1000)}ms')
                 self.sync_learner_event.set(self.num_learners - 1)
             else:
