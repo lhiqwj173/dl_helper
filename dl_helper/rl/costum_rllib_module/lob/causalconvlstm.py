@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 import numpy as np
 
-class HSTAEncoder(TorchModel, Encoder):
+class CausalConvLSTMEncoder(TorchModel, Encoder):
     def __init__(self, config):
         TorchModel.__init__(self, config)
         Encoder.__init__(self, config)
@@ -25,20 +25,37 @@ class HSTAEncoder(TorchModel, Encoder):
         self.output_dims = config._output_dims
         self.split_index = np.prod(self.input_dims)
 
-        # 层次化时空注意力
-        self.spatial_attn = nn.MultiheadAttention(
-            embed_dim=self.feature_per_step,
-            num_heads=4,
-            dropout=0.1
-        )
-        self.temporal_attn = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=self.feature_per_step,
-                nhead=4,
-                dim_feedforward=64,
-                dropout=0.1
+        # 因果卷积网络
+        self.causal_conv = nn.Sequential(
+            nn.Conv1d(
+                in_channels=self.feature_per_step,
+                out_channels=64,
+                kernel_size=3,
+                padding=2,  # 保持时间维度不变
+                dilation=2
             ),
-            num_layers=3
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(64),
+            nn.Dropout(0.1),
+            
+            nn.Conv1d(
+                in_channels=64,
+                out_channels=32,
+                kernel_size=3,
+                padding=4,
+                dilation=4
+            ),
+            nn.LeakyReLU(),
+            nn.BatchNorm1d(32),
+            nn.Dropout(0.2)
+        )
+        
+        # LSTM层
+        self.lstm = nn.LSTM(
+            input_size=32,
+            hidden_size=64,
+            batch_first=True,
+            bidirectional=False
         )
         
         # 静态特征处理
@@ -51,7 +68,7 @@ class HSTAEncoder(TorchModel, Encoder):
         
         # 融合层
         self.fusion = nn.Sequential(
-            nn.Linear(self.feature_per_step * 2 + 16, 32),
+            nn.Linear(64 + 16, 32),
             nn.LayerNorm(32),
             nn.LeakyReLU(),
             nn.Dropout(0.2),
@@ -67,27 +84,20 @@ class HSTAEncoder(TorchModel, Encoder):
         extra_x = inputs[Columns.OBS][:,self.split_index:]
         x = inputs[Columns.OBS][:,:self.split_index].reshape(-1, *self.input_dims)
 
-        # 空间注意力（特征维度）
-        spatial_in = x.permute(1, 0, 2)  # [10,B,20]
-        spatial_attn_out, _ = self.spatial_attn(spatial_in, spatial_in, spatial_in)
-        spatial_attn_out = spatial_attn_out.permute(1, 0, 2)  # [B,10,20]
+        # 因果卷积处理
+        conv_in = x.permute(0, 2, 1)  # [B,20,10]
+        conv_out = self.causal_conv(conv_in)     # [B,32,10]
+        conv_out = conv_out.permute(0, 2, 1)     # [B,10,32]
 
-        # 时间注意力
-        temporal_in = x.permute(1, 0, 2)  # [10,B,20]
-        temporal_attn_out = self.temporal_attn(temporal_in)
-        temporal_attn_out = temporal_attn_out.permute(1, 0, 2)  # [B,10,20]
-
-        # 时空特征融合
-        fused_time = torch.cat([
-            spatial_attn_out.mean(dim=1),  # [B,20]
-            temporal_attn_out.mean(dim=1)   # [B,20]
-        ], dim=1)  # [B,40]
+        # LSTM处理
+        lstm_out, (h_n, c_n) = self.lstm(conv_out)
+        temporal_feat = lstm_out[:, -1, :]  # 取最后一个时间步 [B,64]
 
         # 静态特征处理
         static_out = self.static_net(extra_x)  # [B,16]
 
         # 融合层
-        fused_out = torch.cat([fused_time, static_out], dim=1)  # [B,56]
+        fused_out = torch.cat([temporal_feat, static_out], dim=1)  # [B,80]
         fused_out = self.fusion(fused_out)  # [B,self.output_dims]
 
         # 数值检查
@@ -97,7 +107,7 @@ class HSTAEncoder(TorchModel, Encoder):
         return {ENCODER_OUT: fused_out}
 
 @dataclass
-class HSTAEncoderConfig(ModelConfig):
+class CausalConvLSTMEncoderConfig(ModelConfig):
     """
     output_dims函数 返回编码器输出的维度，用于其他构造 head模型 的输入
     """
@@ -109,7 +119,7 @@ class HSTAEncoderConfig(ModelConfig):
 
     def build(self, framework: str = "torch"):
         if framework == "torch":
-            return HSTAEncoder(self)
+            return CausalConvLSTMEncoder(self)
 
         else:
             raise ValueError(f'only torch ModelConfig')
@@ -119,7 +129,7 @@ class HSTAEncoderConfig(ModelConfig):
         """Read-only `output_dims` are inferred automatically from other settings."""
         return (int(self._output_dims),)# 注意返回的是维度，不是int
 
-class HSTAPPOCatalog(PPOCatalog):
+class CausalConvLSTMPPOCatalog(PPOCatalog):
     """
     - 重写 _determine_components_hook 生成配置
     """
@@ -129,7 +139,7 @@ class HSTAPPOCatalog(PPOCatalog):
         extra_input_dims = self._model_config_dict["extra_input_dims"]
         output_dims = self._model_config_dict["output_dims"]
         # 生成配置
-        self._encoder_config = HSTAEncoderConfig(input_dims=input_dims, extra_input_dims=extra_input_dims, _output_dims=output_dims)
+        self._encoder_config = CausalConvLSTMEncoderConfig(input_dims=input_dims, extra_input_dims=extra_input_dims, _output_dims=output_dims)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the
@@ -145,12 +155,12 @@ class HSTAPPOCatalog(PPOCatalog):
 
 
 if __name__ == "__main__":
-    net = HSTAEncoderConfig(input_dims=(10, 20), extra_input_dims=4, _output_dims=6).build()
+    net = CausalConvLSTMEncoderConfig(input_dims=(10, 20), extra_input_dims=4, _output_dims=6).build()
     print(net)
 
     # 模型参数量
     total_params = sum(p.numel() for p in net.parameters())
-    print(f"模型参数量: {total_params}")# 模型参数量: 17090
+    print(f"模型参数量: {total_params}")# 模型参数量: 38326
 
     batch_size = 2
     input_tensor = torch.randn(batch_size, 20*10+4)  # PyTorch格式

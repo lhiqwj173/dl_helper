@@ -4,11 +4,11 @@ from py_ext.datetime import beijing_time
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 
 from dl_helper.rl.costum_rllib_module.lob.run import run
-from dl_helper.rl.costum_rllib_module.lob.binctabl import BinCtablPPOCatalog
+from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog
 
-train_folder = 'lob_BinCtabl'
-train_title = f'20250213_lob_BinCtabl'
-log_name = f'20250213_lob_BinCtabl_{beijing_time().strftime("%Y%m%d")}'
+train_folder = 'lob_CausalConvLSTM'
+train_title = f'20250213_lob_CausalConvLSTM'
+log_name = f'20250213_lob_CausalConvLSTM_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
@@ -16,12 +16,11 @@ if __name__ == "__main__":
         train_folder,
         log_name, 
         train_title,
-        BinCtablPPOCatalog,# 自定义自定义编码器
+        CausalConvLSTMPPOCatalog,# 自定义自定义编码器
         model_config={
             # 自定义编码器参数  
             'input_dims' : (10, 20),
             'extra_input_dims' : 4,
-            'ds' : (20, 40, 40, 3),
-            'ts' : (10, 6, 3, 1),
+            'output_dims' : 6,
         },
     )

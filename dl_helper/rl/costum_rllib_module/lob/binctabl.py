@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     # 模型参数量
     total_params = sum(p.numel() for p in net.parameters())
-    print(f"模型参数量: {total_params}")
+    print(f"模型参数量: {total_params}")# 模型参数量: 3084
 
     batch_size = 2
     input_tensor = torch.randn(batch_size, 20*10+4)  # PyTorch格式
