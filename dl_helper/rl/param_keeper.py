@@ -549,6 +549,8 @@ class ExperimentHandler:
                 log(f'{msg_header} wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 # FOR DEBUG
+                log(f'{msg_header} self.ip_params_dump_q: {list(self.ip_params_dump_q.keys())}')
+                log(f'{msg_header} self.ip_gradients_dump_q: {list(self.ip_gradients_dump_q.keys())}')
                 dump_data, dump_v = await self.get_params_dump_data(_id)
                 # last_push_grad_count = await wait_need_push(self, last_push_grad_count)
                 # dump_data, dump_v = self.dump_data, self.dump_v
