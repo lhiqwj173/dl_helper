@@ -81,7 +81,7 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True):
+    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder=""):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
@@ -94,6 +94,7 @@ class data_producer:
 
         self.his_len = his_len
         self.data_std = data_std
+        self.save_folder = save_folder
 
         self.use_symbols = use_symbols
         
@@ -721,7 +722,7 @@ class LOB_trade_env(gym.Env):
         init_logger(config['log_name'], home=config['train_folder'], timestamp=False)
         
         # 数据生产器
-        self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std)
+        self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder)
         self.period_done = config['period_done']
 
         # 账户数据
