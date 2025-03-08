@@ -397,7 +397,7 @@ class ExperimentHandler:
                             avg_grad = torch.mean(stacked_grads, dim=0)
                             avg_grads.append(avg_grad)
                         # 应用平均梯度
-                        param_server.apply_gradients(avg_grads)
+                        param_server.apply_gradients(avg_grads, len(all_grads))
                         step_count += 1
 
                         log(f'[CG]{train_title} apply grad, latest_version: {param_server.ver}, cost: {int(1000*(time.time() - t))}ms')
@@ -487,10 +487,10 @@ class ExperimentHandler:
                 await asyncio.sleep(0.001)
                 continue
 
-    async def async_handle_request(self, ip, port, msg_header, cmd, writer, reader):
+    async def async_handle_request(self, ip, msg_header, cmd, writer, reader):
         """异步处理客户端请求
         """
-        _id = ip.replace('.', '') + f'_{port}'
+        _id = ip.replace('.', '')
         if cmd.startswith('get@'):
             t = time.time()
             # 单次请求参数
@@ -508,8 +508,6 @@ class ExperimentHandler:
             self.wait_params_id_q.put(_id)
 
             # 等待获取参数 dump 数据
-            log(f'{msg_header} self.ip_params_dump_q: {list(self.ip_params_dump_q.keys())}')
-            log(f'{msg_header} self.ip_gradients_dump_q: {list(self.ip_gradients_dump_q.keys())}')
             dump_data, dump_v = await self.get_params_dump_data(_id)
 
             # 发送参数
@@ -549,8 +547,6 @@ class ExperimentHandler:
                 log(f'{msg_header} wait_params prepare wait, last_send_v: {last_send_v}')
                 # 等待获取参数 dump 数据
                 # FOR DEBUG
-                log(f'{msg_header} self.ip_params_dump_q: {list(self.ip_params_dump_q.keys())}')
-                log(f'{msg_header} self.ip_gradients_dump_q: {list(self.ip_gradients_dump_q.keys())}')
                 dump_data, dump_v = await self.get_params_dump_data(_id)
                 # last_push_grad_count = await wait_need_push(self, last_push_grad_count)
                 # dump_data, dump_v = self.dump_data, self.dump_v

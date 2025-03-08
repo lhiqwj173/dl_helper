@@ -162,7 +162,7 @@ class AsyncSocketServer:
                 handler = self.handlers[train_title]
 
             # 3 处理指令
-            await handler.async_handle_request(client_ip, client_port, msg_header, cmd, writer, reader)
+            await handler.async_handle_request(client_ip, msg_header, cmd, writer, reader)
 
             # 4. 关闭连接
             return
