@@ -508,7 +508,8 @@ class ExperimentHandler:
             self.wait_params_id_q.put(_id)
 
             # 等待获取参数 dump 数据
-            log(f'{msg_header} self.get_params_dump_data: {list(self.get_params_dump_data.keys())}')
+            log(f'{msg_header} self.ip_params_dump_q: {list(self.ip_params_dump_q.keys())}')
+            log(f'{msg_header} self.ip_gradients_dump_q: {list(self.ip_gradients_dump_q.keys())}')
             dump_data, dump_v = await self.get_params_dump_data(_id)
 
             # 发送参数
