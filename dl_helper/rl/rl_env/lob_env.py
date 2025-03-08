@@ -120,6 +120,7 @@ class data_producer:
 
         self.data_type = data_type
         self.files = []
+        self.cur_data_file = ''
 
         # 当前数据日期/code
         self.date = ''
@@ -181,9 +182,9 @@ class data_producer:
         每次完成后从文件列表中剔除
         """
         while self.files:
-            file = self.files.pop(0)
-            # log(f'[{self.data_type}] load date file: {file}')
-            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, file), 'rb'))
+            self.cur_data_file = self.files.pop(0)
+            log(f'[{self.data_type}] load date file: {self.cur_data_file}')
+            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
 
             # 创建预测数据文件
             os.makedirs(os.path.join(self.save_folder, self.data_type), exist_ok=True)
@@ -744,9 +745,6 @@ class LOB_trade_env(gym.Env):
         # 13001 数组
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 4,), dtype=np.float32)
 
-        # 测试数据集 预测输出文件
-        self.need_upload_file = ''
-
         # 记录上一个买入的idx
         self.last_buy_idx = -1
         
@@ -858,7 +856,15 @@ class LOB_trade_env(gym.Env):
             # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
             # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
             # 给一个小惩罚, 且结束本轮游戏
-            if res['max_drawup_ticks_bm'] > 10 or res['drawup_ticks_bm_count'] > 3:
+            punish = 0
+            if res['max_drawup_ticks_bm'] > 10:
+                log(f'[{self.data_producer.data_type}] max_drawup_ticks_bm{res["max_drawup_ticks_bm"]} > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+                punish = 1
+            if res['drawup_ticks_bm_count'] > 3:
+                log(f'[{self.data_producer.data_type}] drawup_ticks_bm_count{res["drawup_ticks_bm_count"]} > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+                punish = 1
+
+            if punish:
                 acc_done = True
                 reward = -STD_REWARD / 10
 
@@ -873,10 +879,10 @@ class LOB_trade_env(gym.Env):
         id,before_market_close_sec,pos,profit,predict
         """
         # 输出列名
-        if not os.path.exists(self.need_upload_file):
-            with open(self.need_upload_file, 'w') as f:
+        if not os.path.exists(self.data_producer.need_upload_file):
+            with open(self.data_producer.need_upload_file, 'w') as f:
                 f.write('id,before_market_close_sec,pos,profit,predict\n')
-        with open(self.need_upload_file, 'a') as f:
+        with open(self.data_producer.need_upload_file, 'a') as f:
             f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)}\n')
     
     def step(self, action):
@@ -937,7 +943,7 @@ class LOB_trade_env(gym.Env):
             del self.fig
 
         # 数据
-        # log(f'[{self.data_producer.data_type}] reset')
+        log(f'[{self.data_producer.data_type}] reset')
         self.data_producer.reset()
         if self.data_std:
             symbol_id, before_market_close_sec, x, _, _, self.period_done, _id = self._get_data()
