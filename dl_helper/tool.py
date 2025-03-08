@@ -280,13 +280,14 @@ def calc_drawdown(net, tick_size=0.001):
     
     return max_drawdown, max_drawdown_ticks
 
-def calc_drawup_ticks(net, tick_size=0.001):
+def calc_drawup_ticks(net, tick_size=0.001, count_level=2):
     """计算净值序列从阶段低点向上变动的最大刻度数量
     Args:
         net: 净值序列（直接输入净值，而不是收益率）
-        tick_size: 最小刻度大小，默认0.001rmb
+        tick_size: 最小刻度大小, 默认0.001rmb
+        count_level: 计算新高count_level个tick_size的数量
     Returns:
-        int: 上涨对应的最小刻度数量
+        int: 上涨对应的最小刻度数量, int: 新高count_level个tick_size的数量
     """
     if isinstance(net, (pd.Series, pd.DataFrame)):
         net = net.values
@@ -296,7 +297,7 @@ def calc_drawup_ticks(net, tick_size=0.001):
     drawup_price = net - running_min
     max_drawup_ticks = round(abs(np.max(drawup_price)) / tick_size)
     
-    return max_drawup_ticks
+    return max_drawup_ticks, np.sum(np.diff((drawup_price > count_level*tick_size) - 0) > 0)
 
 def calc_return(returns, num_per_year=250):
     """计算年化总对数收益率
