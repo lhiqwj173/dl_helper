@@ -186,13 +186,6 @@ class data_producer:
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
 
-            # 创建预测数据文件
-            os.makedirs(os.path.join(self.save_folder, self.data_type), exist_ok=True)
-            self.need_upload_file = os.path.join(self.save_folder, self.data_type, f'{self.cur_data_file.split(".")[0]}.csv')
-            # 若存在，则删除
-            if os.path.exists(self.need_upload_file):
-                os.remove(self.need_upload_file)
-
             # 列过滤
             if self.need_cols:
                 self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
@@ -744,6 +737,16 @@ class LOB_trade_env(gym.Env):
         # Add notification system
         self.notification_window = None
 
+        # 样本计数
+        self.sample_count = 0
+
+        # 环境输出文件
+        self.need_upload_file = self.update_need_upload_file()
+
+    def update_need_upload_file(self):
+        os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
+        return os.path.join(self.save_folder, self.data_producer.data_type, f'{self.sample_count}.csv')
+        
     def no_need_track_info_item(self):
         return ['act_criteria', 'period_done']
 
@@ -753,6 +756,8 @@ class LOB_trade_env(gym.Env):
     def _set_data_type(self, data_type):
         self.data_producer.set_data_type(data_type)
         self.need_reset = True
+        self.sample_count = 0
+        self.need_upload_file = self.update_need_upload_file()
 
     def val(self):
         self._set_data_type('val')
@@ -872,14 +877,22 @@ class LOB_trade_env(gym.Env):
         id,before_market_close_sec,pos,profit,predict
         """
         # 输出列名
-        if not os.path.exists(self.data_producer.need_upload_file):
-            with open(self.data_producer.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict\n')
-        with open(self.data_producer.need_upload_file, 'a') as f:
-            f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)}\n')
+        if not os.path.exists(self.need_upload_file):
+            with open(self.need_upload_file, 'w') as f:
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file\n')
+        with open(self.need_upload_file, 'a') as f:
+            f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file}\n')
     
     def step(self, action):
         assert not self.need_reset, "LOB env need reset"
+
+        # 更新样本计数
+        self.sample_count += 1
+        if self.sample_count % 500 == 0:
+            log(f'[{self.data_producer.data_type}] total sample: {self.sample_count}')
+        if self.sample_count % 4000 == 0:
+            # 更新环境输出文件名称
+            self.need_upload_file = self.update_need_upload_file()
 
         # 需要输出预测数据文件
         self.out_test_predict(action)
