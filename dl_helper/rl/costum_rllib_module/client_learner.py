@@ -188,6 +188,7 @@ class ClientLearnerGroup(LearnerGroup):
         self.train_folder = train_folder
 
         # 初始化日志
+        log(f'init_logger: {train_title}_{beijing_time().strftime("%Y%m%d")} {train_folder}')
         init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
         # 参数压缩器
@@ -450,6 +451,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f'_run_event_loop_process')
 
         # 初始化日志
+        log(f'init_logger: {train_title}_{beijing_time().strftime("%Y%m%d")} {train_folder}')
         init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
         # 共享梯度队列
@@ -811,6 +813,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     def init_logger(self):
+        log(f'[{self.client_id}] init_logger: {self.train_title}_{beijing_time().strftime("%Y%m%d")} {self.train_folder}')
         init_logger(f'{self.train_title}_{beijing_time().strftime("%Y%m%d")}', home=self.train_folder, timestamp=False)
         log(f"[{self.client_id}] init_logger done: {get_log_folder()}")
         return True

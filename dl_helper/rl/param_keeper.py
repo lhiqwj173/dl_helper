@@ -451,6 +451,7 @@ class ExperimentHandler:
                     for _id, (compress_data, compress_info) in res_dict.items():
                         # dumps
                         dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
+                        log(f'[{_id}] dump_data size: {len(dump_data)}')
                         client_params_q[_id].put(dump_data, block=False, extra_data=np.int64(version))
                         log(f'[CG]{train_title} ready params for {_id}, version: {version}, size: {len(dump_data)}, done, cost: {int(1000*(time.time() - t))}ms')
 
