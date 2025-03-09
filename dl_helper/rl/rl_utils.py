@@ -48,6 +48,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         'env_runner_episode_len_max',
         'env_runner_num_env_steps_sampled',
         'env_runner_num_episodes',
+        'env_runner_num_env_steps_sampled_lifetime',
         'val_episode_return_mean',
         'val_episode_return_max',
         'val_episode_len_mean',
@@ -80,6 +81,8 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
             important_metrics["env_runner"]["num_env_steps_sampled"] = data["env_runners"]["num_env_steps_sampled"]
         if 'num_episodes' in data["env_runners"]:
             important_metrics["env_runner"]["num_episodes"] = data["env_runners"]["num_episodes"]
+        if 'num_env_steps_sampled_lifetime' in data["env_runners"]:
+            important_metrics["env_runner"]["num_env_steps_sampled_lifetime"] = data["env_runners"]["num_env_steps_sampled_lifetime"]
 
     if 'evaluation' in data:
         if 'env_runners' in data["evaluation"]:
@@ -172,6 +175,10 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         with open(out_file, 'a') as f:
             f.write(beijing_time().strftime('%Y-%m-%d %H:%M:%S') + ',')
             f.write(','.join(data_dict.values()) + '\n')
+
+    # 异常采用检查
+    if 'num_env_steps_sampled' in important_metrics['env_runner'] and important_metrics['env_runner']['num_env_steps_sampled'] == 0:
+        raise ValueError(f'num_env_steps_sampled is 0, please check the data')
 
     return important_metrics
 

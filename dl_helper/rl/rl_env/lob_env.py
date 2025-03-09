@@ -688,7 +688,6 @@ class LOB_trade_env(gym.Env):
 
                 'period_done': False,
                 'need_close': False,
-                'save_folder': 'lob',
             }
         """
         super().__init__()
@@ -702,8 +701,6 @@ class LOB_trade_env(gym.Env):
             'use_symbols': [],# 只使用某些标的
 
             'period_done': False,
-            'save_folder': LOB_trade_env.REG_NAME,
-
             # 用于日志初始化
             'train_folder': 'lob',
             'log_name': f'20250213_lob_{beijing_time().strftime("%Y%m%d")}',
@@ -713,7 +710,7 @@ class LOB_trade_env(gym.Env):
             config[k] = config.get(k, v)
 
         # 保存文件夹
-        self.save_folder = os.path.join(config['save_folder'], 'env_output')
+        self.save_folder = os.path.join(config['train_folder'], 'env_output')
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
 
