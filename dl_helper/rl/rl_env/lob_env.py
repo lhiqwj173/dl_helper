@@ -746,6 +746,8 @@ class LOB_trade_env(gym.Env):
         # 环境输出文件
         self.need_upload_file = self.update_need_upload_file()
 
+        log(f'init env done')
+
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
         return os.path.join(self.save_folder, self.data_producer.data_type, f'{self.sample_count}.csv')
@@ -757,6 +759,7 @@ class LOB_trade_env(gym.Env):
         return True
 
     def _set_data_type(self, data_type):
+        log(f'set data type: {data_type}')
         self.data_producer.set_data_type(data_type)
         self.need_reset = True
         self.sample_count = 0
