@@ -72,7 +72,10 @@ def run(
             # 环境配置
             env_config=env_config
         )# 直接使用
-        .env_runners(num_env_runners=int(os.cpu_count() - num_learners))# 设置成核心数减去gpu数
+        .env_runners(
+            sample_timeout_s=float('inf'),
+            num_env_runners=int(os.cpu_count() - num_learners),# 设置成核心数减去gpu数
+        )
         # 自定义模型
         .rl_module(
             rl_module_spec=RLModuleSpec(catalog_class=catalog_class),# 使用自定义配置
