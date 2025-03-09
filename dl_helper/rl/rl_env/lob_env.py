@@ -377,7 +377,7 @@ class data_producer:
         try:
             a, b = self.x[self.idxs[0][0]]
         except Exception as e:
-            send_wx(f'error at lob_env: a, b = self.x[self.idxs[0][0]], cur_date_file: {self.cur_data_file}, x: {self.x}, idxs: {self.idxs}')
+            send_wx(f'error at lob_env: a, b = self.x[self.idxs[0][0]], cur_date_file: {self.cur_data_file}, len(x): {len(self.x)}, idxs: {self.idxs}')
             raise e
 
         if b-a > self.his_len:# 修正历史数据长度
