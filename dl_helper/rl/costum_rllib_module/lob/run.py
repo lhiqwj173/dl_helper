@@ -13,6 +13,21 @@ from dl_helper.train_folder_manager import TrainFolderManager
 from py_ext.tool import log
 from py_ext.datetime import beijing_time
 
+def keep_only_latest_files(folder, num=50):
+    """
+    只保留文件夹中的最新修改的50个文件
+    """
+    files = os.listdir(folder)
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(folder, x)))
+    for file in files[:-num]:
+        os.remove(os.path.join(folder, file))
+
+def remove_old_env_output_files(save_folder):
+    for folder in os.listdir(save_folder):
+        folder = os.path.join(save_folder, folder)
+        if os.path.isdir(folder):
+            keep_only_latest_files(folder)
+
 def run(
         train_folder, 
         log_name, 
@@ -119,6 +134,9 @@ def run(
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
             simplify_rllib_metrics(result, out_func=log)
+
+            # 删除旧的文件
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
         
         # 停止学习者额外的事件进程
         algo.learner_group.stop_extra_process()
@@ -154,6 +172,9 @@ def run(
 
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+
+            # 删除旧的文件
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
 
         # 绘制训练曲线
         plot_training_curve(train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter())
@@ -196,6 +217,9 @@ def run(
 
             out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
+
+            # 删除旧的文件
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
 
             if i>0 and (i % 10 == 0 or i == rounds - 1):
                 # 保存检查点
