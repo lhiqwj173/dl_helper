@@ -73,7 +73,7 @@ def run(
             env_config=env_config
         )# 直接使用
         .env_runners(
-            sample_timeout_s=float('inf'),
+            sample_timeout_s=24*60*60,
             num_env_runners=int(os.cpu_count() - num_learners),# 设置成核心数减去gpu数
         )
         # 自定义模型
