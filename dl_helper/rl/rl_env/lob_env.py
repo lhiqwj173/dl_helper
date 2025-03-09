@@ -112,9 +112,12 @@ class data_producer:
         # 训练数据
         if in_kaggle:
             input_folder = r'/kaggle/input'
-            # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-            data_folder_name = os.listdir(input_folder)[0]
-            self.data_folder = os.path.join(input_folder, data_folder_name)
+            try:
+                # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+                data_folder_name = os.listdir(input_folder)[0]
+                self.data_folder = os.path.join(input_folder, data_folder_name)
+            except:
+                self.data_folder = r''
         else:
             self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data'
 
