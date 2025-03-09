@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
-from py_ext.tool import log, init_logger
+from py_ext.tool import log, init_logger,get_exception_msg
 from py_ext.datetime import beijing_time
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
@@ -887,60 +887,65 @@ class LOB_trade_env(gym.Env):
             f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file}\n')
     
     def step(self, action):
-        assert not self.need_reset, "LOB env need reset"
+        try:
+            assert not self.need_reset, "LOB env need reset"
 
-        # 更新样本计数
-        self.sample_count += 1
-        if self.sample_count % 500 == 0:
-            log(f'[{self.data_producer.data_type}] total sample: {self.sample_count}')
-        if self.sample_count % 4000 == 0:
-            # 更新环境输出文件名称
-            self.need_upload_file = self.update_need_upload_file()
+            # 更新样本计数
+            self.sample_count += 1
+            if self.sample_count % 500 == 0:
+                log(f'[{self.data_producer.data_type}] total sample: {self.sample_count}')
+            if self.sample_count % 4000 == 0:
+                # 更新环境输出文件名称
+                self.need_upload_file = self.update_need_upload_file()
 
-        # 需要输出预测数据文件
-        self.out_test_predict(action)
+            # 需要输出预测数据文件
+            self.out_test_predict(action)
 
-        # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
-        if self.data_std:
-            symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id = self._get_data()
-        else:
-            symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
+            # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
+            if self.data_std:
+                symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id = self._get_data()
+            else:
+                symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
 
-        info = {
-            'period_done': self.period_done,
-            'id': _id,
-        }
+            info = {
+                'period_done': self.period_done,
+                'id': _id,
+            }
 
-        if not self.data_std:
-            info['x_std'] = x_std
-            info['sec_std'] = sec_std
-            info['id_std'] = id_std
+            if not self.data_std:
+                info['x_std'] = x_std
+                info['sec_std'] = sec_std
+                info['id_std'] = id_std
 
-        # 计算奖励
-        reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
+            # 计算奖励
+            reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
 
-        # 记录静态数据，用于输出预测数据
-        self.static_data = {
-            'before_market_close_sec': before_market_close_sec,
-            'pos': pos,
-            'profit': profit,
-        }
+            # 记录静态数据，用于输出预测数据
+            self.static_data = {
+                'before_market_close_sec': before_market_close_sec,
+                'pos': pos,
+                'profit': profit,
+            }
 
-        if action == 1 or need_close or info.get('act_criteria', None) == -1:
-            # 平仓 / 强制平仓 / 非法平仓， 重置idx
-            self.last_buy_idx = -1
-        elif action == 0:
-            # 记录交易idx
-            self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
+            if action == 1 or need_close or info.get('act_criteria', None) == -1:
+                # 平仓 / 强制平仓 / 非法平仓， 重置idx
+                self.last_buy_idx = -1
+            elif action == 0:
+                # 记录交易idx
+                self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
 
-        # 添加标的持仓数据
-        observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
+            # 添加标的持仓数据
+            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
 
-        # 检查是否结束
-        terminated = acc_done# 非法操作 / 消极操作，多次错失机会
-        truncated = need_close# 达到最大步数: 当天的数据结束了
+            # 检查是否结束
+            terminated = acc_done# 非法操作 / 消极操作，多次错失机会
+            truncated = need_close# 达到最大步数: 当天的数据结束了
 
-        return observation, reward, terminated, truncated, info
+            return observation, reward, terminated, truncated, info
+
+        except Exception as e:
+            log(f'[{self.data_producer.data_type}] step error: {get_exception_msg()}')
+            raise e
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
