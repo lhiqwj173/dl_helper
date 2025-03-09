@@ -751,7 +751,7 @@ class LOB_trade_env(gym.Env):
 
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
-        return os.path.join(self.save_folder, self.data_producer.data_type, f'{self.sample_count}.csv')
+        return os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.sample_count}.csv')
         
     def no_need_track_info_item(self):
         return ['act_criteria', 'period_done']
