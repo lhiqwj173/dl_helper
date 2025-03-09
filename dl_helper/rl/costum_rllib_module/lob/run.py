@@ -121,6 +121,7 @@ def run(
             config = config.evaluation(
                 evaluation_interval=15,
                 evaluation_duration=3,
+                evaluation_sample_timeout_s=24*60*60,
             )
 
         # 客户端运行
@@ -161,6 +162,7 @@ def run(
         config = config.evaluation(
             evaluation_interval=15,
             evaluation_duration=3,
+            evaluation_sample_timeout_s=24*60*60,
         )
 
         # 构建算法
@@ -193,6 +195,7 @@ def run(
         config = config.evaluation(
             evaluation_interval=15,
             evaluation_duration=3,
+            evaluation_sample_timeout_s=24*60*60,
         )
 
         # 构建算法
