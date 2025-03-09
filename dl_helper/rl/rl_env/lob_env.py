@@ -12,6 +12,7 @@ import pytz
 from matplotlib.widgets import Button
 from py_ext.tool import log, init_logger,get_exception_msg
 from py_ext.datetime import beijing_time
+from py_ext.wechat import send_wx
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
 from dl_helper.train_param import in_kaggle
@@ -373,7 +374,14 @@ class data_producer:
             self._load_data()
 
         # 准备观察值
-        a, b = self.x[self.idxs[0][0]]
+        try:
+            a, b = self.x[self.idxs[0][0]]
+        except Exception as e:
+            log(f'[{id(self)}][{self.data_producer.data_type}] x: {self.x}')
+            log(f'[{id(self)}][{self.data_producer.data_type}] self.idxs: {self.idxs}')
+            send_wx(f'error at lob_env: a, b = self.x[self.idxs[0][0]]')
+            raise e
+
         if b-a > self.his_len:# 修正历史数据长度
             a = b - self.his_len
         raw = self.all_raw_data[a: b, :].copy()
@@ -747,7 +755,11 @@ class LOB_trade_env(gym.Env):
         # 环境输出文件
         self.need_upload_file = self.update_need_upload_file()
 
-        log(f'init env done')
+        # 记录每个 episode 的步数
+        self.mean_episode_lengths = 0
+        self.episode_count = 0
+        
+        log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
@@ -760,7 +772,7 @@ class LOB_trade_env(gym.Env):
         return True
 
     def _set_data_type(self, data_type):
-        log(f'set data type: {data_type}')
+        log(f'[{id(self)}][{self.data_producer.data_type}] set data type: {data_type}')
         self.data_producer.set_data_type(data_type)
         self.need_reset = True
         self.sample_count = 0
@@ -863,10 +875,10 @@ class LOB_trade_env(gym.Env):
             # 给一个小惩罚, 且结束本轮游戏
             punish = 0
             if res['max_drawup_ticks_bm'] > 10:
-                log(f'[{self.data_producer.data_type}] max_drawup_ticks_bm{res["max_drawup_ticks_bm"]} > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm{res["max_drawup_ticks_bm"]} > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
                 punish = 1
             if res['drawup_ticks_bm_count'] > 3:
-                log(f'[{self.data_producer.data_type}] drawup_ticks_bm_count{res["drawup_ticks_bm_count"]} > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count{res["drawup_ticks_bm_count"]} > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
                 punish = 1
 
             if punish:
@@ -891,6 +903,7 @@ class LOB_trade_env(gym.Env):
             f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file}\n')
     
     def step(self, action):
+        self.steps += 1
         try:
             assert not self.need_reset, "LOB env need reset"
 
@@ -945,46 +958,59 @@ class LOB_trade_env(gym.Env):
             terminated = acc_done# 非法操作 / 消极操作，多次错失机会
             truncated = need_close# 达到最大步数: 当天的数据结束了
 
+            done = terminated or truncated
+            if done:
+                # 计算平均步数
+                self.mean_episode_lengths = (self.mean_episode_lengths * self.episode_count + self.steps) / (self.episode_count + 1)
+                self.episode_count += 1
+                log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}')
+
             return observation, reward, terminated, truncated, info
 
         except Exception as e:
-            log(f'[{self.data_producer.data_type}] step error: {get_exception_msg()}')
+            log(f'[{id(self)}][{self.data_producer.data_type}] step error: {get_exception_msg()}')
             raise e
 
     def reset(self, seed=None, options=None):
-        super().reset(seed=seed, options=options)
-        # 重置
-        self.need_reset = False
-        # 清理图形对象
-        if hasattr(self, 'fig'):
-            plt.close(self.fig)
-            del self.fig
+        try:
+            super().reset(seed=seed, options=options)
+            self.steps = 0
+            # 重置
+            self.need_reset = False
+            # 清理图形对象
+            if hasattr(self, 'fig'):
+                plt.close(self.fig)
+                del self.fig
 
-        # 数据
-        log(f'[{self.data_producer.data_type}] reset')
-        self.data_producer.reset()
-        if self.data_std:
-            symbol_id, before_market_close_sec, x, _, _, self.period_done, _id = self._get_data()
-        else:
-            symbol_id, before_market_close_sec, x, _, _, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
-        # 账户
-        pos, profit = self.acc.reset()
-        # 添加标的持仓数据
-        x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
-        # 初始化skip计数器
-        self.skip_steps = 0
+            # 数据
+            log(f'[{id(self)}][{self.data_producer.data_type}] reset')
+            self.data_producer.reset()
+            if self.data_std:
+                symbol_id, before_market_close_sec, x, _, _, self.period_done, _id = self._get_data()
+            else:
+                symbol_id, before_market_close_sec, x, _, _, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
+            # 账户
+            pos, profit = self.acc.reset()
+            # 添加标的持仓数据
+            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
+            # 初始化skip计数器
+            self.skip_steps = 0
 
-        # 记录静态数据，用于输出预测数据
-        self.static_data = {
-            'before_market_close_sec': before_market_close_sec,
-            'pos': pos,
-            'profit': profit,
-        }
+            # 记录静态数据，用于输出预测数据
+            self.static_data = {
+                'before_market_close_sec': before_market_close_sec,
+                'pos': pos,
+                'profit': profit,
+            }
 
-        if self.data_std:
-            return x, {'id': _id}
-        else:
-            return x, {'x_std': x_std, 'sec_std': sec_std, 'id_std': id_std, 'id': _id}
+            if self.data_std:
+                return x, {'id': _id}
+            else:
+                return x, {'x_std': x_std, 'sec_std': sec_std, 'id_std': id_std, 'id': _id}
+            
+        except Exception as e:
+            log(f'[{id(self)}][{self.data_producer.data_type}] reset error: {get_exception_msg()}')
+            raise e
 
     def show_notification(self, title, message, fig=None):
         """

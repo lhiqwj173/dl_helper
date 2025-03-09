@@ -90,6 +90,7 @@ def run(
         'evaluation_duration': 2000,
         'evaluation_duration_unit': 'timesteps',
         'evaluation_sample_timeout_s': 24*60*60,
+        'evaluation_force_reset_envs_before_iteration': True,
     }
 
     if run_type == 'server':
