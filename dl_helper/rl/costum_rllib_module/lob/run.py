@@ -83,6 +83,14 @@ def run(
         .callbacks(LobCallbacks)
     )
 
+    # 验证配置
+    eval_config = {
+        'evaluation_interval': 15,
+        'evaluation_duration': 500,
+        'evaluation_duration_unit': 'timesteps',
+        'evaluation_sample_timeout_s': 24*60*60,
+    }
+
     if run_type == 'server':
         config = config.extra_config(
             learner_group_class=ClientLearnerGroup,
@@ -118,11 +126,7 @@ def run(
         need_val = request_need_val(train_title)
         log(f"need_val: {need_val}")
         if need_val:
-            config = config.evaluation(
-                evaluation_interval=15,
-                evaluation_duration=3,
-                evaluation_sample_timeout_s=24*60*60,
-            )
+            config = config.evaluation(**eval_config)
 
         # 客户端运行
         # 构建算法
@@ -159,11 +163,7 @@ def run(
             num_learners=num_learners,
             num_gpus_per_learner=1,
         )
-        config = config.evaluation(
-            evaluation_interval=15,
-            evaluation_duration=3,
-            evaluation_sample_timeout_s=24*60*60,
-        )
+        config = config.evaluation(**eval_config)
 
         # 构建算法
         algo = config.build()
@@ -192,11 +192,7 @@ def run(
             num_learners=num_learners,
             num_gpus_per_learner=1,
         )
-        config = config.evaluation(
-            evaluation_interval=15,
-            evaluation_duration=3,
-            evaluation_sample_timeout_s=24*60*60,
-        )
+        config = config.evaluation(**eval_config)
 
         # 构建算法
         algo = config.build()
