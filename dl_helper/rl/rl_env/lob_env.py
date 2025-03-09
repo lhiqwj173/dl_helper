@@ -189,11 +189,6 @@ class data_producer:
             # 创建预测数据文件
             os.makedirs(os.path.join(self.save_folder, self.data_type), exist_ok=True)
             self.need_upload_file = os.path.join(self.save_folder, self.data_type, f'{self.cur_data_file.split(".")[0]}.csv')
-            # 只保留文件夹中的最新修改的50个文件
-            files = os.listdir(os.path.join(self.save_folder, self.data_type))
-            files.sort(key=lambda x: os.path.getmtime(os.path.join(self.save_folder, self.data_type, x)))
-            for file in files[:-50]:
-                os.remove(os.path.join(self.save_folder, self.data_type, file))
             # 若存在，则删除
             if os.path.exists(self.need_upload_file):
                 os.remove(self.need_upload_file)
