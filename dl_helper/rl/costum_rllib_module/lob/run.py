@@ -81,6 +81,7 @@ def run(
             model_config=model_config,
         )
         .callbacks(LobCallbacks)
+        .debugging(log_level='DEBUG')
     )
 
     # 验证配置

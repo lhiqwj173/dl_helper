@@ -177,7 +177,7 @@ class data_producer:
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             if self.data_type == 'train':
                 random.shuffle(self.files)
-            log(f'[{self.data_type}] prepare files: {self.files}')
+            # log(f'[{self.data_type}] prepare files: {self.files}')
             
     def _load_data(self):
         """
@@ -186,7 +186,7 @@ class data_producer:
         """
         while self.files:
             self.cur_data_file = self.files.pop(0)
-            log(f'[{self.data_type}] load date file: {self.cur_data_file}')
+            # log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
 
             # 列过滤
@@ -407,18 +407,18 @@ class data_producer:
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
             need_close = True
-            log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
+            # log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
-            log(f'[{self.data_type}] idxs: {self.idxs}')
+            # log(f'[{self.data_type}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                log(f'[{self.data_type}] date done')
+                # log(f'[{self.data_type}] date done')
                 self.date_file_done = True
-                log(f'[{self.data_type}] len(files): {len(self.files)}')
+                # log(f'[{self.data_type}] len(files): {len(self.files)}')
                 if not self.files:
                     # 没有下一个可以读取的日期数据文件
-                    log(f'[{self.data_type}] all date files done')
+                    # log(f'[{self.data_type}] all date files done')
                     all_done = True
             else:
                 # 重置绘图索引
@@ -897,7 +897,7 @@ class LOB_trade_env(gym.Env):
             # 更新样本计数
             self.sample_count += 1
             if self.sample_count % 500 == 0:
-                log(f'[{self.data_producer.data_type}] total sample: {self.sample_count}')
+                log(f'[{id(self)}][{self.data_producer.data_type}] total sample: {self.sample_count}')
             if self.sample_count % 4000 == 0:
                 # 更新环境输出文件名称
                 self.need_upload_file = self.update_need_upload_file()
