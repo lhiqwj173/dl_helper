@@ -44,13 +44,13 @@ if __name__ == "__main__":
     )
 
     if run_type == 'server':
-        config = config.extra_config(
-            learner_group_class=ClientLearnerGroup,
-            learner_group_kwargs={
-                'train_folder': train_folder,
-                "train_title": train_title,
-            },
-        )
+        # config = config.extra_config(
+        #     learner_group_class=ClientLearnerGroup,
+        #     learner_group_kwargs={
+        #         'train_folder': train_folder,
+        #         "train_title": train_title,
+        #     },
+        # )
 
         # dump config
         add_train_title_item(train_title, config)
