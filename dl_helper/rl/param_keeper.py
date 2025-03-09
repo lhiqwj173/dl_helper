@@ -400,7 +400,7 @@ class ExperimentHandler:
                         param_server.apply_gradients(avg_grads, len(all_grads))
                         step_count += 1
 
-                        log(f'[CG]{train_title} apply grad, latest_version: {param_server.ver}, cost: {int(1000*(time.time() - t))}ms')
+                        log(f'[CG]{train_title} apply grad, lr times: {len(all_grads)}, latest_version: {param_server.ver}, cost: {int(1000*(time.time() - t))}ms')
 
                 #####################################
                 # 2.0 准备/压缩参数

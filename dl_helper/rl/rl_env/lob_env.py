@@ -601,6 +601,7 @@ class Account:
             'max_drawdown_bm': 0.0,
             'max_drawdown_ticks_bm': 0.0,
             'max_drawup_ticks_bm': 0.0,
+            'drawup_ticks_bm_count': 0.0,
             'trade_return_bm': 0.0,
             'step_return_bm': 0.0,
         }
