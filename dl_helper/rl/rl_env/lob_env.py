@@ -210,7 +210,7 @@ class data_producer:
                 self.x = self.x[:8000]
 
             # 距离市场关闭的秒数
-            self.date = file[:8]
+            self.date = self.cur_data_file[:8]
             dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
             dt = pytz.timezone('Asia/Shanghai').localize(dt)
             close_ts = int(dt.timestamp())
