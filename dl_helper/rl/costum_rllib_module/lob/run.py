@@ -30,7 +30,6 @@ def remove_old_env_output_files(save_folder):
 
 def run(
         train_folder, 
-        log_name, 
         train_title,
         catalog_class,
         model_config,
@@ -60,7 +59,7 @@ def run(
 
     # 训练配置
     env_config['train_folder'] = train_folder
-    env_config['log_name'] = log_name
+    env_config['train_title'] = train_title
     config = (
         ClientPPOConfig()
         .api_stack(

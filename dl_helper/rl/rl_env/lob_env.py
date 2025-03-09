@@ -694,7 +694,7 @@ class LOB_trade_env(gym.Env):
             'period_done': False,
             # 用于日志初始化
             'train_folder': 'lob',
-            'log_name': f'20250213_lob_{beijing_time().strftime("%Y%m%d")}',
+            'train_title': '',
         }
         # 用户配置更新
         for k, v in defult_config.items():
@@ -709,7 +709,8 @@ class LOB_trade_env(gym.Env):
         self.data_std = data_std
 
         # 初始化日志
-        init_logger(config['log_name'], home=config['train_folder'], timestamp=False)
+        log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
+        init_logger(log_name, home=config['train_folder'], timestamp=False)
         
         # 数据生产器
         self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder)

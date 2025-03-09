@@ -8,13 +8,11 @@ from dl_helper.rl.costum_rllib_module.lob.hsta import HSTAPPOCatalog
 
 train_folder = 'lob_HSTA'
 train_title = f'20250213_lob_HSTA'
-log_name = f'20250213_lob_HSTA_{beijing_time().strftime("%Y%m%d")}'
-init_logger(log_name, home=train_folder, timestamp=False)
+init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
     run(
         train_folder,
-        log_name, 
         train_title,
         HSTAPPOCatalog,# 自定义自定义编码器
         model_config={

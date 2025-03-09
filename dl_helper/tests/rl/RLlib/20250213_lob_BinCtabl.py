@@ -8,13 +8,11 @@ from dl_helper.rl.costum_rllib_module.lob.binctabl import BinCtablPPOCatalog
 
 train_folder = 'lob_BinCtabl'
 train_title = f'20250213_lob_BinCtabl'
-log_name = f'20250213_lob_BinCtabl_{beijing_time().strftime("%Y%m%d")}'
-init_logger(log_name, home=train_folder, timestamp=False)
+init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
     run(
         train_folder,
-        log_name, 
         train_title,
         BinCtablPPOCatalog,# 自定义自定义编码器
         model_config={
