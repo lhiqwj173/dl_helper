@@ -82,7 +82,7 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder=""):
+    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=""):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
@@ -96,6 +96,7 @@ class data_producer:
         self.his_len = his_len
         self.data_std = data_std
         self.save_folder = save_folder
+        self.debug_date = debug_date.replace('-', '').replace(' ', '')
 
         self.use_symbols = use_symbols
         
@@ -120,7 +121,7 @@ class data_producer:
             except:
                 self.data_folder = r''
         else:
-            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RL_combine_data'
+            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_combine_data'
 
         self.data_type = data_type
         self.files = []
@@ -153,8 +154,8 @@ class data_producer:
         self.bid_price = 0
         # id
         self.id = ''
-        # 当前日期数据停止标志
-        self.date_file_done = False
+        # 当前日期数据停止标志，初始没有可用数据，所以应该为True
+        self.date_file_done = True
 
     def pre_plot_data(self):
         """
@@ -173,21 +174,23 @@ class data_producer:
         若是训练数据，随机读取
         若是验证/测试数据，按顺序读取
         """
-        if not self.files:
+        if not self.files and self.date_file_done:# 当天的数据用完，且没有其他日期数据可以load，需要重新准备数据
             # 若 文件列表为空，重新准备
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             if self.data_type == 'train':
                 random.shuffle(self.files)
-            # log(f'[{self.data_type}] prepare files: {self.files}')
+            if self.debug_date:
+                self.files = [i for i in self.files if i.startswith(self.debug_date)]
+            log(f'[{self.data_type}] prepare files: {self.files}')
             
     def _load_data(self):
         """
         按照文件列表读取数据
         每次完成后从文件列表中剔除
         """
-        while self.files:
+        while self.files and self.date_file_done:
             self.cur_data_file = self.files.pop(0)
-            # log(f'[{self.data_type}] load date file: {self.cur_data_file}')
+            log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
 
             # 列过滤
@@ -224,15 +227,20 @@ class data_producer:
                 self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
 
             if not self.idxs:
-                # log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                self.date_file_done = True
                 continue
+            else:
+                # 载入了新的日期文件数据
+                # 重置日期文件停止标志
+                self.date_file_done = False
 
             # 训练数据随机选择一个标的
             # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
             if self.data_type == 'train':
                 self.idxs = [random.choice(self.idxs)]
 
-            # log(f'[{self.data_type}] init idxs: {self.idxs}')
+            log(f'[{self.data_type}] init idxs: {self.idxs}')
 
             # 调整数据
             # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
@@ -322,9 +330,6 @@ class data_producer:
             # # 测试用
             # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
 
-            # 载入了新的日期文件数据
-            # 重置日期文件停止标志
-            self.date_file_done = False
             break
 
     def set_data_type(self, data_type):
@@ -359,26 +364,22 @@ class data_producer:
     def get(self):
         """
         输出观察值
-        返回 symbol_id, before_market_close_sec, x, done, need_close, period_done
+            返回 symbol_id, before_market_close_sec, x, need_close, self.id
+
+            若data_std=False
+            返回 symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std
         """
         # # 测试用
         # print(self.idxs[0])
+
+        assert not self.date_file_done, f'date_file_done must be False, but is {self.date_file_done}, need_check'
 
         if self.plot_cur_pre != -1:
             # 更新绘图数据
             self.plot_cur = self.plot_cur_pre
 
-        # 检查日期文件结束
-        if self.date_file_done:
-            # load 下一个日期文件的数据
-            self._load_data()
-
         # 准备观察值
-        try:
-            a, b = self.x[self.idxs[0][0]]
-        except Exception as e:
-            send_wx(f'error at lob_env: a, b = self.x[self.idxs[0][0]], cur_date_file: {self.cur_data_file}, len(x): {len(self.x)}, idxs: {self.idxs}')
-            raise e
+        a, b = self.x[self.idxs[0][0]]
 
         if b-a > self.his_len:# 修正历史数据长度
             a = b - self.his_len
@@ -408,24 +409,18 @@ class data_producer:
         self.id = self.ids[self.idxs[0][0]]
 
         # 检查本次数据是否是最后一个数据
-        all_done = False
         need_close = False
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
             need_close = True
-            # log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
+            log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
-            # log(f'[{self.data_type}] idxs: {self.idxs}')
+            log(f'[{self.data_type}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                # log(f'[{self.data_type}] date done')
+                log(f'[{self.data_type}] date file done')
                 self.date_file_done = True
-                # log(f'[{self.data_type}] len(files): {len(self.files)}')
-                if not self.files:
-                    # 没有下一个可以读取的日期数据文件
-                    # log(f'[{self.data_type}] all date files done')
-                    all_done = True
             else:
                 # 重置绘图索引
                 self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
@@ -447,11 +442,11 @@ class data_producer:
             # id
             symbol_id -= MEAN_CODE_ID
             symbol_id /= STD_CODE_ID
-            return symbol_id, before_market_close_sec, x, all_done, need_close, self.date_file_done, self.id
+            return symbol_id, before_market_close_sec, x, need_close, self.id
         else:
             sec_std = (MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE)
             id_std = (MEAN_CODE_ID, STD_CODE_ID)
-            return symbol_id, before_market_close_sec, x, all_done, need_close, self.date_file_done, self.id, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, need_close, self.id, x_std, sec_std, id_std
 
     def get_plot_data(self):
         """
@@ -460,8 +455,13 @@ class data_producer:
         return self.plot_data, self.plot_cur - self.plot_begin, self.ids[self.plot_cur]
 
     def reset(self):
-        self._pre_files()
-        self._load_data()
+        while True:
+            self._pre_files()
+            self._load_data()
+            if self.date_file_done:
+                log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}, will repre files')
+                continue
+            break
 
 class Account:
     """
@@ -663,6 +663,43 @@ class Account:
         self.bm_next_open = True
         return self.pos, 0
 
+class RewardTracker:
+    def __init__(self):
+        # 初始化奖励列表和连续负奖励计数器
+        self.rewards = []  # 存储所有奖励
+        self.consecutive_negative = 0  # 当前连续负奖励次数
+        
+    def add_reward(self, reward):
+        """
+        添加新的奖励值并更新统计信息
+        :param reward: float or int, 当前的奖励值
+        :return: tuple (连续负奖励次数, 平均奖励)
+        """
+        # 添加奖励到列表
+        self.rewards.append(reward)
+        
+        # 更新连续负奖励计数
+        if reward < 0:
+            self.consecutive_negative += 1
+        else:
+            self.consecutive_negative = 0
+            
+        # 计算平均奖励
+        if len(self.rewards) > 0:
+            avg_reward = sum(self.rewards) / len(self.rewards)
+        else:
+            avg_reward = 0.0
+            
+        return (self.consecutive_negative, avg_reward)
+
+    def reset(self):
+        """
+        重置统计信息
+        """
+        self.rewards = []
+        self.consecutive_negative = 0
+        
+
 class LOB_trade_env(gym.Env):
     """
     用于 LOB 的强化学习环境
@@ -672,7 +709,7 @@ class LOB_trade_env(gym.Env):
 
     REG_NAME = 'lob'
     
-    def __init__(self, config: dict, data_std=True):
+    def __init__(self, config: dict, data_std=True, debug_date=''):
         """
         :param config: 配置
             {
@@ -682,9 +719,6 @@ class LOB_trade_env(gym.Env):
                 'simple_test': False,# 是否为简单测试
                 'need_cols': [],# 需要读取的列
                 'use_symbols': [],# 只使用某些标的
-
-                'period_done': False,
-                'need_close': False,
             }
         """
         super().__init__()
@@ -697,7 +731,6 @@ class LOB_trade_env(gym.Env):
             'need_cols': [],# 需要读取的列
             'use_symbols': [],# 只使用某些标的
 
-            'period_done': False,
             # 用于日志初始化
             'train_folder': 'lob',
             'train_title': '',
@@ -711,16 +744,21 @@ class LOB_trade_env(gym.Env):
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
 
+        # 奖励统计器
+        self.reward_tracker = RewardTracker()
+
         # 是否标准化数据
         self.data_std = data_std
+
+        # 测试日期
+        self.debug_date = debug_date
 
         # 初始化日志
         log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
         init_logger(log_name, home=config['train_folder'], timestamp=False)
         
         # 数据生产器
-        self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder)
-        self.period_done = config['period_done']
+        self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder, debug_date=self.debug_date)
 
         # 账户数据
         self.acc = Account()
@@ -764,7 +802,7 @@ class LOB_trade_env(gym.Env):
         return os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.sample_count}.csv')
         
     def no_need_track_info_item(self):
-        return ['act_criteria', 'period_done']
+        return ['act_criteria']
 
     def need_wait_close(self):
         return True
@@ -788,18 +826,23 @@ class LOB_trade_env(gym.Env):
     def _get_data(self):
         # 获取数据
         if self.data_std:
-            symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done, _id = self.data_producer.get()
+            symbol_id, before_market_close_sec, x, need_close, _id = self.data_producer.get()
             x = x.reshape(-1)
-            return symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done, _id
+            return symbol_id, before_market_close_sec, x, need_close, _id
         else:
-            symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done, _id, x_std, sec_std, id_std = self.data_producer.get()
+            symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std = self.data_producer.get()
             x = x.reshape(-1)
-            return symbol_id, before_market_close_sec, x, all_data_done, need_close, period_done, _id, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std
 
     def _cal_reward(self, action, need_close, info):
         """
         计算奖励
         """
+        # 游戏是否终止
+        # 1. 非法操作                                 -100
+        # 2. 消极操作，多次错失机会                     -10
+        # 3. 连续3次平仓奖励为负，则认为任务失败          -100
+        # 4. 连续数据结束了，且平均奖励为正，则认为任务成功 +100
         acc_done = False
 
         legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
@@ -813,9 +856,10 @@ class LOB_trade_env(gym.Env):
 
         # 合法性检查
         if not legal:
-            # 非法动作, 本轮结束
+            # 非法动作, 游戏终止，任务失败
             info['act_criteria'] = -1
-            return ILLEGAL_REWARD, True, pos, profit# TODO
+            acc_done = True
+            return ILLEGAL_REWARD, acc_done, pos, profit
 
         # 拷贝 res > info
         for k, v in res.items():
@@ -870,21 +914,41 @@ class LOB_trade_env(gym.Env):
             # 还未开仓的触发检查
             # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
             # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
+            # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
             # 给一个小惩罚, 且结束本轮游戏
             punish = 0
             if res['max_drawup_ticks_bm'] > 10:
-                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm{res["max_drawup_ticks_bm"]} > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
                 punish = 1
             if res['drawup_ticks_bm_count'] > 3:
-                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count{res["drawup_ticks_bm_count"]} > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
                 punish = 1
 
             if punish:
+                # 游戏终止，任务失败
                 acc_done = True
                 reward = -STD_REWARD / 10
+            
+            elif res['drawup_ticks_bm_count'] == 0:
+                # 标的一直在下跌 不开仓是正确的，需要给与奖励
+                # 与 持仓的 超额奖励一致
+                reward += (0 - res['trade_return_bm']) * (STD_REWARD / 1) * 0.4
 
         # 奖励限制范围
         reward = np.clip(reward, -STD_REWARD, STD_REWARD)
+
+        # 更新奖励统计器, 判断是否游戏结束/最终回报
+        # 只记录每次平仓的奖励
+        if need_close or action==1:
+            keep_negative, avg_reward = self.reward_tracker.add_reward(reward)
+            if keep_negative >= 3:
+                # 连续3次平仓奖励为负，则认为任务失败
+                acc_done = True
+                reward = -STD_REWARD
+            elif need_close and avg_reward > 0:
+                # 连续数据结束了，且平均奖励为正，则认为任务成功
+                acc_done = True
+                reward = STD_REWARD
 
         return reward, acc_done, pos, profit
 
@@ -918,12 +982,11 @@ class LOB_trade_env(gym.Env):
 
             # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
             if self.data_std:
-                symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id = self._get_data()
+                symbol_id, before_market_close_sec, observation, need_close, _id = self._get_data()
             else:
-                symbol_id, before_market_close_sec, observation, data_done, need_close, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
+                symbol_id, before_market_close_sec, observation, need_close, _id, x_std, sec_std, id_std = self._get_data()
 
             info = {
-                'period_done': self.period_done,
                 'id': _id,
             }
 
@@ -953,11 +1016,20 @@ class LOB_trade_env(gym.Env):
             observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
 
             # 检查是否结束
-            terminated = acc_done# 非法操作 / 消极操作，多次错失机会
-            truncated = need_close# 达到最大步数: 当天的数据结束了
+            terminated = acc_done# 游戏终止，最终回报: 非法操作 / 消极操作，多次错失机会 / 连续3次平仓奖励为负 / 当天连续数据结束时，平均平仓奖励为正
+            if not terminated and need_close:
+                # 当天连续数据结束时，没有成功
+                # 游戏截断，奖励在 _cal_reward 中已经计算
+                truncated = True
+            else:
+                truncated = False
 
             done = terminated or truncated
             if done:
+                if self.data_producer.data_type == 'train':
+                    # 不应该继续下一个tick开始游戏，应该重新load一个文件开始
+                    self.data_producer.date_file_done = True
+
                 # 计算平均步数
                 self.mean_episode_lengths = (self.mean_episode_lengths * self.episode_count + self.steps) / (self.episode_count + 1)
                 self.episode_count += 1
@@ -972,7 +1044,10 @@ class LOB_trade_env(gym.Env):
     def reset(self, seed=None, options=None):
         try:
             super().reset(seed=seed, options=options)
+
+            # 步数统计
             self.steps = 0
+
             # 重置
             self.need_reset = False
             # 清理图形对象
@@ -982,11 +1057,12 @@ class LOB_trade_env(gym.Env):
 
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
+            self.reward_tracker.reset()
             self.data_producer.reset()
             if self.data_std:
-                symbol_id, before_market_close_sec, x, _, _, self.period_done, _id = self._get_data()
+                symbol_id, before_market_close_sec, x, _, _id = self._get_data()
             else:
-                symbol_id, before_market_close_sec, x, _, _, self.period_done, _id, x_std, sec_std, id_std = self._get_data()
+                symbol_id, before_market_close_sec, x, _, _id, x_std, sec_std, id_std = self._get_data()
             # 账户
             pos, profit = self.acc.reset()
             # 添加标的持仓数据
@@ -1304,28 +1380,96 @@ class LOB_trade_env(gym.Env):
             
         return self.selected_action
 
+
+def test_quick_produce_train_sdpk(date, code):
+    """
+    快速生成训练数据，用于检查对比
+    """
+    from feature.features.time_point_data import read_sdpk
+    def get_sdpk(date, code):
+        file = rf"D:\L2_DATA_T0_ETF\his_data\{date}\{code}\十档盘口.csv"
+        sdpk = read_sdpk(file).iloc[1:]
+        sdpk['id'] = [f"{code}_{int((x + pd.Timedelta(hours=-8)).timestamp())}" for x in sdpk.index]
+        cols = [item for i in range(5) for item in [f'卖{i+1}价', f'卖{i+1}量', f'买{i+1}价', f'买{i+1}量']]
+        cols.append('id')
+        sdpk = sdpk.loc[:, cols].reset_index(drop=True)
+        return sdpk
+    
+    # 获取标准化数据
+    all_dates = [i for i in os.listdir(rf"D:\L2_DATA_T0_ETF\his_data") if len(i) == 8]
+    all_dates.sort()
+    cur_idx = all_dates.index(date)
+    std_dates = all_dates[cur_idx-5:cur_idx]
+    std_sdpks = pd.DataFrame()
+    for std_date in std_dates:
+        sdpk = get_sdpk(std_date, code)
+        std_sdpks = pd.concat([std_sdpks, sdpk])
+    # 计数标准化数据
+    std_sdpks = std_sdpks.iloc[:, :-1]
+    std_mean = std_sdpks.mean()
+    std_std = std_sdpks.std()
+
+    # 获取当日数据
+    sdpk = get_sdpk(date, code)
+    return sdpk, std_mean, std_std
+
+def check(obs, info, data, mean, std):
+    # 切片 检查用data
+    _id = info['id']
+    _idx = data[data['id'] >= _id].index.to_list()[0]
+    # 获取该id前10个数据
+    start_idx = max(0, _idx - 9)
+    data_slice = data.iloc[start_idx:_idx+1, :-1].values
+    
+    # 对比 检查用data 和 obs
+    obs_data = obs[:200].reshape((10, 20))  
+    if not np.array_equal(obs_data, data_slice):
+        print('obs_data 和 data_slice 不一致')
+        diff_mask = data_slice != obs_data
+        diff_indices = np.where(diff_mask)
+        idxs = []
+        for i in range(len(diff_indices[0])):
+            idxs.append((diff_indices[0][i], diff_indices[1][i]))
+        print(idxs)
+        raise Exception(f'obs_data 和 data_slice 不一致, id: {_id}')
+
+    # 对比 mean, std 和 info
+    info_mean = info['x_std'][:, 0]
+    info_std = info['x_std'][:, 1]
+    data_mean = mean.values
+    data_std = std.values
+    # TODO
+
 def test_lob_data():
+    from tqdm import tqdm
+
+    code = '513050'
     env = LOB_trade_env({
         'data_type': 'train',# 训练/测试
         'his_len': 10,# 每个样本的 历史数据长度
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
-        'use_symbols': ['513050'],
+        # 'use_symbols': [code],
     },
-    data_std=False
+    # data_std=False,
+    # debug_date='20240920'
     )
 
-    print('reset')
-    obs, info = env.reset()
+    for i in tqdm(range(5000)):
+        print(f'iter: {i}, begin')
+        obs, info = env.reset()
+        # cur_date = env.data_producer.date
+        # data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
+        # check(obs, info, data, mean, std)
 
-    for i in range(5):
         while True:
             obs, reward, terminated, truncated, info = env.step(2)
             if terminated or truncated:
-                print('reset')
-                obs, _ = env.reset()
                 break
+            
+        print(f'iter: {i}, end')
 
     print('all done')
 
 if __name__ == '__main__':
+    # test_quick_produce_train_sdpk('20250303', '513050')
     test_lob_data()
