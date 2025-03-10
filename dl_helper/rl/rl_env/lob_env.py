@@ -124,6 +124,7 @@ class data_producer:
             self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_combine_data'
 
         self.data_type = data_type
+        self.cur_data_type = data_type
         self.files = []
         self.cur_data_file = ''
 
@@ -174,7 +175,9 @@ class data_producer:
         若是训练数据，随机读取
         若是验证/测试数据，按顺序读取
         """
-        if not self.files and self.date_file_done:# 当天的数据用完，且没有其他日期数据可以load，需要重新准备数据
+        # 当天的数据用完，且没有其他日期数据可以load，
+        # 或 数据类型发生变化，需要重新准备数据
+        if (not self.files and self.date_file_done) or (self.cur_data_type != self.data_type):
             # 若 文件列表为空，重新准备
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             if self.data_type == 'train':
@@ -188,7 +191,10 @@ class data_producer:
         按照文件列表读取数据
         每次完成后从文件列表中剔除
         """
-        while self.files and self.date_file_done:
+        while (self.files and self.date_file_done) or (self.cur_data_type != self.data_type):
+            # 更新在用数据类型
+            self.cur_data_type = self.data_type
+
             self.cur_data_file = self.files.pop(0)
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
@@ -329,7 +335,6 @@ class data_producer:
 
             # # 测试用
             # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
-
             break
 
     def set_data_type(self, data_type):
