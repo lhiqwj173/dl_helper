@@ -158,6 +158,8 @@ class data_producer:
         # 当前日期数据停止标志，初始没有可用数据，所以应该为True
         self.date_file_done = True
 
+        log(f'[{self.data_type}] data_producer init done')
+
     def pre_plot_data(self):
         """
         预先读取绘图数据
@@ -385,7 +387,7 @@ class data_producer:
         # # 测试用
         # print(self.idxs[0])
 
-        assert not self.date_file_done, f'[{self.data_type}] date_file_done must be False, but is {self.date_file_done}, need_check cur_data_type:{self.cur_data_type} files:{self.files}'
+        assert not self.date_file_done, f'[{self.data_type}] date_file_done must be False, but is {self.date_file_done}, need_check cur_data_file:{self.cur_data_file} files:{self.files}'
 
         if self.plot_cur_pre != -1:
             # 更新绘图数据
@@ -432,7 +434,7 @@ class data_producer:
             log(f'[{self.data_type}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                log(f'[{self.data_type}] date file done')
+                log(f'[{self.data_type}] date file done, need_close: {need_close}')
                 self.date_file_done = True
             else:
                 # 重置绘图索引
@@ -1043,6 +1045,8 @@ class LOB_trade_env(gym.Env):
             # FOR DEBUG
             if need_close:
                 log(f'[{id(self)}][{self.data_producer.data_type}] need_close: True, terminated: {terminated}, truncated: {truncated}')
+            if self.data_producer.date_file_done:
+                log(f'[{id(self)}][{self.data_producer.data_type}] date_file_done: True, cur_data_file: {self.data_producer.cur_data_file}')
 
             done = terminated or truncated
             if done:
