@@ -130,8 +130,9 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         out_func("  no env_runner data")
     
     out_func("val:")
-    for k, v in important_metrics['val'].items():
-        out_func(f"  {k}: {v:.4f}")
+    if 'val' in important_metrics:
+        for k, v in important_metrics['val'].items():
+            out_func(f"  {k}: {v:.4f}")
     else:
         out_func("  no val data")
 
@@ -306,6 +307,11 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     ax.set_title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
         ax.set_ylim(0, y_axis_max)
+    else:
+        # 只显示 mean_reward 和 val_mean_reward 的范围
+        min_y = min(min(_mean_reward), min(_val_mean_reward)) if len(_mean_reward) > 0 and len(_val_mean_reward) > 0 else 0
+        max_y = max(max(_mean_reward), max(_val_mean_reward)) if len(_mean_reward) > 0 and len(_val_mean_reward) > 0 else 1
+        ax.set_ylim(min_y, max_y)
     
     # Add custom plots if provided
     if custom_plotter and additional_plots > 0:

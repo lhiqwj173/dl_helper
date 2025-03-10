@@ -184,6 +184,8 @@ class data_producer:
                 random.shuffle(self.files)
             if self.debug_date:
                 self.files = [i for i in self.files if i.startswith(self.debug_date)]
+            # # FOR DEBUG
+            # self.files = self.files[:2]
             log(f'[{self.data_type}] prepare files: {self.files}')
             
     def _load_data(self):
@@ -377,7 +379,7 @@ class data_producer:
         # # 测试用
         # print(self.idxs[0])
 
-        assert not self.date_file_done, f'date_file_done must be False, but is {self.date_file_done}, need_check'
+        assert not self.date_file_done, f'[{self.data_type}] date_file_done must be False, but is {self.date_file_done}, need_check cur_data_type:{self.cur_data_type} files:{self.files}'
 
         if self.plot_cur_pre != -1:
             # 更新绘图数据
@@ -1030,6 +1032,10 @@ class LOB_trade_env(gym.Env):
             else:
                 truncated = False
 
+            # FOR DEBUG
+            if need_close:
+                log(f'[{id(self)}][{self.data_producer.data_type}] need_close: True, terminated: {terminated}, truncated: {truncated}')
+
             done = terminated or truncated
             if done:
                 if self.data_producer.data_type == 'train':
@@ -1451,10 +1457,11 @@ def test_lob_data():
 
     code = '513050'
     env = LOB_trade_env({
-        'data_type': 'train',# 训练/测试
+        'data_type': 'val',# 训练/测试
+        # 'data_type': 'train',# 训练/测试
         'his_len': 10,# 每个样本的 历史数据长度
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
-        # 'use_symbols': [code],
+        'use_symbols': [code],
     },
     # data_std=False,
     # debug_date='20240920'
