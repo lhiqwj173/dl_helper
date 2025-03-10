@@ -82,7 +82,7 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=['20241022', '20240320']):
+    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=[]):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
@@ -97,6 +97,8 @@ class data_producer:
         self.data_std = data_std
         self.save_folder = save_folder
         self.debug_date = [i.replace('-', '').replace(' ', '') for i in debug_date]
+        if self.debug_date:
+            log(f'[{self.data_type}] debug_date: {self.debug_date}')
 
         self.use_symbols = use_symbols
         
@@ -182,6 +184,7 @@ class data_producer:
         if (not self.files and self.date_file_done) or (self.cur_data_type != self.data_type):
             # 若 文件列表为空，重新准备
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
+            self.files.sort()
             if self.data_type == 'train':
                 random.shuffle(self.files)
             if self.debug_date:
@@ -448,6 +451,9 @@ class data_producer:
             self.idxs[0][0] += 1
             _, self.plot_cur_pre = self.x[self.idxs[0][0]]
             self.plot_cur_pre -= 1
+
+        # FOR DEBUG
+        log(f'[{self.data_type}] idxs: {self.idxs}, cur_data_file: {self.cur_data_file}, date_file_done: {self.date_file_done}, need_close: {need_close}')
 
         if self.data_std:
             # 额外数据的标准化
