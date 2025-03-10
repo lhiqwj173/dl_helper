@@ -87,8 +87,8 @@ def run(
     # 验证配置
     eval_config = {
         # 'evaluation_interval': 15,
-        'evaluation_interval': 5,
-        'evaluation_duration': 2000,
+        'evaluation_interval': 1,
+        'evaluation_duration': 6000,
         'evaluation_duration_unit': 'timesteps',
         'evaluation_sample_timeout_s': 24*60*60,
         'evaluation_force_reset_envs_before_iteration': True,

@@ -82,7 +82,7 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=""):
+    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=['20241022', '20240320']):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
@@ -96,7 +96,7 @@ class data_producer:
         self.his_len = his_len
         self.data_std = data_std
         self.save_folder = save_folder
-        self.debug_date = debug_date.replace('-', '').replace(' ', '')
+        self.debug_date = [i.replace('-', '').replace(' ', '') for i in debug_date]
 
         self.use_symbols = use_symbols
         
@@ -183,7 +183,13 @@ class data_producer:
             if self.data_type == 'train':
                 random.shuffle(self.files)
             if self.debug_date:
-                self.files = [i for i in self.files if i.startswith(self.debug_date)]
+                # 按照 debug_date 的顺序重新排列文件
+                ordered_files = []
+                for debug_date in self.debug_date:
+                    for file in self.files:
+                        if file.split('.')[0] == debug_date:
+                            ordered_files.append(file)
+                self.files = ordered_files
             # # FOR DEBUG
             # self.files = self.files[:2]
             log(f'[{self.data_type}] prepare files: {self.files}')
@@ -759,6 +765,8 @@ class LOB_trade_env(gym.Env):
 
         # 测试日期
         self.debug_date = debug_date
+        if self.debug_date and isinstance(self.debug_date, str):
+            self.debug_date = [self.debug_date]
 
         # 初始化日志
         log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
@@ -1464,7 +1472,7 @@ def test_lob_data():
         'use_symbols': [code],
     },
     # data_std=False,
-    # debug_date='20240920'
+    debug_date=['20241022', '20240320'],
     )
 
     for i in tqdm(range(5000)):
