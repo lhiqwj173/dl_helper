@@ -808,11 +808,12 @@ class LOB_trade_env(gym.Env):
         return True
 
     def _set_data_type(self, data_type):
-        log(f'[{id(self)}][{self.data_producer.data_type}] set data type: {data_type}')
-        self.data_producer.set_data_type(data_type)
-        self.need_reset = True
-        self.sample_count = 0
-        self.need_upload_file = self.update_need_upload_file()
+        if self.data_producer.data_type != data_type:
+            log(f'[{id(self)}][{self.data_producer.data_type}] set data type: {data_type}')
+            self.data_producer.set_data_type(data_type)
+            self.need_reset = True
+            self.sample_count = 0
+            self.need_upload_file = self.update_need_upload_file()
 
     def val(self):
         self._set_data_type('val')
