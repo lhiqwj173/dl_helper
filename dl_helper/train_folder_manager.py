@@ -36,6 +36,21 @@ class TrainFolderManager:
         """
         return os.path.exists(os.path.join(self.checkpoint_folder, 'rllib_checkpoint.json'))
 
+    def load_checkpoint(self, algo, only_params=True):
+        """
+        加载检查点
+        """
+        if only_params:
+            # 获取模型参数
+            from ray.rllib.core.learner.learner_group import LearnerGroup
+            lg = LearnerGroup.from_checkpoint(self.checkpoint_folder + r'\learner_group')
+            w = lg.get_weights()
+            # 组装state
+            state = {'learner_group':{'learner':{'rl_module':w}}}
+            algo.set_state(state)
+        else:
+            algo.restore_from_path(self.checkpoint_folder)
+
     def pull(self):
         """
         拉取训练最新记录, 并解压覆盖到训练文件夹

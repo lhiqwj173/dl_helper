@@ -23,7 +23,7 @@ from dl_helper.rl.socket_base import async_recv_msg, async_send_msg
 from dl_helper.rl.rl_utils import read_train_title_item
 from dl_helper.rl.param_keeper import ExperimentHandler
 
-init_logger(f'net_center_{datetime.now().strftime("%Y%m%d")}', enqueue=True, timestamp=False)
+init_logger(f'net_center_{datetime.now().strftime("%Y%m%d")}', home='net_center', enqueue=True, timestamp=False)
 
 class BlockIPs:
     """管理block ip的类"""

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
-from py_ext.tool import log, init_logger,get_exception_msg
+from py_ext.tool import log, init_logger,get_exception_msg, get_log_file
 from py_ext.datetime import beijing_time
 from py_ext.wechat import send_wx
 
@@ -746,10 +746,6 @@ class LOB_trade_env(gym.Env):
             'simple_test': False,# 是否为简单测试
             'need_cols': [],# 需要读取的列
             'use_symbols': [],# 只使用某些标的
-
-            # 用于日志初始化
-            'train_folder': 'lob',
-            'train_title': '',
         }
         # 用户配置更新
         for k, v in defult_config.items():
@@ -774,6 +770,7 @@ class LOB_trade_env(gym.Env):
         # 初始化日志
         log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
         init_logger(log_name, home=config['train_folder'], timestamp=False)
+        log(f'[{id(self)}][{self.data_producer.data_type}] init logger: {get_log_file()}')
         
         # 数据生产器
         self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder, debug_date=self.debug_date)

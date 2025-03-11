@@ -86,8 +86,8 @@ def run(
 
     # 验证配置
     eval_config = {
-        'evaluation_interval': 15,
-        'evaluation_duration': 2000,
+        'evaluation_interval': 30,
+        'evaluation_duration': 4000,
         'evaluation_duration_unit': 'timesteps',
         'evaluation_sample_timeout_s': 24*60*60,
         'evaluation_force_reset_envs_before_iteration': True,
@@ -194,8 +194,6 @@ def run(
             num_learners=num_learners,
             num_gpus_per_learner=0,
         )
-        eval_config['evaluation_interval'] = 1
-        eval_config['evaluation_duration'] = 60000
         config = config.evaluation(**eval_config)
 
         # 构建算法
@@ -206,7 +204,7 @@ def run(
         train_folder_manager = TrainFolderManager(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            algo.restore_from_path(train_folder_manager.checkpoint_folder)
+            train_folder_manager.load_checkpoint(algo)
 
         begin_time = time.time()
         rounds = 5000

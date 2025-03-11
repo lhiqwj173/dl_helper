@@ -23,7 +23,7 @@ import socket
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 
-from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger, Lock, safe_share_memory_queue
+from py_ext.tool import safe_share_memory, share_tensor, log, Event, get_exception_msg, get_log_folder, init_logger, Lock, safe_share_memory_queue, get_log_file
 from py_ext.datetime import beijing_time
 
 from dl_helper.rl.param_keeper import AsyncRLParameterServer
@@ -188,8 +188,8 @@ class ClientLearnerGroup(LearnerGroup):
         self.train_folder = train_folder
 
         # 初始化日志
-        log(f'init_logger: {train_title}_{beijing_time().strftime("%Y%m%d")} {train_folder}')
         init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
+        log(f'init_logger: {get_log_file()}')
 
         # 参数压缩器
         # param_keys = list(self.get_weights()['default_policy'].keys())
@@ -451,8 +451,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         log(f'_run_event_loop_process')
 
         # 初始化日志
-        log(f'init_logger: {train_title}_{beijing_time().strftime("%Y%m%d")} {train_folder}')
         init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
+        log(f'init_logger: {get_log_file()}')
 
         # 共享梯度队列
         log(f"[{client_id}] init grad_q, buffer size: {grad_q_size}")
@@ -813,9 +813,8 @@ class ClientPPOTorchLearner(PPOTorchLearner):
         return True
 
     def init_logger(self):
-        log(f'[{self.client_id}] init_logger: {self.train_title}_{beijing_time().strftime("%Y%m%d")} {self.train_folder}')
         init_logger(f'{self.train_title}_{beijing_time().strftime("%Y%m%d")}', home=self.train_folder, timestamp=False)
-        log(f"[{self.client_id}] init_logger done: {get_log_folder()}")
+        log(f"[{self.client_id}] init_logger: {get_log_folder()}")
         return True
     
     def set_weights_version(self, version):
