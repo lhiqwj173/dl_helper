@@ -44,11 +44,11 @@ class TrainFolderManager:
             # 获取模型参数
             # 加载文件内容
             module_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'rl_module', 'default_policy', 'module_state.pt'), 'rb'))
-            optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
+            # optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
             # 组装state
             state = {'learner_group':{'learner':{
                 'rl_module':{'default_policy': module_state},
-                'optimizer': optimizer_state
+                # 'optimizer': optimizer_state
             }}}
             algo.set_state(state)
         else:

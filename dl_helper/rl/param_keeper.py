@@ -450,12 +450,12 @@ class ExperimentHandler:
 
                     for _id, (compress_data, compress_info) in res_dict.items():
                         # dumps
-                        dump_data = pickle.dumps((compress_data, compress_info, np.uuint64(version), need_warn_up))
+                        dump_data = pickle.dumps((compress_data, compress_info, np.uint64(version), need_warn_up))
                         dump_size = len(dump_data)
                         if dump_size > params_compressor.full_size:
                             log(f'[{_id}] dump_data size: {dump_size} > {params_compressor.full_size}, force full update')
                             compress_data, compress_info = params_compressor.force_full_update(_id)
-                            dump_data = pickle.dumps((compress_data, compress_info, np.uuint64(version), need_warn_up))
+                            dump_data = pickle.dumps((compress_data, compress_info, np.uint64(version), need_warn_up))
                         else:
                             log(f'[{_id}] dump_data size: {dump_size} <= {params_compressor.full_size}, normal update')
 
