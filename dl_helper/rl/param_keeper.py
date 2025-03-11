@@ -204,10 +204,10 @@ class ExperimentHandler:
         env_specifier = config.env
         if _global_registry.contains(ENV_CREATOR, env_specifier):
             # 注册的环境
-            env = _global_registry.get(ENV_CREATOR, env_specifier)()
+            env = _global_registry.get(ENV_CREATOR, env_specifier)(**config.env_config)
         else:
             # gym 环境
-            env = gym.make(env_specifier)
+            env = gym.make(env_specifier, **config.env_config)
         param_server = AsyncRLParameterServer(config, env)
         _params_dict = param_server.get_weights()[0] 
         _grad_params_dict = param_server.get_gradients_params()
