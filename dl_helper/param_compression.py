@@ -188,7 +188,6 @@ class IncrementalCompressor:
     def compress(self, 
                 raw_tensors: List[torch.Tensor],
                 client_ids: str | List[str],
-                return_need_clone: bool = False,
                ) -> Dict[str, Tuple[List[torch.Tensor], CompressInfo]]:
         """
         并行压缩张量列表, 确保压缩结果在CPU上
@@ -206,17 +205,16 @@ class IncrementalCompressor:
         # 如果只有一个客户端，直接处理无需并行
         if len(client_ids) == 1:
             client_id, compressed_tensors, compress_info = self._compress_single_client(
-                client_ids[0], self.tensors, return_need_clone
+                client_ids[0], self.tensors
             )
             return {client_id: (compressed_tensors, compress_info)}
         
         # 使用持久化的线程池并行处理多个客户端
         res = {}
-        # 创建一个部分应用的函数，固定tensors和return_need_clone参数
+        # 创建一个部分应用的函数，固定tensors
         process_func = partial(
             self._compress_single_client, 
             tensors=self.tensors, 
-            return_need_clone=return_need_clone
         )
         
         # 并行提交所有客户端的压缩任务
