@@ -204,7 +204,7 @@ class ExperimentHandler:
         env_specifier = config.env
         if _global_registry.contains(ENV_CREATOR, env_specifier):
             # 注册的环境
-            env = _global_registry.get(ENV_CREATOR, env_specifier)(**config.env_config)
+            env = _global_registry.get(ENV_CREATOR, env_specifier)(config=config.env_config)
         else:
             # gym 环境
             env = gym.make(env_specifier, **config.env_config)
