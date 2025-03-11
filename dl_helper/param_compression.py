@@ -109,6 +109,10 @@ class IncrementalCompressor:
             self.sparsity_threshold = self._calibrate_sparsity_threshold(tensors)
             log(f"Calibrated sparsity threshold: {self.sparsity_threshold}")
 
+            if self.min_sparsity_threshold >= self.sparsity_threshold:
+                self.min_sparsity_threshold = self.sparsity_threshold / 5
+                log(f"Min sparsity threshold: {self.min_sparsity_threshold}")
+
         if client_id not in self.client_params:
             # 需要拷贝，不需要额外处理设备
             self.client_params[client_id] = [t.clone() for t in tensors]
@@ -144,6 +148,7 @@ class IncrementalCompressor:
                 
                 if update_ratio > self.sparsity_threshold:
                     # 全量更新 - 使用clone确保数据独立性
+                    log(f'update_ratio: {update_ratio:.4f} > {self.sparsity_threshold}, full update')
                     compressed_t = curr_t_cpu.clone()
                     compressed_tensors.append(compressed_t)
                     compress_info['full'].append(True)
@@ -154,10 +159,13 @@ class IncrementalCompressor:
                     if update_ratio < self.min_sparsity_threshold:
                         # 取最大的 n 个元素更新（n>=1 由稀疏度阈值决定）
                         n = max(1, int(self.min_sparsity_threshold * mask.numel()))
+                        log(f'update_ratio: {update_ratio:.4f} < {self.min_sparsity_threshold}, topk update {n} elements')
                         # 修改 mask
                         _, top_indices = torch.topk(diff.flatten(), n)
                         mask = torch.zeros_like(diff, dtype=torch.bool)
                         mask.view(-1)[top_indices] = True
+                    else:
+                        log(f'update_ratio: {update_ratio:.4f} between {self.min_sparsity_threshold} and {self.sparsity_threshold}, incremental update')
 
                     # 增量更新 - 只复制需要更新的值
                     update_indices = torch.where(mask)

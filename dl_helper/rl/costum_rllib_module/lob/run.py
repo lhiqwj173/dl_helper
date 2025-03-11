@@ -153,7 +153,7 @@ def run(
 
         if need_val:
             # 绘制训练曲线
-            plot_training_curve(train_title, train_folder, time.time() - begin_time, y_axis_max=30)
+            plot_training_curve(train_title, train_folder, time.time() - begin_time, y_axis_max=6500)
 
         # 停止算法
         algo.stop()
@@ -183,7 +183,7 @@ def run(
             remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
 
         # 绘制训练曲线
-        plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter())
+        plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter(), y_axis_max=6500)
         # 停止算法
         algo.stop()
         log(f"algo.stop done")
