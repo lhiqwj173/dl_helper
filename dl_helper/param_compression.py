@@ -53,8 +53,8 @@ class IncrementalCompressor:
         incremental_sizes = []
         
         # Get full update size once
-        full_size = len(pickle.dumps((sample_tensor, {'full': True}, 0, False)))
-        log(f"Full update size: {full_size} bytes")
+        self.full_size = len(pickle.dumps((sample_tensor, {'full': True}, 0, False)))
+        log(f"Full update size: {self.full_size} bytes")
         
         # Test each update ratio
         for ratio in update_ratios:
@@ -88,7 +88,7 @@ class IncrementalCompressor:
             log(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")
         
         # Find the threshold where incremental updates are still smaller than full updates
-        threshold_indices = np.where(np.array(incremental_sizes) <= full_size * 0.9)[0]
+        threshold_indices = np.where(np.array(incremental_sizes) <= self.full_size * 0.9)[0]
         
         if len(threshold_indices) > 0:
             # Get the last update ratio where incremental update is still efficient
@@ -119,18 +119,18 @@ class IncrementalCompressor:
             return True
         return False
     
+    def force_full_update(self, client_id):
+        self.client_params[client_id] = [t.clone() for t in self.tensors]
+        return self.client_params[client_id], {'full': True}
+
     def _compress_single_client(self,
                               client_id: str,
                               tensors: List[torch.Tensor],
-                              return_need_clone: bool = False
                              ) -> Tuple[str, List[torch.Tensor], CompressInfo]:
         """处理单个客户端的压缩操作"""
         if self._init_reference(client_id, tensors):
             # 初始化时直接返回参考张量的克隆
-            if return_need_clone:
-                return client_id, [t.clone() for t in self.client_params[client_id]], {'full': True}
-            else:
-                return client_id, self.client_params[client_id], {'full': True}
+            return client_id, self.client_params[client_id], {'full': True}
         
         compressed_tensors = []
         compress_info = {
@@ -199,14 +199,14 @@ class IncrementalCompressor:
         }
         """
         # 预先将所有张量都移至CPU，减少各个id重复操作
-        tensors = [t.detach().cpu().clone() for t in raw_tensors]
+        self.tensors = [t.detach().cpu().clone() for t in raw_tensors]
         if not isinstance(client_ids, list):
             client_ids = [client_ids]
 
         # 如果只有一个客户端，直接处理无需并行
         if len(client_ids) == 1:
             client_id, compressed_tensors, compress_info = self._compress_single_client(
-                client_ids[0], tensors, return_need_clone
+                client_ids[0], self.tensors, return_need_clone
             )
             return {client_id: (compressed_tensors, compress_info)}
         
@@ -215,7 +215,7 @@ class IncrementalCompressor:
         # 创建一个部分应用的函数，固定tensors和return_need_clone参数
         process_func = partial(
             self._compress_single_client, 
-            tensors=tensors, 
+            tensors=self.tensors, 
             return_need_clone=return_need_clone
         )
         
