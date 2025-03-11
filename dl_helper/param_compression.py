@@ -53,7 +53,7 @@ class IncrementalCompressor:
         incremental_sizes = []
         
         # Get full update size once
-        self.full_size = len(pickle.dumps((sample_tensor, {'full': True}, 0, False)))
+        self.full_size = len(pickle.dumps((sample_tensor, {'full': True}, np.uint64(0), False)))
         log(f"Full update size: {self.full_size} bytes")
         
         # Test each update ratio
@@ -82,7 +82,7 @@ class IncrementalCompressor:
                 compress_info['update_indices'].append(torch.stack(update_indices, dim=1))
                 compress_info['full'].append(False)
                 
-            incremental_size = len(pickle.dumps((compress_data, compress_info, 1, False)))
+            incremental_size = len(pickle.dumps((compress_data, compress_info, np.uint64(0), False)))
             incremental_sizes.append(incremental_size)
             
             log(f"Update ratio: {ratio:.2f}, Incremental size: {incremental_size} bytes")

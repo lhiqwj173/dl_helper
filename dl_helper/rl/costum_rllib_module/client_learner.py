@@ -140,7 +140,7 @@ class share_info:
     """
     VERSION, NEED_WARN_UP = range(2)
     def __init__(self, version=None, need_warn_up=None):
-        self._data = share_tensor(name=f'_share_info_data', shape=(2,), dtype='int64')
+        self._data = share_tensor(name=f'_share_info_data', shape=(2,), dtype='uint64')
         self._lock = Lock(name=f'_share_info_lock_event')
 
         self.set(version, need_warn_up)
@@ -386,7 +386,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
             self.grad_params_value_shape = [i.shape for i in grad_params_dict.values()]
 
         if self.ready_params_job:
-            _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, 0, False))
+            _temp_dump_data = pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.uint64(0), False))
             _params_dump_q_buffer_size = len(_temp_dump_data)
             log(f"[{self.client_id}] init params_dump_q, buffer size: {_params_dump_q_buffer_size}")
             self.params_dump_q = safe_share_memory_queue('param_coroutine_dump_q', _params_dump_q_buffer_size, 30)
@@ -407,13 +407,13 @@ class ClientPPOTorchLearner(PPOTorchLearner):
 
             # 获取一个梯度不压缩数据, 作为队列大小
             _g, _info = self.gradient_compressor.compress(self.grad_params_list, True)
-            _g_q_size = len(pickle.dumps((_g, _info)))
+            _g_q_size = len(pickle.dumps((_g, _info, np.uint64(0))))
             self.gradient_compressor.clear()# 清理
             log(f"[{self.client_id}] init grad_q, buffer size: {_g_q_size}")
             self.task_queue = safe_share_memory_queue('grad_data_info_q', _g_q_size, 4)
             self.task_queue.clear()
 
-            _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, 0, False)))
+            _p_q_size = len(pickle.dumps(([v for _, v in self.params_dict.items()], {'full': True}, np.uint64(0), False)))
 
             # stop event
             self.stop_event = Event(name=f'_stop_loop_event')
@@ -725,7 +725,7 @@ class ClientPPOTorchLearner(PPOTorchLearner):
                 log(f'[{self.client_id}][{self.step_count}] compress gradients done, cost time: {cost}ms, avg cost: {int(self.tatal_compress_cost / self.step_count)}ms')
 
                 # 加入队列
-                self.task_queue.put(pickle.dumps((compressed_grads, compress_info, self.info_data.version)))
+                self.task_queue.put(pickle.dumps((compressed_grads, compress_info, np.uint64(self.info_data.version))))
                 log(f'[{self.client_id}][{self.step_count}] put to grad_q: {self.task_queue.qsize()} / {self.task_queue._maxsize}, version: {self.info_data.version}')
 
             if self.ready_params_job:

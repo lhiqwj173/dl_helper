@@ -283,7 +283,7 @@ class ExperimentHandler:
                         new_wait_params_id = wait_params_id_q.get(block=False)
                         if new_wait_params_id not in client_params_q:
                             # 初始化共享队列
-                            client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+                            client_params_q[new_wait_params_id] = safe_share_memory_queue(f'dump_q_{new_wait_params_id}', _p_size, 4, len(pickle.dumps(np.uint64(0))))# 额外的数据保存版本信息
                             client_grad_q[new_wait_params_id] = safe_share_memory_queue(f'g_dump_q_{new_wait_params_id}', _g_size, 30)
                             # 单次状态
                             client_wait_state[new_wait_params_id] = 0
@@ -450,16 +450,16 @@ class ExperimentHandler:
 
                     for _id, (compress_data, compress_info) in res_dict.items():
                         # dumps
-                        dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
+                        dump_data = pickle.dumps((compress_data, compress_info, np.uuint64(version), need_warn_up))
                         dump_size = len(dump_data)
                         if dump_size > params_compressor.full_size:
                             log(f'[{_id}] dump_data size: {dump_size} > {params_compressor.full_size}, force full update')
                             compress_data, compress_info = params_compressor.force_full_update(_id)
-                            dump_data = pickle.dumps((compress_data, compress_info, version, need_warn_up))
+                            dump_data = pickle.dumps((compress_data, compress_info, np.uuint64(version), need_warn_up))
                         else:
-                            log(f'[{_id}] dump_data size: {dump_size} < {params_compressor.full_size}, incremental update')
+                            log(f'[{_id}] dump_data size: {dump_size} <= {params_compressor.full_size}, normal update')
 
-                        client_params_q[_id].put(dump_data, block=False, extra_data=np.int64(version))
+                        client_params_q[_id].put(dump_data, block=False, extra_data=np.uint64(version))
                         log(f'[CG]{train_title} ready params for {_id}, version: {version}, size: {len(dump_data)}, done, cost: {int(1000*(time.time() - t))}ms')
 
                     total_update_time += time.time() - t
@@ -507,7 +507,7 @@ class ExperimentHandler:
 
             # 初始化共享参数队列
             assert _id not in self.ip_params_dump_q, f'{_id} already in ip_params_dump_q'
-            self.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', self.share_params_dump_max_size, 4, len(pickle.dumps(np.int64(0))))# 额外的数据保存版本信息
+            self.ip_params_dump_q[_id] = safe_share_memory_queue(f'dump_q_{_id}', self.share_params_dump_max_size, 4, len(pickle.dumps(np.uint64(0))))# 额外的数据保存版本信息
             self.ip_params_dump_q[_id].clear()
             self.ip_gradients_dump_q[_id] = safe_share_memory_queue(f'g_dump_q_{_id}', self.share_gradients_dump_max_size, 30)
             self.ip_gradients_dump_q[_id].clear()
