@@ -770,7 +770,7 @@ class LOB_trade_env(gym.Env):
         # 初始化日志
         log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
         init_logger(log_name, home=config['train_folder'], timestamp=False)
-        log(f'[{id(self)}][{self.data_producer.data_type}] init logger: {get_log_file()}')
+        log(f'[{id(self)}] init logger: {get_log_file()}')
         
         # 数据生产器
         self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder, debug_date=self.debug_date)
