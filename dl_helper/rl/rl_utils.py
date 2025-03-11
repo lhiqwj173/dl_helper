@@ -253,7 +253,7 @@ class BaseCustomPlotter:
         axes_list[1].plot(datetime, out_data['another_column'], 'r-', label='Custom Data 2')
         axes_list[1].legend()
 
-def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, y_axis_max=None, custom_plotter=None):
+def plot_training_curve(train_title, train_folder, out_file, total_time=None, pic_name=None, y_axis_max=None, custom_plotter=None):
     """
     total_time: 训练总时间 sec
     custom_plotter: Object with two methods:
@@ -304,7 +304,7 @@ def plot_training_curve(train_folder, out_file, total_time=None, pic_name=None, 
     ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
     
     ax.legend()
-    ax.set_title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
+    ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
         ax.set_ylim(0, y_axis_max)
     else:
