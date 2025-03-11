@@ -204,7 +204,7 @@ def run(
         train_folder_manager = TrainFolderManager(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(algo)
+            train_folder_manager.load_checkpoint(algo, False)
 
         begin_time = time.time()
         rounds = 5000
