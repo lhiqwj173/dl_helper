@@ -195,8 +195,6 @@ class data_producer:
                         if file.split('.')[0] == debug_date:
                             ordered_files.append(file)
                 self.files = ordered_files
-            # # FOR DEBUG
-            # self.files = self.files[:2]
             log(f'[{self.data_type}] prepare files: {self.files}')
             
     def _load_data(self):
@@ -437,7 +435,7 @@ class data_producer:
             log(f'[{self.data_type}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
-                log(f'[{self.data_type}] date file done, need_close: {need_close}')
+                log(f'[{self.data_type}] date file done')
                 self.date_file_done = True
             else:
                 # 重置绘图索引
@@ -451,9 +449,6 @@ class data_producer:
             self.idxs[0][0] += 1
             _, self.plot_cur_pre = self.x[self.idxs[0][0]]
             self.plot_cur_pre -= 1
-
-        # FOR DEBUG
-        log(f'[{self.data_type}] idxs: {self.idxs}, cur_data_file: {self.cur_data_file}, date_file_done: {self.date_file_done}, need_close: {need_close}')
 
         if self.data_std:
             # 额外数据的标准化
@@ -1048,12 +1043,6 @@ class LOB_trade_env(gym.Env):
             else:
                 truncated = False
 
-            # FOR DEBUG
-            if need_close:
-                log(f'[{id(self)}][{self.data_producer.data_type}] need_close: True, terminated: {terminated}, truncated: {truncated}')
-            if self.data_producer.date_file_done:
-                log(f'[{id(self)}][{self.data_producer.data_type}] date_file_done: True, cur_data_file: {self.data_producer.cur_data_file}')
-
             done = terminated or truncated
             if done:
                 if self.data_producer.data_type == 'train':
@@ -1087,12 +1076,22 @@ class LOB_trade_env(gym.Env):
 
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
+
             self.reward_tracker.reset()
-            self.data_producer.reset()
-            if self.data_std:
-                symbol_id, before_market_close_sec, x, _, _id = self._get_data()
-            else:
-                symbol_id, before_market_close_sec, x, _, _id, x_std, sec_std, id_std = self._get_data()
+
+            while True:
+                self.data_producer.reset()
+                if self.data_std:
+                    symbol_id, before_market_close_sec, x, need_close, _id = self._get_data()
+                else:
+                    symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std = self._get_data()
+                if need_close:
+                    # 若是 val 数据，有可能 need_close 为True
+                    # 需要过滤
+                    log(f'[{id(self)}][{self.data_producer.data_type}] need_close: True, reset data_producer again')
+                else:
+                    break
+
             # 账户
             pos, profit = self.acc.reset()
             # 添加标的持仓数据

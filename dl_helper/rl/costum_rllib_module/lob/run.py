@@ -73,8 +73,7 @@ def run(
         )# 直接使用
         .env_runners(
             sample_timeout_s=24*60*60,
-            num_env_runners=0
-            # num_env_runners=int(os.cpu_count() - num_learners),# 设置成核心数减去gpu数
+            num_env_runners=int(os.cpu_count() - num_learners),# 设置成核心数减去gpu数
         )
         # 自定义模型
         .rl_module(
@@ -193,7 +192,7 @@ def run(
         # 单机运行
         config = config.learners(    
             num_learners=num_learners,
-            num_gpus_per_learner=1,
+            num_gpus_per_learner=0,
         )
         eval_config['evaluation_interval'] = 1
         eval_config['evaluation_duration'] = 60000
