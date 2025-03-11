@@ -3,7 +3,7 @@
 1. 训练开始时, 拉取alist训练文件夹
 2. 训练过程/结束, 打包上传alist
 """
-import os, shutil
+import os, shutil, pickle
 from py_ext.alist import alist
 from py_ext.tool import log
 from py_ext.wechat import send_wx
@@ -42,12 +42,10 @@ class TrainFolderManager:
         """
         if only_params:
             # 获取模型参数
-            from ray.rllib.core.learner.learner_group import LearnerGroup
-            lg_path = os.path.join(self.checkpoint_folder, 'learner_group')
-            lg = LearnerGroup.from_checkpoint(lg_path)
-            w = lg.get_weights()
+            # 加载文件内容
+            module_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'rl_module', 'default_policy', 'module_state.pt'), 'rb'))
             # 组装state
-            state = {'learner_group':{'learner':{'rl_module':w}}}
+            state = {'learner_group':{'learner':{'rl_module':{'default_policy': module_state}}}}
             algo.set_state(state)
         else:
             algo.restore_from_path(self.checkpoint_folder)
