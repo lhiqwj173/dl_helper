@@ -43,7 +43,8 @@ class TrainFolderManager:
         if only_params:
             # 获取模型参数
             from ray.rllib.core.learner.learner_group import LearnerGroup
-            lg = LearnerGroup.from_checkpoint(self.checkpoint_folder + r'\learner_group')
+            lg_path = os.path.join(self.checkpoint_folder, 'learner_group')
+            lg = LearnerGroup.from_checkpoint(lg_path)
             w = lg.get_weights()
             # 组装state
             state = {'learner_group':{'learner':{'rl_module':w}}}
