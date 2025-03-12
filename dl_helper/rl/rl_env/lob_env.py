@@ -1025,9 +1025,9 @@ class LOB_trade_env(gym.Env):
 
             # 准备输出数据
             # reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
-            out_text += f',{reward},{info.get('sortino_ratio', '')},{info.get('sharpe_ratio', '')},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}'
+            out_text += f",{reward},{info.get('sortino_ratio', '')},{info.get('sharpe_ratio', '')},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
             # sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
-            out_text += f',{info.get("sortino_ratio_bm", "")},{info.get("sharpe_ratio_bm", "")},{info.get("max_drawdown_bm", "")},{info.get("max_drawdown_ticks_bm", "")},{info.get("max_drawup_ticks_bm", "")},{info.get("drawup_ticks_bm_count", "")},{info.get("trade_return_bm", "")},{info.get("step_return_bm", "")}'
+            out_text += f",{info.get('sortino_ratio_bm', '')},{info.get('sharpe_ratio_bm', '')},{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
             # 记录数据
             self.out_test_predict(out_text)
 
