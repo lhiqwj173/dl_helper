@@ -987,6 +987,7 @@ class LOB_trade_env(gym.Env):
                 f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
+            f.write('\n')
     
     def step(self, action):
         self.steps += 1
