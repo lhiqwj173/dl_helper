@@ -602,21 +602,21 @@ class Account:
         
         # 评价指标
         res = {
-            'sortino_ratio': 0.0,
-            'sharpe_ratio': 0.0,
-            'max_drawdown': 0.0,
-            'max_drawdown_ticks': 0.0,
-            'trade_return': 0.0,
-            'step_return': 0.0,
-            'hold_length': 0.0,
-            'sortino_ratio_bm': 0.0,
-            'sharpe_ratio_bm': 0.0,
-            'max_drawdown_bm': 0.0,
-            'max_drawdown_ticks_bm': 0.0,
-            'max_drawup_ticks_bm': 0.0,
-            'drawup_ticks_bm_count': 0.0,
-            'trade_return_bm': 0.0,
-            'step_return_bm': 0.0,
+            'sortino_ratio': np.nan,
+            'sharpe_ratio': np.nan,
+            'max_drawdown': np.nan,
+            'max_drawdown_ticks': np.nan,
+            'trade_return': np.nan,
+            'step_return': np.nan,
+            'hold_length': np.nan,
+            'sortino_ratio_bm': np.nan,
+            'sharpe_ratio_bm': np.nan,
+            'max_drawdown_bm': np.nan,
+            'max_drawdown_ticks_bm': np.nan,
+            'max_drawup_ticks_bm': np.nan,
+            'drawup_ticks_bm_count': np.nan,
+            'trade_return_bm': np.nan,
+            'step_return_bm': np.nan,
         }
         if legal:
             # 数据足够 > 1
@@ -862,6 +862,9 @@ class LOB_trade_env(gym.Env):
         acc_done = False
 
         legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
+        # 记录net/net_bm
+        info['net'] = self.acc.net_raw[-1] if self.acc.net_raw else np.nan
+        info['net_bm'] = self.acc.net_raw_bm[-1] if self.acc.net_raw_bm else np.nan
         acc_opened = len(self.acc.net_raw) > 0# 账户是否开仓过
         if need_close or action==1 or not legal:
             # 重置账户
@@ -973,7 +976,7 @@ class LOB_trade_env(gym.Env):
         输出测试预测数据 -> predict.csv
 
         # 状态相关
-        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,
+        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,
 
         # 奖励评价相关
         reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
@@ -984,7 +987,7 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1024,6 +1027,8 @@ class LOB_trade_env(gym.Env):
             reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
 
             # 准备输出数据
+            # net,net_bm,
+            out_text += f",{info['net']},{info['net_bm']}"
             # reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
             out_text += f",{reward},{info.get('sortino_ratio', '')},{info.get('sharpe_ratio', '')},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
             # sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
