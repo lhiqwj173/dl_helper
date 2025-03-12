@@ -968,17 +968,25 @@ class LOB_trade_env(gym.Env):
 
         return reward, acc_done, pos, profit
 
-    def out_test_predict(self, action):
+    def out_test_predict(self, out_text):
         """
         输出测试预测数据 -> predict.csv
-        id,before_market_close_sec,pos,profit,predict
+
+        # 状态相关
+        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,
+
+        # 奖励评价相关
+        reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
+
+        # 基准相关
+        sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
         """
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
-            f.write(f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file}\n')
+            f.write(out_text)
     
     def step(self, action):
         self.steps += 1
@@ -993,8 +1001,8 @@ class LOB_trade_env(gym.Env):
                 # 更新环境输出文件名称
                 self.need_upload_file = self.update_need_upload_file()
 
-            # 需要输出预测数据文件
-            self.out_test_predict(action)
+            # 准备输出数据
+            out_text = f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file},{self.episode_count},{self.steps}'
 
             # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
             if self.data_std:
@@ -1013,6 +1021,14 @@ class LOB_trade_env(gym.Env):
 
             # 计算奖励
             reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
+
+            # 准备输出数据
+            # reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
+            out_text += f',{reward},{info["sortino_ratio"]},{info["sharpe_ratio"]},{info["max_drawdown"]},{info["max_drawdown_ticks"]},{info["trade_return"]},{info["step_return"]},{info["hold_length"]}'
+            # sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
+            out_text += f',{info["sortino_ratio_bm"]},{info["sharpe_ratio_bm"]},{info["max_drawdown_bm"]},{info["max_drawdown_ticks_bm"]},{info["max_drawup_ticks_bm"]},{info["drawup_ticks_bm_count"]},{info["trade_return_bm"]},{info["step_return_bm"]}'
+            # 记录数据
+            self.out_test_predict(out_text)
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
