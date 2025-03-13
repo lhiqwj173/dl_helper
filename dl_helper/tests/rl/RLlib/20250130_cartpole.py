@@ -188,10 +188,10 @@ if __name__ == "__main__":
         begin_time = time.time()
         # 训练循环
         rounds = 10
+        out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
-            out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
         # 保存检查点
@@ -199,7 +199,7 @@ if __name__ == "__main__":
         log(f"Checkpoint saved in directory {checkpoint_dir}")
         # 绘制训练曲线
         log(f"plot_training_curve done")
-        plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
+        plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, y_axis_max=500)
         # 压缩并上传
         train_folder_manager.push()
         
