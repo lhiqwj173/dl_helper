@@ -1,4 +1,4 @@
-import sys, os, time
+import sys, os, time, shutil, pickle
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
@@ -117,48 +117,71 @@ if __name__ == "__main__":
         stop()
 
     elif run_type == 'test':
-        from dl_helper.param_compression import IncrementalCompressor
-        import pickle, torch
-        params_compressor = IncrementalCompressor()
 
-        # 单机运行
         config = config.learners(    
             num_learners=num_learners,
             num_gpus_per_learner=1,
         )
         config = config.evaluation(
-            evaluation_interval=10,
+            evaluation_interval=5,
             evaluation_duration=3,
         )
+
+        # 读取参数
+        only_params = False
+        for arg in sys.argv:
+            if arg == "only_params":
+                only_params = True
+        log(f"only_params: {only_params}")
 
         # 构建算法
         algo = config.build()
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
 
-        # 训练文件夹管理
-        train_folder_manager = TrainFolderManager(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            algo.restore_from_path(train_folder_manager.checkpoint_folder)
+        # 拷贝前训练文件夹
+        pre_train_folder = r'/kaggle/input/cartpole-keep-on/20250130_cartpole'
+        if os.path.exists(pre_train_folder):
+            shutil.copytree(pre_train_folder, train_folder, dirs_exist_ok=True)
+        # 读取checkpoint
+        checkpoint_folder = os.path.join(os.path.abspath(train_folder), 'checkpoint')
+        def load_checkpoint(algo, only_params=False):
+            """
+            加载检查点
+            """
+            if only_params:
+                # 获取模型参数
+                # 加载文件内容
+                module_state_folder = os.path.join(checkpoint_folder, 'learner_group', 'learner', 'rl_module', 'default_policy')
+                file = [i for i in os.listdir(module_state_folder) if 'module_state' in i]
+                if len(file) == 0:
+                    raise ValueError(f'{module_state_folder} 中没有找到 module_state 文件')
+                module_state = pickle.load(open(os.path.join(module_state_folder, file[0]), 'rb'))
+                # optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
+                # 组装state
+                state = {'learner_group':{'learner':{
+                    'rl_module':{'default_policy': module_state},
+                    # 'optimizer': optimizer_state
+                }}}
+                algo.set_state(state)
+            else:
+                algo.restore_from_path(checkpoint_folder)
+        load_checkpoint(algo, only_params=only_params)
 
         begin_time = time.time()
         # 训练循环
-        rounds = 15
+        rounds = 10
+        out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
         for i in range(rounds):
             log(f"\nTraining iteration {i+1}/{rounds}")
             result = algo.train()
-            out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
-            w = algo.learner_group.get_weights()
-            p_d = [torch.from_numpy(v) for k, v in w['default_policy'].items()]
-            d, info = params_compressor.compress(p_d, '3417369155')
-            dump = pickle.dumps((d, info))
-            log(f'compress size: {len(dump)}')
-
+        # 保存检查点
+        checkpoint_dir = algo.save_to_path(checkpoint_folder)
+        log(f"Checkpoint saved in directory {checkpoint_dir}")
         # 绘制训练曲线
-        plot_training_curve(train_folder, out_file, time.time() - begin_time, y_axis_max=500)
         log(f"plot_training_curve done")
+        plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, y_axis_max=500)
         
         # 停止算法
         algo.stop()

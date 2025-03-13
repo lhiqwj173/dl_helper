@@ -352,6 +352,198 @@ def calc_volatility(returns, num_per_year=250, annualize=True):
     else:
         return std
 
+def _find_plateaus(prices):
+    """
+    识别价格序列中的平台期。
+    
+    参数:
+    prices (np.array): 价格序列
+    
+    返回:
+    list: 平台期列表，每个元素为 (start, end, value)
+    """
+    plateaus = []
+    n = len(prices)
+    i = 0
+    while i < n:
+        start = i
+        value = prices[i]
+        while i + 1 < n and prices[i + 1] == value:
+            i += 1
+        end = i
+        plateaus.append((start, end, value))
+        i += 1
+    return plateaus
+
+def _identify_peaks_valleys(plateaus):
+    """
+    根据平台期识别波峰和波谷。
+    
+    参数:
+    plateaus (list): 平台期列表
+    
+    返回:
+    tuple: (peaks, valleys)，分别为波峰和波谷的代表点列表
+    """
+    peaks = []
+    valleys = []
+    for i in range(1, len(plateaus) - 1):
+        prev_value = plateaus[i - 1][2]
+        current_value = plateaus[i][2]
+        next_value = plateaus[i + 1][2]
+        start, end, _ = plateaus[i]
+        rep = (start + end) // 2  # 选择中间点作为代表
+        if current_value > prev_value and current_value > next_value:
+            peaks.append(rep)
+        elif current_value < prev_value and current_value < next_value:
+            valleys.append(rep)
+    return peaks, valleys
+
+def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
+    """
+    寻找所有可盈利的交易对，最大化对数收益率总和，考虑更低波谷的潜在更大利润。
+
+    参数:
+    bid (np.array): bid 价格序列
+    ask (np.array): ask 价格序列
+    valleys (list): 波谷位置列表
+    peaks (list): 波峰位置列表
+    fee (float): 交易费率，默认为 5e-5
+
+    返回:
+    trades (list): 所有可盈利的交易对列表，每个元素为 (valley, peak)
+    total_log_return (float): 所有可盈利交易的对数收益率总和
+    """
+    trades = []
+    total_log_return = 0.0
+    valley_idx = 0
+    peak_idx = 0
+
+    pre_t2 = 0# 上一个波峰t
+    while valley_idx < len(valleys) and peak_idx < len(peaks):
+        t1 = valleys[valley_idx]
+        t2 = peaks[peak_idx]
+
+        if t1 >= t2:
+            # 波谷在波峰之后，跳到下一个波峰
+            peak_idx += 1
+            continue
+
+        if t1 <= pre_t2:
+            # 新的波谷肯定药在前一个波峰之后
+            valley_idx += 1
+            continue
+
+        if mid[t2] < mid[t1]:
+            # 波峰比波谷还低，测试下一个波谷
+            valley_idx += 1
+            continue
+
+        # 当前波峰波谷中的其他波谷,
+        # 选择一个最小值
+        _valley_idx = valley_idx + 1
+        while valleys[_valley_idx] < t2:
+            # 时间药满足小于 t2
+            _valley_t = valleys[_valley_idx]
+            if ask[_valley_t] <= ask[t1]:
+                t1 = _valley_t
+                valley_idx = _valley_idx
+            _valley_idx += 1
+
+        # 计算当前交易的成本和收入
+        buy_cost = ask[t1] * (1 + fee)
+        sell_income = bid[t2] * (1 - fee)
+
+        if sell_income > buy_cost:
+            # 当前交易盈利，计算收益率
+            current_return = np.log(sell_income / buy_cost)
+
+            # 确认当前交易
+            trades.append((t1, t2))
+            total_log_return += current_return
+            pre_t2 = t2
+            valley_idx += 1
+            peak_idx += 1
+        else:
+            # 不盈利，尝试下一个波峰
+            peak_idx += 1
+
+    return trades, total_log_return
+
+def plot_trades(mid, trades, valleys, peaks):
+    """
+    使用 Plotly 可视化 mid-price 序列和交易机会，支持交互缩放。
+    
+    参数:
+    mid (np.array): mid-price 序列
+    trades (list): 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
+    valleys (list): 波谷位置列表
+    peaks (list): 波峰位置列表
+    """
+    # 创建时间轴
+    time = list(range(len(mid)))
+    
+    # 创建交互式图表
+    fig = go.Figure()
+    
+    # 绘制 mid-price 曲线
+    fig.add_trace(go.Scatter(x=time, y=mid, mode='lines', name='Mid Price', line=dict(color='blue')))
+    
+    # 添加波谷点
+    fig.add_trace(go.Scatter(x=valleys, y=[mid[v] for v in valleys], mode='markers', name='Valleys',
+                             marker=dict(color='red', size=10)))
+    
+    # 添加波峰点
+    fig.add_trace(go.Scatter(x=peaks, y=[mid[p] for p in peaks], mode='markers', name='Peaks',
+                             marker=dict(color='green', size=10)))
+    
+    # 添加交易对的连接线
+    for t1, t2 in trades:
+        fig.add_trace(go.Scatter(x=[t1, t2], y=[mid[t1], mid[t2]], mode='lines',
+                                 line=dict(color='green', dash='dash'), name=f'Trade {t1}-{t2}'))
+    
+    # 设置图表布局，启用缩放
+    fig.update_layout(
+        title='Mid Price with Trading Opportunities',
+        xaxis_title='Time',
+        yaxis_title='Price',
+        hovermode='closest',  # 鼠标悬停时显示最近的数据点信息
+        template='plotly_white',  # 使用白色背景模板
+        dragmode='zoom',  # 设置拖动模式为缩放
+        xaxis_rangeslider_visible=False  # 隐藏范围滑块，确保鼠标滚轮缩放
+    )
+    
+    # 启用鼠标滚轮缩放
+    fig.update_xaxes(fixedrange=False)  # 允许 x 轴缩放
+    fig.update_yaxes(fixedrange=False)  # 允许 y 轴缩放
+    
+    # 在浏览器中显示图表
+    fig.show(renderer='browser')
+
+def max_profit_reachable(bid, ask):
+    """
+    计算bid/ask序列中 潜在的最大利润
+
+    返回 
+    trades: 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
+    total_log_return: 所有可盈利交易的对数收益率总和
+    valleys: 波谷位置列表
+    peaks: 波峰位置列表
+    """
+    # 计算 mid-price
+    mid = (bid + ask) / 2
+
+    # 识别平台期
+    plateaus = _find_plateaus(mid)
+
+    # 识别波峰和波谷
+    peaks, valleys = _identify_peaks_valleys(plateaus)
+
+    # 匹配交易对
+    # 计算可盈利交易的对数收益率总和
+    trades,total_log_return = _find_max_profitable_trades(bid, ask, mid, valleys, peaks)
+    return trades,total_log_return, valleys, peaks
+
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
     min_class_count = predict_df['target'].value_counts().min()
@@ -363,7 +555,6 @@ def adjust_class_weights_df(predict_df):
     
     adjusted_df = predict_df.loc[sampled_indices].reset_index(drop=True)
     return adjusted_df
-
 
 def adjust_class_weights_numpy(y_true, y_pred):
     unique_classes, class_counts = np.unique(y_true, return_counts=True)
@@ -393,7 +584,6 @@ def adjust_class_weights_torch(y_true, y_pred):
     
     return adjusted_y_true, adjusted_y_pred
     
-
 def hex_to_rgb(hex_color):
     # 将十六进制颜色转换为RGB
     hex_color = hex_color.lstrip('#')

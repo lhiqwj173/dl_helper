@@ -849,67 +849,74 @@ class LOB_trade_env(gym.Env):
             # 体现 非法/win/loss
             info['act_criteria'] = 0 if res['trade_return'] > 0 else 1
 
+        # #########################################################
+        # # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
+        # # reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
+        # reward = 0
+        # if acc_opened:
+        #     # 已经开仓的奖励计算
+        #     # 1.0 基础奖励 平仓年化收益率 / 持仓每步年化收益率
+        #     # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
+        #     if need_close or action==1:
+        #         base_reward = res['trade_return'] * (STD_REWARD / 1)
+        #     else:
+        #         base_reward = res['step_return'] * (STD_REWARD / 1)
+
+        #     # 2.0 平仓回撤惩罚(回撤2个最小tick变动价格)
+        #     # # 假设最大容忍5 ticks的回撤
+        #     # 计算超过2 tick的部分
+        #     excess_drawdown = max(0, res['max_drawdown_ticks'] - 2)
+        #     # 非线性惩罚
+        #     dropdown_punish = -(excess_drawdown**2) * (STD_REWARD / (5**2))
+
+        #     # 3.0 超额奖励
+        #     # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
+        #     if need_close or action==1:
+        #         excess_reward = (res['trade_return'] - res['trade_return_bm']) * (STD_REWARD / 1)
+        #     else:
+        #         excess_reward = (res['step_return'] - res['step_return_bm']) * (STD_REWARD / 1)
+
+        #     # # 4.0 持仓长度惩罚
+        #     # # 暂定范围为 [0, 4800] > [-STD_REWARD, 0]
+        #     # hold_length_punish = -((res['hold_length']**3) * (STD_REWARD / (4800**3)))
+
+        #     # # 5.0 积极操作奖励 买入 / 卖出
+        #     # if action in [0, 1]:
+        #     #     positive_reward += POSITIVE_REWARD
+
+        #     # 组成奖励
+        #     reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
+
+        # else:
+        #     # 还未开仓的触发检查
+        #     # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
+        #     # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
+        #     # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
+        #     # 给一个小惩罚, 且结束本轮游戏
+        #     punish = 0
+        #     if res['max_drawup_ticks_bm'] > 10:
+        #         log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+        #         punish = 1
+        #     if res['drawup_ticks_bm_count'] > 3:
+        #         log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+        #         punish = 1
+
+        #     if punish:
+        #         # 游戏终止，任务失败
+        #         acc_done = True
+        #         reward = -STD_REWARD / 10
+            
+        #     elif res['drawup_ticks_bm_count'] == 0:
+        #         # 标的一直在下跌 不开仓是正确的，需要给与奖励
+        #         # 与 持仓的 超额奖励一致
+        #         reward += (0 - res['trade_return_bm']) * (STD_REWARD / 1) * 0.4
+        # #########################################################
+
         #########################################################
         # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
-        reward = 0
-        if acc_opened:
-            # 已经开仓的奖励计算
-            # 1.0 基础奖励 平仓年化收益率 / 持仓每步年化收益率
-            # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
-            if need_close or action==1:
-                base_reward = res['trade_return'] * (STD_REWARD / 1)
-            else:
-                base_reward = res['step_return'] * (STD_REWARD / 1)
-
-            # 2.0 平仓回撤惩罚(回撤2个最小tick变动价格)
-            # # 假设最大容忍5 ticks的回撤
-            # 计算超过2 tick的部分
-            excess_drawdown = max(0, res['max_drawdown_ticks'] - 2)
-            # 非线性惩罚
-            dropdown_punish = -(excess_drawdown**2) * (STD_REWARD / (5**2))
-
-            # 3.0 超额奖励
-            # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
-            if need_close or action==1:
-                excess_reward = (res['trade_return'] - res['trade_return_bm']) * (STD_REWARD / 1)
-            else:
-                excess_reward = (res['step_return'] - res['step_return_bm']) * (STD_REWARD / 1)
-
-            # # 4.0 持仓长度惩罚
-            # # 暂定范围为 [0, 4800] > [-STD_REWARD, 0]
-            # hold_length_punish = -((res['hold_length']**3) * (STD_REWARD / (4800**3)))
-
-            # # 5.0 积极操作奖励 买入 / 卖出
-            # if action in [0, 1]:
-            #     positive_reward += POSITIVE_REWARD
-            #########################################################
-
-            # 组成奖励
-            reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
-
-        else:
-            # 还未开仓的触发检查
-            # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
-            # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
-            # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
-            # 给一个小惩罚, 且结束本轮游戏
-            punish = 0
-            if res['max_drawup_ticks_bm'] > 10:
-                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
-                punish = 1
-            if res['drawup_ticks_bm_count'] > 3:
-                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
-                punish = 1
-
-            if punish:
-                # 游戏终止，任务失败
-                acc_done = True
-                reward = -STD_REWARD / 10
-            
-            elif res['drawup_ticks_bm_count'] == 0:
-                # 标的一直在下跌 不开仓是正确的，需要给与奖励
-                # 与 持仓的 超额奖励一致
-                reward += (0 - res['trade_return_bm']) * (STD_REWARD / 1) * 0.4
+        # 平仓奖励: 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
+        # 持仓奖励: 
+        #########################################################
 
         # 奖励限制范围
         reward = np.clip(reward, -STD_REWARD, STD_REWARD)
