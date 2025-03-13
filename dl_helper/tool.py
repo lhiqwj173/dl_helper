@@ -203,19 +203,22 @@ class AsyncProcessQueueReader:
         """获取队列中的数据"""
         return await self.async_queue.get()
 
-def calc_sharpe_ratio(returns, risk_free_rate=0.02, num_per_year=250):
+def calc_sharpe_ratio(returns, risk_free_rate=0.02, num_per_year=250, annualize=True):
     """计算年化夏普比率
     不会做returns长度/nan检查
     Args:
         returns: 对数收益率序列
         risk_free_rate: 无风险利率(年化), 默认 0.02
         num_per_year: 一年的收益率周期个数, 默认returns为日周期 num_per_year=250
+        annualize: 是否年化, 默认True
+    Returns:
+        float: 夏普比率（年化）
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
 
     # 将年化无风险利率转换为收益率周期的无风险利率
-    period_risk_free = risk_free_rate / num_per_year
+    period_risk_free = risk_free_rate / num_per_year if annualize else risk_free_rate
 
     excess_returns = returns - period_risk_free
     std = excess_returns.std()
@@ -223,23 +226,29 @@ def calc_sharpe_ratio(returns, risk_free_rate=0.02, num_per_year=250):
         return 0
 
     # 年化处理
-    mean_excess = excess_returns.mean() * num_per_year
-    annualized_std = std * np.sqrt(num_per_year)
-    return mean_excess / annualized_std
+    if annualize:
+        mean_excess = excess_returns.mean() * num_per_year
+        annualized_std = std * np.sqrt(num_per_year)
+        return mean_excess / annualized_std
+    else:
+        return excess_returns.mean() / std
 
-def calc_sortino_ratio(returns, risk_free_rate=0.02, num_per_year=250):
+def calc_sortino_ratio(returns, risk_free_rate=0.02, num_per_year=250, annualize=True):
     """计算年化索提诺比率
     不会做returns长度/nan检查
     Args:
         returns: 对数收益率序列
-        risk_free_rate: 无风险利率(年化), 默认0.02
+        risk_free_rate: 无风险利率(年化), 默认 0.02
         num_per_year: 一年的收益率周期个数, 默认returns为日周期 num_per_year=250
+        annualize: 是否年化, 默认True
+    Returns:
+        float: 索提诺比率（年化）
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
 
     # 将年化无风险利率转换为收益率周期的无风险利率
-    period_risk_free = risk_free_rate / num_per_year
+    period_risk_free = risk_free_rate / num_per_year if annualize else risk_free_rate
 
     excess_returns = returns - period_risk_free
     # 只考虑负收益的标准差
@@ -252,9 +261,12 @@ def calc_sortino_ratio(returns, risk_free_rate=0.02, num_per_year=250):
         down_std = downside_returns.std()
 
     # 年化处理
-    mean_excess = excess_returns.mean() * num_per_year
-    annualized_down_std = down_std * np.sqrt(num_per_year)
-    return mean_excess / (max(annualized_down_std, 1e-5))
+    if annualize:
+        mean_excess = excess_returns.mean() * num_per_year
+        annualized_down_std = down_std * np.sqrt(num_per_year)
+        return mean_excess / (max(annualized_down_std, 1e-5))
+    else:
+        return excess_returns.mean() / max(down_std, 1e-5)
 
 def calc_drawdown(net, tick_size=0.001):
     """计算最大回撤和回撤对应的最小刻度数量
@@ -299,40 +311,46 @@ def calc_drawup_ticks(net, tick_size=0.001, count_level=2):
     
     return max_drawup_ticks, np.sum(np.diff((drawup_price > count_level*tick_size) - 0) > 0)
 
-def calc_return(returns, num_per_year=250):
+def calc_return(returns, num_per_year=250, annualize=True):
     """计算年化总对数收益率
     不会做returns长度/nan检查
     Args:
         returns: 对数收益率序列
         num_per_year: 一年的收益率周期个数, 默认returns为日周期 num_per_year=250
+        annualize: 是否年化处理, 默认True
     Returns:
-        float: 年化总对数收益率
+        float: 年化/非年化总对数收益率
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
     total_return = np.sum(returns)
 
-    # 年化处理
-    period_count = len(returns)
-    years = period_count / num_per_year
+    if annualize:
+        # 年化处理
+        period_count = len(returns)
+        years = period_count / num_per_year
+        # 年化对数收益率
+        return total_return / years
+    else:
+        return total_return
 
-    # 年化对数收益率
-    annualized_return = total_return / years
-    
-    return annualized_return
-
-def calc_volatility(returns, num_per_year=250):
-    """计算年化波动率
+def calc_volatility(returns, num_per_year=250, annualize=True):
+    """计算波动率
     不会做returns长度/nan检查
     Args:
         returns: 对数收益率序列
         num_per_year: 一年的收益率周期个数, 默认returns为日周期 num_per_year=250
+        annualize: 是否年化处理, 默认True
     Returns:
-        float: 年化波动率
+        float: 年化/非年化波动率
     """
     if isinstance(returns, (pd.Series, pd.DataFrame)):
         returns = returns.values
-    return returns.std() * np.sqrt(num_per_year)  # 根据序列长度标准化
+    std = returns.std()
+    if annualize:
+        return std * np.sqrt(num_per_year)  # 根据序列长度标准化
+    else:
+        return std
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2

@@ -98,7 +98,7 @@ class data_producer:
         self.save_folder = save_folder
         self.debug_date = [i.replace('-', '').replace(' ', '') for i in debug_date]
         if self.debug_date:
-            log(f'[{self.data_type}] debug_date: {self.debug_date}')
+            log(f'[{data_type}] debug_date: {self.debug_date}')
 
         self.use_symbols = use_symbols
         
@@ -483,38 +483,20 @@ class Account:
     """
     账户类，用于记录交易状态和计算收益
     """
-    def __init__(self, fee_rate=5e-5, net_file=os.path.join(os.path.expanduser('~'), 'net.txt')):
+    num_per_year = int(250*(4*60*60/3))
+    fee_rate = 5e-5
+
+    def __init__(self):
         # 持仓量 
         self.pos = 0
         # 持仓成本
         self.cost = 0
-        # 累计收益率
-        self.profit = 0
-        # 交易费率
-        self.fee_rate = fee_rate
-        self.buy_fee = 0
-        self.sell_fee = 0   
         # 净值序列
         self.net_raw = []
         self.net_raw_bm = []# 基准，一直持有
         self.net = []
         self.net_bm = []
         self.bm_next_open = True
-        # 年内周期个数
-        self.num_per_year = int(250*(4*60*60/3))
-        # 净值文件
-        self.net_file = net_file
-        # 若已经存在 则删除
-        if os.path.exists(net_file):
-            os.remove(net_file)
-
-    def save_net(self, net):
-        """
-        保存净值序列到文件
-        每行保存一个净值序列，用逗号分隔
-        """
-        with open(self.net_file, 'a') as f:
-            f.write(','.join(map(str, net)) + '\n')
 
     def step(self, bid_price, ask_price, action):
         """
@@ -525,14 +507,10 @@ class Account:
 
         :return: (动作是否合法, 持仓量, 对数收益率, 评价指标)
             评价指标(年化):
-                'sortino_ratio'
-                'sharpe_ratio'
                 'max_drawdown'
                 'max_drawdown_ticks'
                 'trade_return'
                 'hold_length'
-                'sortino_ratio_bm'
-                'sharpe_ratio_bm'
                 'max_drawdown_bm'
                 'max_drawdown_ticks_bm'
                 'max_drawup_ticks_bm'
@@ -542,18 +520,14 @@ class Account:
         assert not np.isnan(bid_price), f'bid_price is nan, {bid_price}'
         assert not np.isnan(ask_price), f'ask_price is nan, {ask_price}'
 
-        # 重置fee记录
-        if self.pos == 0:
-            self.buy_fee = 0
-            self.sell_fee = 0
-
         # 计算持仓对数收益率
         unrealized_profit = 0
+        sell_gain = 0.0
         if self.pos == 1:
             # 未实现收益需考虑卖出时的手续费
-            self.sell_fee = bid_price * self.fee_rate
-            sell_price = bid_price - self.sell_fee
-            unrealized_profit = np.log(sell_price / self.cost)
+            sell_fee = bid_price * Account.fee_rate
+            sell_gain = bid_price - sell_fee
+            unrealized_profit = np.log(sell_gain / self.cost)
 
         # 基准净值, 一直持有
         if self.bm_next_open:
@@ -567,17 +541,23 @@ class Account:
         if action == 0:  # 买入
             if self.pos == 0:  # 空仓可以买入
                 self.pos = 1
-                self.net_raw.append(ask_price)
                 # 买入成本需要加上手续费
-                self.buy_fee = ask_price * self.fee_rate
-                self.cost = ask_price + self.buy_fee
+                buy_fee = ask_price * Account.fee_rate
+                self.cost = ask_price + buy_fee
+
+                # 用 cost 填充开仓之前的净值（相对于all in）
+                for _ in range(len(self.net_raw_bm) - 1):
+                    self.net_raw.append(self.cost)
+
+                # 净值统一为买1价
+                # 买入需要扣除手续费
+                self.net_raw.append(bid_price - buy_fee)
             else:
                 legal = False
         elif action == 1:  # 卖出
             if self.pos == 1:  # 有多仓可以卖出
                 self.pos = 0
-                self.profit = unrealized_profit
-                self.net_raw.append(bid_price)
+                self.net_raw.append(sell_gain)# 卖出获利
             else:
                 legal = False
         elif action == 2:   # 不操作
@@ -588,29 +568,27 @@ class Account:
                 # 有持仓
                 self.net_raw.append(bid_price)
 
-        # 起始无持仓的净值矫正
-        # 基准净值长度 > 策略净值长度
-        # 用策略净值填充至相同的长度
-        net_len = len(self.net_raw)
-        bm_len = len(self.net_raw_bm)
-        if net_len == 1 and bm_len > 1:
-            for i in range(bm_len - net_len):
-                self.net_raw.append(self.net_raw[-1])
-
         if not legal:
             self.net_raw.append(bid_price)
         
+        # 额外数据 标准化
+        # 持仓量 TODO
+        # self.pos /= STD_POS
+        # 未实现收益率
+        unrealized_profit /= 0.03043
+
+        # print("acc::step",legal, res)
+        return legal, self.pos, unrealized_profit
+
+    @staticmethod
+    def cal_res(legal, net_raw, net_raw_bm):
         # 评价指标
         res = {
-            'sortino_ratio': np.nan,
-            'sharpe_ratio': np.nan,
             'max_drawdown': np.nan,
             'max_drawdown_ticks': np.nan,
             'trade_return': np.nan,
             'step_return': np.nan,
             'hold_length': np.nan,
-            'sortino_ratio_bm': np.nan,
-            'sharpe_ratio_bm': np.nan,
             'max_drawdown_bm': np.nan,
             'max_drawdown_ticks_bm': np.nan,
             'max_drawup_ticks_bm': np.nan,
@@ -621,51 +599,30 @@ class Account:
         if legal:
             # 数据足够 > 1
             # 需要计算评价指标， 储存在info中
-            if (len(self.net_raw) > 1):
+            if (len(net_raw) > 1):
                 # 计算策略净值的评价指标
-                # 平均税费(买入卖出)到每一步
-                # 第一步买入，等价较好，不平均税费 TODO
-                step_fee = (self.buy_fee + self.sell_fee) / (len(self.net_raw) - 1)
-                self.net = np.array(self.net_raw)
-                self.net[1:] -= step_fee
-                # 储存净值序列到文件
-                self.save_net(self.net)
+                net = np.array(net_raw)
                 # 计算对数收益率序列
-                log_returns = np.diff(np.log(self.net))
+                log_returns = np.diff(np.log(net))
                 # 计算指标
-                res['sortino_ratio'] = calc_sortino_ratio(log_returns, 0, num_per_year=self.num_per_year)
-                res['sharpe_ratio'] = calc_sharpe_ratio(log_returns, 0, num_per_year=self.num_per_year)
-                res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(self.net)
-                res['trade_return'] = calc_return(log_returns, num_per_year=self.num_per_year)
-                res['step_return'] = calc_return(log_returns[-2:], num_per_year=self.num_per_year)
+                res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(net)
+                res['trade_return'] = calc_return(log_returns, annualize=False)
+                res['step_return'] = log_returns[-1]
                 # 从第一个非0值开始计算持仓长度
                 first_nonzero = next((i for i, x in enumerate(log_returns) if x != 0), len(log_returns))
-                res['hold_length'] = len(log_returns) - first_nonzero + 1
+                res['hold_length'] = len(log_returns) - first_nonzero
 
-            if (len(self.net_raw_bm) > 1):
+            if (len(net_raw_bm) > 1):
                 # 计算基准净值的评价指标
-                buy_fee_bm = self.net_raw_bm[0] * self.fee_rate
-                sell_fee_bm = self.net_raw_bm[-1] * self.fee_rate
-                step_fee_bm = (buy_fee_bm + sell_fee_bm) / (len(self.net_raw_bm) - 1)
-                self.net_bm = np.array(self.net_raw_bm)
-                self.net_bm[1:] -= step_fee_bm
+                net_bm = np.array(net_raw_bm)
                 # 计算对数收益率序列
-                log_returns_bm = np.diff(np.log(self.net_bm))
-                res['sortino_ratio_bm'] = calc_sortino_ratio(log_returns_bm, 0, num_per_year=self.num_per_year)
-                res['sharpe_ratio_bm'] = calc_sharpe_ratio(log_returns_bm, 0, num_per_year=self.num_per_year)
-                res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(self.net_bm)
-                res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(self.net_bm)
-                res['trade_return_bm'] = calc_return(log_returns_bm, num_per_year=self.num_per_year)
-                res['step_return_bm'] = calc_return(log_returns_bm[-2:], num_per_year=self.num_per_year)
+                log_returns_bm = np.diff(np.log(net_bm))
+                res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(net_bm)
+                res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(net_bm)
+                res['trade_return_bm'] = calc_return(log_returns_bm, annualize=False)
+                res['step_return_bm'] = log_returns_bm[-1]
 
-        # 额外数据 标准化
-        # 持仓量 TODO
-        # self.pos /= STD_POS
-        # 未实现收益率
-        unrealized_profit /= 0.03043
-
-        # print("acc::step",legal, res)
-        return legal, self.pos, unrealized_profit, res
+        return res
         
     def reset(self):
         """
@@ -673,7 +630,6 @@ class Account:
         """
         self.pos = 0
         self.cost = 0 
-        self.profit = 0
         self.net_raw = []
         self.net_raw_bm = []
         self.bm_next_open = True
@@ -861,7 +817,9 @@ class LOB_trade_env(gym.Env):
         # 4. 连续数据结束了，且平均奖励为正，则认为任务成功 +100
         acc_done = False
 
-        legal, pos, profit, res = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
+        legal, pos, profit = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
+        res = self.acc.cal_res(legal, self.acc.net_raw, self.acc.net_raw_bm)
+
         # 记录net/net_bm
         info['net'] = self.acc.net_raw[-1] if self.acc.net_raw else np.nan
         info['net_bm'] = self.acc.net_raw_bm[-1] if self.acc.net_raw_bm else np.nan
@@ -978,16 +936,19 @@ class LOB_trade_env(gym.Env):
         # 状态相关
         id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,
 
+        # 其他
+        terminated,truncated,
+
         # 奖励评价相关
-        reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
+        reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
 
         # 基准相关
-        sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
+        max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
         """
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,terminated,truncated,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1029,12 +990,10 @@ class LOB_trade_env(gym.Env):
             # 准备输出数据
             # net,net_bm,
             out_text += f",{info['net']},{info['net_bm']}"
-            # reward,sortino_ratio,sharpe_ratio,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
-            out_text += f",{reward},{info.get('sortino_ratio', '')},{info.get('sharpe_ratio', '')},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
-            # sortino_ratio_bm,sharpe_ratio_bm,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
-            out_text += f",{info.get('sortino_ratio_bm', '')},{info.get('sharpe_ratio_bm', '')},{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
-            # 记录数据
-            self.out_test_predict(out_text)
+            # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
+            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
+            # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
+            out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
@@ -1061,6 +1020,11 @@ class LOB_trade_env(gym.Env):
                 truncated = True
             else:
                 truncated = False
+
+            out_text += f",{terminated},{truncated}"
+            out_text += out_text2
+            # 记录数据
+            self.out_test_predict(out_text)
 
             done = terminated or truncated
             if done:
@@ -1434,13 +1398,45 @@ def test_quick_produce_train_sdpk(date, code):
     快速生成训练数据，用于检查对比
     """
     from feature.features.time_point_data import read_sdpk
-    def get_sdpk(date, code):
+    def get_sdpk(date, code, level=5):
         file = rf"D:\L2_DATA_T0_ETF\his_data\{date}\{code}\十档盘口.csv"
-        sdpk = read_sdpk(file).iloc[1:]
+
+        # 使用标准时间api
+        # sdpk = read_sdpk(file).iloc[1:]
+
+        # 简单读取原始数据
+        sdpk = pd.read_csv(file, encoding='gbk')
+        # 删除完全重复的行
+        sdpk = sdpk.drop_duplicates(keep='first')
+        # 删除列 '卖1价' 和 '买1价' 中存在 NaN 值的行
+        sdpk = sdpk.dropna(subset=['卖1价', '买1价'])
+        sdpk['时间'] = pd.to_datetime(sdpk['时间'])
+        # 格式化
+        for col in ['总卖', '总买']:
+            try:
+                sdpk[col] = sdpk[col].astype(float)
+            except:
+                sdpk[col] = sdpk[col].apply(
+                    lambda x: 10000 * (float(x.replace("万", "")))
+                    if "万" in str(x)
+                    else 1e8 * (float(x.replace("亿", "")))
+                    if "亿" in str(x)
+                    else float(x)
+                )
+        sdpk = sdpk.set_index('时间')
+        # 截取时间
+        begin_t = '09:30'
+        end_t = '14:57'
+        sdpk = sdpk[(sdpk.index.time >= pd.to_datetime(begin_t).time()) & (
+            sdpk.index.time < pd.to_datetime(end_t).time())]
+        sdpk = sdpk[(sdpk.index.time <= pd.to_datetime('11:30:00').time()) | (
+            sdpk.index.time > pd.to_datetime('13:00:00').time())]
+        sdpk = sdpk.iloc[1:]
+
         sdpk['id'] = [f"{code}_{int((x + pd.Timedelta(hours=-8)).timestamp())}" for x in sdpk.index]
-        cols = [item for i in range(5) for item in [f'卖{i+1}价', f'卖{i+1}量', f'买{i+1}价', f'买{i+1}量']]
+        cols = [item for i in range(level) for item in [f'卖{i+1}价', f'卖{i+1}量', f'买{i+1}价', f'买{i+1}量']]
         cols.append('id')
-        sdpk = sdpk.loc[:, cols].reset_index(drop=True)
+        sdpk = sdpk.loc[:, cols]
         return sdpk
     
     # 获取标准化数据
@@ -1449,21 +1445,51 @@ def test_quick_produce_train_sdpk(date, code):
     cur_idx = all_dates.index(date)
     std_dates = all_dates[cur_idx-5:cur_idx]
     std_sdpks = pd.DataFrame()
+    begin_t = '09:30'
+    end_t = '14:57'
     for std_date in std_dates:
-        sdpk = get_sdpk(std_date, code)
+        sdpk = get_sdpk(std_date, code, 10)
+        # 截取时间
+        sdpk = sdpk[(sdpk.index.time >= pd.to_datetime(begin_t).time()) & (
+            sdpk.index.time < pd.to_datetime(end_t).time())]
+        sdpk = sdpk[(sdpk.index.time <= pd.to_datetime('11:30:00').time()) | (
+            sdpk.index.time > pd.to_datetime('13:00:00').time())]
         std_sdpks = pd.concat([std_sdpks, sdpk])
     # 计数标准化数据
     std_sdpks = std_sdpks.iloc[:, :-1]
-    std_mean = std_sdpks.mean()
-    std_std = std_sdpks.std()
+    base_price_col_nums = [i for i in range(len(std_sdpks.columns)) if '价' in std_sdpks.columns[i]]
+    base_vol_col_nums = [i for i in range(len(std_sdpks.columns)) if '量' in std_sdpks.columns[i]]
+    base_price_data = std_sdpks.iloc[:, base_price_col_nums]
+    base_vol_data = std_sdpks.iloc[:, base_vol_col_nums]
+    base_price_mean = np.mean(base_price_data.values)
+    base_price_std = np.std(base_price_data.values)
+    base_vol_mean = np.mean(base_vol_data.values)
+    base_vol_std = np.std(base_vol_data.values)
 
     # 获取当日数据
-    sdpk = get_sdpk(date, code)
-    return sdpk, std_mean, std_std
+    sdpk = get_sdpk(date, code).reset_index(drop=True)
+
+    # 合并均值和标准差
+    all_col_mean_list = []
+    all_col_std_list = []
+    for i in list(sdpk)[:-1]:
+        if '价' in i:
+            all_col_mean_list.append(base_price_mean)
+            all_col_std_list.append(base_price_std)
+        else:
+            all_col_mean_list.append(base_vol_mean)
+            all_col_std_list.append(base_vol_std)
+    index = sdpk.columns[:-1]
+    mean = pd.Series(all_col_mean_list, index=index)
+    std = pd.Series(all_col_std_list, index=index)
+
+    return sdpk, mean, std
 
 def check(obs, info, data, mean, std):
     # 切片 检查用data
     _id = info['id']
+    code, ts = _id.split('_')
+    dt = pd.to_datetime(int(ts), unit='s') + pd.Timedelta(hours=8)
     _idx = data[data['id'] >= _id].index.to_list()[0]
     # 获取该id前10个数据
     start_idx = max(0, _idx - 9)
@@ -1486,29 +1512,39 @@ def check(obs, info, data, mean, std):
     info_std = info['x_std'][:, 1]
     data_mean = mean.values
     data_std = std.values
-    # TODO
+    if not np.array_equal(info_mean, data_mean):
+        print('info_mean 和 data_mean 不一致')
+        raise Exception(f'info_mean 和 data_mean 不一致, id: {_id}')
+    if not np.array_equal(info_std, data_std):
+        print('info_std 和 data_std 不一致')
+        raise Exception(f'info_std 和 data_std 不一致, id: {_id}')
+
+    return True
 
 def test_lob_data():
     from tqdm import tqdm
 
     code = '513050'
     env = LOB_trade_env({
-        'data_type': 'val',# 训练/测试
-        # 'data_type': 'train',# 训练/测试
+        # 'data_type': 'val',# 训练/测试
+        'data_type': 'train',# 训练/测试
         'his_len': 10,# 每个样本的 历史数据长度
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
         'use_symbols': [code],
+
+        'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
+        'train_title': 'test',
     },
-    # data_std=False,
-    debug_date=['20241022', '20240320'],
+    data_std=False,
+    debug_date=['20240521'],
     )
 
     for i in tqdm(range(5000)):
         print(f'iter: {i}, begin')
         obs, info = env.reset()
-        # cur_date = env.data_producer.date
-        # data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
-        # check(obs, info, data, mean, std)
+        cur_date = env.data_producer.date
+        data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
+        check(obs, info, data, mean, std)
 
         while True:
             obs, reward, terminated, truncated, info = env.step(2)
@@ -1521,4 +1557,12 @@ def test_lob_data():
 
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    test_lob_data()
+    # test_lob_data()
+
+    acc = Account()
+    res = acc.cal_res(
+        True, 
+        [1.018]*37 + [1.018 * (1 + Account.fee_rate)], 
+        [1.02, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.018, 1.018, 1.018, 1.017, 1.017], 
+    )
+    print(res)

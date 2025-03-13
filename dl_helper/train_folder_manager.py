@@ -36,7 +36,7 @@ class TrainFolderManager:
         """
         return os.path.exists(os.path.join(self.checkpoint_folder, 'rllib_checkpoint.json'))
 
-    def load_checkpoint(self, algo, only_params=True):
+    def load_checkpoint(self, algo, only_params=False):
         """
         加载检查点
         """
