@@ -43,7 +43,11 @@ class TrainFolderManager:
         if only_params:
             # 获取模型参数
             # 加载文件内容
-            module_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'rl_module', 'default_policy', 'module_state.pt'), 'rb'))
+            module_state_folder = os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'rl_module', 'default_policy')
+            file = [i for i in os.listdir(module_state_folder) if 'module_state' in i]
+            if len(file) == 0:
+                raise ValueError(f'{module_state_folder} 中没有找到 module_state 文件')
+            module_state = pickle.load(open(os.path.join(module_state_folder, file[0]), 'rb'))
             # optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
             # 组装state
             state = {'learner_group':{'learner':{
