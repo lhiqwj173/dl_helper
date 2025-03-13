@@ -298,10 +298,14 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     
     # Main training curves plot (first subplot)
     ax = axes[0]
-    ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
-    ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
-    ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
-    ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
+    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
+    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
+    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
+    ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
+    ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
+    ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
     
     ax.legend()
     ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
