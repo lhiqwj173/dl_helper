@@ -60,6 +60,7 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         'time_this_iter_s',
         'num_training_step_calls_per_iteration',
         'training_iteration',
+        'learning_rate',
     ]
 
     data_dict = OrderedDict.fromkeys(ks, '')
@@ -114,6 +115,11 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
     if 'training_iteration' in data:
         important_metrics["training_iteration"] = data["training_iteration"]
 
+    try:
+        important_metrics["learning_rate"] = data['learners']['default_policy']['default_optimizer_learning_rate']
+    except:
+        pass
+
     # 搜集自定义指标
     if 'custom_metrics' in data:
         important_metrics['custom_metrics'] = {}
@@ -147,6 +153,8 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
         out_func(f"time_this_iter_s: {important_metrics['time_this_iter_s']:.4f}")
     if 'num_training_step_calls_per_iteration' in important_metrics:
         out_func(f"num_training_step_calls_per_iteration: {important_metrics['num_training_step_calls_per_iteration']}")
+    if 'learning_rate' in important_metrics:
+        out_func(f"learning_rate: {important_metrics['learning_rate']}")
 
     if 'custom_metrics' in important_metrics:
         out_func(f"custom_metrics:")
@@ -301,16 +309,32 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     
     # Main training curves plot (first subplot)
     ax = axes[0]
+
+    # 创建右侧y轴
+    ax2 = ax.twinx()
+
     # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
     # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
     # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
     # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
-    ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
-    ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
-    ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
-    ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
+    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
+    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
+    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
     
-    ax.legend()
+    # 右侧y轴绘制学习率曲线
+    learning_rates = out_data['learning_rate'].values
+    l5 = ax2.plot(learning_rates, color='blue', linestyle='--', label='learning_rate', alpha=0.6)
+    
+    # 设置右侧y轴标签
+    ax2.set_ylabel('Learning Rate', color='blue')
+    ax2.tick_params(axis='y', labelcolor='blue')
+    
+    # 合并两个坐标轴的图例
+    lns = l1 + l2 + l3 + l4 + l5
+    labs = [l.get_label() for l in lns]
+    ax.legend(lns, labs, loc='upper right')
+
     ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
     if y_axis_max is not None:
         ax.set_ylim(0, y_axis_max)
