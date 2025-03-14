@@ -922,11 +922,20 @@ class LOB_trade_env(gym.Env):
         if acc_opened:
             # 已经开仓的奖励计算
             if need_close or action==1:
-                # 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
-                # TODO total_log_return_bm 为0的情况
-                _, total_log_return_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
-                # 奖励 [0, STD_REWARD]
-                reward = res['trade_return'] / total_log_return_bm * STD_REWARD
+                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+
+                if res['trade_return'] >= 0:
+                    # 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
+                    # 奖励 [0, STD_REWARD] 
+                    # 若 max_profit_reachable_bm 为0，trade_return也必定为0，所以奖励为0
+                    if max_profit_reachable_bm == 0 and res['trade_return'] != 0:
+                        pickle.dump((self.data_producer.bid_price, self.data_producer.ask_price), open(f'bid_ask_{self.data_producer.data_type}_{self.data_producer.cur_data_file}.pkl', 'wb'))
+                        raise ValueError(f'潜在最大对数收益率为0, 但平仓对数收益率不为0')
+                    reward = res['trade_return'] / max_profit_reachable_bm * STD_REWARD if max_profit_reachable_bm != 0 else 0
+                else:
+                    # 平仓对数收益率 - 潜在最大对数收益率，假设收益率==-0.03为最低值(日内的一笔交易，亏损达到-0.03，则认为完全失败，-STD_REWARD)
+                    # 奖励 [-STD_REWARD, 0]
+                    reward = max((res['trade_return'] - max_profit_reachable_bm) / 0.003, -1) * STD_REWARD
             else:
                 # 持仓奖励（步）: 持仓每步收益率 
                 # TODO 如何标准化, step_return 大概率是个很小的值
@@ -939,14 +948,15 @@ class LOB_trade_env(gym.Env):
             # 给一个小惩罚, 且结束本轮游戏
             punish = 0
             if res['max_drawup_ticks_bm'] > 10:
-                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束: LOSS')
                 punish = 1
             if res['drawup_ticks_bm_count'] > 3:
-                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束: LOSS')
                 punish = 1
 
             if punish:
-                # 游戏终止，任务失败
+                # 游戏终止，任务失败 
+                # 奖励: -STD_REWARD/10
                 acc_done = True
                 reward = -STD_REWARD / 10
             
@@ -968,10 +978,12 @@ class LOB_trade_env(gym.Env):
                 # 连续3次平仓奖励为负，则认为任务失败
                 acc_done = True
                 reward = -STD_REWARD
+                log(f'[{id(self)}][{self.data_producer.data_type}] keep_negative({keep_negative}) >= 3, 连续3次平仓奖励为负, 游戏结束: LOSS')
             elif need_close and avg_reward > 0:
                 # 连续数据结束了，且平均奖励为正，则认为任务成功
                 acc_done = True
                 reward = STD_REWARD
+                log(f'[{id(self)}][{self.data_producer.data_type}] avg_reward({avg_reward}) > 0, 连续数据结束了，且平均奖励为正, 游戏结束: WIN')
 
         return reward, acc_done, pos, profit
 
