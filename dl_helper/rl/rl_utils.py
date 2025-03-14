@@ -324,7 +324,7 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     
     # 右侧y轴绘制学习率曲线
     learning_rates = out_data['learning_rate'].values
-    l5 = ax2.plot(learning_rates, color='blue', linestyle='--', label='learning_rate', alpha=0.6)
+    l5 = ax2.plot(learning_rates, color='lightblue', linestyle='--', label='learning_rate', alpha=0.3)
     
     # 设置右侧y轴标签
     ax2.set_ylabel('Learning Rate', color='blue')
