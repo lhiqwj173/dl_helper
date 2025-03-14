@@ -261,6 +261,9 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
         - plot(out_data, axes_list): Performs custom plotting across given list of axes
     """
     out_data = pd.read_csv(out_file)
+
+    # 填充 NaN 值
+    out_data = out_data.ffill()
     
     # Extract data
     datetime = pd.to_datetime(out_data['datetime'])  # Convert to datetime objects
