@@ -2,7 +2,7 @@ import psutil, pickle, torch, os, time
 import numpy as np
 from tqdm import tqdm
 import platform
-
+import time
 import pandas as pd
 import numpy as np
 
@@ -387,17 +387,29 @@ def _identify_peaks_valleys(plateaus):
     """
     peaks = []
     valleys = []
-    for i in range(1, len(plateaus) - 1):
-        prev_value = plateaus[i - 1][2]
-        current_value = plateaus[i][2]
-        next_value = plateaus[i + 1][2]
-        start, end, _ = plateaus[i]
+    n = len(plateaus)
+    
+    for i in range(n):
+        start, end, value = plateaus[i]
         rep = (start + end) // 2  # 选择中间点作为代表
-        if current_value > prev_value and current_value > next_value:
-            peaks.append(rep)
-        elif current_value < prev_value and current_value < next_value:
-            valleys.append(rep)
-    return peaks, valleys
+        if i == 0:  # 第一个平台期
+            if n > 1 and value < plateaus[1][2]:
+                valleys.append(rep)
+            elif n > 1 and value > plateaus[1][2]:
+                peaks.append(rep)
+        elif i == n - 1:  # 最后一个平台期
+            if value < plateaus[i - 1][2]:
+                valleys.append(rep)
+            elif value > plateaus[i - 1][2]:
+                peaks.append(rep)
+        else:  # 中间平台期
+            prev_value = plateaus[i - 1][2]
+            next_value = plateaus[i + 1][2]
+            if value > prev_value and value > next_value:
+                peaks.append(rep)
+            elif value < prev_value and value < next_value:
+                valleys.append(rep)
+    return peaks, valleys 
 
 def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
     """
@@ -470,6 +482,36 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
 
     return trades, total_log_return
 
+def max_profit_reachable(bid, ask):
+    """
+    计算bid/ask序列中 潜在的最大利润
+
+    返回 
+    trades: 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
+    total_log_return: 所有可盈利交易的对数收益率总和
+    valleys: 波谷位置列表
+    peaks: 波峰位置列表
+    """
+    # 检查 bid/ask, 转化为 numpy
+    if not isinstance(bid, np.ndarray):
+        bid = np.array(bid)
+    if not isinstance(ask, np.ndarray):
+        ask = np.array(ask)
+
+    # 计算 mid-price
+    mid = (bid + ask) / 2
+
+    # 识别平台期
+    plateaus = _find_plateaus(mid)
+
+    # 识别波峰和波谷
+    peaks, valleys = _identify_peaks_valleys(plateaus)
+
+    # 匹配交易对
+    # 计算可盈利交易的对数收益率总和
+    trades,total_log_return = _find_max_profitable_trades(bid, ask, mid, valleys, peaks)
+    return trades,total_log_return, valleys, peaks
+
 def plot_trades(mid, trades, valleys, peaks):
     """
     使用 Plotly 可视化 mid-price 序列和交易机会，支持交互缩放。
@@ -480,10 +522,13 @@ def plot_trades(mid, trades, valleys, peaks):
     valleys (list): 波谷位置列表
     peaks (list): 波峰位置列表
     """
+    import plotly.graph_objects as go
+    
     # 创建时间轴
     time = list(range(len(mid)))
     
     # 创建交互式图表
+    import plotly.graph_objects as go
     fig = go.Figure()
     
     # 绘制 mid-price 曲线
@@ -519,36 +564,6 @@ def plot_trades(mid, trades, valleys, peaks):
     
     # 在浏览器中显示图表
     fig.show(renderer='browser')
-
-def max_profit_reachable(bid, ask):
-    """
-    计算bid/ask序列中 潜在的最大利润
-
-    返回 
-    trades: 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
-    total_log_return: 所有可盈利交易的对数收益率总和
-    valleys: 波谷位置列表
-    peaks: 波峰位置列表
-    """
-    # 检查 bid/ask, 转化为 numpy
-    if not isinstance(bid, np.ndarray):
-        bid = np.array(bid)
-    if not isinstance(ask, np.ndarray):
-        ask = np.array(ask)
-
-    # 计算 mid-price
-    mid = (bid + ask) / 2
-
-    # 识别平台期
-    plateaus = _find_plateaus(mid)
-
-    # 识别波峰和波谷
-    peaks, valleys = _identify_peaks_valleys(plateaus)
-
-    # 匹配交易对
-    # 计算可盈利交易的对数收益率总和
-    trades,total_log_return = _find_max_profitable_trades(bid, ask, mid, valleys, peaks)
-    return trades,total_log_return, valleys, peaks
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
