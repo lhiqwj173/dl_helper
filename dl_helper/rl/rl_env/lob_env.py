@@ -529,12 +529,8 @@ class Account:
             sell_gain = bid_price - sell_fee
             unrealized_profit = np.log(sell_gain / self.cost)
 
-        # 基准净值, 一直持有
-        if self.bm_next_open:
-            self.bm_next_open = False
-            self.net_raw_bm.append(ask_price)
-        else:
-            self.net_raw_bm.append(bid_price)
+        # 基准净值, 一直持有标的的兑现价格(买一价)
+        self.net_raw_bm.append(bid_price)
 
         # 无操作任何时间都允许
         legal = True
@@ -829,6 +825,11 @@ class LOB_trade_env(gym.Env):
             acc_net_raw = self.acc.net_raw
             acc_net_bm_raw = self.acc.net_raw_bm
             self.acc.reset()
+            # 重置 data_producer bid/ask序列
+            self.data_producer.bid_price = self.data_producer.bid_price[-1:]
+            self.data_producer.ask_price = self.data_producer.ask_price[-1:]
+            # 账户需要走一步
+            _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
 
         #数据类型
         info['data_type'] = self.data_producer.data_type
@@ -924,7 +925,8 @@ class LOB_trade_env(gym.Env):
         if acc_opened:
             # 已经开仓的奖励计算
             if need_close or action==1:
-                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                # 需要排除最后一个，储存的是下一个step的数据
+                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[:-1], self.data_producer.ask_price[:-1])
 
                 if res['trade_return'] >= 0:
                     # 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
@@ -937,7 +939,7 @@ class LOB_trade_env(gym.Env):
                 else:
                     # 平仓对数收益率 - 潜在最大对数收益率，假设收益率==-0.03为最低值(日内的一笔交易，亏损达到-0.03，则认为完全失败，-STD_REWARD)
                     # 奖励 [-STD_REWARD, 0]
-                    reward = max((res['trade_return'] - max_profit_reachable_bm) / 0.003, -1) * STD_REWARD
+                    reward = max((res['trade_return'] - max_profit_reachable_bm) / 0.03, -1) * STD_REWARD
             else:
                 # 持仓奖励（步）: 持仓每步收益率 
                 # TODO 如何标准化, step_return 大概率是个很小的值
@@ -949,10 +951,10 @@ class LOB_trade_env(gym.Env):
             # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
             # 给一个小惩罚, 且结束本轮游戏
             punish = 0
-            if res['max_drawup_ticks_bm'] > 10:
+            if res['max_drawup_ticks_bm'] >= 10:
                 log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束: LOSS')
                 punish = 1
-            if res['drawup_ticks_bm_count'] > 3:
+            if res['drawup_ticks_bm_count'] >= 3:
                 log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束: LOSS')
                 punish = 1
 
@@ -1136,7 +1138,9 @@ class LOB_trade_env(gym.Env):
                     break
 
             # 账户
-            pos, profit = self.acc.reset()
+            self.acc.reset()
+            # 账户需要用动作2走一步, 会初始记录act之前的净值
+            _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
             # 添加标的持仓数据
             x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
             # 初始化skip计数器
@@ -1581,7 +1585,7 @@ def check(obs, info, data, mean, std):
 
     return True
 
-def test_lob_data():
+def test_lob_data(check_data = True):
     from tqdm import tqdm
 
     code = '513050'
@@ -1596,18 +1600,27 @@ def test_lob_data():
         'train_title': 'test',
     },
     data_std=False,
-    debug_date=['20240521'],
+    # debug_date=['20240521'],
     )
+
+    acts = [0, 1, 0, 1, 0, 1]
+    acts = [0, 0]
+    act_idx = 0
 
     for i in tqdm(range(5000)):
         print(f'iter: {i}, begin')
         obs, info = env.reset()
-        cur_date = env.data_producer.date
-        data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
-        check(obs, info, data, mean, std)
+        if check_data:
+            cur_date = env.data_producer.date
+            data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
+            check(obs, info, data, mean, std)
 
         while True:
-            obs, reward, terminated, truncated, info = env.step(2)
+            act = acts[act_idx] if act_idx < len(acts) else 2
+            act_idx += 1
+            obs, reward, terminated, truncated, info = env.step(act)
+            if check_data:
+                check(obs, info, data, mean, std)
             if terminated or truncated:
                 break
             
@@ -1617,12 +1630,12 @@ def test_lob_data():
 
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    # test_lob_data()
+    test_lob_data(check_data=False)
 
-    acc = Account()
-    res = acc.cal_res(
-        True, 
-        [1.018]*37 + [1.018 * (1 + Account.fee_rate)], 
-        [1.02, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.018, 1.018, 1.018, 1.017, 1.017], 
-    )
-    print(res)
+    # acc = Account()
+    # res = acc.cal_res(
+    #     True, 
+    #     [1.018]*37 + [1.018 * (1 + Account.fee_rate)], 
+    #     [1.02, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.018, 1.018, 1.018, 1.017, 1.017], 
+    # )
+    # print(res)
