@@ -325,8 +325,8 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     # Set x-label only on bottom plot
     axes[-1].set_xlabel('Time')
     
-    # Rotate x-axis labels for better readability
-    plt.setp(axes[-1].xaxis.get_majorticklabels(), rotation=45)
+    # # Rotate x-axis labels for better readability
+    # plt.setp(axes[-1].xaxis.get_majorticklabels(), rotation=45)
     
     # Adjust layout to prevent overlap
     plt.tight_layout()

@@ -14,7 +14,7 @@ from py_ext.tool import log, init_logger,get_exception_msg, get_log_file
 from py_ext.datetime import beijing_time
 from py_ext.wechat import send_wx
 
-from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks
+from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks, max_profit_reachable
 from dl_helper.train_param import in_kaggle
 
 USE_CODES = [
@@ -152,9 +152,9 @@ class data_producer:
         self.plot_cur = 0
         self.plot_cur_pre = -1
         self.plot_data = None
-        # 买卖1档价格
-        self.ask_price = 0
-        self.bid_price = 0
+        # 买卖1档价格 序列
+        self.ask_price = []
+        self.bid_price = []
         # id
         self.id = ''
         # 当前日期数据停止标志，初始没有可用数据，所以应该为True
@@ -374,8 +374,8 @@ class data_producer:
         raw 是完整的 pickle 切片
         """
         last_row = raw[-1]  # 最后一个数据
-        self.bid_price = last_row[self.col_idx['BASE买1价']]
-        self.ask_price = last_row[self.col_idx['BASE卖1价']]
+        self.bid_price.append(last_row[self.col_idx['BASE买1价']])
+        self.ask_price.append(last_row[self.col_idx['BASE卖1价']])
 
     def get(self):
         """
@@ -817,7 +817,7 @@ class LOB_trade_env(gym.Env):
         # 4. 连续数据结束了，且平均奖励为正，则认为任务成功 +100
         acc_done = False
 
-        legal, pos, profit = self.acc.step(self.data_producer.bid_price, self.data_producer.ask_price, action)
+        legal, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
         res = self.acc.cal_res(legal, self.acc.net_raw, self.acc.net_raw_bm)
 
         # 记录net/net_bm
@@ -914,8 +914,47 @@ class LOB_trade_env(gym.Env):
 
         #########################################################
         # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
-        # 平仓奖励: 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
-        # 持仓奖励: 
+        # 平仓奖励/最终奖励: 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
+        # 持仓/空仓奖励（步）: 持仓每步收益率 / 每步的标的收益率的相反数​
+        # 消极空仓惩罚
+
+        reward = 0
+        if acc_opened:
+            # 已经开仓的奖励计算
+            if need_close or action==1:
+                # 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
+                # TODO total_log_return_bm 为0的情况
+                _, total_log_return_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                # 奖励 [0, STD_REWARD]
+                reward = res['trade_return'] / total_log_return_bm * STD_REWARD
+            else:
+                # 持仓奖励（步）: 持仓每步收益率 
+                # TODO 如何标准化, step_return 大概率是个很小的值
+                reward = res['step_return']
+        else:
+            # 还未开仓的触发检查
+            # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
+            # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
+            # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
+            # 给一个小惩罚, 且结束本轮游戏
+            punish = 0
+            if res['max_drawup_ticks_bm'] > 10:
+                log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
+                punish = 1
+            if res['drawup_ticks_bm_count'] > 3:
+                log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
+                punish = 1
+
+            if punish:
+                # 游戏终止，任务失败
+                acc_done = True
+                reward = -STD_REWARD / 10
+            
+            elif res['drawup_ticks_bm_count'] == 0:
+                # 标的一直在下跌 不开仓是正确的，需要给与奖励 
+                # TODO 如何标准化, step_return 大概率是个很小的值
+                reward = -res['step_return_bm']
+
         #########################################################
 
         # 奖励限制范围
