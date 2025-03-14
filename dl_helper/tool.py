@@ -454,7 +454,7 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
         # 当前波峰波谷中的其他波谷,
         # 选择一个最小值
         _valley_idx = valley_idx + 1
-        while valleys[_valley_idx] < t2:
+        while _valley_idx < len(valleys) and valleys[_valley_idx] < t2:
             # 时间药满足小于 t2
             _valley_t = valleys[_valley_idx]
             if ask[_valley_t] <= ask[t1]:
