@@ -530,6 +530,12 @@ def max_profit_reachable(bid, ask):
     valleys: 波谷位置列表
     peaks: 波峰位置列表
     """
+    # 检查 bid/ask, 转化为 numpy
+    if not isinstance(bid, np.ndarray):
+        bid = np.array(bid)
+    if not isinstance(ask, np.ndarray):
+        ask = np.array(ask)
+
     # 计算 mid-price
     mid = (bid + ask) / 2
 
