@@ -931,7 +931,7 @@ class LOB_trade_env(gym.Env):
                     # 奖励 [0, STD_REWARD] 
                     # 若 max_profit_reachable_bm 为0，trade_return也必定为0，所以奖励为0
                     if max_profit_reachable_bm == 0 and res['trade_return'] != 0:
-                        pickle.dump((self.data_producer.bid_price, self.data_producer.ask_price, acc_net_raw, acc_net_bm_raw), open(f'bid_ask_{self.data_producer.data_type}_{self.data_producer.cur_data_file}.pkl', 'wb'))
+                        pickle.dump((self.data_producer.bid_price, self.data_producer.ask_price, legal, acc_net_raw, acc_net_bm_raw), open(f'bid_ask_{self.data_producer.data_type}_{self.data_producer.cur_data_file}.pkl', 'wb'))
                         raise ValueError(f'潜在最大对数收益率为0, 但平仓对数收益率不为0')
                     reward = res['trade_return'] / max_profit_reachable_bm * STD_REWARD if max_profit_reachable_bm != 0 else 0
                 else:
