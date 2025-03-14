@@ -51,20 +51,17 @@ class LobCallbacks(DefaultCallbacks):
         **kwargs,
     ) -> None:
         # res = {
-        #     'sortino_ratio': 0.0,
-        #     'sharpe_ratio': 0.0,
-        #     'max_drawdown': 0.0,
-        #     'max_drawdown_ticks': 0.0,
-        #     'trade_return': 0.0,
-        #     'step_return': 0.0,
-        #     'hold_length': 0.0,
-        #     'sortino_ratio_bm': 0.0,
-        #     'sharpe_ratio_bm': 0.0,
-        #     'max_drawdown_bm': 0.0,
-        #     'max_drawdown_ticks_bm': 0.0,
-        #     'max_drawup_ticks_bm': 0.0,
-        #     'trade_return_bm': 0.0,
-        #     'step_return_bm': 0.0,
+        #     'max_drawdown': np.nan,
+        #     'max_drawdown_ticks': np.nan,
+        #     'trade_return': np.nan,
+        #     'step_return': np.nan,
+        #     'hold_length': np.nan,
+        #     'max_drawdown_bm': np.nan,
+        #     'max_drawdown_ticks_bm': np.nan,
+        #     'max_drawup_ticks_bm': np.nan,
+        #     'drawup_ticks_bm_count': np.nan,
+        #     'trade_return_bm': np.nan,
+        #     'step_return_bm': np.nan,
         # }
         # 从环境的 info 中提取自定义指标
         info = episode.get_infos(-1)
@@ -84,7 +81,6 @@ class LobCallbacks(DefaultCallbacks):
                     metrics_logger.log_value("win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
                     metrics_logger.log_value("loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
 
-                    metrics_logger.log_value("sharpe_ratio", info['sharpe_ratio'])
                     metrics_logger.log_value("max_drawdown", info['max_drawdown'])
                     metrics_logger.log_value("trade_return", info['trade_return'])
                     metrics_logger.log_value("hold_length", info['hold_length'])
@@ -95,7 +91,6 @@ class LobCallbacks(DefaultCallbacks):
                     metrics_logger.log_value("val_win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
                     metrics_logger.log_value("val_loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
 
-                    metrics_logger.log_value("val_sharpe_ratio", info['sharpe_ratio'])
                     metrics_logger.log_value("val_max_drawdown", info['max_drawdown'])
                     metrics_logger.log_value("val_trade_return", info['trade_return'])
                     metrics_logger.log_value("val_hold_length", info['hold_length'])
@@ -111,7 +106,6 @@ class LobCallbacks(DefaultCallbacks):
             "trade_num": float('nan'),
             "win_ratio": float('nan'),
             "profit_loss_ratio": float('nan'),
-            "sharpe_ratio": float('nan'),
             "max_drawdown": float('nan'),
             "trade_return": float('nan'),
             "hold_length": float('nan'),
@@ -121,7 +115,6 @@ class LobCallbacks(DefaultCallbacks):
             "val_trade_num": float('nan'),
             "val_win_ratio": float('nan'),
             "val_profit_loss_ratio": float('nan'),
-            "val_sharpe_ratio": float('nan'),
             "val_max_drawdown": float('nan'),
             "val_trade_return": float('nan'),
             "val_hold_length": float('nan'),
@@ -135,7 +128,6 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"]
                 result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"]
                 result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"]
-                result["custom_metrics"]["sharpe_ratio"] = result["env_runners"]["sharpe_ratio"]
                 result["custom_metrics"]["max_drawdown"] = result["env_runners"]["max_drawdown"]
                 result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
                 result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
@@ -145,7 +137,6 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["val_trade_num"] = result["env_runners"]["val_trade_num"]
                 result["custom_metrics"]["val_win_ratio"] = result["env_runners"]["val_win_num"] / result["env_runners"]["val_trade_num"]
                 result["custom_metrics"]["val_profit_loss_ratio"] = result["env_runners"]["val_win_ret"] / result["env_runners"]["val_loss_ret"]
-                result["custom_metrics"]["val_sharpe_ratio"] = result["env_runners"]["val_sharpe_ratio"]
                 result["custom_metrics"]["val_max_drawdown"] = result["env_runners"]["val_max_drawdown"]
                 result["custom_metrics"]["val_trade_return"] = result["env_runners"]["val_trade_return"]
                 result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
@@ -159,7 +150,6 @@ class LobPlotter(BaseCustomPlotter):
         custom_metrics_trade_num,
         custom_metrics_win_ratio,
         custom_metrics_profit_loss_ratio,
-        custom_metrics_sharpe_ratio,
         custom_metrics_max_drawdown,
         custom_metrics_trade_return,
         custom_metrics_hold_length,
@@ -169,13 +159,12 @@ class LobPlotter(BaseCustomPlotter):
         custom_metrics_val_trade_num,
         custom_metrics_val_win_ratio,
         custom_metrics_val_profit_loss_ratio,
-        custom_metrics_val_sharpe_ratio,
         custom_metrics_val_max_drawdown,
         custom_metrics_val_trade_return,
         custom_metrics_val_hold_length,
         custom_metrics_val_excess_return
         """
-        return 8
+        return 7
     def plot(self, out_data, axes_list):
         """
         子类必须实现
@@ -214,17 +203,8 @@ class LobPlotter(BaseCustomPlotter):
         ax.set_title('Profit Loss Ratio')
         ax.legend()
 
-        # 4. sharpe_ratio
-        ax = axes_list[3]
-        sharpe_ratio_last = out_data['custom_metrics_sharpe_ratio'].iloc[-1]
-        val_sharpe_ratio_last = out_data['custom_metrics_val_sharpe_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_sharpe_ratio'], 'r-', label=f'sharpe_ratio({sharpe_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_sharpe_ratio'], 'r-', label=f'val_sharpe_ratio({val_sharpe_ratio_last:.2f})')
-        ax.set_title('Sharpe Ratio')
-        ax.legend()
-
         # 5. max_drawdown
-        ax = axes_list[4]
+        ax = axes_list[3]
         max_drawdown_last = out_data['custom_metrics_max_drawdown'].iloc[-1]
         val_max_drawdown_last = out_data['custom_metrics_val_max_drawdown'].iloc[-1]
         ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_last:.2f})', alpha=0.4)
@@ -233,7 +213,7 @@ class LobPlotter(BaseCustomPlotter):
         ax.legend()
 
         # 6. trade_return
-        ax = axes_list[5]
+        ax = axes_list[4]
         trade_return_last = out_data['custom_metrics_trade_return'].iloc[-1]
         val_trade_return_last = out_data['custom_metrics_val_trade_return'].iloc[-1]
         ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_last:.2f})', alpha=0.4)
@@ -242,7 +222,7 @@ class LobPlotter(BaseCustomPlotter):
         ax.legend()
 
         # 7. hold_length
-        ax = axes_list[6]
+        ax = axes_list[5]
         hold_length_last = out_data['custom_metrics_hold_length'].iloc[-1]
         val_hold_length_last = out_data['custom_metrics_val_hold_length'].iloc[-1]
         ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_last:.2f})', alpha=0.4)
@@ -251,7 +231,7 @@ class LobPlotter(BaseCustomPlotter):
         ax.legend()
 
         # 8. excess_return
-        ax = axes_list[7]
+        ax = axes_list[6]
         excess_return_last = out_data['custom_metrics_excess_return'].iloc[-1]
         val_excess_return_last = out_data['custom_metrics_val_excess_return'].iloc[-1]
         ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.2f})', alpha=0.4)
