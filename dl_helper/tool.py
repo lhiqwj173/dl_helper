@@ -441,7 +441,7 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
             peak_idx += 1
             continue
 
-        if t1 <= pre_t2:
+        if t1 < pre_t2:
             # 新的波谷肯定药在前一个波峰之后
             valley_idx += 1
             continue

@@ -479,6 +479,9 @@ class data_producer:
                 continue
             break
 
+        self.bid_price = []
+        self.ask_price = []
+
 class Account:
     """
     账户类，用于记录交易状态和计算收益
@@ -952,10 +955,10 @@ class LOB_trade_env(gym.Env):
                 # 给一个小惩罚, 且结束本轮游戏
                 punish = 0
                 if res['max_drawup_ticks_bm'] >= 10:
-                    log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束: LOSS')
+                    log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) >= 10, missed a significant long profit opportunity (continuous 10 tick rise), game over: LOSS')
                     punish = 1
                 if res['drawup_ticks_bm_count'] >= 3:
-                    log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束: LOSS')
+                    log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) >= 3, missed 3 consecutive small long profit opportunities (at least 2 tick rise), game over: LOSS')
                     punish = 1
 
                 if punish:
@@ -982,12 +985,12 @@ class LOB_trade_env(gym.Env):
                     # 连续3次平仓奖励为负，则认为任务失败
                     acc_done = True
                     reward = -STD_REWARD
-                    log(f'[{id(self)}][{self.data_producer.data_type}] keep_negative({keep_negative}) >= 3, 连续3次平仓奖励为负, 游戏结束: LOSS')
+                    log(f'[{id(self)}][{self.data_producer.data_type}] keep_negative({keep_negative}) >= 3, consecutive 3 negative closing rewards, game over: LOSS')
                 elif need_close and avg_reward > 0:
                     # 连续数据结束了，且平均奖励为正，则认为任务成功
                     acc_done = True
                     reward = STD_REWARD
-                    log(f'[{id(self)}][{self.data_producer.data_type}] avg_reward({avg_reward}) > 0, 连续数据结束了，且平均奖励为正, 游戏结束: WIN')
+                    log(f'[{id(self)}][{self.data_producer.data_type}] avg_reward({avg_reward}) > 0, continuous data ended with positive average reward, game over: WIN')
 
         else:
             # 非法动作, 游戏终止，任务失败
