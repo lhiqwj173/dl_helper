@@ -158,14 +158,14 @@ class LobCallbacks(DefaultCallbacks):
                 for i in ['trade_num', 'win_ratio', 'profit_loss_ratio', 'hold_length']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
-            if 'val_trade_num' in result["env_runners"]:
-                result["custom_metrics"]["val_trade_num"] = result["env_runners"]["val_trade_num"]
-                result["custom_metrics"]["val_win_ratio"] = result["env_runners"]["val_win_num"] / result["env_runners"]["val_trade_num"] if result["env_runners"]["val_trade_num"] > 0 else 0
-                result["custom_metrics"]["val_profit_loss_ratio"] = result["env_runners"]["val_win_ret"] / result["env_runners"]["val_loss_ret"] if result["env_runners"]["val_loss_ret"] > 0 else 0
-                result["custom_metrics"]["val_max_drawdown"] = result["env_runners"]["val_max_drawdown"]
-                result["custom_metrics"]["val_trade_return"] = result["env_runners"]["val_trade_return"]
-                result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
-                result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
+            if 'val_trade_num' in result["evaluation"]["env_runners"]:
+                result["custom_metrics"]["val_trade_num"] = result["evaluation"]["env_runners"]["val_trade_num"]
+                result["custom_metrics"]["val_win_ratio"] = result["evaluation"]["env_runners"]["val_win_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else 0
+                result["custom_metrics"]["val_profit_loss_ratio"] = result["evaluation"]["env_runners"]["val_win_ret"] / result["evaluation"]["env_runners"]["val_loss_ret"] if result["evaluation"]["env_runners"]["val_loss_ret"] > 0 else 0
+                result["custom_metrics"]["val_max_drawdown"] = result["evaluation"]["env_runners"]["val_max_drawdown"]
+                result["custom_metrics"]["val_trade_return"] = result["evaluation"]["env_runners"]["val_trade_return"]
+                result["custom_metrics"]["val_hold_length"] = result["evaluation"]["env_runners"]["val_hold_length"]
+                result["custom_metrics"]["val_excess_return"] = result["evaluation"]["env_runners"]["val_excess_return"]
 
                 for i in ['val_trade_num', 'val_win_ratio', 'val_profit_loss_ratio', 'val_hold_length']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
