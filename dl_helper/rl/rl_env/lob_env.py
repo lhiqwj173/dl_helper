@@ -852,6 +852,9 @@ class LOB_trade_env(gym.Env):
         #数据类型
         info['data_type'] = self.data_producer.data_type
 
+        # 记录开仓成本
+        info['cost'] = self.acc.cost
+
         reward = 0
         if legal:
             # 拷贝 res > info
@@ -1036,7 +1039,7 @@ class LOB_trade_env(gym.Env):
         输出测试预测数据 -> predict.csv
 
         # 状态相关
-        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,
+        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,
 
         # 其他
         terminated,truncated,
@@ -1050,7 +1053,7 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,net,net_bm,terminated,truncated,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1094,7 +1097,7 @@ class LOB_trade_env(gym.Env):
 
             # 准备输出数据
             # net,net_bm,
-            out_text += f",{info['net']},{info['net_bm']}"
+            out_text += f",{self.acc.cost},{info['net']},{info['net_bm']}"
             # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
             out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
             # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
