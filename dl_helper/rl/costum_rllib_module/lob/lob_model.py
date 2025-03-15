@@ -134,7 +134,7 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
                 result["custom_metrics"]["excess_return"] = result["env_runners"]["excess_return"]
 
-                for i in ['trade_num', 'win_num', 'win_ret', 'loss_ret', 'max_drawdown', 'trade_return', 'hold_length', 'excess_return']:
+                for i in ['trade_num', 'win_ratio', 'profit_loss_ratio', 'max_drawdown', 'trade_return', 'hold_length', 'excess_return']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
             if 'val_trade_num' in result["env_runners"]:
@@ -146,7 +146,7 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
                 result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
 
-                for i in ['val_trade_num', 'val_win_num', 'val_win_ret', 'val_loss_ret', 'val_max_drawdown', 'val_trade_return', 'val_hold_length', 'val_excess_return']:
+                for i in ['val_trade_num', 'val_win_ratio', 'val_profit_loss_ratio', 'val_max_drawdown', 'val_trade_return', 'val_hold_length', 'val_excess_return']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
 class LobPlotter(BaseCustomPlotter):

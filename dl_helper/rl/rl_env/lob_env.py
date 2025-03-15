@@ -1051,7 +1051,7 @@ class LOB_trade_env(gym.Env):
         id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,
 
         # 其他
-        terminated,truncated,
+        terminated,truncated,legal,
 
         # 奖励评价相关
         reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
@@ -1062,7 +1062,7 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1138,7 +1138,7 @@ class LOB_trade_env(gym.Env):
             else:
                 truncated = False
 
-            out_text += f",{terminated},{truncated}"
+            out_text += f",{terminated},{truncated},{info.get('act_criteria', None) != -1}"
             out_text += out_text2
             # 记录数据
             self.out_test_predict(out_text)
