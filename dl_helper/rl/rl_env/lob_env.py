@@ -51,6 +51,7 @@ USE_CODES = [
 ]
 MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
 STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
+MAX_CODE_ID = len(USE_CODES) - 1
 
 STD_REWARD = 100
 
@@ -63,7 +64,7 @@ POSITIVE_REWARD = STD_REWARD
 # 时间标准化
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
-
+MAX_SEC_BEFORE_CLOSE = 5.5*60*60
 
 class data_producer:
     """
@@ -454,11 +455,18 @@ class data_producer:
         if self.data_std:
             # 额外数据的标准化
             # 距离收盘秒数
-            before_market_close_sec -= MEAN_SEC_BEFORE_CLOSE
-            before_market_close_sec /= STD_SEC_BEFORE_CLOSE
+            # ZSCORE
+            # before_market_close_sec -= MEAN_SEC_BEFORE_CLOSE
+            # before_market_close_sec /= STD_SEC_BEFORE_CLOSE
+            # 归一化
+            before_market_close_sec /= MAX_SEC_BEFORE_CLOSE
+
             # id
-            symbol_id -= MEAN_CODE_ID
-            symbol_id /= STD_CODE_ID
+            # ZSCORE
+            # symbol_id -= MEAN_CODE_ID
+            # symbol_id /= STD_CODE_ID
+            # 归一化
+            symbol_id /= MAX_CODE_ID
             return symbol_id, before_market_close_sec, x, need_close, self.id
         else:
             sec_std = (MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE)
