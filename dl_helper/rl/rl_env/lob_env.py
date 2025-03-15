@@ -64,6 +64,7 @@ POSITIVE_REWARD = STD_REWARD
 MEAN_SEC_BEFORE_CLOSE = 10024.17
 STD_SEC_BEFORE_CLOSE = 6582.91
 
+
 class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
@@ -767,6 +768,10 @@ class LOB_trade_env(gym.Env):
         # 样本计数
         self.sample_count = 0
 
+        # 记录上一个step的时间戳
+        self.last_step_time = 0
+        self.iteration = 0
+
         # 环境输出文件
         self.need_upload_file = ''
         self.update_need_upload_file()
@@ -774,10 +779,6 @@ class LOB_trade_env(gym.Env):
         # 记录每个 episode 的步数
         self.mean_episode_lengths = 0
         self.episode_count = 0
-
-        # 记录上一个step的时间戳
-        self.last_step_time = 0
-        self.iteration = 0
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 

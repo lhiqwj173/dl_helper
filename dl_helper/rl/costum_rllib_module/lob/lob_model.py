@@ -2,6 +2,7 @@
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
 import pandas as pd
+import numpy as np
 
 from dl_helper.rl.rl_env.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import BaseCustomPlotter
@@ -141,6 +142,8 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
                 result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
 
+        for i in result["custom_metrics"]:
+            assert not np.isnan(result["custom_metrics"][i]), f'custom_metrics:{i} is nan'
 
 class LobPlotter(BaseCustomPlotter):
     def get_additional_plot_count(self):
