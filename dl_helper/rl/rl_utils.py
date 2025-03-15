@@ -191,48 +191,6 @@ def simplify_rllib_metrics(data, out_func=print, out_file=''):
 
     return important_metrics
 
-def plot_training_curve_0(train_folder, out_file, total_time=None, pic_name=None, y_axis_max = None):
-    """
-    total_time: 训练总时间 sec
-    """
-    out_data = pd.read_csv(out_file)
-    mean_reward = out_data['env_runner_episode_return_mean'].tolist()
-    max_reward = out_data['env_runner_episode_return_max'].tolist()
-    val_mean_reward = out_data['val_episode_return_mean'].tolist()
-    val_max_reward = out_data['val_episode_return_max'].tolist()
-    
-    if len(mean_reward) == 0:
-        log('No mean_reward data found')
-        return
-
-    # 绘制训练曲线并保存到 train_folder 中
-    _mean_reward = [x for x in mean_reward if not np.isnan(x)]
-    _max_reward = [x for x in max_reward if not np.isnan(x)]
-    _val_mean_reward = [x for x in val_mean_reward if not np.isnan(x)]
-    _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
-    mean_reward_max = max(_mean_reward) if len(_mean_reward) > 0 else 0
-    max_reward_max = max(_max_reward) if len(_max_reward) > 0 else 0
-    val_mean_reward_max = max(_val_mean_reward) if len(_val_mean_reward) > 0 else 0
-    val_max_reward_max = max(_val_max_reward) if len(_val_max_reward) > 0 else 0
-
-    # 创建一个新的图形对象，确保每次调用都有一个新图
-    plt.figure(figsize=(10, 6))  # 可以调整大小以适合您的需要
-
-    # Train curves (alpha=0.4)
-    plt.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
-    plt.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
-    # Val curves (solid lines)
-    plt.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
-    plt.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
-    
-    plt.legend()
-    plt.title(f'Training Curve' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
-    if y_axis_max is not None:
-        plt.ylim(0, y_axis_max)
-    plt.savefig(os.path.join(train_folder, f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' if None is pic_name else pic_name))
-    
-    plt.close()  # 关闭当前图形
-
 class BaseCustomPlotter:
     def get_additional_plot_count(self):
         """
@@ -313,18 +271,18 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     # 创建右侧y轴
     ax2 = ax.twinx()
 
-    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
-    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
-    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
-    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
-    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.2f})')
-    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.2f})')
-    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.2f})')
-    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.2f})')
+    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.4f})')
+    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.4f})')
+    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.4f})')
+    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.4f})')
+    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.4f})')
+    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.4f})')
+    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.4f})')
+    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.4f})')
     
     # 右侧y轴绘制学习率曲线
     learning_rates = out_data['learning_rate'].values
-    l5 = ax2.plot(learning_rates, color='lightblue', linestyle='--', label='learning_rate', alpha=0.3)
+    l5 = ax2.plot(learning_rates, color='lightblue', linestyle='--', label=f'learning_rate({learning_rates[-1]:.2e})', alpha=0.3)
     
     # 设置右侧y轴标签
     ax2.set_ylabel('Learning Rate', color='blue')

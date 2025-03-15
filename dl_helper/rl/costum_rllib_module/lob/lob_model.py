@@ -87,7 +87,26 @@ class LobCallbacks(DefaultCallbacks):
                     metrics_logger.log_value("hold_length", info['hold_length'])
                     metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
                 else:
-                    print(f'info: \n{info}')
+                    # print(f'info: \n{info}')
+                    # {
+                    #     'id': '513050_1701223138', 
+                    #     'net': 0.9879506, 
+                    #     'net_bm': 0.9879506, 
+                    #     'data_type': 'val', 
+                    #     'cost': 0.98904945, 
+                    #     'max_drawdown': -0.0011110162388745515, 
+                    #     'max_drawdown_ticks': 1, 
+                    #     'trade_return': -0.0011116338749276172, 
+                    #     'step_return': 0.0, 
+                    #     'hold_length': 2, 
+                    #     'max_drawdown_bm': -0.0010111223458038054, 
+                    #     'max_drawdown_ticks_bm': 1, 
+                    #     'max_drawup_ticks_bm': 0, 
+                    #     'drawup_ticks_bm_count': 0, 
+                    #     'trade_return_bm': -0.0010116338748442713, 
+                    #     'step_return_bm': 0.0, 
+                    #     'act_criteria': 1
+                    # }
                     metrics_logger.log_value("val_trade_num", 1, reduce="sum")
                     metrics_logger.log_value("val_win_num", int(info['act_criteria'] == 0), reduce="sum")
                     metrics_logger.log_value("val_win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
@@ -122,32 +141,33 @@ class LobCallbacks(DefaultCallbacks):
             "val_excess_return": float('nan'),
         })
 
+        print(f'result: \n{result}')
         if 'env_runners' in result:
             result["custom_metrics"]["illegal_ratio"] = result["env_runners"]["illegal_num"] / result["env_runners"]["all_num"]
             assert not np.isnan(result["custom_metrics"]["illegal_ratio"]), f'illegal_ratio is nan'
             
             if 'trade_num' in result["env_runners"]:
                 result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"]
-                result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"]
-                result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"]
+                result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"] if result["env_runners"]["trade_num"] > 0 else 0
+                result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"] if result["env_runners"]["loss_ret"] > 0 else 0
                 result["custom_metrics"]["max_drawdown"] = result["env_runners"]["max_drawdown"]
                 result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
                 result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
                 result["custom_metrics"]["excess_return"] = result["env_runners"]["excess_return"]
 
-                for i in ['trade_num', 'win_ratio', 'profit_loss_ratio', 'max_drawdown', 'trade_return', 'hold_length', 'excess_return']:
+                for i in ['trade_num', 'win_ratio', 'profit_loss_ratio', 'hold_length']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
             if 'val_trade_num' in result["env_runners"]:
                 result["custom_metrics"]["val_trade_num"] = result["env_runners"]["val_trade_num"]
-                result["custom_metrics"]["val_win_ratio"] = result["env_runners"]["val_win_num"] / result["env_runners"]["val_trade_num"]
-                result["custom_metrics"]["val_profit_loss_ratio"] = result["env_runners"]["val_win_ret"] / result["env_runners"]["val_loss_ret"]
+                result["custom_metrics"]["val_win_ratio"] = result["env_runners"]["val_win_num"] / result["env_runners"]["val_trade_num"] if result["env_runners"]["val_trade_num"] > 0 else 0
+                result["custom_metrics"]["val_profit_loss_ratio"] = result["env_runners"]["val_win_ret"] / result["env_runners"]["val_loss_ret"] if result["env_runners"]["val_loss_ret"] > 0 else 0
                 result["custom_metrics"]["val_max_drawdown"] = result["env_runners"]["val_max_drawdown"]
                 result["custom_metrics"]["val_trade_return"] = result["env_runners"]["val_trade_return"]
                 result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
                 result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
 
-                for i in ['val_trade_num', 'val_win_ratio', 'val_profit_loss_ratio', 'val_max_drawdown', 'val_trade_return', 'val_hold_length', 'val_excess_return']:
+                for i in ['val_trade_num', 'val_win_ratio', 'val_profit_loss_ratio', 'val_hold_length']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
 class LobPlotter(BaseCustomPlotter):
@@ -186,10 +206,10 @@ class LobPlotter(BaseCustomPlotter):
         win_ratio_last = out_data['custom_metrics_win_ratio'].iloc[-1]
         val_illegal_ratio_last = out_data['custom_metrics_val_illegal_ratio'].iloc[-1]
         val_win_ratio_last = out_data['custom_metrics_val_win_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_last:.2f})')
-        ax.plot(datetime, out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_last:.4f})')
+        ax.plot(datetime, out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_last:.4f})')
         ax.set_title('Illegal Ratio & Win Ratio')
         ax.legend()
 
@@ -197,8 +217,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[1]
         trade_num_last = out_data['custom_metrics_trade_num'].iloc[-1]
         val_trade_num_last = out_data['custom_metrics_val_trade_num'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_trade_num'], 'b-', label=f'trade_num({trade_num_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_num'], 'b-', label=f'val_trade_num({val_trade_num_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_trade_num'], 'b-', label=f'trade_num({trade_num_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_trade_num'], 'b-', label=f'val_trade_num({val_trade_num_last:.4f})')
         ax.set_title('Trade Number')
         ax.legend()
 
@@ -206,8 +226,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[2]
         profit_loss_ratio_last = out_data['custom_metrics_profit_loss_ratio'].iloc[-1]
         val_profit_loss_ratio_last = out_data['custom_metrics_val_profit_loss_ratio'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_profit_loss_ratio'], 'g-', label=f'profit_loss_ratio({profit_loss_ratio_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_profit_loss_ratio'], 'g-', label=f'val_profit_loss_ratio({val_profit_loss_ratio_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_profit_loss_ratio'], 'g-', label=f'profit_loss_ratio({profit_loss_ratio_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_profit_loss_ratio'], 'g-', label=f'val_profit_loss_ratio({val_profit_loss_ratio_last:.4f})')
         ax.set_title('Profit Loss Ratio')
         ax.legend()
 
@@ -215,8 +235,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[3]
         max_drawdown_last = out_data['custom_metrics_max_drawdown'].iloc[-1]
         val_max_drawdown_last = out_data['custom_metrics_val_max_drawdown'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_max_drawdown'], 'r-', label=f'val_max_drawdown({val_max_drawdown_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_max_drawdown'], 'r-', label=f'max_drawdown({max_drawdown_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_max_drawdown'], 'r-', label=f'val_max_drawdown({val_max_drawdown_last:.4f})')
         ax.set_title('Max Drawdown')
         ax.legend()
 
@@ -224,8 +244,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[4]
         trade_return_last = out_data['custom_metrics_trade_return'].iloc[-1]
         val_trade_return_last = out_data['custom_metrics_val_trade_return'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_trade_return'], 'g-', label=f'val_trade_return({val_trade_return_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_trade_return'], 'g-', label=f'trade_return({trade_return_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_trade_return'], 'g-', label=f'val_trade_return({val_trade_return_last:.4f})')
         ax.set_title('Trade Return')
         ax.legend()
 
@@ -233,8 +253,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[5]
         hold_length_last = out_data['custom_metrics_hold_length'].iloc[-1]
         val_hold_length_last = out_data['custom_metrics_val_hold_length'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_hold_length'], 'b-', label=f'val_hold_length({val_hold_length_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_hold_length'], 'b-', label=f'hold_length({hold_length_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_hold_length'], 'b-', label=f'val_hold_length({val_hold_length_last:.4f})')
         ax.set_title('Hold Length')
         ax.legend()
 
@@ -242,8 +262,8 @@ class LobPlotter(BaseCustomPlotter):
         ax = axes_list[6]
         excess_return_last = out_data['custom_metrics_excess_return'].iloc[-1]
         val_excess_return_last = out_data['custom_metrics_val_excess_return'].iloc[-1]
-        ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.2f})', alpha=0.4)
-        ax.plot(datetime, out_data['custom_metrics_val_excess_return'], 'g-', label=f'val_excess_return({val_excess_return_last:.2f})')
+        ax.plot(datetime, out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.4f})', alpha=0.4)
+        ax.plot(datetime, out_data['custom_metrics_val_excess_return'], 'g-', label=f'val_excess_return({val_excess_return_last:.4f})')
         ax.set_title('Excess Return')
         ax.legend()
 
