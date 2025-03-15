@@ -198,8 +198,8 @@ def run(
             num_learners=num_learners,
             num_gpus_per_learner=0,
         )
-        # FOR DEBUG
-        eval_config['evaluation_interval'] = 1
+        # # FOR DEBUG
+        # eval_config['evaluation_interval'] = 1
         config = config.evaluation(**eval_config)
 
         # 修改学习率
@@ -236,8 +236,8 @@ def run(
             # 删除旧的文件
             remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
 
-            # FOR DEBUG
-            break
+            # # FOR DEBUG
+            # break
 
             if i>0 and (i % 10 == 0 or i == rounds - 1):
                 # 保存检查点
