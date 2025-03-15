@@ -340,8 +340,9 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
         ax.set_ylim(0, y_axis_max)
     else:
         # 只显示 mean_reward 和 val_mean_reward 的范围
-        min_y = min(min(_mean_reward), min(_val_mean_reward)) if len(_mean_reward) > 0 and len(_val_mean_reward) > 0 else 0
-        max_y = max(max(_mean_reward), max(_val_mean_reward)) if len(_mean_reward) > 0 and len(_val_mean_reward) > 0 else 1
+        values = _mean_reward + _val_mean_reward
+        min_y = min(values) if len(values) > 0 else 0
+        max_y = max(values) if len(values) > 0 else 1
         ax.set_ylim(min_y, max_y)
 
     # 计算每4小时的时间点

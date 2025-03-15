@@ -43,6 +43,7 @@ def run(
         }
     ):
     run_type = 'self'
+    new_lr = 0
 
     # 获取参数
     if len(sys.argv) > 1:
@@ -53,6 +54,8 @@ def run(
                 run_type = 'client'
             elif arg == "test":
                 run_type = 'test'
+            elif arg.startswith('lr='):
+                new_lr = float(arg.split('=')[1])
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
@@ -197,6 +200,12 @@ def run(
         )
         config = config.evaluation(**eval_config)
 
+        # 修改学习率
+        if new_lr > 0:
+            config = config.training(
+                lr=new_lr,
+            )
+
         # 构建算法
         algo = config.build()
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
@@ -205,7 +214,7 @@ def run(
         train_folder_manager = TrainFolderManager(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(algo)
+            train_folder_manager.load_checkpoint(algo, only_params=new_lr>0)
 
         begin_time = time.time()
         rounds = 5000
