@@ -87,6 +87,7 @@ class LobCallbacks(DefaultCallbacks):
                     metrics_logger.log_value("hold_length", info['hold_length'])
                     metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
                 else:
+                    print(f'info: \n{info}')
                     metrics_logger.log_value("val_trade_num", 1, reduce="sum")
                     metrics_logger.log_value("val_win_num", int(info['act_criteria'] == 0), reduce="sum")
                     metrics_logger.log_value("val_win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
