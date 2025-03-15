@@ -137,9 +137,9 @@ def run_idx_manager():
         client_socket.close()
 
 if "__main__" == __name__:
-    print(f'idx: {get_idx("test")}')
-    run_idx_manager()
-    # if len(sys.argv) > 1 and sys.argv[1] == "server":
-    #     run_idx_manager()
-    # else:
-    #     print(f'idx: {get_idx("test")}')
+    # print(f'idx: {get_idx("test")}')
+    # run_idx_manager()
+    if len(sys.argv) > 1 and sys.argv[1] == "server":
+        run_idx_manager()
+    else:
+        print(f'idx: {get_idx("test")}')
