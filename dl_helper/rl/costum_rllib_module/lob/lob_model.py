@@ -141,7 +141,7 @@ class LobCallbacks(DefaultCallbacks):
             "val_excess_return": float('nan'),
         })
 
-        print(f'result: \n{result}')
+        # print(f'result: \n{result}')
         if 'env_runners' in result:
             result["custom_metrics"]["illegal_ratio"] = result["env_runners"]["illegal_num"] / result["env_runners"]["all_num"]
             assert not np.isnan(result["custom_metrics"]["illegal_ratio"]), f'illegal_ratio is nan'
