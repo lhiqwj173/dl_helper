@@ -23,11 +23,11 @@ def keep_only_latest_files(folder, num=50):
     for file in files[:-num]:
         os.remove(os.path.join(folder, file))
 
-def remove_old_env_output_files(save_folder):
+def remove_old_env_output_files(save_folder, num=50):
     for folder in os.listdir(save_folder):
         folder = os.path.join(save_folder, folder)
         if os.path.isdir(folder):
-            keep_only_latest_files(folder)
+            keep_only_latest_files(folder, num)
 
 def run(
         train_folder, 
@@ -149,7 +149,7 @@ def run(
             simplify_rllib_metrics(result, out_func=log)
 
             # 删除旧的文件
-            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'), num=5)
         
         # 停止学习者额外的事件进程
         algo.learner_group.stop_extra_process()
@@ -184,7 +184,7 @@ def run(
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
             # 删除旧的文件
-            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'), num=5)
 
         # 绘制训练曲线
         plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter(), y_axis_max=10000)
@@ -234,7 +234,7 @@ def run(
             simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
             # 删除旧的文件
-            remove_old_env_output_files(os.path.join(train_folder, 'env_output'))
+            remove_old_env_output_files(os.path.join(train_folder, 'env_output'), num=5)
 
             # # FOR DEBUG
             # break
