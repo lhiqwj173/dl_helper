@@ -158,7 +158,7 @@ class LobCallbacks(DefaultCallbacks):
                 for i in ['trade_num', 'win_ratio', 'profit_loss_ratio', 'hold_length']:
                     assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
-            if 'val_trade_num' in result["evaluation"]["env_runners"]:
+            if 'evaluation' in result and 'env_runners' in result["evaluation"] and 'val_trade_num' in result["evaluation"]["env_runners"]:
                 result["custom_metrics"]["val_trade_num"] = result["evaluation"]["env_runners"]["val_trade_num"]
                 result["custom_metrics"]["val_win_ratio"] = result["evaluation"]["env_runners"]["val_win_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else 0
                 result["custom_metrics"]["val_profit_loss_ratio"] = result["evaluation"]["env_runners"]["val_win_ret"] / result["evaluation"]["env_runners"]["val_loss_ret"] if result["evaluation"]["env_runners"]["val_loss_ret"] > 0 else 0
