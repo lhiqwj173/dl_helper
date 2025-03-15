@@ -1,4 +1,4 @@
-import os
+import os, time
 import random
 import datetime
 import numpy as np
@@ -525,15 +525,14 @@ class Account:
 
         # 计算持仓对数收益率
         unrealized_profit = 0
-        sell_gain = 0.0
+        sell_fee = bid_price * Account.fee_rate
+        sell_gain = bid_price - sell_fee
         if self.pos == 1:
             # 未实现收益需考虑卖出时的手续费
-            sell_fee = bid_price * Account.fee_rate
-            sell_gain = bid_price - sell_fee
             unrealized_profit = np.log(sell_gain / self.cost)
 
-        # 基准净值, 一直持有标的的兑现价格(买一价)
-        self.net_raw_bm.append(bid_price)
+        # 基准净值, 一直持有标的的兑现价值（剔除手续费）
+        self.net_raw_bm.append(sell_gain)
 
         # 无操作任何时间都允许
         legal = True
@@ -548,9 +547,8 @@ class Account:
                 for _ in range(len(self.net_raw_bm) - 1):
                     self.net_raw.append(self.cost)
 
-                # 净值统一为买1价
-                # 买入需要扣除手续费
-                self.net_raw.append(bid_price - buy_fee)
+                # 兑现价值（剔除手续费）
+                self.net_raw.append(sell_gain)
 
                 # 买入后就应该有未实现收益 > 是下一个step的状态
                 # 未实现收益需考虑卖出时的手续费
@@ -562,7 +560,8 @@ class Account:
         elif action == 1:  # 卖出
             if self.pos == 1:  # 有多仓可以卖出
                 self.pos = 0
-                self.net_raw.append(sell_gain)# 卖出获利
+                # 兑现价值（剔除手续费）
+                self.net_raw.append(sell_gain)
             else:
                 legal = False
         elif action == 2:   # 不操作
@@ -571,11 +570,14 @@ class Account:
                 assert len(self.net_raw) == 0
             else:
                 # 有持仓
-                self.net_raw.append(bid_price)
+                # 兑现价值（剔除手续费）
+                self.net_raw.append(sell_gain)
 
-        if not legal:
-            self.net_raw.append(bid_price)
-        
+        # # 非法动作， 净值也不在作用
+        # if not legal:
+        #     # 兑现价值（剔除手续费）
+        #     self.net_raw.append(sell_gain)
+
         # 额外数据 标准化
         # 持仓量 TODO
         # self.pos /= STD_POS
@@ -685,6 +687,7 @@ class LOB_trade_env(gym.Env):
     """
 
     REG_NAME = 'lob'
+    ITERATION_DONE_FILE = os.path.join(os.path.expanduser('~'), '_lob_env_iteration_done')
     
     def __init__(self, config: dict, data_std=True, debug_date=''):
         """
@@ -765,17 +768,34 @@ class LOB_trade_env(gym.Env):
         self.sample_count = 0
 
         # 环境输出文件
-        self.need_upload_file = self.update_need_upload_file()
+        self.need_upload_file = ''
+        self.update_need_upload_file()
 
         # 记录每个 episode 的步数
         self.mean_episode_lengths = 0
         self.episode_count = 0
+
+        # 记录上一个step的时间戳
+        self.last_step_time = 0
+        self.iteration = 0
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
+    @staticmethod
+    def iteration_done():
+        """会使用文件来标记迭代结束的时间"""
+        with open(LOB_trade_env.ITERATION_DONE_FILE, 'w') as f:
+            f.write(f'1')
+
+    def is_iteration_done(self):
+        """是否最近迭代完成"""
+        if os.path.exists(LOB_trade_env.ITERATION_DONE_FILE):
+            return os.path.getmtime(LOB_trade_env.ITERATION_DONE_FILE) > self.last_step_time
+        return False
+
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
-        return os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.sample_count}.csv')
+        self.need_upload_file = os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.iteration}.csv')
         
     def no_need_track_info_item(self):
         return ['act_criteria']
@@ -789,7 +809,7 @@ class LOB_trade_env(gym.Env):
             self.data_producer.set_data_type(data_type)
             self.need_reset = True
             self.sample_count = 0
-            self.need_upload_file = self.update_need_upload_file()
+            self.update_need_upload_file()
 
     def val(self):
         self._set_data_type('val')
@@ -1044,9 +1064,12 @@ class LOB_trade_env(gym.Env):
             self.sample_count += 1
             if self.sample_count % 500 == 0:
                 log(f'[{id(self)}][{self.data_producer.data_type}] total sample: {self.sample_count}')
-            if self.sample_count % 4000 == 0:
-                # 更新环境输出文件名称
-                self.need_upload_file = self.update_need_upload_file()
+
+            # 在每个迭代更新文件
+            if self.is_iteration_done():
+                self.update_need_upload_file()
+                self.iteration += 1
+            self.last_step_time = time.time()
 
             # 准备输出数据
             out_text = f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file},{self.episode_count},{self.steps}'

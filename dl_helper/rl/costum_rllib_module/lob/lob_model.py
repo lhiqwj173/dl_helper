@@ -96,7 +96,6 @@ class LobCallbacks(DefaultCallbacks):
                     metrics_logger.log_value("val_hold_length", info['hold_length'])
                     metrics_logger.log_value("val_excess_return", info['trade_return'] - info['trade_return_bm'])
             
-
     def on_train_result(
         self, *, algorithm, result, metrics_logger, **kwargs
     ):
@@ -141,6 +140,7 @@ class LobCallbacks(DefaultCallbacks):
                 result["custom_metrics"]["val_trade_return"] = result["env_runners"]["val_trade_return"]
                 result["custom_metrics"]["val_hold_length"] = result["env_runners"]["val_hold_length"]
                 result["custom_metrics"]["val_excess_return"] = result["env_runners"]["val_excess_return"]
+
 
 class LobPlotter(BaseCustomPlotter):
     def get_additional_plot_count(self):
