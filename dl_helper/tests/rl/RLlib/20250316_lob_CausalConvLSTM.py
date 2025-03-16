@@ -6,7 +6,7 @@ from py_ext.datetime import beijing_time
 from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog
 
-train_folder = 'lob_CausalConvLSTM'
+train_folder = '20250316_lob_CausalConvLSTM'
 train_title = f'20250316_lob_CausalConvLSTM'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
