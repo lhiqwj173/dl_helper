@@ -7,8 +7,7 @@ from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog
 from dl_helper.rl.rl_env.lob_env_reward import NoPositionRewardStrategy_00
 
-train_folder = 'lob_CausalConvLSTM'
-train_title = f'20250213_lob_CausalConvLSTM'
+train_title = train_folder = f'20250213_lob_CausalConvLSTM'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
