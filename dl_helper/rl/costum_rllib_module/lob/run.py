@@ -37,13 +37,7 @@ def run(
         train_title,
         catalog_class,
         model_config,
-        env_config={
-            'data_type': 'train',# 训练/测试
-            'his_len': 10,# 每个样本的 历史数据长度
-            'file_num': 10,# 数据生产器 限制最多使用的文件（日期）数量
-            'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
-            'use_symbols': ['513050'],
-        }
+        env_config = {},
     ):
     run_type = 'self'
     new_lr = 0
@@ -65,6 +59,16 @@ def run(
     log(f"num_learners: {num_learners}")
 
     # 训练配置
+    defualt_env_config={
+        'data_type': 'train',# 训练/测试
+        'his_len': 10,# 每个样本的 历史数据长度
+        'file_num': 10,# 数据生产器 限制最多使用的文件（日期）数量
+        'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+        'use_symbols': ['513050'],
+    }
+    for k, v in defualt_env_config.items():
+        if k not in env_config:
+            env_config[k] = v
     env_config['train_folder'] = train_folder
     env_config['train_title'] = train_title
     config = (
