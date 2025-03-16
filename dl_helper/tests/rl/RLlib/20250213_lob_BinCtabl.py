@@ -27,6 +27,7 @@ if __name__ == "__main__":
         env_config ={
             'reward_strategy_class_dict': {
                 'no_position': NoPositionRewardStrategy_00,
-            }
+            },
+            'new_data': False,
         }
     )

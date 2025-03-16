@@ -5,6 +5,7 @@ from py_ext.datetime import beijing_time
 
 from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog
+from dl_helper.rl.rl_env.lob_env_reward import NoPositionRewardStrategy_00
 
 train_folder = 'lob_CausalConvLSTM'
 train_title = f'20250213_lob_CausalConvLSTM'
@@ -21,4 +22,10 @@ if __name__ == "__main__":
             'extra_input_dims' : 4,
             'output_dims' : 6,
         },
+        env_config ={
+            'reward_strategy_class_dict': {
+                'no_position': NoPositionRewardStrategy_00,
+            },
+            'new_data': False,
+        }
     )

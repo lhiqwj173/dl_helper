@@ -758,7 +758,7 @@ class LOB_trade_env(gym.Env):
                 'simple_test': False,# 是否为简单测试
                 'need_cols': [],# 需要读取的列
                 'use_symbols': [],# 只使用某些标的
-                'new_data': False,# 是否为新数据
+                'new_data': True,# 是否为新数据
                 'use_random_his_window': False,# 是否使用随机历史窗口
                 'use_time_scaling': False,# 是否使用时间缩放
                 'use_gaussian_noise': False,# 是否使用高斯噪声
@@ -783,7 +783,7 @@ class LOB_trade_env(gym.Env):
             'simple_test': False,# 是否为简单测试
             'need_cols': [],# 需要读取的列
             'use_symbols': [],# 只使用某些标的
-            'new_data': False,# 是否为新数据
+            'new_data': True,# 是否为新数据
             'use_random_his_window': False,# 是否使用随机历史窗口
             'use_time_scaling': False,# 是否使用时间缩放
             'use_gaussian_noise': False,# 是否使用高斯噪声
