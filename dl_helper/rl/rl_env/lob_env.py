@@ -17,6 +17,8 @@ from py_ext.wechat import send_wx
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks, max_profit_reachable
 from dl_helper.train_param import in_kaggle
 
+from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
+
 USE_CODES = [
     '513050',
     '513330',
@@ -84,14 +86,43 @@ class data_producer:
         ]
 
     """
-    def __init__(self, data_type='train', his_len=100, simple_test=False, need_cols=[], use_symbols=[], data_std=True, save_folder="", debug_date=[]):
+    def __init__(
+            self,
+            data_type='train', 
+            his_len=100, 
+            simple_test=False, 
+            need_cols=[], 
+            use_symbols=[], 
+            data_std=True, 
+            save_folder="", 
+            debug_date=[],
+
+            # 数据增强
+            use_random_his_window=True,
+            use_time_scaling=True,
+            use_gaussian_noise=True,
+            use_impact_noise=True,
+            use_progressive_mask=True,
+        ):
         """
         'data_type': 'train',# 训练/测试
         'his_len': 100,# 每个样本的 历史数据长度
         'simple_test': False,# 是否为简单测试
         'need_cols': [],# 需要的特征列名
         'use_symbols': []# 只使用指定的标的
+        'use_random_his_window': True,# 随机窗口开关
+        'use_time_scaling': True,# 时间缩放开关
+        'use_gaussian_noise': True,# 高斯噪声开关
+        'use_impact_noise': True,# 冲击噪声开关
+        'use_progressive_mask': True,# 渐进式遮挡开关
         """
+        # 数据增强
+        self.use_random_his_window = use_random_his_window  # 随机窗口开关
+        self.use_time_scaling = use_time_scaling   # 时间缩放开关
+        self.use_gaussian_noise = use_gaussian_noise  # 高斯噪声开关
+        self.use_impact_noise = use_impact_noise   # 冲击噪声开关
+        self.use_progressive_mask = use_progressive_mask  # 渐进式遮挡开关
+
         # 快速测试
         self.simple_test = simple_test
 
@@ -398,14 +429,31 @@ class data_producer:
 
         # 准备观察值
         a, b = self.x[self.idxs[0][0]]
+        raw_0 = self.all_raw_data[max(b - int(self.his_len * 1.5), a): b, :].copy()# 多截取 50% 数据，用于增强 TODO copy 是否必要
 
-        if b-a > self.his_len:# 修正历史数据长度
-            a = b - self.his_len
-        raw = self.all_raw_data[a: b, :].copy()
+        # 原始数据增强
+        # 1. use_random_his_window 从更长的历史窗口（如1ls5个）随机截取 所需的时间窗口的数据
+        if self.use_random_his_window and self.data_type == 'train':
+            raw_0 = random_his_window(raw_0, self.his_len)
+        # 2. use_time_scaling 时间缩放：对时间轴进行非线性缩放，例如加速或减速某些时段的价格变化，以模拟市场的波动性变化。
+
+        # 修正历史数据长度
+        raw = raw_0[-self.his_len:]
         # 记录 买卖1档 的价格
         self.store_bid_ask_1st_data(raw)
+
+        # 截断数据后的增强
+        # 1. use_gaussian_noise 添加高斯噪声，在买卖五档价格和成交量上添加符合正态分布的小幅随机噪声，模拟市场中的微小波动
+        # 2. use_impact_noise 添加冲击噪声，随机增减某些档位数量 ±5%
+        # 3. use_progressive_mask 按概率逐步遮挡历史数据（如越早的时间点遮挡概率越高），模拟渐进式信息衰减。
+
+
         # 数据标准化
-        ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
+        std_data = self.mean_std[self.idxs[0][0]]
+        # 未实现收益率 使用 zscore
+        unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
+        # 价格量 使用 robust
+        ms = pd.DataFrame(std_data['price_vol_each']['robust'])
         x, ms = self.use_data_split(raw, ms)
 
         if self.data_std:
@@ -467,11 +515,11 @@ class data_producer:
             # symbol_id /= STD_CODE_ID
             # 归一化
             symbol_id /= MAX_CODE_ID
-            return symbol_id, before_market_close_sec, x, need_close, self.id
+            return symbol_id, before_market_close_sec, x, need_close, self.id, unrealized_log_return_std_data
         else:
             sec_std = (MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE)
             id_std = (MEAN_CODE_ID, STD_CODE_ID)
-            return symbol_id, before_market_close_sec, x, need_close, self.id, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, need_close, self.id, unrealized_log_return_std_data, x_std, sec_std, id_std
 
     def get_plot_data(self):
         """
@@ -586,12 +634,6 @@ class Account:
         # if not legal:
         #     # 兑现价值（剔除手续费）
         #     self.net_raw.append(sell_gain)
-
-        # 额外数据 标准化
-        # 持仓量 TODO
-        # self.pos /= STD_POS
-        # 未实现收益率
-        unrealized_profit /= 0.03043
 
         # print("acc::step",legal, res)
         return legal, self.pos, unrealized_profit
@@ -832,13 +874,13 @@ class LOB_trade_env(gym.Env):
     def _get_data(self):
         # 获取数据
         if self.data_std:
-            symbol_id, before_market_close_sec, x, need_close, _id = self.data_producer.get()
+            symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data = self.data_producer.get()
             x = x.reshape(-1)
-            return symbol_id, before_market_close_sec, x, need_close, _id
+            return symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data
         else:
-            symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std = self.data_producer.get()
+            symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self.data_producer.get()
             x = x.reshape(-1)
-            return symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -995,9 +1037,15 @@ class LOB_trade_env(gym.Env):
 
                 if punish:
                     # 游戏终止，任务失败 
-                    # 奖励: -STD_REWARD/10
                     acc_done = True
-                    reward = -STD_REWARD / 10
+                    # # 奖励: -STD_REWARD/10
+                    # reward = -STD_REWARD / 10
+                    # 这个惩罚要比非法操作的惩罚(-STD_REWARD)轻
+                    # 但要比普通的负收益惩罚重，以体现错过机会的特殊性
+                    if res['max_drawup_ticks_bm'] >= 10:
+                        reward = -STD_REWARD * (7/10)  # 加大对错过大机会的惩罚
+                    else:
+                        reward = -STD_REWARD * (5/10)  # 适度惩罚错过多次小机会
                 
                 elif res['drawup_ticks_bm_count'] == 0:
                     # 标的一直在下跌 不开仓是正确的，需要给与奖励 
@@ -1088,9 +1136,9 @@ class LOB_trade_env(gym.Env):
 
             # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
             if self.data_std:
-                symbol_id, before_market_close_sec, observation, need_close, _id = self._get_data()
+                symbol_id, before_market_close_sec, observation, need_close, _id, unrealized_log_return_std_data = self._get_data()
             else:
-                symbol_id, before_market_close_sec, observation, need_close, _id, x_std, sec_std, id_std = self._get_data()
+                symbol_id, before_market_close_sec, observation, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self._get_data()
 
             info = {
                 'id': _id,
@@ -1126,7 +1174,10 @@ class LOB_trade_env(gym.Env):
                 # 记录交易idx
                 self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
 
-            # 添加标的持仓数据
+            # 标准化 未实现收益率
+            profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+
+            # 添加 静态特征
             observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
 
             # 检查是否结束
@@ -1182,9 +1233,9 @@ class LOB_trade_env(gym.Env):
             while True:
                 self.data_producer.reset()
                 if self.data_std:
-                    symbol_id, before_market_close_sec, x, need_close, _id = self._get_data()
+                    symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data = self._get_data()
                 else:
-                    symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std = self._get_data()
+                    symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self._get_data()
                 if need_close:
                     # 若是 val 数据，有可能 need_close 为True
                     # 需要过滤
@@ -1196,7 +1247,9 @@ class LOB_trade_env(gym.Env):
             self.acc.reset()
             # 账户需要用动作2走一步, 会初始记录act之前的净值
             _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
-            # 添加标的持仓数据
+            # 标准化 未实现收益率
+            profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            # 添加 静态特征
             x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
             # 初始化skip计数器
             self.skip_steps = 0
