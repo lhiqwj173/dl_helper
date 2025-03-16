@@ -21,4 +21,7 @@ if __name__ == "__main__":
             'extra_input_dims' : 4,
             'output_dims' : 6,
         },
+        env_config ={
+            'new_data': False,
+        }
     )
