@@ -6,10 +6,8 @@ from py_ext.datetime import beijing_time
 from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.binctabl import BinCtablPPOCatalog
 
-from dl_helper.rl.rl_env.lob_env_reward import NoPositionRewardStrategy_00
-
 train_folder = 'lob_BinCtabl'
-train_title = f'20250213_lob_BinCtabl'
+train_title = f'20250316_lob_BinCtabl'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
@@ -24,9 +22,7 @@ if __name__ == "__main__":
             'ds' : (20, 40, 40, 3),
             'ts' : (10, 6, 3, 1),
         },
-        env_config ={
-            'reward_strategy_class_dict': {
-                'no_position': NoPositionRewardStrategy_00,
-            }
+        env_config={
+            'new_data': True,
         }
     )

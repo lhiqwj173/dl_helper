@@ -1,4 +1,7 @@
 import sys, os, time
+
+from dl_helper.tool import in_windows
+
 from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
@@ -58,7 +61,7 @@ def run(
                 new_lr = float(arg.split('=')[1])
 
     # 根据设备gpu数量选择 num_learners
-    num_learners = match_num_processes()
+    num_learners = match_num_processes() if not in_windows() else 0
     log(f"num_learners: {num_learners}")
 
     # 训练配置
@@ -77,7 +80,7 @@ def run(
         )# 直接使用
         .env_runners(
             sample_timeout_s=24*60*60,
-            num_env_runners=int(os.cpu_count() - num_learners),# 设置成核心数减去gpu数
+            num_env_runners=int(os.cpu_count() - num_learners) if not in_windows() else 0,# 设置成核心数减去gpu数, win下不使用
         )
         # 自定义模型
         .rl_module(
@@ -213,10 +216,11 @@ def run(
         # print(algo.learner_group._learner.module._rl_modules['default_policy'])
 
         # 训练文件夹管理
-        train_folder_manager = TrainFolderManager(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(algo, only_params=new_lr>0)
+        if not in_windows():
+            train_folder_manager = TrainFolderManager(train_folder)
+            if train_folder_manager.exists():
+                log(f"restore from {train_folder_manager.checkpoint_folder}")
+                train_folder_manager.load_checkpoint(algo, only_params=new_lr>0)
 
         begin_time = time.time()
         rounds = 5000
@@ -240,13 +244,15 @@ def run(
             # break
 
             if i>0 and (i % 10 == 0 or i == rounds - 1):
-                # 保存检查点
-                checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
-                log(f"Checkpoint saved in directory {checkpoint_dir}")
+                if not in_windows():
+                    # 保存检查点
+                    checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
+                    log(f"Checkpoint saved in directory {checkpoint_dir}")
                 # 绘制训练曲线
                 plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time, custom_plotter=LobPlotter())
-                # 压缩并上传
-                train_folder_manager.push()
+                if not in_windows():
+                    # 压缩并上传
+                    train_folder_manager.push()
                 # 迭代完成
                 LOB_trade_env.iteration_done()
 

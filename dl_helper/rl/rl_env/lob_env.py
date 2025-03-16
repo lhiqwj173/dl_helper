@@ -18,6 +18,7 @@ from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown,
 from dl_helper.train_param import in_kaggle
 
 from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
+from dl_helper.rl.rl_env.lob_env_reward import ClosePositionRewardStrategy, OpenPositionStepRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, RewardCalculator
 
 USE_CODES = [
     '513050',
@@ -96,13 +97,14 @@ class data_producer:
             data_std=True, 
             save_folder="", 
             debug_date=[],
+            new_data = True,
 
             # 数据增强
-            use_random_his_window=True,
-            use_time_scaling=True,
-            use_gaussian_noise=True,
-            use_impact_noise=True,
-            use_progressive_mask=True,
+            use_random_his_window=False,
+            use_time_scaling=False,
+            use_gaussian_noise=False,
+            use_impact_noise=False,
+            use_progressive_mask=False,
         ):
         """
         'data_type': 'train',# 训练/测试
@@ -122,6 +124,9 @@ class data_producer:
         self.use_gaussian_noise = use_gaussian_noise  # 高斯噪声开关
         self.use_impact_noise = use_impact_noise   # 冲击噪声开关
         self.use_progressive_mask = use_progressive_mask  # 渐进式遮挡开关
+
+        # 新数据集
+        self.new_data = new_data
 
         # 快速测试
         self.simple_test = simple_test
@@ -449,11 +454,15 @@ class data_producer:
 
 
         # 数据标准化
-        std_data = self.mean_std[self.idxs[0][0]]
-        # 未实现收益率 使用 zscore
-        unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
-        # 价格量 使用 robust
-        ms = pd.DataFrame(std_data['price_vol_each']['robust'])
+        if self.new_data:
+            std_data = self.mean_std[self.idxs[0][0]]
+            # 未实现收益率 使用 zscore
+            unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
+            # 价格量 使用 robust
+            ms = pd.DataFrame(std_data['price_vol_each']['robust'])
+        else:
+            unrealized_log_return_std_data = None
+            ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
         x, ms = self.use_data_split(raw, ms)
 
         if self.data_std:
@@ -729,7 +738,6 @@ class RewardTracker:
         self.rewards = []
         self.consecutive_negative = 0
         
-
 class LOB_trade_env(gym.Env):
     """
     用于 LOB 的强化学习环境
@@ -750,6 +758,20 @@ class LOB_trade_env(gym.Env):
                 'simple_test': False,# 是否为简单测试
                 'need_cols': [],# 需要读取的列
                 'use_symbols': [],# 只使用某些标的
+                'new_data': False,# 是否为新数据
+                'use_random_his_window': False,# 是否使用随机历史窗口
+                'use_time_scaling': False,# 是否使用时间缩放
+                'use_gaussian_noise': False,# 是否使用高斯噪声
+                'use_impact_noise': False,# 是否使用冲击噪声
+                'use_progressive_mask': False,# 是否使用渐进式掩码
+
+                # 奖励策略
+                'reward_strategy_class_dict': {
+                    'close_position': ClosePositionRewardStrategy,
+                    'open_position_step': OpenPositionStepRewardStrategy,
+                    'hold_position': HoldPositionRewardStrategy,
+                    'no_position': NoPositionRewardStrategy
+                }
             }
         """
         super().__init__()
@@ -761,15 +783,35 @@ class LOB_trade_env(gym.Env):
             'simple_test': False,# 是否为简单测试
             'need_cols': [],# 需要读取的列
             'use_symbols': [],# 只使用某些标的
+            'new_data': False,# 是否为新数据
+            'use_random_his_window': False,# 是否使用随机历史窗口
+            'use_time_scaling': False,# 是否使用时间缩放
+            'use_gaussian_noise': False,# 是否使用高斯噪声
+            'use_impact_noise': False,# 是否使用冲击噪声
+            'use_progressive_mask': False,# 是否使用渐进式掩码
+
+            # 奖励策略
+            'reward_strategy_class_dict': {
+                'close_position': ClosePositionRewardStrategy,
+                'open_position_step': OpenPositionStepRewardStrategy,
+                'hold_position': HoldPositionRewardStrategy,
+                'no_position': NoPositionRewardStrategy
+            }
         }
+
         # 用户配置更新
         for k, v in defult_config.items():
             config[k] = config.get(k, v)
+        for k, v in defult_config['reward_strategy_class_dict'].items():
+            config['reward_strategy_class_dict'][k] = config['reward_strategy_class_dict'].get(k, v)
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
+
+        # 奖励计算器
+        self.reward_calculator = RewardCalculator(config['reward_strategy_class_dict'])
 
         # 奖励统计器
         self.reward_tracker = RewardTracker()
@@ -788,7 +830,22 @@ class LOB_trade_env(gym.Env):
         log(f'[{id(self)}] init logger: {get_log_file()}')
         
         # 数据生产器
-        self.data_producer = data_producer(config['data_type'], config['his_len'], config['simple_test'], config['need_cols'], config['use_symbols'], data_std=data_std, save_folder=self.save_folder, debug_date=self.debug_date)
+        self.data_producer = data_producer(
+            config['data_type'], 
+            config['his_len'], 
+            config['simple_test'], 
+            config['need_cols'], 
+            config['use_symbols'], 
+            data_std=data_std, 
+            save_folder=self.save_folder, 
+            debug_date=self.debug_date,
+            new_data=config['new_data'],
+            use_random_his_window=config['use_random_his_window'],
+            use_time_scaling=config['use_time_scaling'],
+            use_gaussian_noise=config['use_gaussian_noise'],
+            use_impact_noise=config['use_impact_noise'],
+            use_progressive_mask=config['use_progressive_mask'],
+        )
 
         # 账户数据
         self.acc = Account()
@@ -922,137 +979,8 @@ class LOB_trade_env(gym.Env):
             # 账户是否开仓过
             acc_opened = len(self.acc.net_raw) > 0
 
-            # #########################################################
-            # # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
-            # # reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
-            # reward = 0
-            # if acc_opened:
-            #     # 已经开仓的奖励计算
-            #     # 1.0 基础奖励 平仓年化收益率 / 持仓每步年化收益率
-            #     # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
-            #     if need_close or action==1:
-            #         base_reward = res['trade_return'] * (STD_REWARD / 1)
-            #     else:
-            #         base_reward = res['step_return'] * (STD_REWARD / 1)
-
-            #     # 2.0 平仓回撤惩罚(回撤2个最小tick变动价格)
-            #     # # 假设最大容忍5 ticks的回撤
-            #     # 计算超过2 tick的部分
-            #     excess_drawdown = max(0, res['max_drawdown_ticks'] - 2)
-            #     # 非线性惩罚
-            #     dropdown_punish = -(excess_drawdown**2) * (STD_REWARD / (5**2))
-
-            #     # 3.0 超额奖励
-            #     # 暂定范围为 [-1, 1] > [-STD_REWARD, STD_REWARD]
-            #     if need_close or action==1:
-            #         excess_reward = (res['trade_return'] - res['trade_return_bm']) * (STD_REWARD / 1)
-            #     else:
-            #         excess_reward = (res['step_return'] - res['step_return_bm']) * (STD_REWARD / 1)
-
-            #     # # 4.0 持仓长度惩罚
-            #     # # 暂定范围为 [0, 4800] > [-STD_REWARD, 0]
-            #     # hold_length_punish = -((res['hold_length']**3) * (STD_REWARD / (4800**3)))
-
-            #     # # 5.0 积极操作奖励 买入 / 卖出
-            #     # if action in [0, 1]:
-            #     #     positive_reward += POSITIVE_REWARD
-
-            #     # 组成奖励
-            #     reward = base_reward * 0.4 + dropdown_punish * 0.2 + excess_reward * 0.4
-
-            # else:
-            #     # 还未开仓的触发检查
-            #     # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
-            #     # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
-            #     # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
-            #     # 给一个小惩罚, 且结束本轮游戏
-            #     punish = 0
-            #     if res['max_drawup_ticks_bm'] > 10:
-            #         log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨), 游戏结束')
-            #         punish = 1
-            #     if res['drawup_ticks_bm_count'] > 3:
-            #         log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨), 游戏结束')
-            #         punish = 1
-
-            #     if punish:
-            #         # 游戏终止，任务失败
-            #         acc_done = True
-            #         reward = -STD_REWARD / 10
-                
-            #     elif res['drawup_ticks_bm_count'] == 0:
-            #         # 标的一直在下跌 不开仓是正确的，需要给与奖励
-            #         # 与 持仓的 超额奖励一致
-            #         reward += (0 - res['trade_return_bm']) * (STD_REWARD / 1) * 0.4
-            # #########################################################
-
-            #########################################################
-            # 交易计算奖励 标准化范围: [-STD_REWARD, STD_REWARD] 
-            # 平仓奖励/最终奖励: 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
-            # 持仓/空仓奖励（步）: 持仓每步收益率 / 每步的标的收益率的相反数​
-            # 消极空仓惩罚
-
-            if acc_opened:
-                # 已经开仓的奖励计算
-                if need_close or action==1:
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
-
-                    if res['trade_return'] >= 0:
-                        # 平仓对数收益率 / 潜在最大对数收益率 * STD_REWARD
-                        # 奖励 [0, STD_REWARD] 
-                        # 若 max_profit_reachable_bm 为0，trade_return也必定为0，所以奖励为0
-                        if max_profit_reachable_bm == 0 and res['trade_return'] != 0:
-                            pickle.dump((self.data_producer.bid_price, self.data_producer.ask_price, legal, self.acc.net_raw, self.acc.net_raw_bm), open(f'bid_ask_{self.data_producer.data_type}_{self.data_producer.cur_data_file}.pkl', 'wb'))
-                            raise ValueError(f'Maximum potential log return is 0, but closing log return is not 0')
-                        reward = res['trade_return'] / max_profit_reachable_bm * STD_REWARD if max_profit_reachable_bm != 0 else 0
-                    else:
-                        # 平仓对数收益率 - 潜在最大对数收益率，假设收益率==-0.03为最低值(日内的一笔交易，亏损达到-0.03，则认为完全失败，-STD_REWARD)
-                        # 奖励 [-STD_REWARD, 0]
-                        reward = max((res['trade_return'] - max_profit_reachable_bm) / 0.03, -1) * STD_REWARD
-                
-                elif action == 0:
-                    # 开仓步的奖励需要特别考虑
-                    # 开仓步的 step_return 因为买入手续费的原因，必定为负
-                    # 直接给与 step_return 作为奖励，可能会导致模型不愿意开仓
-
-                    # 中性
-                    reward = 0
-
-                else:
-                    # 持仓奖励（步）: 持仓每步收益率 
-                    # TODO 如何标准化, step_return 大概率是个很小的值
-                    reward = res['step_return']
-            else:
-                # 还未开仓的触发检查
-                # 1. 若期间的标的净值 max_drawup_ticks_bm > 10, 代表错过了一个很大的多头盈利机会(连续10个tick刻度的上涨)
-                # 2. 若期间的标的净值 drawup_ticks_bm_count > 3, 代表连续错过了3个多头可盈利小机会(至少2个tick刻度的上涨)
-                # 3. 若 标的一直在下跌 不开仓是正确的，需要给与奖励 
-                # 给一个小惩罚, 且结束本轮游戏
-                punish = 0
-                if res['max_drawup_ticks_bm'] >= 10:
-                    log(f'[{id(self)}][{self.data_producer.data_type}] max_drawup_ticks_bm({res["max_drawup_ticks_bm"]}) >= 10, missed a significant long profit opportunity (continuous 10 tick rise), game over: LOSS')
-                    punish = 1
-                if res['drawup_ticks_bm_count'] >= 3:
-                    log(f'[{id(self)}][{self.data_producer.data_type}] drawup_ticks_bm_count({res["drawup_ticks_bm_count"]}) >= 3, missed 3 consecutive small long profit opportunities (at least 2 tick rise), game over: LOSS')
-                    punish = 1
-
-                if punish:
-                    # 游戏终止，任务失败 
-                    acc_done = True
-                    # # 奖励: -STD_REWARD/10
-                    # reward = -STD_REWARD / 10
-                    # 这个惩罚要比非法操作的惩罚(-STD_REWARD)轻
-                    # 但要比普通的负收益惩罚重，以体现错过机会的特殊性
-                    if res['max_drawup_ticks_bm'] >= 10:
-                        reward = -STD_REWARD * (7/10)  # 加大对错过大机会的惩罚
-                    else:
-                        reward = -STD_REWARD * (5/10)  # 适度惩罚错过多次小机会
-                
-                elif res['drawup_ticks_bm_count'] == 0:
-                    # 标的一直在下跌 不开仓是正确的，需要给与奖励 
-                    # TODO 如何标准化, step_return 大概率是个很小的值
-                    reward = -res['step_return_bm']
-
-            #########################################################
+            # 计算奖励
+            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, acc_opened, legal, need_close, action, res, self.data_producer, self.acc)
 
             # 奖励限制范围
             reward = np.clip(reward, -STD_REWARD, STD_REWARD)
@@ -1175,7 +1103,10 @@ class LOB_trade_env(gym.Env):
                 self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
 
             # 标准化 未实现收益率
-            profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            if not unrealized_log_return_std_data is None:
+                profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            else:
+                profit /= 0.03043
 
             # 添加 静态特征
             observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
@@ -1248,7 +1179,10 @@ class LOB_trade_env(gym.Env):
             # 账户需要用动作2走一步, 会初始记录act之前的净值
             _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
             # 标准化 未实现收益率
-            profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            if not unrealized_log_return_std_data is None:
+                profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            else:
+                profit /= 0.03043
             # 添加 静态特征
             x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
             # 初始化skip计数器
