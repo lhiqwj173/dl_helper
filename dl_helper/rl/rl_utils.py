@@ -307,6 +307,11 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     min_time = datetime.min()
     max_time = datetime.max()
     time_range = pd.date_range(start=min_time, end=max_time, freq='4H')
+    
+    # Add custom plots if provided
+    if custom_plotter and additional_plots > 0:
+        # Pass the list of additional axes (excluding the first one used for main plot)
+        custom_plotter.plot(out_data, axes[1:])
 
     # 找到每个4小时时间点对应的索引
     indices = []
@@ -323,11 +328,12 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
         ax.text(idx, y_max, datetime[idx].strftime('%Y-%m-%d %H:%M'), 
                 rotation=90, verticalalignment='top', horizontalalignment='right', 
                 fontsize=8, color='gray')
-    
-    # Add custom plots if provided
-    if custom_plotter and additional_plots > 0:
-        # Pass the list of additional axes (excluding the first one used for main plot)
-        custom_plotter.plot(out_data, axes[1:])
+
+    # 在附图上添加竖线
+    for ax_i in axes[1:]:
+        for idx in indices:
+            # 绘制浅色虚线
+            ax_i.axvline(x=idx, color='gray', linestyle='--', alpha=0.5)
 
     # Set x-label only on bottom plot
     axes[-1].set_xlabel('Iteration')

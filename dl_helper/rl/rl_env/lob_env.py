@@ -18,7 +18,7 @@ from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown,
 from dl_helper.train_param import in_kaggle
 
 from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.lob_env_reward import ClosePositionRewardStrategy, OpenPositionStepRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.lob_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, OpenPositionStepRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, RewardCalculator
 
 USE_CODES = [
     '513050',
@@ -57,12 +57,10 @@ STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
 MAX_CODE_ID = len(USE_CODES) - 1
 
 STD_REWARD = 100
+FINAL_REWARD = STD_REWARD * 1000
 
-# 非法操作奖励
-ILLEGAL_REWARD = -STD_REWARD
-
-# 积极操作奖励
-POSITIVE_REWARD = STD_REWARD
+# 非法操作惩罚
+ILLEGAL_REWARD = -FINAL_REWARD
 
 # 时间标准化
 MEAN_SEC_BEFORE_CLOSE = 10024.17
@@ -161,7 +159,7 @@ class data_producer:
             except:
                 self.data_folder = r''
         else:
-            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_combine_data'
+            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_10level_20250316'
 
         self.data_type = data_type
         self.cur_data_type = data_type
@@ -193,10 +191,10 @@ class data_producer:
         # 买卖1档价格 序列
         self.ask_price = []
         self.bid_price = []
+        # 最近一个平仓的idx
+        self.last_close_idx = 0
         # id
         self.id = ''
-        # 当前日期数据停止标志，初始没有可用数据，所以应该为True
-        self.date_file_done = True
 
         log(f'[{self.data_type}] data_producer init done')
 
@@ -219,7 +217,7 @@ class data_producer:
         """
         # 当天的数据用完，且没有其他日期数据可以load，
         # 或 数据类型发生变化，需要重新准备数据
-        if (not self.files and self.date_file_done) or (self.cur_data_type != self.data_type):
+        if (not self.files) or (self.cur_data_type != self.data_type):
             # 若 文件列表为空，重新准备
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             self.files.sort()
@@ -240,7 +238,7 @@ class data_producer:
         按照文件列表读取数据
         每次完成后从文件列表中剔除
         """
-        while (self.files and self.date_file_done) or (self.cur_data_type != self.data_type):
+        while (self.files) or (self.cur_data_type != self.data_type):
             # 更新在用数据类型
             self.cur_data_type = self.data_type
 
@@ -283,12 +281,7 @@ class data_producer:
 
             if not self.idxs:
                 log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
-                self.date_file_done = True
                 continue
-            else:
-                # 载入了新的日期文件数据
-                # 重置日期文件停止标志
-                self.date_file_done = False
 
             # 训练数据随机选择一个标的
             # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
@@ -415,6 +408,12 @@ class data_producer:
         self.bid_price.append(last_row[self.col_idx['BASE买1价']])
         self.ask_price.append(last_row[self.col_idx['BASE卖1价']])
 
+    def order_close(self):
+        """
+        平仓
+        """
+        self.last_close_idx = len(self.bid_price) - 1
+
     def get(self):
         """
         输出观察值
@@ -425,8 +424,6 @@ class data_producer:
         """
         # # 测试用
         # print(self.idxs[0])
-
-        assert not self.date_file_done, f'[{self.data_type}] date_file_done must be False, but is {self.date_file_done}, need_check cur_data_file:{self.cur_data_file} files:{self.files}'
 
         if self.plot_cur_pre != -1:
             # 更新绘图数据
@@ -495,7 +492,6 @@ class data_producer:
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
                 log(f'[{self.data_type}] date file done')
-                self.date_file_done = True
             else:
                 # 重置绘图索引
                 self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
@@ -540,13 +536,16 @@ class data_producer:
         while True:
             self._pre_files()
             self._load_data()
-            if self.date_file_done:
+            if not self.idxs:
+                # 没有成功加载到可用数据，需要重新准备文件
+                # 当天数据中没有指定标的
                 log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}, will repre files')
                 continue
             break
 
         self.bid_price = []
         self.ask_price = []
+        self.last_close_idx = 0
 
 class Account:
     """
@@ -765,8 +764,12 @@ class LOB_trade_env(gym.Env):
                 'use_impact_noise': False,# 是否使用冲击噪声
                 'use_progressive_mask': False,# 是否使用渐进式掩码
 
+                # 终止游戏的回撤阈值
+                'max_drawdown_threshold': 0.005,# 最大回测阈值
+
                 # 奖励策略
                 'reward_strategy_class_dict': {
+                    'end_position': EndPositionRewardStrategy,
                     'close_position': ClosePositionRewardStrategy,
                     'open_position_step': OpenPositionStepRewardStrategy,
                     'hold_position': HoldPositionRewardStrategy,
@@ -790,8 +793,12 @@ class LOB_trade_env(gym.Env):
             'use_impact_noise': False,# 是否使用冲击噪声
             'use_progressive_mask': False,# 是否使用渐进式掩码
 
+            # 终止游戏的回撤阈值
+            'max_drawdown_threshold': 0.005,# 最大回测阈值
+
             # 奖励策略
             'reward_strategy_class_dict': {
+                'end_position': EndPositionRewardStrategy,
                 'close_position': ClosePositionRewardStrategy,
                 'open_position_step': OpenPositionStepRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
@@ -805,6 +812,8 @@ class LOB_trade_env(gym.Env):
         for k, v in defult_config['reward_strategy_class_dict'].items():
             config['reward_strategy_class_dict'][k] = config['reward_strategy_class_dict'].get(k, v)
 
+        self.max_drawdown_threshold = config['max_drawdown_threshold']
+
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
         if not os.path.exists(self.save_folder):
@@ -812,9 +821,6 @@ class LOB_trade_env(gym.Env):
 
         # 奖励计算器
         self.reward_calculator = RewardCalculator(config['reward_strategy_class_dict'])
-
-        # 奖励统计器
-        self.reward_tracker = RewardTracker()
 
         # 是否标准化数据
         self.data_std = data_std
@@ -886,6 +892,11 @@ class LOB_trade_env(gym.Env):
         # 记录每个 episode 的步数
         self.mean_episode_lengths = 0
         self.episode_count = 0
+
+        # 记录策略日内的累计收益率
+        self.acc_return = 0
+        # 累计潜在收益
+        self.potential_return = 0
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
@@ -944,10 +955,8 @@ class LOB_trade_env(gym.Env):
         计算奖励
         """
         # 游戏是否终止
-        # 1. 非法操作                                 -100
-        # 2. 消极操作，多次错失机会                     -10
-        # 3. 连续3次平仓奖励为负，则认为任务失败          -100
-        # 4. 连续数据结束了，且平均奖励为正，则认为任务成功 +100
+        # 1. 非法操作                                 -ILLEGAL_REWARD
+        # 2. 最大回测超过阈值                           -STD_REWARD
         acc_done = False
 
         legal, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
@@ -965,9 +974,7 @@ class LOB_trade_env(gym.Env):
 
         reward = 0
         if legal:
-            # 拷贝 res > info
-            for k, v in res.items():
-                info[k] = v
+            # 动作合法
 
             # 只有平仓才给与 act_criteria
             # 同时记录评价指标
@@ -975,47 +982,49 @@ class LOB_trade_env(gym.Env):
                 # 增加操作交易评价结果
                 # 体现 非法/win/loss
                 info['act_criteria'] = 0 if res['trade_return'] > 0 else 1
-            
-            # 账户是否开仓过
-            acc_opened = len(self.acc.net_raw) > 0
 
-            # 计算奖励
-            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, acc_opened, legal, need_close, action, res, self.data_producer, self.acc)
+            # 检查最大回测 
+            if abs(res['max_drawdown']) > self.max_drawdown_threshold:
+                # 游戏被终止，计入交易失败
+                info['act_criteria'] = 1
+                acc_done = True
+                reward = -STD_REWARD
 
-            # 奖励限制范围
-            reward = np.clip(reward, -STD_REWARD, STD_REWARD)
+            else:
+                # 游戏正常进行
 
-            # 更新奖励统计器, 判断是否游戏结束/最终回报
-            # 只记录每次平仓的奖励
-            if need_close or action==1:
-                keep_negative, avg_reward = self.reward_tracker.add_reward(reward)
-                if keep_negative >= 3:
-                    # 连续3次平仓奖励为负，则认为任务失败
-                    acc_done = True
-                    reward = -STD_REWARD
-                    log(f'[{id(self)}][{self.data_producer.data_type}] keep_negative({keep_negative}) >= 3, consecutive 3 negative closing rewards, game over: LOSS')
-                elif need_close and avg_reward > 0:
-                    # 连续数据结束了，且平均奖励为正，则认为任务成功
-                    acc_done = True
-                    reward = STD_REWARD
-                    log(f'[{id(self)}][{self.data_producer.data_type}] avg_reward({avg_reward}) > 0, continuous data ended with positive average reward, game over: WIN')
+                # 平仓时更新一次记录
+                if need_close or action==1:
+                    # 潜在收益率
+                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
+                    # 必须要完整计算，否则可能会被 策略 的交易对影响截断
+                    _, max_profit_reachable_bm_total, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                    self.potential_return = max_profit_reachable_bm_total
+                    # 策略收益率
+                    self.acc_return += res['trade_return']
+
+                    res['max_profit_reachable_bm'] = max_profit_reachable_bm
+                    res['potential_return'] = self.potential_return
+                    res['acc_return'] = self.acc_return
+
+                # 账户是否开仓过
+                acc_opened = len(self.acc.net_raw) > 0
+
+                # 计算奖励
+                reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, acc_opened, legal, need_close, action, res, self.data_producer, self.acc)
+
+                # 奖励范围
+                assert abs(reward) <= FINAL_REWARD, f'reward({reward}) > FINAL_REWARD({FINAL_REWARD})'
+
+            # 拷贝 res > info
+            for k, v in res.items():
+                info[k] = v
 
         else:
             # 非法动作, 游戏终止，任务失败
             info['act_criteria'] = -1
             acc_done = True
             reward = ILLEGAL_REWARD
-
-        # 若需要平仓/强制平仓/非法平仓，需要特别处理
-        # 重置账户 / 重置bid/ask序列
-        if need_close or action==1 or not legal:
-            # 重置账户
-            self.acc.reset()
-            # 重置 data_producer bid/ask序列
-            self.data_producer.bid_price = self.data_producer.bid_price[-1:]
-            self.data_producer.ask_price = self.data_producer.ask_price[-1:]
-            # 账户需要走一步
-            _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
 
         return reward, acc_done, pos, profit
 
@@ -1030,7 +1039,7 @@ class LOB_trade_env(gym.Env):
         terminated,truncated,legal,
 
         # 奖励评价相关
-        reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
+        reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,
 
         # 基准相关
         max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
@@ -1038,7 +1047,7 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1070,6 +1079,7 @@ class LOB_trade_env(gym.Env):
 
             info = {
                 'id': _id,
+                'action': action,
             }
 
             if not self.data_std:
@@ -1080,11 +1090,15 @@ class LOB_trade_env(gym.Env):
             # 计算奖励
             reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
 
+            # 记录平仓
+            if action==1:
+                self.data_producer.order_close()
+
             # 准备输出数据
             # net,net_bm,
             out_text += f",{self.acc.cost},{info['net']},{info['net_bm']}"
             # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
-            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')}"
+            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')},{info.get('max_profit_reachable_bm', '')},{info.get('potential_return', '')},{info.get('acc_return', '')}"
             # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
             out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
 
@@ -1112,13 +1126,9 @@ class LOB_trade_env(gym.Env):
             observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
 
             # 检查是否结束
-            terminated = acc_done# 游戏终止，最终回报: 非法操作 / 消极操作，多次错失机会 / 连续3次平仓奖励为负 / 当天连续数据结束时，平均平仓奖励为正
-            if not terminated and need_close:
-                # 当天连续数据结束时，没有成功
-                # 游戏截断，奖励在 _cal_reward 中已经计算
-                truncated = True
-            else:
-                truncated = False
+            terminated = acc_done or need_close# 游戏终止，最终回报: 非法操作 / 消极操作，多次错失机会 / 连续3次平仓奖励为负 / 当天连续数据结束时，平均平仓奖励为正
+            # 环境中没有截断结束
+            truncated = False
 
             out_text += f",{terminated},{truncated},{info.get('act_criteria', None) != -1}"
             out_text += out_text2
@@ -1127,14 +1137,15 @@ class LOB_trade_env(gym.Env):
 
             done = terminated or truncated
             if done:
-                if self.data_producer.data_type == 'train':
-                    # 不应该继续下一个tick开始游戏，应该重新load一个文件开始
-                    self.data_producer.date_file_done = True
-
                 # 计算平均步数
                 self.mean_episode_lengths = (self.mean_episode_lengths * self.episode_count + self.steps) / (self.episode_count + 1)
                 self.episode_count += 1
                 log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}')
+
+            else:
+                if action == 1:
+                    # 卖出后需要重置 acc
+                    self.acc.reset()
 
             return observation, reward, terminated, truncated, info
 
@@ -1149,6 +1160,11 @@ class LOB_trade_env(gym.Env):
             # 步数统计
             self.steps = 0
 
+            # 重置累计收益率
+            self.acc_return = 0
+            # 重置累计潜在收益
+            self.potential_return = 0
+            
             # 重置
             self.need_reset = False
             # 清理图形对象
@@ -1158,8 +1174,6 @@ class LOB_trade_env(gym.Env):
 
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
-
-            self.reward_tracker.reset()
 
             while True:
                 self.data_producer.reset()
@@ -1629,6 +1643,7 @@ def check(obs, info, data, mean, std):
 
 def test_lob_data(check_data = True):
     from tqdm import tqdm
+    from dl_helper.rl.rl_env.lob_env_reward import BlankRewardStrategy
 
     code = '513050'
     env = LOB_trade_env({
@@ -1640,13 +1655,23 @@ def test_lob_data(check_data = True):
 
         'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
         'train_title': 'test',
+
+        # 奖励策略
+        'reward_strategy_class_dict': {
+            'end_position': BlankRewardStrategy,
+            'close_position': BlankRewardStrategy,
+            'open_position_step': BlankRewardStrategy,
+            'hold_position': BlankRewardStrategy,
+            'no_position': BlankRewardStrategy
+        }
     },
     data_std=False,
     # debug_date=['20240521'],
     )
 
     acts = [0, 1, 0, 1, 0, 1]
-    # acts = [0, 0]
+    acts = [0] * 10# 违法操作, 多次买入
+    acts = [0,1,2,0,1,2]# 合法操作
     act_idx = 0
 
     for i in tqdm(range(5000)):
