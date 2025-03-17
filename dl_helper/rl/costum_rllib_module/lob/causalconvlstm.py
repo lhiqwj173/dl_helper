@@ -7,6 +7,8 @@ from ray.rllib.core.models.torch.encoder import TorchModel, Encoder
 from dataclasses import dataclass
 from ray.rllib.core.models.base import ENCODER_OUT
 from ray.rllib.core.columns import Columns
+from ray.rllib.examples.rl_modules.classes.intrinsic_curiosity_model_rlm import IntrinsicCuriosityModel
+from ray.rllib.models.utils import get_activation_fn
 
 import torch
 import torch.nn as nn
@@ -134,7 +136,7 @@ class CausalConvLSTMPPOCatalog(PPOCatalog):
     - 重写 _determine_components_hook 生成配置
     """
     def _determine_components_hook(self):
-        # 获取输入参数 可设置参数 ds / ts
+        # 获取输入参数
         input_dims = tuple(self._model_config_dict["input_dims"])   
         extra_input_dims = self._model_config_dict["extra_input_dims"]
         output_dims = self._model_config_dict["output_dims"]
@@ -152,6 +154,54 @@ class CausalConvLSTMPPOCatalog(PPOCatalog):
         # The dimensions of the latent vector that is output by the encoder and fed
         # to the heads.
         self.latent_dims = self._encoder_config.output_dims
+
+class CausalConvLSTMIntrinsicCuriosityModel(IntrinsicCuriosityModel):
+    def setup(self):
+        # Get the ICM achitecture settings from the `model_config` attribute:
+        cfg = self.model_config
+
+        # 使用与主模型一致的特征提取
+        # 获取输入参数
+        input_dims = tuple(cfg["input_dims"])   
+        extra_input_dims = cfg["extra_input_dims"]
+        output_dims = cfg["output_dims"]
+        # 生成配置
+        self._feature_config = CausalConvLSTMEncoderConfig(input_dims=input_dims, extra_input_dims=extra_input_dims, _output_dims=output_dims)
+        self._feature_net = self._feature_config.build()
+
+        # Build the inverse model (predicting the action between two observations).
+        layers = []
+        dense_layers = cfg.get("inverse_net_hiddens", (256,))
+        # `in_size` is 2x the feature dim.
+        in_size = output_dims * 2
+        for out_size in dense_layers:
+            layers.append(nn.Linear(in_size, out_size))
+            if cfg.get("inverse_net_activation") not in [None, "linear"]:
+                layers.append(
+                    get_activation_fn(cfg["inverse_net_activation"], "torch")()
+                )
+            in_size = out_size
+        # Last feature layer of n nodes (action space).
+        layers.append(nn.Linear(in_size, self.action_space.n))
+        self._inverse_net = nn.Sequential(*layers)
+
+        # Build the forward model (predicting the next observation from current one and
+        # action).
+        layers = []
+        dense_layers = cfg.get("forward_net_hiddens", (256,))
+        # `in_size` is the feature dim + action space (one-hot).
+        in_size = output_dims + self.action_space.n
+        for out_size in dense_layers:
+            layers.append(nn.Linear(in_size, out_size))
+            if cfg.get("forward_net_activation") not in [None, "linear"]:
+                layers.append(
+                    get_activation_fn(cfg["forward_net_activation"], "torch")()
+                )
+            in_size = out_size
+        # Last feature layer of n nodes (feature dimension).
+        layers.append(nn.Linear(in_size, output_dims))
+        self._forward_net = nn.Sequential(*layers)
+
 
 
 if __name__ == "__main__":

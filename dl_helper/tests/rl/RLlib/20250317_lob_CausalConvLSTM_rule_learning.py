@@ -10,7 +10,7 @@
 from py_ext.tool import init_logger
 from py_ext.datetime import beijing_time
 from dl_helper.rl.costum_rllib_module.lob.run import run
-from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog
+from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog, CausalConvLSTMIntrinsicCuriosityModel
 from dl_helper.rl.rl_env.lob_env_reward import BlankRewardStrategy
 
 train_title = train_folder = '20250317_rule_learning'
@@ -25,7 +25,7 @@ if __name__ == "__main__":
             # 自定义编码器参数  
             'input_dims' : (10, 20),
             'extra_input_dims' : 4,
-            'output_dims' : 6,
+            'output_dims' : 8,
         },
         env_config ={
             # 全部使用空白的奖励
@@ -36,5 +36,17 @@ if __name__ == "__main__":
                 'hold_position': BlankRewardStrategy,
                 'no_position': BlankRewardStrategy
             }
-        }
+        },
+        intrinsic_curiosity_model_class = CausalConvLSTMIntrinsicCuriosityModel,
+        intrinsic_curiosity_model_config = {
+            # feature(自定义编码器)参数  
+            'input_dims' : (10, 20),
+            'extra_input_dims' : 4,
+            'output_dims' : 8,
+            # inverse / forward 网络参数
+            "inverse_net_hiddens": (16, 16),
+            "inverse_net_activation": "relu",
+            "forward_net_hiddens": (16, 16),
+            "forward_net_activation": "relu",
+        },
     )

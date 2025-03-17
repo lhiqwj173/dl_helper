@@ -2,7 +2,13 @@ import sys, os, time
 
 from dl_helper.tool import in_windows
 
+from ray.rllib.utils.from_config import NotProvided, from_config
+
+from ray.rllib.core import DEFAULT_MODULE_ID
 from ray.rllib.core.rl_module.rl_module import RLModuleSpec
+from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
+from ray.rllib.examples.learners.classes.intrinsic_curiosity_learners import ICM_MODULE_ID
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
@@ -38,6 +44,8 @@ def run(
         catalog_class,
         model_config,
         env_config = {},
+        intrinsic_curiosity_model_class = None,
+        intrinsic_curiosity_model_config = {},
     ):
     run_type = 'self'
     new_lr = 0
@@ -45,11 +53,7 @@ def run(
     # 获取参数
     if len(sys.argv) > 1:
         for arg in sys.argv:
-            if arg == "server":
-                run_type = 'server'
-            elif arg == "client":
-                run_type = 'client'
-            elif arg == "test":
+            if arg == "test":
                 run_type = 'test'
             elif arg.startswith('lr='):
                 new_lr = float(arg.split('=')[1])
@@ -86,14 +90,54 @@ def run(
             sample_timeout_s=24*60*60,
             num_env_runners=int(os.cpu_count() - num_learners) if not in_windows() else 0,# 设置成核心数减去gpu数, win下不使用
         )
-        # 自定义模型
-        .rl_module(
+        .callbacks(LobCallbacks)
+        .debugging(log_level='DEBUG')
+        .training(
+            lr=new_lr if new_lr > 0 else NotProvided,
+            learner_config_dict={
+                # Intrinsic reward coefficient.
+                "intrinsic_reward_coeff": 0.05,
+                # Forward loss weight (vs inverse dynamics loss). Total ICM loss is:
+                # L(total ICM) = (
+                #     `forward_loss_weight` * L(forward)
+                #     + (1.0 - `forward_loss_weight`) * L(inverse_dyn)
+                # )
+                "forward_loss_weight": 0.2,
+            }
+        )
+    )
+
+    if None is intrinsic_curiosity_model_class:
+        config = config.rl_module(
             rl_module_spec=RLModuleSpec(catalog_class=catalog_class),# 使用自定义配置
             model_config=model_config,
         )
-        .callbacks(LobCallbacks)
-        .debugging(log_level='DEBUG')
-    )
+    else:
+        # 添加 好奇心模块
+        config = config.rl_module(
+            rl_module_spec=MultiRLModuleSpec(
+                rl_module_specs={
+                    DEFAULT_MODULE_ID: RLModuleSpec(
+                        catalog_class=catalog_class,
+                        model_config=model_config,
+                    ),
+                    # The intrinsic curiosity model.
+                    ICM_MODULE_ID: RLModuleSpec(
+                        module_class=intrinsic_curiosity_model_class,
+                        # Only create the ICM on the Learner workers, NOT on the
+                        # EnvRunners.
+                        learner_only=True,
+                        # Configure the architecture of the ICM here.
+                        model_config=intrinsic_curiosity_model_config,
+                    ),
+                }
+
+            ),
+            # # Use a different learning rate for training the ICM.
+            # algorithm_config_overrides_per_module={
+            #     ICM_MODULE_ID: AlgorithmConfig.overrides(lr=0.0005)
+            # },
+        )
 
     # 验证配置
     eval_config = {
@@ -104,73 +148,7 @@ def run(
         'evaluation_force_reset_envs_before_iteration': True,
     }
 
-    if run_type == 'server':
-        config = config.extra_config(
-            learner_group_class=ClientLearnerGroup,
-            learner_group_kwargs={
-                'train_folder': train_folder,
-                "train_title": train_title,
-            },
-        )
-
-        # dump config
-        add_train_title_item(train_title, config)
-
-    elif run_type == 'client':
-        # 客户端配置
-        config = config.training(
-            learner_class=ClientPPOTorchLearner,# 分布式客户端 学习者
-        )
-
-        config = config.learners(    
-            num_learners=num_learners,
-            num_gpus_per_learner=1,
-        )
-
-        config = config.extra_config(
-            learner_group_class=ClientLearnerGroup,
-            learner_group_kwargs={
-                'train_folder': train_folder,
-                "train_title": train_title,
-            },
-        )
-
-        # 询问服务器，本机是否需要验证环节
-        need_val = request_need_val(train_title)
-        log(f"need_val: {need_val}")
-        if need_val:
-            config = config.evaluation(**eval_config)
-
-        # 客户端运行
-        # 构建算法
-        algo = config.build()
-
-        begin_time = time.time()
-        # 训练循环
-        # rounds = 2000
-        # rounds = 100
-        rounds = 30
-        for i in range(rounds):
-            log(f"\nTraining iteration {i+1}/{rounds}")
-            result = algo.train()
-            simplify_rllib_metrics(result, out_func=log)
-
-            # 删除旧的文件
-            remove_old_env_output_files(os.path.join(train_folder, 'env_output'), num=5)
-        
-        # 停止学习者额外的事件进程
-        algo.learner_group.stop_extra_process()
-        log(f"learner_group.stop_extra_process done")
-
-        if need_val:
-            # 绘制训练曲线
-            plot_training_curve(train_title, train_folder, time.time() - begin_time, y_axis_max=10000)
-
-        # 停止算法
-        algo.stop()
-        log(f"algo.stop done")
-
-    elif run_type == 'test':
+    if run_type == 'test':
         # 单机测试
         config = config.learners(    
             num_learners=num_learners,
@@ -208,12 +186,6 @@ def run(
         # # FOR DEBUG
         # eval_config['evaluation_interval'] = 1
         config = config.evaluation(**eval_config)
-
-        # 修改学习率
-        if new_lr > 0:
-            config = config.training(
-                lr=new_lr,
-            )
 
         # 构建算法
         algo = config.build()

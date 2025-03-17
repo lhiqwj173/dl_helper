@@ -70,9 +70,14 @@ class LobCallbacks(DefaultCallbacks):
 
         if info is not None:
             # 用于统计动作分布
-            metrics_logger.log_value("step_num", 1, reduce="sum")
-            metrics_logger.log_value("act_0_num", int(info['action'] == 0), reduce="sum")
-            metrics_logger.log_value("act_1_num", int(info['action'] == 1), reduce="sum")
+            if info['data_type'] == 'train':
+                metrics_logger.log_value("step_num", 1, reduce="sum")
+                metrics_logger.log_value("act_0_num", int(info['action'] == 0), reduce="sum")
+                metrics_logger.log_value("act_1_num", int(info['action'] == 1), reduce="sum")
+            else:
+                metrics_logger.log_value("val_step_num", 1, reduce="sum")
+                metrics_logger.log_value("val_act_0_num", int(info['action'] == 0), reduce="sum")
+                metrics_logger.log_value("val_act_1_num", int(info['action'] == 1), reduce="sum")
 
         if info is not None and 'act_criteria' in info:
             if info['data_type'] == 'train':
