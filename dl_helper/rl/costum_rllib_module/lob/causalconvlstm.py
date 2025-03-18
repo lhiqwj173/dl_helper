@@ -62,15 +62,15 @@ class CausalConvLSTMEncoder(TorchModel, Encoder):
         
         # 静态特征处理
         self.static_net = nn.Sequential(
-            nn.Linear(self.extra_input_dims, 16),
-            nn.LayerNorm(16),
+            nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
+            nn.LayerNorm(self.extra_input_dims * 4),
             nn.LeakyReLU(),
             nn.Dropout(0.1)
         )
         
         # 融合层
         self.fusion = nn.Sequential(
-            nn.Linear(64 + 16, 32),
+            nn.Linear(64 + self.extra_input_dims * 4, 32),
             nn.LayerNorm(32),
             nn.LeakyReLU(),
             nn.Dropout(0.2),
