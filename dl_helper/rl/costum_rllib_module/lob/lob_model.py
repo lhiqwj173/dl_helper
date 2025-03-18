@@ -126,7 +126,7 @@ class LobCallbacks(DefaultCallbacks):
         win_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_num"))# 可能为 nan
         win_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_ret"))# 可能为 nan
         loss_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}loss_ret"))# 可能为 nan
-        max_drawdown = np.min(episode.get_temporary_timestep_data(f"{key_type}max_drawdown"))# 可能为 nan
+        max_drawdown = np.min(episode.get_temporary_timestep_data(f"{key_type}max_drawdown")) if len(episode.get_temporary_timestep_data(f"{key_type}max_drawdown")) > 0 else np.nan# 可能为 nan
         trade_return = np.sum(episode.get_temporary_timestep_data(f"{key_type}trade_return"))# 可能为 nan
         hold_length = np.sum(episode.get_temporary_timestep_data(f"{key_type}hold_length"))# 可能为 nan
         excess_return = np.sum(episode.get_temporary_timestep_data(f"{key_type}excess_return"))# 可能为 nan
