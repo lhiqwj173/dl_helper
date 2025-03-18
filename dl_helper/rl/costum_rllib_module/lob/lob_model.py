@@ -13,6 +13,10 @@ def _get_env(env):
     return env
 
 class LobCallbacks(DefaultCallbacks):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.window = 50
+
     def on_evaluate_start(self, *args, **kwargs):
         print('on_evaluate_start')
         # 获取 eval_env_runner
@@ -68,70 +72,103 @@ class LobCallbacks(DefaultCallbacks):
         info = episode.get_infos(-1)
         # print(f'info: \n{info}')
 
+        key_type = '' if info['data_type'] == 'train' else 'val_'
         if info is not None:
             # 用于统计动作分布
-            if info['data_type'] == 'train':
-                metrics_logger.log_value("step_num", 1, reduce="sum")
-                metrics_logger.log_value("act_0_num", int(info['action'] == 0), reduce="sum")
-                metrics_logger.log_value("act_1_num", int(info['action'] == 1), reduce="sum")
+            if info['action'] == 0:
+                episode.add_temporary_timestep_data(f"{key_type}act_0_num", 1)
+            elif info['action'] == 1:
+                episode.add_temporary_timestep_data(f"{key_type}act_1_num", 1)
             else:
-                metrics_logger.log_value("val_step_num", 1, reduce="sum")
-                metrics_logger.log_value("val_act_0_num", int(info['action'] == 0), reduce="sum")
-                metrics_logger.log_value("val_act_1_num", int(info['action'] == 1), reduce="sum")
+                episode.add_temporary_timestep_data(f"{key_type}act_2_num", 1)
 
-        if info is not None and 'act_criteria' in info:
-            if info['data_type'] == 'train':
-                metrics_logger.log_value("all_num", 1, reduce="sum")
-                metrics_logger.log_value("illegal_num", int(info['act_criteria'] == -1), reduce="sum")
+        if 'act_criteria' in info:
+            # 平仓后
+            episode.add_temporary_timestep_data(f"{key_type}all_num", 1)# 总操作次数
+            if info['act_criteria'] == -1:
+                episode.add_temporary_timestep_data(f"{key_type}illegal_num", 1)# 非法操作次数
+
             else:
-                metrics_logger.log_value("val_all_num", 1, reduce="sum")
-                metrics_logger.log_value("val_illegal_num", int(info['act_criteria'] == -1), reduce="sum")
-
-            if info['act_criteria'] != -1:
-                if info['data_type'] == 'train':
-                    metrics_logger.log_value("trade_num", 1, reduce="sum")
-                    metrics_logger.log_value("win_num", int(info['act_criteria'] == 0), reduce="sum")
-                    metrics_logger.log_value("win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
-                    metrics_logger.log_value("loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
-
-                    metrics_logger.log_value("max_drawdown", info['max_drawdown'])
-                    metrics_logger.log_value("trade_return", info['trade_return'])
-                    metrics_logger.log_value("hold_length", info['hold_length'])
-                    metrics_logger.log_value("excess_return", info['trade_return'] - info['trade_return_bm'])
+                episode.add_temporary_timestep_data(f"{key_type}trade_num", 1)# 总交易次数(合法操作次数)
+                if info['act_criteria'] == 0:
+                    episode.add_temporary_timestep_data(f"{key_type}win_num", 1)# 盈利次数
+                    episode.add_temporary_timestep_data(f"{key_type}win_ret", info['trade_return'])# 盈利金额
                 else:
-                    # print(f'info: \n{info}')
-                    # {
-                    #     'id': '513050_1701223138', 
-                    #     'net': 0.9879506, 
-                    #     'net_bm': 0.9879506, 
-                    #     'data_type': 'val', 
-                    #     'cost': 0.98904945, 
-                    #     'max_drawdown': -0.0011110162388745515, 
-                    #     'max_drawdown_ticks': 1, 
-                    #     'trade_return': -0.0011116338749276172, 
-                    #     'step_return': 0.0, 
-                    #     'hold_length': 2, 
-                    #     'max_drawdown_bm': -0.0010111223458038054, 
-                    #     'max_drawdown_ticks_bm': 1, 
-                    #     'max_drawup_ticks_bm': 0, 
-                    #     'drawup_ticks_bm_count': 0, 
-                    #     'trade_return_bm': -0.0010116338748442713, 
-                    #     'step_return_bm': 0.0, 
-                    #     'act_criteria': 1
-                    # }
-                    metrics_logger.log_value("val_trade_num", 1, reduce="sum")
-                    metrics_logger.log_value("val_win_num", int(info['act_criteria'] == 0), reduce="sum")
-                    metrics_logger.log_value("val_win_ret", info['trade_return'] if info['act_criteria'] == 0 else 0, reduce="sum")
-                    metrics_logger.log_value("val_loss_ret", abs(info['trade_return']) if info['act_criteria'] == 1 else 0, reduce="sum")
+                    episode.add_temporary_timestep_data(f"{key_type}loss_ret", abs(info['trade_return']))# 亏损金额
 
-                    metrics_logger.log_value("val_max_drawdown", info['max_drawdown'])
-                    metrics_logger.log_value("val_trade_return", info['trade_return'])
-                    metrics_logger.log_value("val_hold_length", info['hold_length'])
-                    metrics_logger.log_value("val_excess_return", info['trade_return'] - info['trade_return_bm'])
-            
+                episode.add_temporary_timestep_data(f"{key_type}max_drawdown", info['max_drawdown'])
+                episode.add_temporary_timestep_data(f"{key_type}trade_return", info['trade_return'])
+                episode.add_temporary_timestep_data(f"{key_type}hold_length", info['hold_length'])
+                episode.add_temporary_timestep_data(f"{key_type}excess_return", info['trade_return'] - info['trade_return_bm'])
+
+    def on_episode_end(self, *, episode, metrics_logger, **kwargs):
+        # 从环境的 info 中提取自定义指标
+        info = episode.get_infos(-1)
+        key_type = '' if info['data_type'] == 'train' else 'val_'
+
+        # 各个动作的次数 每轮取和
+        act_0s = episode.get_temporary_timestep_data(f"{key_type}act_0_num")
+        act_1s = episode.get_temporary_timestep_data(f"{key_type}act_1_num")
+        act_2s = episode.get_temporary_timestep_data(f"{key_type}act_2_num")
+        metrics_logger.log_value(
+            f"{key_type}act_0_num", np.sum(act_0s), reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}act_1_num", np.sum(act_1s), reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}act_2_num", np.sum(act_2s), reduce='sum', window=self.window
+        )
+
+        all_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}all_num"))
+        illegal_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}illegal_num"))# 可能为 nan
+        trade_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}trade_num"))# 可能为 nan
+        win_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_num"))# 可能为 nan
+        win_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_ret"))# 可能为 nan
+        loss_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}loss_ret"))# 可能为 nan
+        max_drawdown = np.min(episode.get_temporary_timestep_data(f"{key_type}max_drawdown"))# 可能为 nan
+        trade_return = np.sum(episode.get_temporary_timestep_data(f"{key_type}trade_return"))# 可能为 nan
+        hold_length = np.sum(episode.get_temporary_timestep_data(f"{key_type}hold_length"))# 可能为 nan
+        excess_return = np.sum(episode.get_temporary_timestep_data(f"{key_type}excess_return"))# 可能为 nan
+        # 求和
+        metrics_logger.log_value(
+            f"{key_type}all_num", all_num, reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}illegal_num", illegal_num, reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}trade_num", trade_num, reduce='sum', window=self.window  
+        )
+        metrics_logger.log_value(
+            f"{key_type}win_num", win_num, reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}win_ret", win_ret, reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}loss_ret", loss_ret, reduce='sum', window=self.window
+        )
+
+        # 求均值
+        metrics_logger.log_value(
+            f"{key_type}max_drawdown", max_drawdown, reduce='mean', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}trade_return", trade_return, reduce='mean', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}hold_length", hold_length, reduce='mean', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}excess_return", excess_return, reduce='mean', window=self.window
+        )
+        
+
     def on_train_result(
         self, *, algorithm, result, metrics_logger, **kwargs
     ):
+        
         # 提取自定义指标并添加到训练结果中
         result.setdefault("custom_metrics", {
             "illegal_ratio": float('nan'),
@@ -144,6 +181,7 @@ class LobCallbacks(DefaultCallbacks):
             "excess_return": float('nan'),
             "act_0_pct": float('nan'),
             "act_1_pct": float('nan'),
+            "act_2_pct": float('nan'),
 
             "val_illegal_ratio": float('nan'),
             "val_trade_num": float('nan'),
@@ -155,48 +193,46 @@ class LobCallbacks(DefaultCallbacks):
             "val_excess_return": float('nan'),
             "val_act_0_pct": float('nan'),
             "val_act_1_pct": float('nan'),
+            "val_act_2_pct": float('nan'),
         })
 
         # print(f'result: \n{result}')
         if 'env_runners' in result:
-            result["custom_metrics"]["act_0_pct"] = result["env_runners"]["act_0_num"] / result["env_runners"]["step_num"]
-            result["custom_metrics"]["act_1_pct"] = result["env_runners"]["act_1_num"] / result["env_runners"]["step_num"]
-            result["custom_metrics"]["act_2_pct"] = 1 - result["custom_metrics"]["act_0_pct"] - result["custom_metrics"]["act_1_pct"]
+            total_acts = result["env_runners"]["act_0_num"] + result["env_runners"]["act_1_num"] + result["env_runners"]["act_2_num"]
+            result["custom_metrics"]["act_0_pct"] = result["env_runners"]["act_0_num"] / total_acts
+            result["custom_metrics"]["act_1_pct"] = result["env_runners"]["act_1_num"] / total_acts
+            result["custom_metrics"]["act_2_pct"] = result["env_runners"]["act_2_num"] / total_acts
             for i in ['act_0_pct', 'act_1_pct', 'act_2_pct']:
                 assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
             result["custom_metrics"]["illegal_ratio"] = result["env_runners"]["illegal_num"] / result["env_runners"]["all_num"]
-            assert not np.isnan(result["custom_metrics"]["illegal_ratio"]), f'illegal_ratio is nan'
             
             if 'trade_num' in result["env_runners"]:
-                result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"]
-                result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"] if result["env_runners"]["trade_num"] > 0 else 0
-                result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"] if result["env_runners"]["loss_ret"] > 0 else 0
+                result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"] / self.window# 每轮平均交易数
+                result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"] if result["env_runners"]["trade_num"] > 0 else np.nan
+                result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"] if result["env_runners"]["loss_ret"] > 0 else np.nan
                 result["custom_metrics"]["max_drawdown"] = result["env_runners"]["max_drawdown"]
                 result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
                 result["custom_metrics"]["hold_length"] = result["env_runners"]["hold_length"]
                 result["custom_metrics"]["excess_return"] = result["env_runners"]["excess_return"]
 
-                for i in ['trade_num', 'win_ratio', 'profit_loss_ratio']:
-                    assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
-
         if 'evaluation' in result and 'env_runners' in result["evaluation"] and 'val_trade_num' in result["evaluation"]["env_runners"]:
-            result["custom_metrics"]["val_act_0_pct"] = result["evaluation"]["env_runners"]["val_act_0_num"] / result["evaluation"]["env_runners"]["val_step_num"]
-            result["custom_metrics"]["val_act_1_pct"] = result["evaluation"]["env_runners"]["val_act_1_num"] / result["evaluation"]["env_runners"]["val_step_num"]
-            result["custom_metrics"]["val_act_2_pct"] = 1 - result["custom_metrics"]["val_act_0_pct"] - result["custom_metrics"]["val_act_1_pct"]
+            total_acts = result["evaluation"]["env_runners"]["val_act_0_num"] + result["evaluation"]["env_runners"]["val_act_1_num"] + result["evaluation"]["env_runners"]["val_act_2_num"]
+            result["custom_metrics"]["val_act_0_pct"] = result["evaluation"]["env_runners"]["val_act_0_num"] / total_acts
+            result["custom_metrics"]["val_act_1_pct"] = result["evaluation"]["env_runners"]["val_act_1_num"] / total_acts
+            result["custom_metrics"]["val_act_2_pct"] = result["evaluation"]["env_runners"]["val_act_2_num"] / total_acts
             for i in ['val_act_0_pct', 'val_act_1_pct', 'val_act_2_pct']:
                 assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
+            
+            result["custom_metrics"]["val_illegal_ratio"] = result["evaluation"]["env_runners"]["val_illegal_num"] / result["evaluation"]["env_runners"]["val_all_num"]
 
-            result["custom_metrics"]["val_trade_num"] = result["evaluation"]["env_runners"]["val_trade_num"]
-            result["custom_metrics"]["val_win_ratio"] = result["evaluation"]["env_runners"]["val_win_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else 0
-            result["custom_metrics"]["val_profit_loss_ratio"] = result["evaluation"]["env_runners"]["val_win_ret"] / result["evaluation"]["env_runners"]["val_loss_ret"] if result["evaluation"]["env_runners"]["val_loss_ret"] > 0 else 0
+            result["custom_metrics"]["val_trade_num"] = result["evaluation"]["env_runners"]["val_trade_num"] / self.window# 每轮平均交易数
+            result["custom_metrics"]["val_win_ratio"] = result["evaluation"]["env_runners"]["val_win_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else np.nan
+            result["custom_metrics"]["val_profit_loss_ratio"] = result["evaluation"]["env_runners"]["val_win_ret"] / result["evaluation"]["env_runners"]["val_loss_ret"] if result["evaluation"]["env_runners"]["val_loss_ret"] > 0 else np.nan
             result["custom_metrics"]["val_max_drawdown"] = result["evaluation"]["env_runners"]["val_max_drawdown"]
             result["custom_metrics"]["val_trade_return"] = result["evaluation"]["env_runners"]["val_trade_return"]
             result["custom_metrics"]["val_hold_length"] = result["evaluation"]["env_runners"]["val_hold_length"]
             result["custom_metrics"]["val_excess_return"] = result["evaluation"]["env_runners"]["val_excess_return"]
-
-            for i in ['val_trade_num', 'val_win_ratio', 'val_profit_loss_ratio']:
-                assert not np.isnan(result["custom_metrics"][i]), f'{i} is nan'
 
 class LobPlotter(BaseCustomPlotter):
     def get_additional_plot_count(self):
