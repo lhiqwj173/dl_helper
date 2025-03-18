@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     begin_time = time.time()
     # 训练循环
-    rounds = 30
+    rounds = 100
     out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
     for i in range(rounds):
         log(f"\nTraining iteration {i+1}/{rounds}")
