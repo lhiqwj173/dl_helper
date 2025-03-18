@@ -13,7 +13,12 @@ from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog, CausalConvLSTMIntrinsicCuriosityModel
 from dl_helper.rl.rl_env.lob_env_reward import BlankRewardStrategy
 
-train_title = train_folder = '20250317_rule_learning'
+import sys
+use_intrinsic_curiosity = True
+if len(sys.argv) > 1 and sys.argv[1] == 'no_intrinsic_curiosity':
+    use_intrinsic_curiosity = False
+
+train_title = train_folder = '20250317_rule_learning' + '_no_intrinsic_curiosity' if not use_intrinsic_curiosity else ''
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
@@ -37,7 +42,7 @@ if __name__ == "__main__":
                 'no_position': BlankRewardStrategy
             }
         },
-        intrinsic_curiosity_model_class = CausalConvLSTMIntrinsicCuriosityModel,
+        intrinsic_curiosity_model_class = CausalConvLSTMIntrinsicCuriosityModel if use_intrinsic_curiosity else None,
         intrinsic_curiosity_model_config = {
             # feature(自定义编码器)参数  
             'input_dims' : (10, 20),
