@@ -180,6 +180,7 @@ class LobCallbacks(DefaultCallbacks):
             "illegal_ratio": float('nan'),
             "trade_num": float('nan'),
             "win_ratio": float('nan'),
+            "force_stop_ratio": float('nan'),
             "profit_loss_ratio": float('nan'),
             "max_drawdown": float('nan'),
             "trade_return": float('nan'),
@@ -192,6 +193,7 @@ class LobCallbacks(DefaultCallbacks):
             "val_illegal_ratio": float('nan'),
             "val_trade_num": float('nan'),
             "val_win_ratio": float('nan'),
+            "val_force_stop_ratio": float('nan'),
             "val_profit_loss_ratio": float('nan'),
             "val_max_drawdown": float('nan'),
             "val_trade_return": float('nan'),
@@ -246,23 +248,6 @@ class LobPlotter(BaseCustomPlotter):
     def get_additional_plot_count(self):
         """
         返回需要额外绘制的图表数量
-        custom_metrics_illegal_ratio,
-        custom_metrics_trade_num,
-        custom_metrics_win_ratio,
-        custom_metrics_profit_loss_ratio,
-        custom_metrics_max_drawdown,
-        custom_metrics_trade_return,
-        custom_metrics_hold_length,
-        custom_metrics_excess_return
-
-        custom_metrics_val_illegal_ratio,
-        custom_metrics_val_trade_num,
-        custom_metrics_val_win_ratio,
-        custom_metrics_val_profit_loss_ratio,
-        custom_metrics_val_max_drawdown,
-        custom_metrics_val_trade_return,
-        custom_metrics_val_hold_length,
-        custom_metrics_val_excess_return
         """
         return 8
     def plot(self, out_data, axes_list):
