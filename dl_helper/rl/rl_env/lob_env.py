@@ -812,7 +812,7 @@ class LOB_trade_env(gym.Env):
         for k, v in defult_config['reward_strategy_class_dict'].items():
             config['reward_strategy_class_dict'][k] = config['reward_strategy_class_dict'].get(k, v)
 
-        self.max_drawdown_threshold = config['max_drawdown_threshold']
+        self.max_drawdown_threshold = abs(config['max_drawdown_threshold'])
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -953,6 +953,12 @@ class LOB_trade_env(gym.Env):
     def _cal_reward(self, action, need_close, info):
         """
         计算奖励
+        
+        act_criteria 动作评价:
+            -1 非法动作
+            0 交易获利
+            1 交易亏损
+            2 触发止损
         """
         # 游戏是否终止
         # 1. 非法操作                                 -ILLEGAL_REWARD
@@ -986,7 +992,7 @@ class LOB_trade_env(gym.Env):
             # 检查最大回测 
             if abs(res['max_drawdown']) > self.max_drawdown_threshold:
                 # 游戏被终止，计入交易失败
-                info['act_criteria'] = 1
+                info['act_criteria'] = 2
                 acc_done = True
                 reward = -STD_REWARD
 

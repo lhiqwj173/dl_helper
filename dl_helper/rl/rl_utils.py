@@ -247,12 +247,12 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     _max_reward = [x for x in max_reward if not np.isnan(x)]
     _val_mean_reward = [x for x in val_mean_reward if not np.isnan(x)]
     _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
-    
-    # Calculate maximums
-    mean_reward_max = max(_mean_reward) if len(_mean_reward) > 0 else 0
-    max_reward_max = max(_max_reward) if len(_max_reward) > 0 else 0
-    val_mean_reward_max = max(_val_mean_reward) if len(_val_mean_reward) > 0 else 0
-    val_max_reward_max = max(_val_max_reward) if len(_val_max_reward) > 0 else 0
+
+    # latest values
+    mean_reward_latest = _mean_reward[-1] if len(_mean_reward) > 0 else np.nan
+    max_reward_latest = _max_reward[-1] if len(_max_reward) > 0 else np.nan
+    val_mean_reward_latest = _val_mean_reward[-1] if len(_val_mean_reward) > 0 else np.nan
+    val_max_reward_latest = _val_max_reward[-1] if len(_val_max_reward) > 0 else np.nan
 
     # Determine number of subplots
     additional_plots = custom_plotter.get_additional_plot_count() if custom_plotter else 0
@@ -271,14 +271,14 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     # 创建右侧y轴
     ax2 = ax.twinx()
 
-    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.4f})')
-    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.4f})')
-    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.4f})')
-    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.4f})')
-    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_max:.4f})')
-    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_max:.4f})')
-    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_max:.4f})')
-    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_max:.4f})')
+    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_latest:.4f})')
+    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_latest:.4f})')
+    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_latest:.4f})')
+    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_latest:.4f})')
+    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_latest:.4f})')
+    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_latest:.4f})')
+    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_latest:.4f})')
+    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_latest:.4f})')
     
     # 右侧y轴绘制学习率曲线
     learning_rates = out_data['learning_rate'].values

@@ -9,6 +9,7 @@ from ray.rllib.core.rl_module.rl_module import RLModuleSpec
 from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
 from ray.rllib.examples.learners.classes.intrinsic_curiosity_learners import ICM_MODULE_ID
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+from ray.rllib.algorithms.ppo import PPOConfig
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
@@ -76,7 +77,7 @@ def run(
     env_config['train_folder'] = train_folder
     env_config['train_title'] = train_title
     config = (
-        ClientPPOConfig()
+        PPOConfig()
         .api_stack(
             enable_rl_module_and_learner=True,
             enable_env_runner_and_connector_v2=True,
@@ -85,7 +86,7 @@ def run(
             "lob",
             # 环境配置
             env_config=env_config
-        )# 直接使用
+        )
         .env_runners(
             sample_timeout_s=24*60*60,
             num_env_runners=int(os.cpu_count() - num_learners) if not in_windows() else 0,# 设置成核心数减去gpu数, win下不使用

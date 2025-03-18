@@ -95,6 +95,8 @@ class LobCallbacks(DefaultCallbacks):
                     episode.add_temporary_timestep_data(f"{key_type}win_ret", info['trade_return'])# 盈利金额
                 else:
                     episode.add_temporary_timestep_data(f"{key_type}loss_ret", abs(info['trade_return']))# 亏损金额
+                    if info['act_criteria'] == 2:
+                        episode.add_temporary_timestep_data(f"{key_type}force_stop_num", 1)# 触发止损次数
 
                 episode.add_temporary_timestep_data(f"{key_type}max_drawdown", info['max_drawdown'])
                 episode.add_temporary_timestep_data(f"{key_type}trade_return", info['trade_return'])
@@ -124,6 +126,7 @@ class LobCallbacks(DefaultCallbacks):
         illegal_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}illegal_num"))# 可能为 nan
         trade_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}trade_num"))# 可能为 nan
         win_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_num"))# 可能为 nan
+        force_stop_num = np.sum(episode.get_temporary_timestep_data(f"{key_type}force_stop_num"))# 可能为 nan
         win_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}win_ret"))# 可能为 nan
         loss_ret = np.sum(episode.get_temporary_timestep_data(f"{key_type}loss_ret"))# 可能为 nan
         max_drawdown = np.min(episode.get_temporary_timestep_data(f"{key_type}max_drawdown")) if len(episode.get_temporary_timestep_data(f"{key_type}max_drawdown")) > 0 else np.nan# 可能为 nan
@@ -142,6 +145,9 @@ class LobCallbacks(DefaultCallbacks):
         )
         metrics_logger.log_value(
             f"{key_type}win_num", win_num, reduce='sum', window=self.window
+        )
+        metrics_logger.log_value(
+            f"{key_type}force_stop_num", force_stop_num, reduce='sum', window=self.window
         )
         metrics_logger.log_value(
             f"{key_type}win_ret", win_ret, reduce='sum', window=self.window
@@ -210,6 +216,7 @@ class LobCallbacks(DefaultCallbacks):
             if 'trade_num' in result["env_runners"]:
                 result["custom_metrics"]["trade_num"] = result["env_runners"]["trade_num"] / self.window# 每轮平均交易数
                 result["custom_metrics"]["win_ratio"] = result["env_runners"]["win_num"] / result["env_runners"]["trade_num"] if result["env_runners"]["trade_num"] > 0 else np.nan
+                result["custom_metrics"]["force_stop_ratio"] = result["env_runners"]["force_stop_num"] / result["env_runners"]["trade_num"] if result["env_runners"]["trade_num"] > 0 else np.nan
                 result["custom_metrics"]["profit_loss_ratio"] = result["env_runners"]["win_ret"] / result["env_runners"]["loss_ret"] if result["env_runners"]["loss_ret"] > 0 else np.nan
                 result["custom_metrics"]["max_drawdown"] = result["env_runners"]["max_drawdown"]
                 result["custom_metrics"]["trade_return"] = result["env_runners"]["trade_return"]
@@ -228,6 +235,7 @@ class LobCallbacks(DefaultCallbacks):
 
             result["custom_metrics"]["val_trade_num"] = result["evaluation"]["env_runners"]["val_trade_num"] / self.window# 每轮平均交易数
             result["custom_metrics"]["val_win_ratio"] = result["evaluation"]["env_runners"]["val_win_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else np.nan
+            result["custom_metrics"]["val_force_stop_ratio"] = result["evaluation"]["env_runners"]["val_force_stop_num"] / result["evaluation"]["env_runners"]["val_trade_num"] if result["evaluation"]["env_runners"]["val_trade_num"] > 0 else np.nan
             result["custom_metrics"]["val_profit_loss_ratio"] = result["evaluation"]["env_runners"]["val_win_ret"] / result["evaluation"]["env_runners"]["val_loss_ret"] if result["evaluation"]["env_runners"]["val_loss_ret"] > 0 else np.nan
             result["custom_metrics"]["val_max_drawdown"] = result["evaluation"]["env_runners"]["val_max_drawdown"]
             result["custom_metrics"]["val_trade_return"] = result["evaluation"]["env_runners"]["val_trade_return"]
@@ -264,17 +272,21 @@ class LobPlotter(BaseCustomPlotter):
         """
         datetime = pd.to_datetime(out_data['datetime'])
 
-        # 1. illegal_ratio 和 win_ratio
+        # 1. illegal_ratio, win_ratio 和 force_stop_ratio
         ax = axes_list[0]
         illegal_ratio_last = out_data['custom_metrics_illegal_ratio'].iloc[-1]
         win_ratio_last = out_data['custom_metrics_win_ratio'].iloc[-1]
+        force_stop_ratio_last = out_data['custom_metrics_force_stop_ratio'].iloc[-1]
         val_illegal_ratio_last = out_data['custom_metrics_val_illegal_ratio'].iloc[-1]
         val_win_ratio_last = out_data['custom_metrics_val_win_ratio'].iloc[-1]
+        val_force_stop_ratio_last = out_data['custom_metrics_val_force_stop_ratio'].iloc[-1]
         ax.plot(out_data['custom_metrics_illegal_ratio'], 'r-', label=f'illegal_ratio({illegal_ratio_last:.4f})', alpha=0.4)
         ax.plot(out_data['custom_metrics_win_ratio'], 'g-', label=f'win_ratio({win_ratio_last:.4f})', alpha=0.4)
+        ax.plot(out_data['custom_metrics_force_stop_ratio'], 'y-', label=f'force_stop_ratio({force_stop_ratio_last:.4f})', alpha=0.4)
         ax.plot(out_data['custom_metrics_val_illegal_ratio'], 'r-', label=f'val_illegal_ratio({val_illegal_ratio_last:.4f})')
         ax.plot(out_data['custom_metrics_val_win_ratio'], 'g-', label=f'val_win_ratio({val_win_ratio_last:.4f})')
-        ax.set_title('Illegal Ratio & Win Ratio')
+        ax.plot(out_data['custom_metrics_val_force_stop_ratio'], 'y-', label=f'val_force_stop_ratio({val_force_stop_ratio_last:.4f})')
+        ax.set_title('Illegal Ratio & Win Ratio & Force Stop Ratio')
         ax.legend()
 
         # 2. act pct
