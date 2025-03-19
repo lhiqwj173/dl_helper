@@ -6,6 +6,18 @@ from dl_helper.tool import in_windows
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
+
+from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
+from ray.rllib.core import DEFAULT_MODULE_ID
+from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
+from ray.rllib.core.rl_module.rl_module import RLModuleSpec
+from ray.rllib.examples.learners.classes.intrinsic_curiosity_learners import (
+    ICM_MODULE_ID,
+)
+from ray.rllib.examples.rl_modules.classes.intrinsic_curiosity_model_rlm import (
+    IntrinsicCuriosityModel,
+)
+
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
@@ -43,6 +55,10 @@ if __name__ == "__main__":
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
     log(f"num_learners: {num_learners}")
+
+    use_intrinsic_curiosity = False
+    if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
+        use_intrinsic_curiosity = True
 
     env_config = {
         # 用于实例化 数据生产器
@@ -98,6 +114,52 @@ if __name__ == "__main__":
         )
         .evaluation(**eval_config)
     )
+
+    if use_intrinsic_curiosity:
+        config = config.rl_module(
+            rl_module_spec=MultiRLModuleSpec(
+                rl_module_specs={
+                    # The "main" RLModule (policy) to be trained by our algo.
+                    DEFAULT_MODULE_ID: RLModuleSpec(
+                        **({}),
+                    ),
+                    # The intrinsic curiosity model.
+                    ICM_MODULE_ID: RLModuleSpec(
+                        module_class=IntrinsicCuriosityModel,
+                        # Only create the ICM on the Learner workers, NOT on the
+                        # EnvRunners.
+                        learner_only=True,
+                        # Configure the architecture of the ICM here.
+                        model_config={
+                            "feature_dim": 12,
+                            "feature_net_hiddens": (24, 24),
+                            "feature_net_activation": "relu",
+                            "inverse_net_hiddens": (24, 24),
+                            "inverse_net_activation": "relu",
+                            "forward_net_hiddens": (24, 24),
+                            "forward_net_activation": "relu",
+                        },
+                    ),
+                }
+            ),
+            # # Use a different learning rate for training the ICM.
+            # algorithm_config_overrides_per_module={
+            #     ICM_MODULE_ID: AlgorithmConfig.overrides(lr=0.0005)
+            # },
+        )
+
+        config = config.training(
+            learner_config_dict={
+                # Intrinsic reward coefficient.
+                "intrinsic_reward_coeff": 0.05,
+                # Forward loss weight (vs inverse dynamics loss). Total ICM loss is:
+                # L(total ICM) = (
+                #     `forward_loss_weight` * L(forward)
+                #     + (1.0 - `forward_loss_weight`) * L(inverse_dyn)
+                # )
+                "forward_loss_weight": 0.2,
+            }
+        )
 
     # 构建算法
     algo = config.build()
