@@ -786,7 +786,6 @@ class MATCH_trade_env(gym.Env):
             # 标准化 res / res_last TODO
 
             # 添加 静态特征
-            pickle.dump([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]], open(os.path.join(self.save_folder, 'observation.pkl'), 'wb'))
             observation = np.concatenate([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]])
 
             # 检查是否结束
@@ -839,12 +838,12 @@ class MATCH_trade_env(gym.Env):
             # 账户
             self.acc.reset(match_data)
             # 账户需要用动作0走一步, 会初始记录act之前的净值
-            pos, res, res_last, _ = self.acc.step(self.data_producer.get_codes_bid_ask(), 0)
+            pos, res_last, _, _ = self.acc.step(self.data_producer.get_codes_bid_ask(), 0)
+            res = 0.0# 初始肯定为 0.0
 
             # 标准化 res / res_last TODO
 
             # 添加 静态特征
-            pickle.dump([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]], open(os.path.join(self.save_folder, 'observation.pkl'), 'wb'))
             observation = np.concatenate([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]])
 
             # 记录静态数据，用于输出预测数据
@@ -937,7 +936,7 @@ def test_env():
             'train_folder': r'C:\Users\lh\Desktop\temp\match_env',
             'train_title': 'test',
         },
-        debug_dates=['20241009.pkl'],
+        debug_dates=['20231204.pkl'],
     )
 
     act_idx = 0
