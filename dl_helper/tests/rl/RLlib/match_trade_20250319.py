@@ -33,7 +33,11 @@ from dl_helper.rl.rl_env.match_env_reward import EndPositionRewardStrategy, Clos
 from dl_helper.rl.costum_rllib_module.match_model import MatchCallbacks, MatchPlotter
 from dl_helper.rl.rl_env.match_env import MATCH_trade_env
 
-train_folder = train_title = f'20250319_match_trade'
+use_intrinsic_curiosity = False
+if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
+    use_intrinsic_curiosity = True
+
+train_folder = train_title = f'20250319_match_trade' + "" if not use_intrinsic_curiosity else '_ICM'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 def keep_only_latest_files(folder, num=50):
@@ -55,10 +59,6 @@ if __name__ == "__main__":
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes()
     log(f"num_learners: {num_learners}")
-
-    use_intrinsic_curiosity = False
-    if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
-        use_intrinsic_curiosity = True
 
     env_config = {
         # 用于实例化 数据生产器
