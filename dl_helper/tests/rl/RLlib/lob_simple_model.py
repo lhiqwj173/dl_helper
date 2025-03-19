@@ -25,7 +25,7 @@ class EncourageTradeRewardStrategy(RewardStrategy):
             return STD_REWARD / 100, False
         return 0, False
 
-train_title = train_folder = '20250318_rule_learning'
+train_title = train_folder = '20250319_rule_learning_simple'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
