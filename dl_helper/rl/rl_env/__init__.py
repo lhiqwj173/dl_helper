@@ -9,7 +9,7 @@ from ray.tune.registry import register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
 from dl_helper.rl.rl_env.lob_env import LOB_trade_env
-
+from dl_helper.rl.rl_env.match_env import MATCH_trade_env
 
 class Register:
     _instance = None
@@ -24,6 +24,7 @@ class Register:
         # print(CartPoleEnv.__dict__)
         # register_env(CartPoleEnv.REG_NAME, lambda config={}: CartPoleEnv())
         register_env(LOB_trade_env.REG_NAME, lambda config={}: LOB_trade_env(config))
+        register_env(MATCH_trade_env.REG_NAME, lambda config={}: MATCH_trade_env(config))
 
 # 实例化
 _ = Register()

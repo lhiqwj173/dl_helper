@@ -182,7 +182,7 @@ def run(
         # 单机运行
         config = config.learners(    
             num_learners=num_learners,
-            num_gpus_per_learner=0,
+            num_gpus_per_learner=1,
         )
         # # FOR DEBUG
         # eval_config['evaluation_interval'] = 1

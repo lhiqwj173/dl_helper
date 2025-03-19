@@ -8,8 +8,30 @@
 
 目标: 
     1. 止损触发率0
-    2. 非法操作率0
+    2. 非法操作率0 > 交易频率最高，且无非法操作
 
+20250319:
+    奖励: 
+        1. 非法操作     -STD_REWARD * 1000
+        2. 止损         -STD_REWARD
+        3. 积极交易     +STD_REWARD / 100
+    
+    结果:
+        illegal_ratio: 0.0789
+        force_stop_ratio: 0.0000
+        act_0_pct: 0.4554
+        act_1_pct: 0.4547
+        hold_length: 3.3
+    
+    总结:
+        1. ai 积极交易，追求交易奖励，但最终都以 illegal 终止，说明还是没能学到完美的交易规则
+        2. force_stop_ratio 为 0, 没有触发止损 / 持仓太短达不到跌幅
+        3. 中间阶段出现过峰值 4454, 完美的频繁交易，且不触发 illegal > reward不是全部文件, 而是部分文件, 因此可能是局部文件过拟合
+
+    改进:
+        1. 增加止损触发情景 > 使用下跌趋势的行情, 以持仓并临近止损状态开始训练
+        2. 增加奖励: 交易次数越高，交易获得的奖励就越高
+        3. 正常训练结束, 给与额外奖励
 """
 from py_ext.tool import init_logger
 from py_ext.datetime import beijing_time
