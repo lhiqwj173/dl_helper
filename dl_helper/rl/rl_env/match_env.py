@@ -844,6 +844,7 @@ class MATCH_trade_env(gym.Env):
             # 标准化 res / res_last TODO
 
             # 添加 静态特征
+            pickle.dump([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]], open(os.path.join(self.save_folder, 'observation.pkl'), 'wb'))
             observation = np.concatenate([his_daily_x, tick_x, [before_market_close_sec, pos, res, res_last]])
 
             # 记录静态数据，用于输出预测数据
