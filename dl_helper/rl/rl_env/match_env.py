@@ -453,6 +453,7 @@ class Account:
         self.match_data = match_data
         self.default_code1_pos = self.code1_pos = self.match_data['beta']
         self.default_code2_pos = self.code2_pos = 1
+        self.last_pos_increase_diff = 0
         self.pos = 0
         self.net_raw = []
         self.net_raw_bm = []
