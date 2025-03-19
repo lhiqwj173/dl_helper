@@ -111,19 +111,19 @@ class RewardCalculator:
         if need_close:
             # 当天结束
             strategy = self.strategies['end_position']
-            print(f'reward end_position')
+            # print(f'reward end_position')
         elif close_net_raw_last_change_bm:
             # 最近的非均衡仓位平仓了
             strategy = self.strategies['close_position']
-            print(f'reward close_position')
+            # print(f'reward close_position')
         else:
             if acc.pos in [-1, 1]:
                 # 非均衡仓位
                 strategy = self.strategies['hold_position']
-                print(f'reward hold_position')
+                # print(f'reward hold_position')
             else:
                 # 均衡仓位
                 strategy = self.strategies['balance']
-                print(f'reward balance')
+                # print(f'reward balance')
         reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, need_close, action, res, data_producer, acc, close_net_raw_last_change, close_net_raw_last_change_bm)
         return reward, acc_done

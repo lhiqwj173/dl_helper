@@ -459,6 +459,8 @@ class Account:
         self.net_raw_bm = []
         self.net_raw_last_change = []# 最近一次调仓策略净值
         self.net_raw_last_change_bm = []# 最近一次调仓基准净值
+        self.last_change_pre_code1_pos = 0
+        self.last_change_pre_code2_pos = 0
         return self.pos, 0, 0
 
 class RewardTracker:
@@ -694,9 +696,12 @@ class MATCH_trade_env(gym.Env):
             # 标记结束交易
             result['close_trade'] = True
             # 计算结束交易的超额收益率
-            ret = np.log(self.acc.net_raw_last_change[-1]) - np.log(self.acc.net_raw_last_change[0])
-            ret_bm = np.log(self.acc.net_raw_last_change_bm[-1]) - np.log(self.acc.net_raw_last_change_bm[0])
-            excess_return = ret - ret_bm
+            if len(self.acc.net_raw_last_change) > 0:
+                ret = np.log(self.acc.net_raw_last_change[-1]) - np.log(self.acc.net_raw_last_change[0])
+                ret_bm = np.log(self.acc.net_raw_last_change_bm[-1]) - np.log(self.acc.net_raw_last_change_bm[0])
+                excess_return = ret - ret_bm
+            else:
+                excess_return = 0.0
             result['close_excess_return'] = excess_return
 
         else:
@@ -740,6 +745,9 @@ class MATCH_trade_env(gym.Env):
             f.write('\n')
     
     def step(self, action):
+        # 校正 action
+        action -= 1
+
         self.steps += 1
         try:
             assert not self.need_reset, "LOB env need reset"

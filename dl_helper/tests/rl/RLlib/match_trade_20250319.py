@@ -57,7 +57,7 @@ def remove_old_env_output_files(save_folder, num=50):
 
 if __name__ == "__main__":
     # 根据设备gpu数量选择 num_learners
-    num_learners = match_num_processes()
+    num_learners = match_num_processes() if not in_windows() else 0
     log(f"num_learners: {num_learners}")
 
     env_config = {
