@@ -555,16 +555,16 @@ class Account:
     fee_rate = 5e-5
 
     def __init__(self):
-        # 持仓量 
+        # 持仓状态 
+        self.status = 0
+        # 持仓量
         self.pos = 0
         # 持仓成本
         self.cost = 0
         # 净值序列
         self.net_raw = []
         self.net_raw_bm = []# 基准，一直持有
-        self.net = []
-        self.net_bm = []
-        self.bm_next_open = True
+        self.net_raw_last_change = []# 最近一次开仓策略净值
 
     def step(self, bid_price, ask_price, action):
         """
@@ -573,7 +573,7 @@ class Account:
         :param ask_price: 最优卖价 
         :param action: 0-买入 1-卖出 2-不操作
 
-        :return: (动作是否合法, 持仓量, 对数收益率, 评价指标)
+        :return: (动作是否合法, 持仓状态, 对数收益率, 评价指标)
             评价指标(年化):
                 'max_drawdown'
                 'max_drawdown_ticks'
@@ -592,7 +592,7 @@ class Account:
         unrealized_profit = 0
         sell_fee = bid_price * Account.fee_rate
         sell_gain = bid_price - sell_fee
-        if self.pos == 1:
+        if self.status == 1:
             # 未实现收益需考虑卖出时的手续费
             unrealized_profit = np.log(sell_gain / self.cost)
 
@@ -602,8 +602,8 @@ class Account:
         # 无操作任何时间都允许
         legal = True
         if action == 0:  # 买入
-            if self.pos == 0:  # 空仓可以买入
-                self.pos = 1
+            if self.status == 0:  # 空仓可以买入
+                self.status = 1
                 # 买入成本需要加上手续费
                 buy_fee = ask_price * Account.fee_rate
                 self.cost = ask_price + buy_fee
@@ -623,14 +623,14 @@ class Account:
             else:
                 legal = False
         elif action == 1:  # 卖出
-            if self.pos == 1:  # 有多仓可以卖出
-                self.pos = 0
+            if self.status == 1:  # 有多仓可以卖出
+                self.status = 0
                 # 兑现价值（剔除手续费）
                 self.net_raw.append(sell_gain)
             else:
                 legal = False
         elif action == 2:   # 不操作
-            if self.pos == 0:
+            if self.status == 0:
                 # 肯定没有前净值数据
                 assert len(self.net_raw) == 0
             else:
@@ -644,7 +644,7 @@ class Account:
         #     self.net_raw.append(sell_gain)
 
         # print("acc::step",legal, res)
-        return legal, self.pos, unrealized_profit
+        return legal, self.status, unrealized_profit
 
     @staticmethod
     def cal_res(legal, net_raw, net_raw_bm):
@@ -694,12 +694,11 @@ class Account:
         """
         重置账户状态
         """
-        self.pos = 0
+        self.status = 0
         self.cost = 0 
         self.net_raw = []
         self.net_raw_bm = []
-        self.bm_next_open = True
-        return self.pos, 0
+        return self.status, 0
 
 class RewardTracker:
     def __init__(self):
@@ -1517,7 +1516,6 @@ class LOB_trade_env(gym.Env):
             plt.pause(0.1)  # 降低检查频率
             
         return self.selected_action
-
 
 def test_quick_produce_train_sdpk(date, code):
     """

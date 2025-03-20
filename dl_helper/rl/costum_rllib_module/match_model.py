@@ -293,7 +293,7 @@ class MatchPlotter(BaseCustomPlotter):
         ax.legend()
 
         # 7. excess_return
-        ax = axes_list[7]
+        ax = axes_list[6]
         excess_return_last = out_data['custom_metrics_excess_return'].iloc[-1]
         val_excess_return_last = out_data['custom_metrics_val_excess_return'].iloc[-1]
         ax.plot(out_data['custom_metrics_excess_return'], 'g-', label=f'excess_return({excess_return_last:.4f})', alpha=0.4)
