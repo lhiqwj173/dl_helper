@@ -1003,7 +1003,6 @@ class LOB_trade_env(gym.Env):
                     if action==1:
                         # 交易对数
                         self.trades += 1
-                        res['trades'] = self.trades
 
                     if not need_close:
                         # 潜在收益率（针对最近的交易序列）
@@ -1018,6 +1017,9 @@ class LOB_trade_env(gym.Env):
                     res['potential_return'] = max_profit_reachable_bm
                     res['acc_return'] = acc_return
 
+                # 交易对数
+                res['trades'] = self.trades
+
                 # 账户是否开仓过
                 acc_opened = len(self.acc.net_raw) > 0
 
@@ -1027,14 +1029,14 @@ class LOB_trade_env(gym.Env):
                 # 奖励范围
                 assert abs(reward) <= FINAL_REWARD, f'reward({reward}) > FINAL_REWARD({FINAL_REWARD})'
 
-            # 拷贝 res > info
-            for k, v in res.items():
-                info[k] = v
-
         else:
             # 非法动作, 游戏终止，任务失败
             info['act_criteria'] = -1
             reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, None, legal, need_close, action, res, self.data_producer, self.acc)
+
+        # 拷贝 res > info
+        for k, v in res.items():
+            info[k] = v
 
         return reward, acc_done, pos, inday_return, unrealized_return
 
