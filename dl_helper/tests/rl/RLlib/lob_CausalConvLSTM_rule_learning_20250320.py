@@ -41,13 +41,13 @@ from dl_helper.rl.rl_env.lob_env_reward import RewardStrategy
 from dl_helper.rl.rl_env.lob_env import STD_REWARD
 
 class EncourageTradeRewardStrategy(RewardStrategy):
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
         """鼓励交易"""
         if action in [0, 1]:
             return STD_REWARD / 100, False
         return 0, False
 
-train_title = train_folder = '20250318_rule_learning_output_dims16'
+train_title = train_folder = '20250320_rule_learning'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
 
 if __name__ == "__main__":
@@ -58,10 +58,12 @@ if __name__ == "__main__":
         model_config={
             # 自定义编码器参数  
             'input_dims' : (10, 20),
-            'extra_input_dims' : 4,
+            'extra_input_dims' : 5,
             'output_dims' : 16,
         },
         env_config ={
+            # 终止游戏的回撤阈值
+            'max_drawdown_threshold': 1000,# 相当于无止损
             # 全部使用空白的奖励
             'reward_strategy_class_dict': {
                 'end_position': EncourageTradeRewardStrategy,

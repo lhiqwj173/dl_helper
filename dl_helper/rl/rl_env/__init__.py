@@ -10,6 +10,7 @@ from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
 from dl_helper.rl.rl_env.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.match_env import MATCH_trade_env
+from dl_helper.rl.rl_env.snake_env import SnakeEnv
 
 class Register:
     _instance = None
@@ -25,6 +26,7 @@ class Register:
         # register_env(CartPoleEnv.REG_NAME, lambda config={}: CartPoleEnv())
         register_env(LOB_trade_env.REG_NAME, lambda config={}: LOB_trade_env(config))
         register_env(MATCH_trade_env.REG_NAME, lambda config={}: MATCH_trade_env(config))
+        register_env(SnakeEnv.REG_NAME, lambda config={}: SnakeEnv(config))
 
 # 实例化
 _ = Register()

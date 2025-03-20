@@ -18,7 +18,7 @@ from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown,
 from dl_helper.train_param import in_kaggle
 
 from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.lob_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, OpenPositionStepRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, RewardCalculator
 
 USE_CODES = [
     '513050',
@@ -557,10 +557,13 @@ class Account:
     def __init__(self):
         # 持仓状态 
         self.status = 0
+        # 是否初始化了策略净值
+        self.init_net_raw = False
         # 持仓量
         self.pos = 0
-        # 持仓成本
-        self.cost = 0
+        self.cash = 0
+        # 持仓时间
+        self.hold_length = 0
         # 净值序列
         self.net_raw = []
         self.net_raw_bm = []# 基准，一直持有
@@ -588,63 +591,75 @@ class Account:
         assert not np.isnan(bid_price), f'bid_price is nan, {bid_price}'
         assert not np.isnan(ask_price), f'ask_price is nan, {ask_price}'
 
-        # 计算持仓对数收益率
-        unrealized_profit = 0
-        sell_fee = bid_price * Account.fee_rate
-        sell_gain = bid_price - sell_fee
+        # 检查
+        if self.status:
+            assert self.cash == 0 and self.pos>0, f'status:{self.status} cash:{self.cash} pos:{self.pos}'
+        else:
+            assert not self.net_raw_last_change, f'status:{self.status} net_raw_last_change:{self.net_raw_last_change}'
+            assert self.pos == 0 and (self.cash >0 or not self.init_net_raw), f'status:{self.status} cash:{self.cash} pos:{self.pos}'
+
+        # 持仓时间
+        if self.status == 1:
+            self.hold_length += 1
+
+        # 基于最新数据 更新净值
+        # 转为现金的价值
+        net_bm = bid_price * (1 - Account.fee_rate)
+        self.net_raw_bm.append(net_bm)
+        # 初始化策略净值（与基准净值一致）
+        if len(self.net_raw) == 0:
+            net = self.cash = self.net_raw_bm[0]# 现金
+            self.init_net_raw = True
+        else:
+            net = self.cash + self.pos * bid_price * (1 - Account.fee_rate)
+        self.net_raw.append(net)
+        if self.status == 1:
+            self.net_raw_last_change.append(net)
+
+        # 计算持仓对数收益率(最近一次的在持仓位)
+        unrealized_return = 0
         if self.status == 1:
             # 未实现收益需考虑卖出时的手续费
-            unrealized_profit = np.log(sell_gain / self.cost)
+            unrealized_return = np.log(self.net_raw_last_change[-1] / self.net_raw_last_change[0])
 
-        # 基准净值, 一直持有标的的兑现价值（剔除手续费）
-        self.net_raw_bm.append(sell_gain)
+        # 日内收益率
+        inday_return = np.log(self.net_raw[-1] / self.net_raw[0])
+
+        # 本次操作平仓的净值序列
+        close_net_raw = []
 
         # 无操作任何时间都允许
         legal = True
         if action == 0:  # 买入
             if self.status == 0:  # 空仓可以买入
                 self.status = 1
-                # 买入成本需要加上手续费
-                buy_fee = ask_price * Account.fee_rate
-                self.cost = ask_price + buy_fee
+                self.hold_length += 1
 
-                # 用 cost 填充开仓之前的净值（相对于all in）
-                for _ in range(len(self.net_raw_bm) - 1):
-                    self.net_raw.append(self.cost)
+                # 更新 pos/cash
+                self.pos = self.cash / (ask_price * (1 + Account.fee_rate))
+                self.cash = 0
 
-                # 兑现价值（剔除手续费）
-                self.net_raw.append(sell_gain)
-
-                # 买入后就应该有未实现收益 > 是下一个step的状态
-                # 未实现收益需考虑卖出时的手续费
-                sell_fee = bid_price * Account.fee_rate
-                sell_gain = bid_price - sell_fee
-                unrealized_profit = np.log(sell_gain / self.cost)
+                # 更新净值
+                self.net_raw[-1] = self.pos * bid_price * (1 - Account.fee_rate)
             else:
                 legal = False
         elif action == 1:  # 卖出
             if self.status == 1:  # 有多仓可以卖出
                 self.status = 0
-                # 兑现价值（剔除手续费）
-                self.net_raw.append(sell_gain)
+                self.hold_length -= 1# 时刻开始就卖出了，需要把多加的剪掉
+
+                # 备份重置 net_raw_last_change
+                close_net_raw = self.net_raw_last_change
+                self.net_raw_last_change = []
+
+                # 更新 pos/cash
+                self.cash = self.net_raw[-1]
+                self.pos = 0
             else:
                 legal = False
-        elif action == 2:   # 不操作
-            if self.status == 0:
-                # 肯定没有前净值数据
-                assert len(self.net_raw) == 0
-            else:
-                # 有持仓
-                # 兑现价值（剔除手续费）
-                self.net_raw.append(sell_gain)
 
-        # # 非法动作， 净值也不在作用
-        # if not legal:
-        #     # 兑现价值（剔除手续费）
-        #     self.net_raw.append(sell_gain)
-
-        # print("acc::step",legal, res)
-        return legal, self.status, unrealized_profit
+        print("acc::step", action, self.status, self.pos, self.cash)
+        return legal, self.status, inday_return, unrealized_return, close_net_raw
 
     @staticmethod
     def cal_res(legal, net_raw, net_raw_bm):
@@ -674,11 +689,7 @@ class Account:
                 res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(net)
                 res['trade_return'] = calc_return(log_returns, annualize=False)
                 res['step_return'] = log_returns[-1]
-                # 从第一个非0值开始计算持仓长度
-                first_nonzero = next((i for i, x in enumerate(log_returns) if x != 0), len(log_returns))
-                res['hold_length'] = len(log_returns) - first_nonzero
 
-            if (len(net_raw_bm) > 1):
                 # 计算基准净值的评价指标
                 net_bm = np.array(net_raw_bm)
                 # 计算对数收益率序列
@@ -695,9 +706,13 @@ class Account:
         重置账户状态
         """
         self.status = 0
-        self.cost = 0 
+        self.pos = 0
+        self.cash = 0
+        self.hold_length = 0
         self.net_raw = []
         self.net_raw_bm = []
+        self.net_raw_last_change = []
+        self.init_net_raw = False
         return self.status, 0
 
 class RewardTracker:
@@ -768,9 +783,9 @@ class LOB_trade_env(gym.Env):
 
                 # 奖励策略
                 'reward_strategy_class_dict': {
-                    'end_position': EndPositionRewardStrategy,
+                    'end_position': ClosePositionRewardStrategy,
                     'close_position': ClosePositionRewardStrategy,
-                    'open_position_step': OpenPositionStepRewardStrategy,
+                    'open_position_step': BlankRewardStrategy,
                     'hold_position': HoldPositionRewardStrategy,
                     'no_position': NoPositionRewardStrategy
                 }
@@ -793,13 +808,13 @@ class LOB_trade_env(gym.Env):
             'use_progressive_mask': False,# 是否使用渐进式掩码
 
             # 终止游戏的回撤阈值
-            'max_drawdown_threshold': 0.005,# 最大回测阈值
+            'max_drawdown_threshold': 0.01,# 最大回测阈值
 
             # 奖励策略
             'reward_strategy_class_dict': {
-                'end_position': EndPositionRewardStrategy,
+                'end_position': ClosePositionRewardStrategy,
                 'close_position': ClosePositionRewardStrategy,
-                'open_position_step': OpenPositionStepRewardStrategy,
+                'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
                 'no_position': NoPositionRewardStrategy
             }
@@ -819,7 +834,7 @@ class LOB_trade_env(gym.Env):
             os.makedirs(self.save_folder)
 
         # 奖励计算器
-        self.reward_calculator = RewardCalculator(config['reward_strategy_class_dict'])
+        self.reward_calculator = RewardCalculator(config['max_drawdown_threshold'], config['reward_strategy_class_dict'])
 
         # 是否标准化数据
         self.data_std = data_std
@@ -863,13 +878,7 @@ class LOB_trade_env(gym.Env):
         self.action_space = spaces.Discrete(3)
 
         # 观察空间 
-        #     标的数据
-        #       100 * 130 -> 13000
-        #     仓位数据:
-        #       #交易数量 固定1单位
-        #       0/1 空仓/多头
-        # 13001 数组
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 4,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 5,), dtype=np.float32)
 
         # 记录上一个买入的idx
         self.last_buy_idx = -1
@@ -892,11 +901,6 @@ class LOB_trade_env(gym.Env):
         self.mean_episode_lengths = 0
         self.episode_count = 0
 
-        # 记录策略日内的累计收益率
-        self.acc_return = 0
-        # 累计潜在收益
-        self.potential_return = 0
-        
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
     @staticmethod
@@ -964,34 +968,31 @@ class LOB_trade_env(gym.Env):
         # 2. 最大回测超过阈值                           -STD_REWARD
         acc_done = False
 
-        legal, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
+        legal, pos, inday_return, unrealized_return, close_net_raw = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
         res = self.acc.cal_res(legal, self.acc.net_raw, self.acc.net_raw_bm)
+        res['hold_length'] = self.acc.hold_length
 
         # 记录net/net_bm
-        info['net'] = self.acc.net_raw[-1] if self.acc.net_raw else np.nan
-        info['net_bm'] = self.acc.net_raw_bm[-1] if self.acc.net_raw_bm else np.nan
+        res['net'] = self.acc.net_raw[-1] if self.acc.net_raw else np.nan
+        res['net_bm'] = self.acc.net_raw_bm[-1] if self.acc.net_raw_bm else np.nan
 
         #数据类型
-        info['data_type'] = self.data_producer.data_type
-
-        # 记录开仓成本
-        info['cost'] = self.acc.cost
+        res['data_type'] = self.data_producer.data_type
 
         reward = 0
         if legal:
             # 动作合法
 
-            # 只有平仓才给与 act_criteria
             # 同时记录评价指标
             if need_close or action==1:
                 # 增加操作交易评价结果
                 # 体现 非法/win/loss
-                info['act_criteria'] = 0 if res['trade_return'] > 0 else 1
+                res['act_criteria'] = 0 if res['trade_return'] > 0 else 1
 
             # 检查最大回测 
             if abs(res['max_drawdown']) > self.max_drawdown_threshold:
                 # 游戏被终止，计入交易失败
-                info['act_criteria'] = 2
+                res['act_criteria'] = 2
                 acc_done = True
                 reward = -STD_REWARD
 
@@ -1000,17 +1001,18 @@ class LOB_trade_env(gym.Env):
 
                 # 平仓时更新一次记录
                 if need_close or action==1:
-                    # 潜在收益率
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
-                    # 必须要完整计算，否则可能会被 策略 的交易对影响截断
-                    _, max_profit_reachable_bm_total, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
-                    self.potential_return = max_profit_reachable_bm_total
-                    # 策略收益率
-                    self.acc_return += res['trade_return']
+                    if not need_close:
+                        # 潜在收益率（针对最近的交易序列）
+                        _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
+                        acc_return = np.log(close_net_raw[-1]) - np.log(close_net_raw[0])
+                    else:
+                        # 游戏完成，使用所有数据完整计算
+                        _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                        # 日内完整的策略收益率
+                        acc_return = res['trade_return']
 
-                    res['max_profit_reachable_bm'] = max_profit_reachable_bm
-                    res['potential_return'] = self.potential_return
-                    res['acc_return'] = self.acc_return
+                    res['potential_return'] = max_profit_reachable_bm
+                    res['acc_return'] = acc_return
 
                 # 账户是否开仓过
                 acc_opened = len(self.acc.net_raw) > 0
@@ -1031,20 +1033,20 @@ class LOB_trade_env(gym.Env):
             acc_done = True
             reward = ILLEGAL_REWARD
 
-        return reward, acc_done, pos, profit
+        return reward, acc_done, pos, inday_return, unrealized_return
 
     def out_test_predict(self, out_text):
         """
         输出测试预测数据 -> predict.csv
 
         # 状态相关
-        id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,
+        id,before_market_close_sec,pos,inday_return,unrealized_return,predict,data_file,episode,step,net,net_bm,
 
         # 其他
         terminated,truncated,legal,
 
         # 奖励评价相关
-        reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,
+        reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,potential_return,acc_return,
 
         # 基准相关
         max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
@@ -1052,7 +1054,7 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,profit,predict,data_file,episode,step,cost,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,inday_return,unrealized_return,predict,data_file,episode,step,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -1074,7 +1076,7 @@ class LOB_trade_env(gym.Env):
             self.last_step_time = time.time()
 
             # 准备输出数据
-            out_text = f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["profit"]},{int(action)},{self.data_producer.cur_data_file},{self.episode_count},{self.steps}'
+            out_text = f'{self.data_producer.id},{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["inday_return"]},{self.static_data["unrealized_return"]},{int(action)},{self.data_producer.cur_data_file},{self.episode_count},{self.steps}'
 
             # 先获取下一个状态的数据, 会储存 bid_price, ask_price, 用于acc.step(), 避免用当前状态种的价格结算
             if self.data_std:
@@ -1093,7 +1095,7 @@ class LOB_trade_env(gym.Env):
                 info['id_std'] = id_std
 
             # 计算奖励
-            reward, acc_done, pos, profit = self._cal_reward(action, need_close, info)
+            reward, acc_done, pos, inday_return, unrealized_return = self._cal_reward(action, need_close, info)
 
             # 记录平仓
             if action==1:
@@ -1101,9 +1103,9 @@ class LOB_trade_env(gym.Env):
 
             # 准备输出数据
             # net,net_bm,
-            out_text += f",{self.acc.cost},{info['net']},{info['net_bm']}"
+            out_text += f",{info['net']},{info['net_bm']}"
             # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
-            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')},{info.get('max_profit_reachable_bm', '')},{info.get('potential_return', '')},{info.get('acc_return', '')}"
+            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')},{info.get('potential_return', '')},{info.get('acc_return', '')}"
             # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
             out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
 
@@ -1111,7 +1113,8 @@ class LOB_trade_env(gym.Env):
             self.static_data = {
                 'before_market_close_sec': before_market_close_sec,
                 'pos': pos,
-                'profit': profit,
+                'inday_return': inday_return,
+                'unrealized_return': unrealized_return,
             }
 
             if action == 1 or need_close or info.get('act_criteria', None) == -1:
@@ -1123,12 +1126,14 @@ class LOB_trade_env(gym.Env):
 
             # 标准化 未实现收益率
             if not unrealized_log_return_std_data is None:
-                profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+                unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+                inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
             else:
-                profit /= 0.03043
+                unrealized_return /= 0.03043
+                inday_return /= 0.03043
 
             # 添加 静态特征
-            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, profit]])
+            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
 
             # 检查是否结束
             terminated = acc_done or need_close# 游戏终止，最终回报: 非法操作 / 消极操作，多次错失机会 / 连续3次平仓奖励为负 / 当天连续数据结束时，平均平仓奖励为正
@@ -1167,8 +1172,6 @@ class LOB_trade_env(gym.Env):
 
             # 重置累计收益率
             self.acc_return = 0
-            # 重置累计潜在收益
-            self.potential_return = 0
             
             # 重置
             self.need_reset = False
@@ -1196,14 +1199,17 @@ class LOB_trade_env(gym.Env):
             # 账户
             self.acc.reset()
             # 账户需要用动作2走一步, 会初始记录act之前的净值
-            _, pos, profit = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
+            _, pos, inday_return, unrealized_return, _ = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
             # 标准化 未实现收益率
             if not unrealized_log_return_std_data is None:
-                profit = (profit - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+                unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+                inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
             else:
-                profit /= 0.03043
+                unrealized_return /= 0.03043
+                inday_return /= 0.03043
+                
             # 添加 静态特征
-            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, profit]])
+            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
             # 初始化skip计数器
             self.skip_steps = 0
 
@@ -1211,7 +1217,8 @@ class LOB_trade_env(gym.Env):
             self.static_data = {
                 'before_market_close_sec': before_market_close_sec,
                 'pos': pos,
-                'profit': profit,
+                'inday_return': inday_return,
+                'unrealized_return': unrealized_return,
             }
 
             if self.data_std:
@@ -1702,11 +1709,3 @@ def test_lob_data(check_data = True):
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
     test_lob_data(check_data=False)
-
-    # acc = Account()
-    # res = acc.cal_res(
-    #     True, 
-    #     [1.018]*37 + [1.018 * (1 + Account.fee_rate)], 
-    #     [1.02, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.019, 1.018, 1.018, 1.018, 1.017, 1.017], 
-    # )
-    # print(res)
