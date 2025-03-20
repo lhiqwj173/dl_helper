@@ -40,12 +40,27 @@ from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPP
 from dl_helper.rl.rl_env.lob_env_reward import RewardStrategy
 from dl_helper.rl.rl_env.lob_env import STD_REWARD
 
+class IllegalRewardStrategy(RewardStrategy):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+        """
+        非法动作奖励策略
+        适用 STD_REWARD 量级惩罚
+        """
+        return -STD_REWARD, True
+
 class EncourageTradeRewardStrategy(RewardStrategy):
     def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
-        """鼓励交易"""
+        """
+        鼓励交易
+        交易对越多，获得的奖励越高
+        """
+        trades = res['trades']
+
+        reward = 0
         if action in [0, 1]:
-            return STD_REWARD / 100, False
-        return 0, False
+            reward = STD_REWARD * (min(trades / (4500 // 2), 1))
+
+        return reward, False
 
 train_title = train_folder = '20250320_rule_learning'
 init_logger(f'{train_title}_{beijing_time().strftime("%Y%m%d")}', home=train_folder, timestamp=False)
@@ -70,7 +85,8 @@ if __name__ == "__main__":
                 'close_position': EncourageTradeRewardStrategy,
                 'open_position_step': EncourageTradeRewardStrategy,
                 'hold_position': EncourageTradeRewardStrategy,
-                'no_position': EncourageTradeRewardStrategy
+                'no_position': EncourageTradeRewardStrategy,
+                'illegal': IllegalRewardStrategy,
             }
         },
     )

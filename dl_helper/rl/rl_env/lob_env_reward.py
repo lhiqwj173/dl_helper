@@ -103,6 +103,14 @@ class NoPositionRewardStrategy_00(NoPositionRewardStrategy):
         reward = -STD_REWARD / 10
         return reward, acc_done
     
+class IllegalRewardStrategy(RewardStrategy):
+    """
+    非法动作奖励策略
+    处理非法动作的情况，包括非法动作的惩罚逻辑。
+    """
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+        return -STD_REWARD * 1000, True
+
 class RewardCalculator:
     def __init__(self, 
             max_drawdown_threshold,
@@ -111,7 +119,8 @@ class RewardCalculator:
                 'close_position': ClosePositionRewardStrategy,
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
-                'no_position': NoPositionRewardStrategy
+                'no_position': NoPositionRewardStrategy,
+                'illegal': IllegalRewardStrategy,
             },
         ):
         """
@@ -127,18 +136,21 @@ class RewardCalculator:
 
     def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc):
         # 当天结束
-        if need_close:
-            strategy = self.strategies['end_position']
-        else:
-            if acc_opened:
-                if action == 1:
-                    strategy = self.strategies['close_position']
-                elif action == 0:
-                    strategy = self.strategies['open_position_step']
-                else:
-                    strategy = self.strategies['hold_position']
+        if legal:
+            if need_close:
+                strategy = self.strategies['end_position']
             else:
-                strategy = self.strategies['no_position']
-
+                if acc_opened:
+                    if action == 1:
+                        strategy = self.strategies['close_position']
+                    elif action == 0:
+                        strategy = self.strategies['open_position_step']
+                    else:
+                        strategy = self.strategies['hold_position']
+                else:
+                    strategy = self.strategies['no_position']
+        else:
+            strategy = self.strategies['illegal']
+    
         reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, self.max_drawdown_threshold)
         return reward, acc_done

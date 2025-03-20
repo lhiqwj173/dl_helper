@@ -18,7 +18,7 @@ from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown,
 from dl_helper.train_param import in_kaggle
 
 from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, IllegalRewardStrategy, RewardCalculator
 
 USE_CODES = [
     '513050',
@@ -58,9 +58,6 @@ MAX_CODE_ID = len(USE_CODES) - 1
 
 STD_REWARD = 100
 FINAL_REWARD = STD_REWARD * 1000
-
-# 非法操作惩罚
-ILLEGAL_REWARD = -FINAL_REWARD
 
 # 时间标准化
 MEAN_SEC_BEFORE_CLOSE = 10024.17
@@ -787,7 +784,8 @@ class LOB_trade_env(gym.Env):
                     'close_position': ClosePositionRewardStrategy,
                     'open_position_step': BlankRewardStrategy,
                     'hold_position': HoldPositionRewardStrategy,
-                    'no_position': NoPositionRewardStrategy
+                    'no_position': NoPositionRewardStrategy,
+                    'illegal': IllegalRewardStrategy,
                 }
             }
         """
@@ -816,7 +814,8 @@ class LOB_trade_env(gym.Env):
                 'close_position': ClosePositionRewardStrategy,
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
-                'no_position': NoPositionRewardStrategy
+                'no_position': NoPositionRewardStrategy,
+                'illegal': IllegalRewardStrategy,
             }
         }
 
@@ -971,7 +970,7 @@ class LOB_trade_env(gym.Env):
         legal, pos, inday_return, unrealized_return, close_net_raw = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
         res = self.acc.cal_res(legal, self.acc.net_raw, self.acc.net_raw_bm)
         res['hold_length'] = self.acc.hold_length
-
+        
         # 记录net/net_bm
         res['net'] = self.acc.net_raw[-1] if self.acc.net_raw else np.nan
         res['net_bm'] = self.acc.net_raw_bm[-1] if self.acc.net_raw_bm else np.nan
@@ -1001,6 +1000,11 @@ class LOB_trade_env(gym.Env):
 
                 # 平仓时更新一次记录
                 if need_close or action==1:
+                    if action==1:
+                        # 交易对数
+                        self.trades += 1
+                        res['trades'] = self.trades
+
                     if not need_close:
                         # 潜在收益率（针对最近的交易序列）
                         _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
@@ -1030,8 +1034,7 @@ class LOB_trade_env(gym.Env):
         else:
             # 非法动作, 游戏终止，任务失败
             info['act_criteria'] = -1
-            acc_done = True
-            reward = ILLEGAL_REWARD
+            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, None, legal, need_close, action, res, self.data_producer, self.acc)
 
         return reward, acc_done, pos, inday_return, unrealized_return
 
@@ -1170,6 +1173,9 @@ class LOB_trade_env(gym.Env):
             # 步数统计
             self.steps = 0
 
+            # 交易对数
+            self.trades = 0
+
             # 重置累计收益率
             self.acc_return = 0
             
@@ -1207,7 +1213,7 @@ class LOB_trade_env(gym.Env):
             else:
                 unrealized_return /= 0.03043
                 inday_return /= 0.03043
-                
+
             # 添加 静态特征
             x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
             # 初始化skip计数器
