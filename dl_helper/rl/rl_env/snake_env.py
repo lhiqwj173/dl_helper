@@ -4,14 +4,28 @@ import gymnasium as gym
 from gymnasium import spaces
 import time
 
+def default_crash_reward(snake, food, grid_size):
+    return -1
+
+def default_eat_reward(snake, food, grid_size):
+    return 1
+
+def default_move_reward(snake, food, grid_size):
+    return 0
+
 class SnakeEnv(gym.Env):
     """贪吃蛇环境，用于强化学习，带有Pygame可视化功能"""
     
     REG_NAME = 'snake'
     metadata = {'render_modes': ['human', 'none'], 'render_fps': 10}
     
-    def __init__(self, config: dict, render_mode='none'):
+    def __init__(self, config: dict, render_mode='none', crash_reward=default_crash_reward, eat_reward=default_eat_reward, move_reward=default_move_reward):
         super(SnakeEnv, self).__init__()
+
+        # 激励函数
+        self.crash_reward = crash_reward
+        self.eat_reward = eat_reward
+        self.move_reward = move_reward
         
         self.grid_size = config.get('grid_size', (10, 10))
         self.need_flatten = config.get('need_flatten', False)
@@ -88,17 +102,20 @@ class SnakeEnv(gym.Env):
         if (new_head[0] < 0 or new_head[0] >= self.grid_size[0] or
             new_head[1] < 0 or new_head[1] >= self.grid_size[1] or
             new_head in self.snake):
+            # 检查是否撞击边界或自身
             self.done = True
-            reward = -1
+            reward = self.crash_reward(self.snake, self.food, self.grid_size)
         else:
             self.snake.insert(0, new_head)
             if new_head == self.food:
+                # 吃到食物
+                reward = self.eat_reward(self.snake, self.food, self.grid_size)
                 self.food = self._generate_food()
-                reward = 1
                 self.score += 1
             else:
+                # 正常移动
                 self.snake.pop()
-                reward = 0
+                reward = self.move_reward(self.snake, self.food, self.grid_size)
         
         # 检查是否超时
         truncated = False
@@ -166,12 +183,11 @@ class SnakeEnv(gym.Env):
         if self.render_mode == 'human':
             pygame.quit()
 
-
-# 测试环境 - 手动控制
-if __name__ == "__main__":
+def human_control():
+    # 测试环境 - 手动控制
     env = SnakeEnv(
         {
-            'grid_size': (30, 30),
+            'grid_size': (5, 5),
         },
         render_mode='human',
     )
@@ -200,3 +216,22 @@ if __name__ == "__main__":
         clock.tick(4)  # 控制游戏速度为10帧每秒
     
     env.close()
+
+def test_run():
+    env = SnakeEnv(
+        {
+            'grid_size': (5, 5),
+        },
+    )
+    observation, info = env.reset()
+    done = False
+    while not done:
+        action = env.action_space.sample()
+        observation, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        env.render()
+
+
+if __name__ == "__main__":
+    # human_control() 
+    test_run()

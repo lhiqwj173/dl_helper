@@ -2,6 +2,7 @@
 配对交易强化学习
 """
 import sys, os, time, shutil, pickle
+import numpy as np
 from dl_helper.tool import in_windows
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
@@ -39,6 +40,40 @@ if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
 train_folder = train_title = f'20250320_snake' + ("" if not use_intrinsic_curiosity else '_ICM')
 init_logger(train_title, home=train_folder, timestamp=False)
 
+
+# 吃到食物标准奖励
+STD_EAT_FOOD_REWARD = 100
+
+# 移动到实物的标准奖励
+STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
+
+"""
+激励函数
+
+# 最大吃食物数量
+MAX_EAT_FOOD_NUM = 10 *10 - 1
+
+# 奖励函数
+shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃到食物数量) * STD_EAT_FOOD_REWARD
+"""
+
+def crash_reward(snake, food, grid_size):
+    # 10 * 10 的网格, 最大惩罚: -9910
+    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
+    return -STD_MOVE_REWARD - MAX_EAT_FOOD_NUM * STD_EAT_FOOD_REWARD
+
+def keep_alive_reward(snake, food, grid_size):
+    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
+    eat_food_num = len(snake) - 1
+    distance = np.sqrt((snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2)
+    return -(distance**2/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - eat_food_num) * STD_EAT_FOOD_REWARD
+
+def eat_reward(snake, food, grid_size):
+    return 1
+
+def move_reward(snake, food, grid_size):
+    return 0
+
 if __name__ == "__main__":
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
@@ -47,6 +82,9 @@ if __name__ == "__main__":
     env_config = {
         'grid_size': (10, 10),
         'need_flatten': True,
+        'crash_reward': crash_reward,
+        'eat_reward': keep_alive_reward,
+        'move_reward': keep_alive_reward,
     }
 
     model_config = {
