@@ -40,6 +40,13 @@ class TrainFolderManager:
         """
         加载检查点
         """
+        need_optimizer_state = False
+        if not only_params:
+            # TODO restore_from_path 出现bug，等待修复
+            # algo.restore_from_path(self.checkpoint_folder)
+            only_params = True
+            need_optimizer_state = True
+
         if only_params:
             # 获取模型参数
             # 加载文件内容
@@ -48,15 +55,18 @@ class TrainFolderManager:
             if len(file) == 0:
                 raise ValueError(f'{module_state_folder} 中没有找到 module_state 文件')
             module_state = pickle.load(open(os.path.join(module_state_folder, file[0]), 'rb'))
-            # optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
-            # 组装state
-            state = {'learner_group':{'learner':{
-                'rl_module':{'default_policy': module_state},
-                # 'optimizer': optimizer_state
-            }}}
+            if need_optimizer_state:
+                optimizer_state = pickle.load(open(os.path.join(self.checkpoint_folder, 'learner_group', 'learner', 'state.pkl'), 'rb'))['optimizer']
+                # 组装state
+                state = {'learner_group':{'learner':{
+                    'rl_module':{'default_policy': module_state},
+                    'optimizer': optimizer_state
+                }}}
+            else:
+                state = {'learner_group':{'learner':{
+                    'rl_module':{'default_policy': module_state},
+                }}}
             algo.set_state(state)
-        else:
-            algo.restore_from_path(self.checkpoint_folder)
 
     def pull(self):
         """

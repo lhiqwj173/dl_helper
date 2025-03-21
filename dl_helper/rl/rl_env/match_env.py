@@ -765,7 +765,7 @@ class MATCH_trade_env(gym.Env):
 
         # 状态相关
         before_market_close_sec,pos,res,res_last,predict,data_file,episode,step,
-        net,net_bm,
+        code1_ask,code1_bid,code2_ask,code2_bid,net,net_bm,
 
         # 其他
         terminated,truncated,force_close,close_trade,
@@ -776,10 +776,17 @@ class MATCH_trade_env(gym.Env):
         # 基准相关
         max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,excess_return,
         """
+        cols = [
+            'before_market_close_sec', 'pos', 'res', 'res_last', 'predict', 'data_file', 'episode', 'step',
+            'code1_ask', 'code1_bid', 'code2_ask', 'code2_bid', 'net', 'net_bm', 
+            'terminated', 'truncated', 'force_close', 'close_trade', 
+            'reward', 'max_drawdown', 'max_drawdown_ticks', 'trade_return', 'step_return', 'hold_length', 'max_profit_reachable_bm', 'potential_return', 'acc_return', 
+            'max_drawdown_bm', 'max_drawdown_ticks_bm', 'max_drawup_ticks_bm', 'drawup_ticks_bm_count', 'trade_return_bm', 'step_return_bm', 'excess_return'
+        ]
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('before_market_close_sec,pos,res,res_last,predict,data_file,episode,step,net,net_bm,terminated,truncated,force_close,close_trade,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,excess_return\n')
+                f.write(','.join(cols) + '\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
@@ -817,8 +824,8 @@ class MATCH_trade_env(gym.Env):
             reward, acc_done, pos, res, res_last = self._cal_reward(action, need_close, info)
 
             # 准备输出数据
-            # net,net_bm,
-            out_text += f",{info['net']},{info['net_bm']}"
+            # code1_ask,code1_bid,code2_ask,code2_bid,net,net_bm,
+            out_text += f",{','.join(self.data_producer.latest_tick[:4].to_list())},{info['net']},{info['net_bm']}"
             # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
             out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')},{info.get('max_profit_reachable_bm', '')},{info.get('potential_return', '')},{info.get('acc_return', '')}"
             # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
@@ -975,12 +982,14 @@ class MATCH_trade_env(gym.Env):
         ax1.plot(range(hist_end), df[f'{codes[1]}_net'].iloc[:hist_end], label=f'{codes[1]}_net({df[f"{codes[1]}_net"].iloc[hist_end - 1]:.6f})', color='red', alpha=1)
         ax1.plot(range(hist_end), net_raw, label=f'acc_net({net_raw[-1]:.6f})', color='blue', alpha=1)
         ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='red', alpha=1)
-        ax1.fill_between(range(hist_end), net_raw_bm, y2=-float('inf'), alpha=0.2, color='blue')
+        # 获取当前轴的 y 轴下限作为基准
+        y_min = ax1.get_ylim()[0]
+        ax1.fill_between(range(hist_end), net_raw_bm, y2=y_min, alpha=0.2, color='blue')
         ax1.plot(range(hist_end-1, n), df[f'{codes[0]}_net'].iloc[hist_end-1:], color='blue', alpha=0.3)
         ax1.plot(range(hist_end-1, n), df[f'{codes[1]}_net'].iloc[hist_end-1:], color='red', alpha=0.3)
         ax1.legend()
         status_str = f'满仓{codes[0]}' if status == -1 else '均衡仓位' if status == 0 else f'满仓{codes[1]}'
-        ax1.set_title('status: ' + status_str + (' ' * 10 + msg if msg else ''))
+        ax1.set_title('status: ' + status_str)
 
         # 附图：绘制zscore
         ax2.plot(range(hist_end), df['zscore'].iloc[:hist_end], label=f'zscore({df["zscore"].iloc[hist_end - 1]:.2f})', color='green', alpha=1)
