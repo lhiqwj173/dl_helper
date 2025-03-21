@@ -19,13 +19,13 @@ class SnakeEnv(gym.Env):
     REG_NAME = 'snake'
     metadata = {'render_modes': ['human', 'none'], 'render_fps': 10}
     
-    def __init__(self, config: dict, render_mode='none', crash_reward=default_crash_reward, eat_reward=default_eat_reward, move_reward=default_move_reward):
+    def __init__(self, config: dict, render_mode='none'):
         super(SnakeEnv, self).__init__()
 
         # 激励函数
-        self.crash_reward = crash_reward
-        self.eat_reward = eat_reward
-        self.move_reward = move_reward
+        self.crash_reward = config.get('crash_reward', default_crash_reward)
+        self.eat_reward = config.get('eat_reward', default_eat_reward)
+        self.move_reward = config.get('move_reward', default_move_reward)
         
         self.grid_size = config.get('grid_size', (10, 10))
         self.need_flatten = config.get('need_flatten', False)
@@ -117,6 +117,8 @@ class SnakeEnv(gym.Env):
                 self.snake.pop()
                 reward = self.move_reward(self.snake, self.food, self.grid_size)
         
+        self.reward = reward
+
         # 检查是否超时
         truncated = False
         elapsed_time = time.time() - self.start_time
@@ -173,8 +175,10 @@ class SnakeEnv(gym.Env):
             remaining_time = max(0, (self.total_time / 1000) - pygame_elapsed_time)
             score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
             time_text = self.font.render(f"Time: {int(remaining_time)}s", True, (255, 255, 255))
+            reward_text = self.font.render(f"Reward: {self.reward:.2f}", True, (255, 255, 255)) 
             self.screen.blit(score_text, (10, 10))
             self.screen.blit(time_text, (10, 50))
+            self.screen.blit(reward_text, (10, 100))
         
         pygame.display.flip()
         self.clock.tick(self.metadata['render_fps'])
@@ -183,18 +187,20 @@ class SnakeEnv(gym.Env):
         if self.render_mode == 'human':
             pygame.quit()
 
-def human_control():
+def human_control(env_config = {
+    'grid_size': (5, 5),
+}):
     # 测试环境 - 手动控制
     env = SnakeEnv(
-        {
-            'grid_size': (5, 5),
-        },
+        env_config,
         render_mode='human',
     )
     observation, info = env.reset()
     done = False
     action = 3  # 初始方向：右
     clock = pygame.time.Clock()
+
+    time.sleep(3)
     
     while not done:
         for event in pygame.event.get():

@@ -31,7 +31,7 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
-from dl_helper.rl.rl_env.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control
 
 use_intrinsic_curiosity = False
 if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
@@ -65,8 +65,8 @@ def crash_reward(snake, food, grid_size):
 def keep_alive_reward(snake, food, grid_size):
     MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
     eat_food_num = len(snake) - 1
-    distance = np.sqrt((snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2)
-    return -(distance**2/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - eat_food_num) * STD_EAT_FOOD_REWARD
+    distance_sqrt = (snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2
+    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - eat_food_num) * STD_EAT_FOOD_REWARD
 
 def eat_reward(snake, food, grid_size):
     return 1
@@ -75,9 +75,6 @@ def move_reward(snake, food, grid_size):
     return 0
 
 if __name__ == "__main__":
-    # 根据设备gpu数量选择 num_learners
-    num_learners = match_num_processes() if not in_windows() else 0
-    log(f"num_learners: {num_learners}")
 
     env_config = {
         'grid_size': (10, 10),
@@ -86,6 +83,14 @@ if __name__ == "__main__":
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
     }
+
+    # human_control(env_config)
+    # import sys
+    # sys.exit()
+
+    # 根据设备gpu数量选择 num_learners
+    num_learners = match_num_processes() if not in_windows() else 0
+    log(f"num_learners: {num_learners}")
 
     model_config = {
         'input_dims': (10, 10),
