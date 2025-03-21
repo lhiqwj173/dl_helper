@@ -56,6 +56,48 @@ STD_REWARD = 100
 # 时间标准化
 MAX_SEC_BEFORE_CLOSE = 5.5*60*60
 
+def format_item(k, v):
+    """格式化单个键值对，若值是浮点数，保留3个小数"""
+    k_str = str(k)
+    if isinstance(v, float):
+        v_str = f"{v:.3f}"
+    else:
+        v_str = str(v)
+    return f"{k_str}: {v_str}"
+
+def print_dict(d, columns=3):
+    """格式化输出字典，分层指定列数"""
+    # 将字典转为键值对列表
+    items = list(d.items())
+    # 计算行数
+    rows = (len(items) + columns - 1) // columns
+    # 补足items到rows * columns的长度，便于分组
+    while len(items) < rows * columns:
+        items.append(None)
+    # 分组为每行columns个
+    grouped_items = [items[i*columns:(i+1)*columns] for i in range(rows)]
+    # 计算每列的最大宽度
+    column_widths = [0] * columns
+    for row in grouped_items:
+        for col in range(columns):
+            if row[col] is not None:
+                k, v = row[col]
+                s = format_item(k, v)
+                if len(s) > column_widths[col]:
+                    column_widths[col] = len(s)
+    # 按行输出
+    for row in grouped_items:
+        line = []
+        for col in range(columns):
+            if row[col] is not None:
+                k, v = row[col]
+                s = format_item(k, v)
+                line.append(s.ljust(column_widths[col]))
+            else:
+                break  # 遇到None停止，忽略剩余列
+        if line:
+            print(' '.join(line))
+
 class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
@@ -567,13 +609,6 @@ class MATCH_trade_env(gym.Env):
         """
         super().__init__()
 
-        self.render_mode = render_mode
-        if self.render_mode == 'human':
-            self.input_queue = Queue()  # 创建多进程队列用于传递数据
-            self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
-            self.update_process.start()  # 启动更新进程
-            self.need_std = True
-
         defult_config = {
             # 用于实例化 数据生产器
             'data_type': 'train',# 训练/测试
@@ -655,6 +690,13 @@ class MATCH_trade_env(gym.Env):
 
         # 最新的评价数据
         self.latest_data = {}
+
+        self.render_mode = render_mode
+        if self.render_mode == 'human':
+            self.input_queue = Queue()  # 创建多进程队列用于传递数据
+            self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
+            self.update_process.start()  # 启动更新进程
+            self.need_std = True
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
@@ -759,7 +801,7 @@ class MATCH_trade_env(gym.Env):
 
         return reward, acc_done, pos, exceed_reward, res_last
 
-    def out_test_predict(self, out_text):
+    def out_test_predict(self, out_data):
         """
         输出测试预测数据 -> predict.csv
 
@@ -783,13 +825,17 @@ class MATCH_trade_env(gym.Env):
             'reward', 'max_drawdown', 'max_drawdown_ticks', 'trade_return', 'step_return', 'hold_length', 'max_profit_reachable_bm', 'potential_return', 'acc_return', 
             'max_drawdown_bm', 'max_drawdown_ticks_bm', 'max_drawup_ticks_bm', 'drawup_ticks_bm_count', 'trade_return_bm', 'step_return_bm', 'excess_return'
         ]
+
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
                 f.write(','.join(cols) + '\n')
         with open(self.need_upload_file, 'a') as f:
-            f.write(out_text)
-            f.write('\n')
+            f.write(','.join(out_data) + '\n')
+
+        else:
+            out_dict = dict(zip(cols, out_data))
+            print_dict(out_dict)
     
     def step(self, action):
         # 校正 action
@@ -811,7 +857,15 @@ class MATCH_trade_env(gym.Env):
             self.last_step_time = time.time()
 
             # 准备输出数据
-            out_text = f'{self.static_data["before_market_close_sec"]},{self.static_data["pos"]},{self.static_data["res"]},{self.static_data["res_last"]},{int(action)},{self.data_producer.cur_data_file},{self.episode_count},{self.steps}'
+            out_data = []
+            out_data.append(self.static_data["before_market_close_sec"])
+            out_data.append(self.static_data["pos"])
+            out_data.append(self.static_data["res"])
+            out_data.append(self.static_data["res_last"])
+            out_data.append(int(action))
+            out_data.append(self.data_producer.cur_data_file)
+            out_data.append(self.episode_count)
+            out_data.append(self.steps)
 
             # 先获取下一个状态的数据, 会储存 latest_tick, 用于acc.step(), 避免用当前状态价格结算
             before_market_close_sec, tick_x, his_daily_x, need_close = self.data_producer.get()
@@ -825,11 +879,28 @@ class MATCH_trade_env(gym.Env):
 
             # 准备输出数据
             # code1_ask,code1_bid,code2_ask,code2_bid,net,net_bm,
-            out_text += f",{','.join(self.data_producer.latest_tick[:4].to_list())},{info['net']},{info['net_bm']}"
-            # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,
-            out_text2 = f",{reward},{info.get('max_drawdown', '')},{info.get('max_drawdown_ticks', '')},{info.get('trade_return', '')},{info.get('step_return', '')},{info.get('hold_length', '')},{info.get('max_profit_reachable_bm', '')},{info.get('potential_return', '')},{info.get('acc_return', '')}"
-            # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,
-            out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')},{info.get('excess_return', '')}"
+            out_data += self.data_producer.latest_tick[:4].to_list()
+            out_data.append(info['net'])
+            out_data.append(info['net_bm'])
+            # reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,max_profit_reachable_bm,potential_return,acc_return,
+            out_data2 = []
+            out_data2.append(reward)
+            out_data2.append(info.get('max_drawdown', ''))
+            out_data2.append(info.get('max_drawdown_ticks', ''))
+            out_data2.append(info.get('trade_return', ''))
+            out_data2.append(info.get('step_return', ''))
+            out_data2.append(info.get('hold_length', ''))
+            out_data2.append(info.get('max_profit_reachable_bm', ''))
+            out_data2.append(info.get('potential_return', ''))
+            out_data2.append(info.get('acc_return', ''))
+            # max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm,excess_return,
+            out_data2.append(info.get('max_drawdown_bm', ''))
+            out_data2.append(info.get('max_drawdown_ticks_bm', ''))
+            out_data2.append(info.get('max_drawup_ticks_bm', ''))
+            out_data2.append(info.get('drawup_ticks_bm_count', ''))
+            out_data2.append(info.get('trade_return_bm', ''))
+            out_data2.append(info.get('step_return_bm', ''))
+            out_data2.append(info.get('excess_return', ''))
 
             # 记录静态数据，用于输出预测数据, 在下一个step中使用
             self.static_data = {
@@ -849,10 +920,13 @@ class MATCH_trade_env(gym.Env):
             # 环境中没有截断结束
             truncated = False
 
-            out_text += f",{terminated},{truncated},{info.get('force_close', 0)},{info.get('close_trade', False)}"
-            out_text += out_text2
+            out_data.append(terminated)
+            out_data.append(truncated)
+            out_data.append(info.get('force_close', 0))
+            out_data.append(info.get('close_trade', False))
+            out_data += out_data2
             # 记录数据
-            self.out_test_predict(out_text)
+            self.out_test_predict(out_data)
 
             done = terminated or truncated
             if done:
@@ -933,14 +1007,14 @@ class MATCH_trade_env(gym.Env):
         while True:
             try:
                 # 从队列中获取数据，非阻塞方式
-                df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg = input_queue.get_nowait()
-                self._plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg, std_data)
+                df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, match_data = input_queue.get_nowait()
+                self._plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, std_data, match_data)
             except queue.Empty:
                 pass  # 队列为空时跳过
             plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
 
     @staticmethod
-    def _plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg, std_data):
+    def _plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, std_data, match_data):
         """绘制图形的具体实现"""
         # 清空当前的axes
         ax1.clear()
@@ -989,7 +1063,7 @@ class MATCH_trade_env(gym.Env):
         ax1.plot(range(hist_end-1, n), df[f'{codes[1]}_net'].iloc[hist_end-1:], color='red', alpha=0.3)
         ax1.legend()
         status_str = f'满仓{codes[0]}' if status == -1 else '均衡仓位' if status == 0 else f'满仓{codes[1]}'
-        ax1.set_title('status: ' + status_str)
+        ax1.set_title('status:' + status_str + f'    beta:{match_data["beta"]}    mean:{match_data["mean"]}    std:{match_data["std"]}')
 
         # 附图：绘制zscore
         ax2.plot(range(hist_end), df['zscore'].iloc[:hist_end], label=f'zscore({df["zscore"].iloc[hist_end - 1]:.2f})', color='green', alpha=1)
@@ -1019,28 +1093,8 @@ class MATCH_trade_env(gym.Env):
         df, codes, latest_tick_time = self.data_producer.get_plot_data()
         net_raw, net_raw_bm, status = self.acc.get_plot_data()
 
-        msg = ''
-        if 'reward' in self.latest_data:
-            reward_value = self.latest_data["reward"]
-            formatted_reward = f"{reward_value:.3f}" if isinstance(reward_value, float) else str(reward_value)
-            msg = f'reward: {formatted_reward}\n'
-
-            info_pairs = [(k, f"{v:.3f}" if isinstance(v, float) else str(v)) for k, v in self.latest_data['info'].items()]
-            max_key_length = max(len(k) for k, _ in info_pairs) if info_pairs else 0
-            max_value_length = max(len(v) for _, v in info_pairs) if info_pairs else 0
-
-            # 每行3组数据
-            for i in range(0, len(info_pairs), 3):
-                group = info_pairs[i:i+3]
-                line = ''
-                for k, v in group:
-                    formatted_k = k.ljust(max_key_length)  # 键左对齐
-                    formatted_v = v.rjust(max_value_length)  # 值右对齐
-                    line += f"{formatted_k}: {formatted_v}," + ' ' * 10
-                msg += line.rstrip(', ') + '\n'
-
         # 将数据放入队列，交给更新线程处理
-        self.input_queue.put((df, codes, latest_tick_time, net_raw, net_raw_bm, status, self.need_std, msg))
+        self.input_queue.put((df, codes, latest_tick_time, net_raw, net_raw_bm, status, self.need_std, self.data_producer.match_data))
         if self.need_std:
             self.need_std = False
 
@@ -1177,13 +1231,14 @@ def play_env():
     obs, info = env.reset()
     env.render()
     need_close = False
+    act = 1
     while not need_close:
-        act = input('请输入动作(0:code1满仓, 1:均衡仓位, 2:code2满仓):')
-        act = int(act)
+        act_str = input('请输入动作(0:code1满仓, 1:均衡仓位, 2:code2满仓, 回车:继续上一个动作):')
+        if act_str != '':
+            act = int(act_str)
         obs, reward, terminated, truncated, info = env.step(act)
         env.render()
         need_close = terminated or truncated
-        print(f'pos: {obs[-3]}, res: {obs[-2]}, res_last: {obs[-1]}, reward: {reward}')
 
     print('done')
 
