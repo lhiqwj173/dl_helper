@@ -5,6 +5,11 @@ from py_ext.tool import log
 import numpy as np
 """
 奖励系统
+原则: 
+    1. 优化策略路径
+    2. 向目标前进 (让ai知道是变好了还是变坏了)
+    3. 最快速度
+
 游戏终止的本质: 无法继续游戏最终达成目标
 
 最终目标 0 : 日内累计最大的超额收益, 尽可能的控制风险
@@ -14,6 +19,7 @@ import numpy as np
         失败: 超额亏损 > 0.5%                   -STD_REWARD
         其他: 未达成目标 and 超额亏损 <= 0.5%
     最终奖励: 超额收益 * STD_REWARD
+
 """
 
 class RewardStrategy(ABC):
@@ -29,7 +35,6 @@ class BlankRewardStrategy(RewardStrategy):
     """
     def calculate_reward(self, env_id, STD_REWARD, need_close, action, res, data_producer, acc, close_net_raw_last_change, close_net_raw_last_change_bm):
         return 0, False
-
 
 class ExcessReturnRewardStrategy(RewardStrategy):
     def _excess_return_reward(self, excess_return, STD_REWARD):

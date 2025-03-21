@@ -203,6 +203,22 @@ class AsyncProcessQueueReader:
         """获取队列中的数据"""
         return await self.async_queue.get()
 
+def keep_only_latest_files(folder, num=50):
+    """
+    只保留文件夹中的最新修改的50个文件
+    """
+    files = os.listdir(folder)
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(folder, x)))
+    for file in files[:-num]:
+        os.remove(os.path.join(folder, file))
+
+def remove_old_env_output_files(save_folder, num=50):
+    for folder in os.listdir(save_folder):
+        folder = os.path.join(save_folder, folder)
+        if os.path.isdir(folder):
+            keep_only_latest_files(folder, num)
+
+
 def calc_sharpe_ratio(returns, risk_free_rate=0.02, num_per_year=250, annualize=True):
     """计算年化夏普比率
     不会做returns长度/nan检查
