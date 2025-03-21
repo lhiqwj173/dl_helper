@@ -22,7 +22,9 @@
     最大化超额收益
 """
 
-import os, time, json
+import os, time, json, copy
+import queue
+from multiprocessing import Process, Queue
 import random
 import datetime
 import numpy as np
@@ -31,6 +33,11 @@ import gymnasium as gym
 import gymnasium.spaces as spaces
 import pickle
 import matplotlib.pyplot as plt
+# 设置matplotlib中文显示
+import matplotlib.font_manager as fm
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
@@ -223,6 +230,17 @@ class data_producer:
 
         return before_market_close_sec, tick_x, his_daily_x, need_close
 
+    def get_plot_data(self):
+        """获取当前的绘图数据
+        返回 tick, codes, latest_tick_time
+        """
+        _idx = self.idx - 1
+        # 获取 最近 self.his_tick_len + 5 个数据 + 未来5个数据
+        # 共 5 + self.his_tick_len + 5 个数据
+        a, b = _idx - self.his_tick_len - 5 + 1, _idx + 5 + 1
+        tick = self.tick_data.iloc[max(0, a): min(len(self.tick_data), b)].copy()
+        return tick, (self.code1, self.code2), self.tick_data.iloc[_idx].name
+        
     def reset(self):
         self._pre_files()
         self._load_data()
@@ -256,6 +274,14 @@ class Account:
         # 最近一次非均衡调仓前的仓位，用于计算 调仓基准净值
         self.last_change_pre_code1_pos = 0
         self.last_change_pre_code2_pos = 0
+
+    def get_plot_data(self):
+        """
+        获取绘图数据
+
+        net_raw, net_raw_bm, status
+        """
+        return [i for i in self.net_raw], [i for i in self.net_raw_bm], self.pos
 
     def step(self, codes_bid_ask, action):
         """
@@ -514,7 +540,7 @@ class MATCH_trade_env(gym.Env):
     REG_NAME = 'match'
     ITERATION_DONE_FILE = os.path.join(os.path.expanduser('~'), '_match_env_iteration_done')
     
-    def __init__(self, config: dict, debug_dates=[]):
+    def __init__(self, config: dict, debug_dates=[], render_mode='none'):
         """
         :param config: 配置
             {
@@ -534,8 +560,19 @@ class MATCH_trade_env(gym.Env):
                     'balance': BalanceRewardStrategy
                 }
             }
+
+        :param render_mode: 渲染模式
+            'none': 不渲染
+            'human': 人类渲染
         """
         super().__init__()
+
+        self.render_mode = render_mode
+        if self.render_mode == 'human':
+            self.input_queue = Queue()  # 创建多进程队列用于传递数据
+            self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
+            self.update_process.start()  # 启动更新进程
+            self.need_std = True
 
         defult_config = {
             # 用于实例化 数据生产器
@@ -615,6 +652,9 @@ class MATCH_trade_env(gym.Env):
         # 记录每个 episode 的步数
         self.mean_episode_lengths = 0
         self.episode_count = 0
+
+        # 最新的评价数据
+        self.latest_data = {}
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
@@ -814,6 +854,12 @@ class MATCH_trade_env(gym.Env):
                 self.episode_count += 1
                 log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}')
 
+            # 记录最新数据
+            self.latest_data['info'] = info
+            self.latest_data['reward'] = reward
+            self.latest_data['terminated'] = terminated
+            self.latest_data['truncated'] = truncated
+
             return observation, reward, terminated, truncated, info
 
         except Exception as e:
@@ -829,6 +875,7 @@ class MATCH_trade_env(gym.Env):
 
             # 重置
             self.need_reset = False
+            self.need_std = True
 
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
@@ -868,6 +915,126 @@ class MATCH_trade_env(gym.Env):
         except Exception as e:
             log(f'[{id(self)}][{self.data_producer.data_type}] reset error: {get_exception_msg()}')
             raise e
+
+    def update_plot(self, input_queue):
+        """线程中运行的图形更新函数"""
+        fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(12, 8), gridspec_kw={'height_ratios': [2, 1]})
+        plt.show(block=False)  # 添加这行，非阻塞方式显示图形
+
+        std_data = {}
+
+        while True:
+            try:
+                # 从队列中获取数据，非阻塞方式
+                df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg = input_queue.get_nowait()
+                self._plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg, std_data)
+            except queue.Empty:
+                pass  # 队列为空时跳过
+            plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+
+    @staticmethod
+    def _plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, msg, std_data):
+        """绘制图形的具体实现"""
+        # 清空当前的axes
+        ax1.clear()
+        ax2.clear()
+
+        # 确定历史数据和未来数据的分界点
+        n = len(df)
+        hist_end = df.index.get_loc(latest_tick_time) + 1
+
+        # 截取账户净值并标准化
+        net_raw = np.array(net_raw[-hist_end:])
+        net_raw_bm = np.array(net_raw_bm[-hist_end:])
+        # 记录标准化数据
+        if need_std:
+            std_data['net_raw'] = net_raw[0]
+            std_data['net_raw_bm'] = net_raw_bm[0]
+        # 标准化
+        net_raw = net_raw / std_data['net_raw']
+        net_raw_bm = net_raw_bm / std_data['net_raw_bm']
+        # 对齐长度
+        if len(net_raw) < hist_end:
+            net_raw = np.concatenate([[np.nan] * (hist_end - len(net_raw)), net_raw])
+        if len(net_raw_bm) < hist_end:
+            net_raw_bm = np.concatenate([[np.nan] * (hist_end - len(net_raw_bm)), net_raw_bm])
+
+        # 计算mid_price
+        df[f'{codes[0]}_mid'] = (df[f'{codes[0]}_bid'] + df[f'{codes[0]}_ask']) / 2
+        df[f'{codes[1]}_mid'] = (df[f'{codes[1]}_bid'] + df[f'{codes[1]}_ask']) / 2
+        # 记录标准化数据
+        if need_std:
+            std_data[f'{codes[0]}_mid'] = df[f'{codes[0]}_mid'].iloc[0]
+            std_data[f'{codes[1]}_mid'] = df[f'{codes[1]}_mid'].iloc[0]
+        # 标准化成净值
+        df[f'{codes[0]}_net'] = df[f'{codes[0]}_mid'] / std_data[f'{codes[0]}_mid']
+        df[f'{codes[1]}_net'] = df[f'{codes[1]}_mid'] / std_data[f'{codes[1]}_mid']
+
+        # 主图：绘制净值序列
+        ax1.plot(range(hist_end), df[f'{codes[0]}_net'].iloc[:hist_end], label=f'{codes[0]}_net({df[f"{codes[0]}_net"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
+        ax1.plot(range(hist_end), df[f'{codes[1]}_net'].iloc[:hist_end], label=f'{codes[1]}_net({df[f"{codes[1]}_net"].iloc[hist_end - 1]:.6f})', color='red', alpha=1)
+        ax1.plot(range(hist_end), net_raw, label=f'acc_net({net_raw[-1]:.6f})', color='blue', alpha=1)
+        ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='red', alpha=1)
+        ax1.fill_between(range(hist_end), net_raw_bm, y2=-float('inf'), alpha=0.2, color='blue')
+        ax1.plot(range(hist_end-1, n), df[f'{codes[0]}_net'].iloc[hist_end-1:], color='blue', alpha=0.3)
+        ax1.plot(range(hist_end-1, n), df[f'{codes[1]}_net'].iloc[hist_end-1:], color='red', alpha=0.3)
+        ax1.legend()
+        status_str = f'满仓{codes[0]}' if status == -1 else '均衡仓位' if status == 0 else f'满仓{codes[1]}'
+        ax1.set_title('status: ' + status_str + (' ' * 10 + msg if msg else ''))
+
+        # 附图：绘制zscore
+        ax2.plot(range(hist_end), df['zscore'].iloc[:hist_end], label=f'zscore({df["zscore"].iloc[hist_end - 1]:.2f})', color='green', alpha=1)
+        ax2.plot(range(hist_end-1, n), df['zscore'].iloc[hist_end-1:], color='green', alpha=0.3)
+        ax2.legend()
+        ax2.set_title('Z-score')
+
+        # 标注最新的历史数据时间
+        time_str = df.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
+        ax1.axvline(x=hist_end-1, color='gray', linestyle='--')
+        ax2.axvline(x=hist_end-1, color='gray', linestyle='--')
+        ax2.text(hist_end-1, ax2.get_ylim()[0], time_str, rotation=90, verticalalignment='bottom')
+
+        # 设置x轴标签
+        ax2.set_xlabel('Tick Index')
+
+        # 调整布局并刷新图形
+        fig.tight_layout()
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+    def render(self):
+        """绘图并接收用户输入"""
+        if self.render_mode != 'human':
+            return
+        
+        df, codes, latest_tick_time = self.data_producer.get_plot_data()
+        net_raw, net_raw_bm, status = self.acc.get_plot_data()
+
+        msg = ''
+        if 'reward' in self.latest_data:
+            reward_value = self.latest_data["reward"]
+            formatted_reward = f"{reward_value:.3f}" if isinstance(reward_value, float) else str(reward_value)
+            msg = f'reward: {formatted_reward}\n'
+
+            info_pairs = [(k, f"{v:.3f}" if isinstance(v, float) else str(v)) for k, v in self.latest_data['info'].items()]
+            max_key_length = max(len(k) for k, _ in info_pairs) if info_pairs else 0
+            max_value_length = max(len(v) for _, v in info_pairs) if info_pairs else 0
+
+            # 每行3组数据
+            for i in range(0, len(info_pairs), 3):
+                group = info_pairs[i:i+3]
+                line = ''
+                for k, v in group:
+                    formatted_k = k.ljust(max_key_length)  # 键左对齐
+                    formatted_v = v.rjust(max_value_length)  # 值右对齐
+                    line += f"{formatted_k}: {formatted_v}," + ' ' * 10
+                msg += line.rstrip(', ') + '\n'
+
+        # 将数据放入队列，交给更新线程处理
+        self.input_queue.put((df, codes, latest_tick_time, net_raw, net_raw_bm, status, self.need_std, msg))
+        if self.need_std:
+            self.need_std = False
+
 
 def test_data_producer():
     dp = data_producer(
@@ -945,7 +1112,7 @@ def test_env():
             'train_folder': r'C:\Users\lh\Desktop\temp\match_env',
             'train_title': 'test',
         },
-        debug_dates=['20231204.pkl'],
+        debug_dates=['20250319.pkl'],
     )
 
     act_idx = 0
@@ -970,8 +1137,51 @@ def test_env():
 
     print('done')
 
+def play_env():
+    """可视化玩游戏"""
+    env = MATCH_trade_env(
+        config = {
+            # 用于实例化 数据生产器
+            'data_type': 'train',# 训练/测试
+            'his_daily_len': 5,# 每个样本的 历史日的价差长度
+            'his_tick_len': 10,# 每个样本的 历史tick的价差长度
+
+            # 终止游戏的超额亏损阈值
+            'loss_threshold': -0.005,# 最大超额亏损阈值
+
+            # 奖励策略
+            'reward_strategy_class_dict': {
+                'end_position': EndPositionRewardStrategy,
+                'close_position': ClosePositionRewardStrategy,
+                'hold_position': HoldPositionRewardStrategy,
+                'balance': BalanceRewardStrategy
+            },
+
+            'train_folder': r'C:\Users\lh\Desktop\temp\match_env',
+            'train_title': 'test',
+        },
+        debug_dates=['20250317.pkl'],
+        render_mode='human',
+    )
+
+    print('reset')
+    obs, info = env.reset()
+    env.render()
+    need_close = False
+    while not need_close:
+        act = input('请输入动作(0:code1满仓, 1:均衡仓位, 2:code2满仓):')
+        act = int(act)
+        obs, reward, terminated, truncated, info = env.step(act)
+        env.render()
+        need_close = terminated or truncated
+        print(f'pos: {obs[-3]}, res: {obs[-2]}, res_last: {obs[-1]}, reward: {reward}')
+
+    print('done')
+
+
 if __name__ == '__main__':
     # test_data_producer()
-    test_env()
+    # test_env()
+    play_env()
 
 
