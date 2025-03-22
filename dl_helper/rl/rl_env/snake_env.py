@@ -236,6 +236,7 @@ def ai_control(
         'grid_size': (10, 10),
     },
     checkpoint_abs_path = '',
+    times = 10,
 ):
     def model_action(obs, rl_module):
         obs = torch.tensor(obs, dtype=torch.float32) if not isinstance(obs, torch.Tensor) else obs
@@ -255,18 +256,17 @@ def ai_control(
     rl_module_checkpoint_dir = os.path.join(checkpoint_abs_path,  "learner_group" , "learner" , "rl_module" , "default_policy")
     rl_module = RLModule.from_checkpoint(rl_module_checkpoint_dir)
 
-    observation, info = env.reset()
-    done = False
-    clock = pygame.time.Clock()
-
-    time.sleep(3)
-    
-    while not done:
-        action = model_action(observation, rl_module)
-        observation, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        env.render()
-        clock.tick(4)  # 控制游戏速度为10帧每秒
+    for _ in range(times):
+        observation, info = env.reset()
+        done = False
+        clock = pygame.time.Clock()
+        
+        while not done:
+            action = model_action(observation, rl_module)
+            observation, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            env.render()
+            clock.tick(4)  # 控制游戏速度为10帧每秒
 
     env.close()
 
