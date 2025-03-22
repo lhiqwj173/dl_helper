@@ -833,9 +833,8 @@ class MATCH_trade_env(gym.Env):
         with open(self.need_upload_file, 'a') as f:
             f.write(','.join(out_data) + '\n')
 
-        else:
-            out_dict = dict(zip(cols, out_data))
-            print_dict(out_dict)
+        out_dict = dict(zip(cols, out_data))
+        print_dict(out_dict)
     
     def step(self, action):
         # 校正 action
@@ -1202,6 +1201,13 @@ def test_env():
 
 def play_env():
     """可视化玩游戏"""
+    act_dict_file = input('请输入动作字典文件路径:(空白开始录制行情数据)')
+    act_dict = None
+    if not act_dict_file:
+        print('开始录制行情数据')
+    else:
+        act_dict = json.load(open(act_dict_file))
+    
     env = MATCH_trade_env(
         config = {
             # 用于实例化 数据生产器
@@ -1229,19 +1235,27 @@ def play_env():
 
     print('reset')
     obs, info = env.reset()
+
+    if None is act_dict:
+        # 保存数据文件 
+        data = env.data_producer.tick_data
+        pickle.dump(data, open(r'C:\Users\lh\Desktop\temp\tick_data.pkl', 'wb'))
+        return
+
+    dt= env.data_producer.latest_tick.name
     env.render()
-    need_close = False
     act = 1
+    need_close = False
     while not need_close:
-        act_str = input('请输入动作(0:code1满仓, 1:均衡仓位, 2:code2满仓, 回车:继续上一个动作):')
-        if act_str != '':
-            act = int(act_str)
+        if dt in act_dict:
+            act = act_dict[dt]
         obs, reward, terminated, truncated, info = env.step(act)
+        dt= env.data_producer.latest_tick.name
         env.render()
         need_close = terminated or truncated
+        time.sleep(0.1)
 
     print('done')
-
 
 if __name__ == '__main__':
     # test_data_producer()
