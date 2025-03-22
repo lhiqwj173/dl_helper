@@ -52,8 +52,7 @@ class CNNEncoder(TorchModel, Encoder):
         # for debug
         pickle.dump(inputs, open(f'inputs_{self.error_count}.pkl', 'wb'))
 
-        x = inputs[Columns.OBS] # 输入的obs是(B, 10, 10)
-        x = x.unsqueeze(1) # 增加一个维度，变成(B, 1, 10, 10)
+        x = inputs[Columns.OBS] # 输入的obs是(B, 1, 10, 10)
         
         # 通过卷积层
         x = self.convs(x)

@@ -58,6 +58,9 @@ class SnakeEnv(gym.Env):
         obs /= np.float32(3)
         if self.need_flatten:
             obs = obs.flatten()
+
+        else:
+            obs = obs.unsqueeze(0) # 增加一个维度，变成(1, 10, 10)
         return obs
 
     def reset(self, seed=None, options=None):
