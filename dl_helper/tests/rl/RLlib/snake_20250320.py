@@ -87,6 +87,7 @@ if __name__ == "__main__":
         'crash_reward': crash_reward,
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
+        'need_flatten': True if model_type == 'mlp' else False,
     }
 
     # 人控制
