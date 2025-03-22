@@ -834,8 +834,9 @@ class MATCH_trade_env(gym.Env):
         with open(self.need_upload_file, 'a') as f:
             f.write(','.join([str(i) for i in out_data]) + '\n')
 
-        out_dict = dict(zip(cols, out_data))
-        print_dict(out_dict)
+        if self.render_mode == 'human':
+            out_dict = dict(zip(cols, out_data))
+            print_dict(out_dict)
     
     def step(self, action):
         # 校正 action
@@ -1055,20 +1056,20 @@ class MATCH_trade_env(gym.Env):
         ax1.plot(range(hist_end), df[f'{codes[0]}_net'].iloc[:hist_end], label=f'{codes[0]}_net({df[f"{codes[0]}_net"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
         ax1.plot(range(hist_end), df[f'{codes[1]}_net'].iloc[:hist_end], label=f'{codes[1]}_net({df[f"{codes[1]}_net"].iloc[hist_end - 1]:.6f})', color='green', alpha=1)
         ax1.plot(range(hist_end), net_raw, label=f'acc_net({net_raw[-1]:.6f})', color='red', alpha=1)
-        ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='blue', alpha=0.5)
+        # ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='blue', alpha=0.5)
+        ax1.plot(range(hist_end-1, n), df[f'{codes[0]}_net'].iloc[hist_end-1:], color='blue', alpha=0.3)
+        ax1.plot(range(hist_end-1, n), df[f'{codes[1]}_net'].iloc[hist_end-1:], color='green', alpha=0.3)
         # 获取当前轴的 y 轴下限作为基准
         y_min = ax1.get_ylim()[0]
-        ax1.fill_between(range(hist_end), net_raw_bm, y2=y_min, alpha=0.2, color='blue')
-        ax1.plot(range(hist_end-1, n), df[f'{codes[0]}_net'].iloc[hist_end-1:], color='blue', alpha=0.3)
-        ax1.plot(range(hist_end-1, n), df[f'{codes[1]}_net'].iloc[hist_end-1:], color='red', alpha=0.3)
-        ax1.legend()
+        ax1.fill_between(range(hist_end), net_raw_bm, y2=y_min, alpha=0.2, color='blue', label=f'bm_net({net_raw_bm[-1]:.6f})')
+        ax1.legend(loc='upper left')
         status_str = f'满仓{codes[0]}' if status == -1 else '均衡仓位' if status == 0 else f'满仓{codes[1]}'
         ax1.set_title('status:' + status_str + f'    beta:{match_data["beta"]}    mean:{match_data["mean"]}    std:{match_data["std"]}')
 
         # 附图：绘制zscore
         ax2.plot(range(hist_end), df['zscore'].iloc[:hist_end], label=f'zscore({df["zscore"].iloc[hist_end - 1]:.2f})', color='green', alpha=1)
         ax2.plot(range(hist_end-1, n), df['zscore'].iloc[hist_end-1:], color='green', alpha=0.3)
-        ax2.legend()
+        ax2.legend(loc='upper left')
         ax2.set_title('Z-score')
 
         # 标注最新的历史数据时间
