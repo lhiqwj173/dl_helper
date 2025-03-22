@@ -277,9 +277,10 @@ class data_producer:
         返回 tick, codes, latest_tick_time
         """
         _idx = self.idx - 1
+        extra_data_length = 10
         # 获取 最近 self.his_tick_len + 5 个数据 + 未来5个数据
         # 共 5 + self.his_tick_len + 5 个数据
-        a, b = _idx - self.his_tick_len - 5 + 1, _idx + 5 + 1
+        a, b = _idx - self.his_tick_len - extra_data_length + 1, _idx + extra_data_length + 1
         tick = self.tick_data.iloc[max(0, a): min(len(self.tick_data), b)].copy()
         return tick, (self.code1, self.code2), self.tick_data.iloc[_idx].name
         
@@ -831,7 +832,7 @@ class MATCH_trade_env(gym.Env):
             with open(self.need_upload_file, 'w') as f:
                 f.write(','.join(cols) + '\n')
         with open(self.need_upload_file, 'a') as f:
-            f.write(','.join(out_data) + '\n')
+            f.write(','.join([str(i) for i in out_data]) + '\n')
 
         out_dict = dict(zip(cols, out_data))
         print_dict(out_dict)
@@ -1052,9 +1053,9 @@ class MATCH_trade_env(gym.Env):
 
         # 主图：绘制净值序列
         ax1.plot(range(hist_end), df[f'{codes[0]}_net'].iloc[:hist_end], label=f'{codes[0]}_net({df[f"{codes[0]}_net"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
-        ax1.plot(range(hist_end), df[f'{codes[1]}_net'].iloc[:hist_end], label=f'{codes[1]}_net({df[f"{codes[1]}_net"].iloc[hist_end - 1]:.6f})', color='red', alpha=1)
-        ax1.plot(range(hist_end), net_raw, label=f'acc_net({net_raw[-1]:.6f})', color='blue', alpha=1)
-        ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='red', alpha=1)
+        ax1.plot(range(hist_end), df[f'{codes[1]}_net'].iloc[:hist_end], label=f'{codes[1]}_net({df[f"{codes[1]}_net"].iloc[hist_end - 1]:.6f})', color='green', alpha=1)
+        ax1.plot(range(hist_end), net_raw, label=f'acc_net({net_raw[-1]:.6f})', color='red', alpha=1)
+        ax1.plot(range(hist_end), net_raw_bm, label=f'bm_net({net_raw_bm[-1]:.6f})', color='blue', alpha=0.5)
         # 获取当前轴的 y 轴下限作为基准
         y_min = ax1.get_ylim()[0]
         ax1.fill_between(range(hist_end), net_raw_bm, y2=y_min, alpha=0.2, color='blue')
@@ -1201,13 +1202,18 @@ def test_env():
 
 def play_env():
     """可视化玩游戏"""
-    act_dict_file = input('请输入动作字典文件路径:(空白开始录制行情数据)')
     act_dict = None
-    if not act_dict_file:
-        print('开始录制行情数据')
-    else:
-        act_dict = json.load(open(act_dict_file))
-    
+    act_dict = {
+        '2025/3/17 09:30:15':2,
+        '2025/3/17 09:31:54':0,
+        '2025/3/17 09:53:36':1,
+    }
+
+    act_dict = {
+        datetime.datetime.strptime(key, '%Y/%m/%d %H:%M:%S'): value
+        for key, value in act_dict.items()
+    }
+
     env = MATCH_trade_env(
         config = {
             # 用于实例化 数据生产器
@@ -1239,7 +1245,7 @@ def play_env():
     if None is act_dict:
         # 保存数据文件 
         data = env.data_producer.tick_data
-        pickle.dump(data, open(r'C:\Users\lh\Desktop\temp\tick_data.pkl', 'wb'))
+        data.to_csv(r'C:\Users\lh\Desktop\temp\tick_data.csv', encoding='gbk')
         return
 
     dt= env.data_producer.latest_tick.name
