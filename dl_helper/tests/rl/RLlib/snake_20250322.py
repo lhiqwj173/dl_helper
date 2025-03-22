@@ -20,8 +20,7 @@ from ray.rllib.examples.rl_modules.classes.intrinsic_curiosity_model_rlm import 
 )
 
 from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
-from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
+from ray.rllib.core.rl_module.default_model_config import DefaultModelConfig
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
@@ -34,17 +33,13 @@ from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
 from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
 from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control, ai_control
 
-use_intrinsic_curiosity = False
 model_type = 'mlp'
 for arg in sys.argv:
-    if arg == 'ICM':
-        use_intrinsic_curiosity = True
-    elif arg == 'cnn':
+    if arg == 'cnn':
         model_type = 'cnn'
 
-train_folder = train_title = f'20250320_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250322_snake_build_in' + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
-
 
 # 吃到食物标准奖励
 STD_EAT_FOOD_REWARD = 100
@@ -105,19 +100,31 @@ if __name__ == "__main__":
     log(f"num_learners: {num_learners}")
 
     if model_type == 'mlp':
-        # 模型参数量: 33048
-        model_config = {
-            'input_dims': (10, 10),
-            'hidden_sizes': [128, 128],
-            'output_dims': 24,
-        } 
+        # # 模型参数量: 33048
+        # model_config = {
+        #     'input_dims': (10, 10),
+        #     'hidden_sizes': [128, 128],
+        #     'output_dims': 24,
+        # } 
+        model_config = DefaultModelConfig(
+            fcnet_hiddens=[128, 128, 24],
+        )
+
     elif model_type == 'cnn':
-        # 模型参数量: 25176
-        model_config = {
-            'input_dims': (1, 10, 10),
-            'hidden_sizes': [32, 64],
-            'output_dims': 24,
-        }
+        # # 模型参数量: 25176
+        # model_config = {
+        #     'input_dims': (1, 10, 10),
+        #     'hidden_sizes': [32, 64],
+        #     'output_dims': 24,
+        # }
+        model_config = DefaultModelConfig(
+            # Use a DreamerV3-style CNN stack for 64x64 images.
+            conv_filters=[
+                [32, 4, 2],  # 1st CNN layer: num_filters, kernel, stride(, padding)?
+                [64, 4, 2],  # 2nd CNN layer
+            ],
+            # After the last CNN, the default model flattens, then adds an optional MLP.
+        )
 
     # 验证配置
     eval_config = {
@@ -152,64 +159,13 @@ if __name__ == "__main__":
         .evaluation(**eval_config)
     )
 
-    catalog_class = MLPPPOCatalog if model_type == 'mlp' else CNNPPOCatalog
-    if use_intrinsic_curiosity:
-        config = config.rl_module(
-            rl_module_spec=MultiRLModuleSpec(
-                rl_module_specs={
-                    # The "main" RLModule (policy) to be trained by our algo.
-                    DEFAULT_MODULE_ID: RLModuleSpec(
-                        catalog_class=catalog_class,
-                        model_config=model_config,
-                    ),
-                    # The intrinsic curiosity model.
-                    ICM_MODULE_ID: RLModuleSpec(
-                        module_class=IntrinsicCuriosityModel,
-                        # Only create the ICM on the Learner workers, NOT on the
-                        # EnvRunners.
-                        learner_only=True,
-                        # Configure the architecture of the ICM here.
-                        model_config={
-                            "feature_dim": 24,
-                            "feature_net_hiddens": (128, 256),
-                            "feature_net_activation": "relu",
-                            "inverse_net_hiddens": (128, 256),
-                            "inverse_net_activation": "relu",
-                            "forward_net_hiddens": (128, 256),
-                            "forward_net_activation": "relu",
-                        },
-                    ),
-                }
-            ),
-            # # Use a different learning rate for training the ICM.
-            # algorithm_config_overrides_per_module={
-            #     ICM_MODULE_ID: AlgorithmConfig.overrides(lr=0.0005)
-            # },
-        )
-
-        config = config.training(
-            learner_config_dict={
-                # Intrinsic reward coefficient.
-                "intrinsic_reward_coeff": 0.05,
-                # Forward loss weight (vs inverse dynamics loss). Total ICM loss is:
-                # L(total ICM) = (
-                #     `forward_loss_weight` * L(forward)
-                #     + (1.0 - `forward_loss_weight`) * L(inverse_dyn)
-                # )
-                "forward_loss_weight": 0.2,
-            }
-        )
-    else:
-        config = config.rl_module(
-            rl_module_spec=RLModuleSpec(catalog_class=catalog_class),# 使用自定义配置
-            model_config=model_config,
-        )
+    config = config.rl_module(
+        model_config=model_config,
+    )
 
     # 构建算法
     algo = config.build()
     print(algo.get_module())
-
-    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():

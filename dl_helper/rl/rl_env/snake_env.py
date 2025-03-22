@@ -50,7 +50,7 @@ class SnakeEnv(gym.Env):
             self.font = pygame.font.Font(None, 36)
         
         self.action_space = spaces.Discrete(4)
-        self.observation_space = spaces.Box(low=0, high=3, shape=self.grid_size, dtype=np.float32) if not self.need_flatten else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if not self.need_flatten else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
         
         self.reset()
     
