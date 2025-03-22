@@ -45,7 +45,7 @@ class TrainFolderManager:
             # TODO restore_from_path 出现bug，等待修复
             # algo.restore_from_path(self.checkpoint_folder)
             only_params = True
-            need_optimizer_state = True
+            # need_optimizer_state = True
 
         if only_params:
             # 获取模型参数
