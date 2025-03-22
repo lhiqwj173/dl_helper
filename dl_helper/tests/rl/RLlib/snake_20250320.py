@@ -31,13 +31,18 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
-from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control
+from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
+from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control, ai_control
 
 use_intrinsic_curiosity = False
-if len(sys.argv) > 1 and sys.argv[1] == 'ICM':
-    use_intrinsic_curiosity = True
+model_type = 'mlp'
+for arg in sys.argv:
+    if arg == 'ICM':
+        use_intrinsic_curiosity = True
+    elif arg == 'cnn':
+        model_type = 'cnn'
 
-train_folder = train_title = f'20250320_snake' + ("" if not use_intrinsic_curiosity else '_ICM')
+train_folder = train_title = f'20250320_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 
@@ -58,9 +63,9 @@ shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃�
 """
 
 def crash_reward(snake, food, grid_size):
-    # 10 * 10 的网格, 最大惩罚: -9910
+    # 10 * 10 的网格, 最大惩罚: -10000
     MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
-    return -STD_MOVE_REWARD - MAX_EAT_FOOD_NUM * STD_EAT_FOOD_REWARD
+    return -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD
 
 def keep_alive_reward(snake, food, grid_size):
     MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
@@ -84,7 +89,13 @@ if __name__ == "__main__":
         'move_reward': keep_alive_reward,
     }
 
+    # 人控制
     # human_control(env_config)
+    # import sys
+    # sys.exit()
+
+    # 模型控制
+    # ai_control(env_config, checkpoint_abs_path=r'C:\Users\lh\Desktop\temp\checkpoint')
     # import sys
     # sys.exit()
 
@@ -92,11 +103,20 @@ if __name__ == "__main__":
     num_learners = match_num_processes() if not in_windows() else 0
     log(f"num_learners: {num_learners}")
 
-    model_config = {
-        'input_dims': (10, 10),
-        'hidden_sizes': [128, 256],
-        'output_dims': 24,
-    }
+    if model_type == 'mlp':
+        # 模型参数量: 33048
+        model_config = {
+            'input_dims': (10, 10),
+            'hidden_sizes': [128, 128],
+            'output_dims': 24,
+        } 
+    elif model_type == 'cnn':
+        # 模型参数量: 25176
+        model_config = {
+            'input_dims': (1, 10, 10),
+            'hidden_sizes': [32, 64],
+            'output_dims': 24,
+        }
 
     # 验证配置
     eval_config = {
@@ -131,7 +151,7 @@ if __name__ == "__main__":
         .evaluation(**eval_config)
     )
 
-    catalog_class = MLPPPOCatalog
+    catalog_class = MLPPPOCatalog if model_type == 'mlp' else CNNPPOCatalog
     if use_intrinsic_curiosity:
         config = config.rl_module(
             rl_module_spec=MultiRLModuleSpec(

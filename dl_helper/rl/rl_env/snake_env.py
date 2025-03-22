@@ -1,8 +1,10 @@
 import numpy as np
+import os, torch
 import pygame
 import gymnasium as gym
 from gymnasium import spaces
 import time
+from ray.rllib.core.rl_module.rl_module import RLModule
 
 def default_crash_reward(snake, food, grid_size):
     return -1
@@ -52,6 +54,12 @@ class SnakeEnv(gym.Env):
         
         self.reset()
     
+    def _std_obs(self, obs):
+        obs /= np.float32(3)
+        if self.need_flatten:
+            obs = obs.flatten()
+        return obs
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.snake = [(self.grid_size[0] // 2, self.grid_size[1] // 2)]
@@ -62,6 +70,10 @@ class SnakeEnv(gym.Env):
         if self.render_mode == 'human':
             self.pygame_start_time = pygame.time.get_ticks()  # 用于渲染显示
         observation = self._get_state()
+        
+        # 标准化
+        observation = self._std_obs(observation)
+
         info = {}
         return observation, info
     
@@ -80,14 +92,6 @@ class SnakeEnv(gym.Env):
             else:
                 grid[segment[1], segment[0]] = 1  # 蛇身
         grid[self.food[1], self.food[0]] = 3  # 食物
-
-        if self.render_mode != 'human':
-            # 标准化
-            grid /= np.float32(3)
-
-            # 展平
-            if self.need_flatten:
-                grid = grid.flatten()
 
         return grid
     
@@ -127,6 +131,10 @@ class SnakeEnv(gym.Env):
             truncated = True
         
         observation = self._get_state()
+
+        # 标准化
+        observation = self._std_obs(observation)
+
         terminated = self.done and not truncated
         info = {}
         return observation, reward, terminated, truncated, info
@@ -188,7 +196,7 @@ class SnakeEnv(gym.Env):
             pygame.quit()
 
 def human_control(env_config = {
-    'grid_size': (5, 5),
+    'grid_size': (10, 10),
 }):
     # 测试环境 - 手动控制
     env = SnakeEnv(
@@ -223,6 +231,45 @@ def human_control(env_config = {
     
     env.close()
 
+def ai_control(
+    env_config = {
+        'grid_size': (10, 10),
+    },
+    checkpoint_abs_path = '',
+):
+    def model_action(obs, rl_module):
+        obs = torch.tensor(obs, dtype=torch.float32) if not isinstance(obs, torch.Tensor) else obs
+        results = rl_module.forward_inference({"obs":obs})
+        action_logits = results['action_dist_inputs']  # 获取 logits 张量
+        action = torch.argmax(action_logits).item()    # 取最大值索引并转为 Python 标量
+        print(f"action: {action}")
+        return action
+
+    # 测试环境 - 模型控制
+    env = SnakeEnv(
+        env_config,
+        render_mode='human',
+    )
+
+    # 模型
+    rl_module_checkpoint_dir = os.path.join(checkpoint_abs_path,  "learner_group" , "learner" , "rl_module" , "default_policy")
+    rl_module = RLModule.from_checkpoint(rl_module_checkpoint_dir)
+
+    observation, info = env.reset()
+    done = False
+    clock = pygame.time.Clock()
+
+    time.sleep(3)
+    
+    while not done:
+        action = model_action(observation, rl_module)
+        observation, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        env.render()
+        clock.tick(4)  # 控制游戏速度为10帧每秒
+
+    env.close()
+
 def test_run():
     env = SnakeEnv(
         {
@@ -237,7 +284,6 @@ def test_run():
         done = terminated or truncated
         env.render()
 
-
 if __name__ == "__main__":
-    # human_control() 
-    test_run()
+    human_control() 
+    # test_run()
