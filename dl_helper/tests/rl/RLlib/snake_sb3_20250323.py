@@ -15,16 +15,24 @@ class CustomCNN(BaseFeaturesExtractor):
         n_input_channels = observation_space.shape[0]
         # 定义 CNN 架构
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 16, kernel_size=2, stride=1, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=2, stride=1, padding=0),
-            nn.ReLU(),
+            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+
             nn.Flatten(),  # 展平特征图
         )
+
         # 计算展平后的维度
         with torch.no_grad():
             sample = torch.as_tensor(observation_space.sample()[None]).float()
             n_flatten = self.cnn(sample).shape[1]
+
         # 全连接层，将展平后的特征映射到指定维度
         self.linear = nn.Sequential(
             nn.Linear(n_flatten, features_dim),
@@ -90,7 +98,7 @@ from py_ext.tool import init_logger, log
 import sys
 
 model_type = 'cnn'
-train_folder = train_title = f'20250322_snake_sb3' + f'_{model_type}'
+train_folder = train_title = f'20250323_snake_sb3' + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
@@ -126,7 +134,7 @@ if __name__ == "__main__":
         'crash_reward': crash_reward,
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
-        'model_type': f'sb3_{model_type}',
+        'model_type': model_type,
     }
 
     env = SnakeEnv(
