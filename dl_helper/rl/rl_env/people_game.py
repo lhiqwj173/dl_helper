@@ -1,5 +1,5 @@
 from dl_helper.train_param import in_kaggle
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD, USE_CODES
+from dl_helper.rl.rl_env.lob_trade.lob_env import data_producer, LOB_trade_env, ILLEGAL_REWARD, USE_CODES
 from dl_helper.rl.rl_utils import ReplayBufferWaitClose
 import matplotlib.pyplot as plt
 import os

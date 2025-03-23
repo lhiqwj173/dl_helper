@@ -10,7 +10,7 @@ from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from py_ext.alist import alist
 
-from dl_helper.rl.rl_env.lob_env import ILLEGAL_REWARD
+from dl_helper.rl.rl_env.lob_trade.lob_env import ILLEGAL_REWARD
 from dl_helper.rl.socket_base import get_net_params, send_val_test_data, check_need_val_test, request_client_id, send_accumulated_gradients
 from dl_helper.rl.rl_utils import update_model_params, ReplayBuffer, ReplayBufferWaitClose, calculate_importance_loss,ExperimentHandler
 from dl_helper.rl.tracker import Tracker

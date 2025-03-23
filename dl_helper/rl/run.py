@@ -4,7 +4,7 @@ import torch.multiprocessing as mp
 
 from py_ext.tool import log    
 
-from dl_helper.rl.rl_env.lob_env import data_producer, LOB_trade_env
+from dl_helper.rl.rl_env.lob_trade.lob_env import data_producer, LOB_trade_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
 from dl_helper.train_param import match_num_processes, get_gpu_info

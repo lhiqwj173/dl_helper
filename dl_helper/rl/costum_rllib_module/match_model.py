@@ -4,7 +4,7 @@ from ray.rllib.algorithms.callbacks import DefaultCallbacks
 import pandas as pd
 import numpy as np
 
-from dl_helper.rl.rl_env.match_env import MATCH_trade_env
+from dl_helper.rl.rl_env.match_trade.match_env import MATCH_trade_env
 from dl_helper.rl.rl_utils import BaseCustomPlotter
 
 def _get_env(env):

@@ -8,9 +8,9 @@ except:
 from ray.tune.registry import register_env
 from dl_helper.rl.rl_env.breakout_env import BreakoutEnv
 from dl_helper.rl.rl_env.cartpole_env import CartPoleEnv
-from dl_helper.rl.rl_env.lob_env import LOB_trade_env
-from dl_helper.rl.rl_env.match_env import MATCH_trade_env
-from dl_helper.rl.rl_env.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
+from dl_helper.rl.rl_env.match_trade.match_env import MATCH_trade_env
+from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 
 class Register:
     _instance = None

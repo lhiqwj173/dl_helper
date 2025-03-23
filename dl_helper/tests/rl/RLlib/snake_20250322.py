@@ -31,7 +31,7 @@ from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
 from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
-from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control, ai_control
+from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv, human_control, ai_control
 
 model_type = 'mlp'
 for arg in sys.argv:

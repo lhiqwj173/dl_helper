@@ -48,8 +48,7 @@ from py_ext.wechat import send_wx
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks, max_profit_reachable
 from dl_helper.train_param import in_kaggle
 
-from dl_helper.rl.rl_env.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.match_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, HoldPositionRewardStrategy, BalanceRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.match_trade.match_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, HoldPositionRewardStrategy, BalanceRewardStrategy, RewardCalculator
 
 STD_REWARD = 100
 

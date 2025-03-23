@@ -32,7 +32,8 @@ from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
 from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
-from dl_helper.rl.rl_env.snake_env import SnakeEnv, human_control, ai_control
+from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
 model_type = 'mlp'
@@ -91,9 +92,12 @@ if __name__ == "__main__":
     }
 
     # 人控制
-    # human_control(env_config)
-    # import sys
-    # sys.exit()
+    human_control(
+        env_class=SnakeEnv,
+        env_config=env_config,
+    )
+    import sys
+    sys.exit()
 
     # # 模型控制
     # ai_control(env_config, checkpoint_abs_path=r'C:\Users\lh\Desktop\temp\checkpoint')

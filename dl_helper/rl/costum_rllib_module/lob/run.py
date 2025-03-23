@@ -18,7 +18,7 @@ from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics
 from dl_helper.rl.socket_base import request_need_val
-from dl_helper.rl.rl_env.lob_env import LOB_trade_env
+from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.train_folder_manager import TrainFolderManager
 
 from py_ext.tool import log

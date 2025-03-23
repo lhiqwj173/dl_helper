@@ -4,7 +4,6 @@ import pygame
 import gymnasium as gym
 from gymnasium import spaces
 import time
-from ray.rllib.core.rl_module.rl_module import RLModule
 
 def default_crash_reward(snake, food, grid_size):
     return -1
@@ -21,7 +20,7 @@ class SnakeEnv(gym.Env):
     REG_NAME = 'snake'
     metadata = {'render_modes': ['human', 'none'], 'render_fps': 10}
     
-    def __init__(self, config: dict, render_mode='none'):
+    def __init__(self, config: dict):
         super(SnakeEnv, self).__init__()
 
         # 激励函数
@@ -30,9 +29,9 @@ class SnakeEnv(gym.Env):
         self.move_reward = config.get('move_reward', default_move_reward)
         
         self.grid_size = config.get('grid_size', (10, 10))
-        self.need_flatten = config.get('need_flatten', False)
+        self.model_type = config.get('model_type', 'cnn')
 
-        self.render_mode = render_mode
+        self.render_mode = config.get('render_mode', 'none')
         self.total_time = 300000  # 5分钟，单位毫秒
         
         if self.render_mode == 'human':
@@ -50,19 +49,22 @@ class SnakeEnv(gym.Env):
             self.font = pygame.font.Font(None, 36)
         
         self.action_space = spaces.Discrete(4)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if not self.need_flatten else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if not self.model_type == 'cnn' else spaces.Box(low=0, high=1, shape=(*self.grid_size, 1), dtype=np.float32) if self.model_type == 'sb3_cnn' else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
         
         self.reset()
     
     def _std_obs(self, obs):
         obs /= np.float32(3)
-        if self.need_flatten:
+        if self.model_type == 'mlp':
+            # 展平
             obs = obs.flatten()
-
-        else:
-            # obs = obs.unsqueeze(0) # 增加一个维度，变成(1, 10, 10)
+        elif self.model_type == 'cnn':
+            # 增加一个维度，变成(1, 10, 10)
             obs = np.expand_dims(obs, axis=0)  # 形状从 (10, 10) 变成 (1, 10, 10)
-            
+        elif self.model_type == 'sb3_cnn':
+            # 增加一个维度，变成(10, 10, 1)
+            obs = np.expand_dims(obs, axis=2)  # 形状从 (10, 10) 变成 (10, 10, 1)
+
         return obs
 
     def reset(self, seed=None, options=None):
@@ -200,95 +202,9 @@ class SnakeEnv(gym.Env):
         if self.render_mode == 'human':
             pygame.quit()
 
-def human_control(env_config = {
-    'grid_size': (10, 10),
-}):
-    # 测试环境 - 手动控制
-    env = SnakeEnv(
-        env_config,
-        render_mode='human',
-    )
-    observation, info = env.reset()
-    done = False
-    action = 3  # 初始方向：右
-    clock = pygame.time.Clock()
-
-    time.sleep(3)
-    
-    while not done:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                done = True
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    action = 0
-                elif event.key == pygame.K_DOWN:
-                    action = 1
-                elif event.key == pygame.K_LEFT:
-                    action = 2
-                elif event.key == pygame.K_RIGHT:
-                    action = 3
-        
-        observation, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        env.render()
-        clock.tick(4)  # 控制游戏速度为10帧每秒
-    
-    env.close()
-
-def ai_control(
-    env_config = {
-        'grid_size': (10, 10),
-    },
-    checkpoint_abs_path = '',
-    times = 10,
-):
-    def model_action(obs, rl_module):
-        obs = torch.tensor(obs, dtype=torch.float32) if not isinstance(obs, torch.Tensor) else obs
-        results = rl_module.forward_inference({"obs":obs})
-        action_logits = results['action_dist_inputs']  # 获取 logits 张量
-        action = torch.argmax(action_logits).item()    # 取最大值索引并转为 Python 标量
-        print(f"action: {action}")
-        return action
-
-    # 测试环境 - 模型控制
-    env = SnakeEnv(
-        env_config,
-        render_mode='human',
-    )
-
-    # 模型
-    rl_module_checkpoint_dir = os.path.join(checkpoint_abs_path,  "learner_group" , "learner" , "rl_module" , "default_policy")
-    rl_module = RLModule.from_checkpoint(rl_module_checkpoint_dir)
-
-    for _ in range(times):
-        observation, info = env.reset()
-        done = False
-        clock = pygame.time.Clock()
-        
-        while not done:
-            action = model_action(observation, rl_module)
-            observation, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            env.render()
-            clock.tick(4)  # 控制游戏速度为10帧每秒
-
-    env.close()
-
-def test_run():
-    env = SnakeEnv(
-        {
-            'grid_size': (5, 5),
-        },
-    )
-    observation, info = env.reset()
-    done = False
-    while not done:
-        action = env.action_space.sample()
-        observation, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        env.render()
-
 if __name__ == "__main__":
-    human_control() 
-    # test_run()
+    from dl_helper.rl.rl_env.tool import human_control
+    human_control(
+        env_class=SnakeEnv,
+        env_config={},
+    )

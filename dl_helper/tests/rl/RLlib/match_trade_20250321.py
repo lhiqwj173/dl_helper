@@ -51,9 +51,9 @@ from py_ext.tool import init_logger, log
 from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
-from dl_helper.rl.rl_env.match_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, HoldPositionRewardStrategy, BalanceRewardStrategy, RewardStrategy
+from dl_helper.rl.rl_env.match_trade.match_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, HoldPositionRewardStrategy, BalanceRewardStrategy, RewardStrategy
 from dl_helper.rl.costum_rllib_module.match_model import MatchCallbacks, MatchPlotter
-from dl_helper.rl.rl_env.match_env import MATCH_trade_env
+from dl_helper.rl.rl_env.match_trade.match_env import MATCH_trade_env
 
 use_intrinsic_curiosity = False
 if len(sys.argv) > 1 and sys.argv[1] == 'ICM':

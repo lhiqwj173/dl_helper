@@ -38,7 +38,7 @@ from py_ext.datetime import beijing_time
 from dl_helper.rl.costum_rllib_module.lob.run import run
 from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog, CausalConvLSTMIntrinsicCuriosityModel
 from dl_helper.rl.rl_env.lob_env_reward import RewardStrategy
-from dl_helper.rl.rl_env.lob_env import STD_REWARD
+from dl_helper.rl.rl_env.lob_trade.lob_env import STD_REWARD
 
 class IllegalRewardStrategy(RewardStrategy):
     def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):

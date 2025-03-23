@@ -1,6 +1,6 @@
 import unittest
 from statistics import mean
-from dl_helper.rl.rl_env.lob_env import RewardTracker
+from dl_helper.rl.rl_env.lob_trade.lob_env import RewardTracker
 
 class TestRewardTracker(unittest.TestCase):
     def setUp(self):
