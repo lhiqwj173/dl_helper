@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+from py_ext.alist import alist
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -32,6 +33,57 @@ class CustomCNN(BaseFeaturesExtractor):
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
+
+class CustomCheckpointCallback(CheckpointCallback):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _checkpoint_path(self, checkpoint_type: str = "", extension: str = "") -> str:
+        """
+        Helper to get checkpoint path for each type of checkpoint.
+
+        :param checkpoint_type: empty for the model, "replay_buffer_"
+            or "vecnormalize_" for the other checkpoints.
+        :param extension: Checkpoint file extension (zip for model, pkl for others)
+        :return: Path to the checkpoint
+        """
+        file = os.path.join(self.save_path, f"{self.name_prefix}_{checkpoint_type}.{extension}")
+        # 删除文件
+        if os.path.exists(file):
+            os.remove(file)
+        return file
+
+    def _on_step(self) -> bool:
+        if self.n_calls % self.save_freq == 0:
+            model_path = self._checkpoint_path(extension="zip")
+            self.model.save(model_path)
+            if self.verbose >= 2:
+                print(f"Saving model checkpoint to {model_path}")
+
+            if self.save_replay_buffer and hasattr(self.model, "replay_buffer") and self.model.replay_buffer is not None:
+                # If model has a replay buffer, save it too
+                replay_buffer_path = self._checkpoint_path("replay_buffer_", extension="pkl")
+                self.model.save_replay_buffer(replay_buffer_path)  # type: ignore[attr-defined]
+                if self.verbose > 1:
+                    print(f"Saving model replay buffer checkpoint to {replay_buffer_path}")
+
+            if self.save_vecnormalize and self.model.get_vec_normalize_env() is not None:
+                # Save the VecNormalize statistics
+                vec_normalize_path = self._checkpoint_path("vecnormalize_", extension="pkl")
+                self.model.get_vec_normalize_env().save(vec_normalize_path)  # type: ignore[union-attr]
+                if self.verbose >= 2:
+                    print(f"Saving model VecNormalize to {vec_normalize_path}")
+
+            # 上传更新到alist
+            ALIST_UPLOAD_FOLDER = 'rl_learning_process'
+            client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+            upload_folder = f'/{ALIST_UPLOAD_FOLDER}/'
+            client.mkdir(upload_folder)
+            client.upload(model_path, upload_folder)
+            log('upload done')
+
+        return True
 
 from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 from py_ext.tool import init_logger, log
@@ -86,7 +138,7 @@ if __name__ == "__main__":
     save_freq = 10000           # 每 10000 步保存一次
 
     # 创建回调实例
-    checkpoint_callback = CheckpointCallback(save_freq=save_freq, save_path=save_path)
+    checkpoint_callback = CustomCheckpointCallback(save_freq=save_freq, save_path=save_path)
 
     # 配置 policy_kwargs
     policy_kwargs = dict(
