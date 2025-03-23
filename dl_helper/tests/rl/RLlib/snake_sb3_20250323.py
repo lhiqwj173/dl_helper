@@ -37,11 +37,7 @@ from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 from py_ext.tool import init_logger, log
 import sys
 
-model_type = 'mlp'
-for arg in sys.argv:
-    if arg == 'cnn':
-        model_type = 'cnn'
-
+model_type = 'cnn'
 train_folder = train_title = f'20250322_snake_sb3' + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
