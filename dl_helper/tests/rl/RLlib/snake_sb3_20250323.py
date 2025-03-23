@@ -42,7 +42,7 @@ for arg in sys.argv:
     if arg == 'cnn':
         model_type = 'cnn'
 
-train_folder = train_title = f'20250322_snake_build_in' + f'_{model_type}'
+train_folder = train_title = f'20250322_snake_sb3' + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
