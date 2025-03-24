@@ -43,7 +43,7 @@ for arg in sys.argv:
     elif arg == 'cnn':
         model_type = 'cnn'
 
-train_folder = train_title = f'20250324_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250324_2_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 
