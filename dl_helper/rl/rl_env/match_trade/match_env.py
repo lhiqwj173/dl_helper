@@ -276,7 +276,7 @@ class data_producer:
         返回 tick, codes, latest_tick_time
         """
         _idx = self.idx - 1
-        extra_data_length = 10
+        extra_data_length = 15
         # 获取 最近 self.his_tick_len + 5 个数据 + 未来5个数据
         # 共 5 + self.his_tick_len + 5 个数据
         a, b = _idx - self.his_tick_len - extra_data_length + 1, _idx + extra_data_length + 1
@@ -715,6 +715,7 @@ class MATCH_trade_env(gym.Env):
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
         self.need_upload_file = os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.iteration}.csv')
+        log(f'[{id(self)}][{self.data_producer.data_type}] update need upload file: {self.need_upload_file}')
 
     def _set_data_type(self, data_type):
         if self.data_producer.data_type != data_type:
@@ -1200,7 +1201,7 @@ def test_env():
 
     print('done')
 
-def play_env():
+def play_env(render=True):
     """可视化玩游戏"""
     act_dict = None
     act_dict = {
@@ -1236,7 +1237,7 @@ def play_env():
             'train_title': 'test',
         },
         debug_dates=['20250317.pkl'],
-        render_mode='human',
+        render_mode='human' if render else 'none',
     )
 
     print('reset')
@@ -1249,7 +1250,8 @@ def play_env():
         return
 
     dt= env.data_producer.latest_tick.name
-    env.render()
+    if render:
+        env.render()
     act = 1
     need_close = False
     while not need_close:
@@ -1257,15 +1259,17 @@ def play_env():
             act = act_dict[dt]
         obs, reward, terminated, truncated, info = env.step(act)
         dt= env.data_producer.latest_tick.name
-        env.render()
+        if render:
+            env.render()
         need_close = terminated or truncated
-        time.sleep(0.1)
+        if render:
+            time.sleep(0.1)
 
     print('done')
 
 if __name__ == '__main__':
     # test_data_producer()
     # test_env()
-    play_env()
+    play_env(False)
 
 

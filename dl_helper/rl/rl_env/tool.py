@@ -3,6 +3,7 @@ import time
 import pygame
 import torch
 from ray.rllib.core.rl_module.rl_module import RLModule
+from stable_baselines3.common.evaluation import evaluate_policy
 
 def human_control(
         env_class,
@@ -27,8 +28,8 @@ def human_control(
     action = 3  # 初始方向：右
     clock = pygame.time.Clock()
 
-    time.sleep(1)
-    
+    pygame.time.wait(3000)
+
     while not done:
         action = action if default_action is None else default_action
         for event in pygame.event.get():
@@ -50,12 +51,19 @@ def ai_control(
     env_config={},
     checkpoint_abs_path = '',
     times = 10,
+
+    #sb3
+    sb3_rl_model = None,
 ):
-    def model_action(obs, rl_module):
+    def model_action(obs, rl_module, rllib=True):
         obs = torch.tensor(obs, dtype=torch.float32) if not isinstance(obs, torch.Tensor) else obs
-        results = rl_module.forward_inference({"obs":obs})
-        action_logits = results['action_dist_inputs']  # 获取 logits 张量
-        action = torch.argmax(action_logits).item()    # 取最大值索引并转为 Python 标量
+        if rllib:
+            results = rl_module.forward_inference({"obs":obs})
+            action_logits = results['action_dist_inputs']  # 获取 logits 张量
+            action = torch.argmax(action_logits).item()    # 取最大值索引并转为 Python 标量
+        else:
+            actions, states = rl_module.predict(obs)
+            action = actions.item()
         print(f"action: {action}")
         return action
 
@@ -66,9 +74,18 @@ def ai_control(
         env_config,
     )
 
-    # 模型
-    rl_module_checkpoint_dir = os.path.join(checkpoint_abs_path,  "learner_group" , "learner" , "rl_module" , "default_policy")
-    rl_module = RLModule.from_checkpoint(rl_module_checkpoint_dir)
+    rllib = True if sb3_rl_model is None else False
+
+    if rllib:
+        # rllib
+        rl_module_checkpoint_dir = os.path.join(checkpoint_abs_path,  "learner_group" , "learner" , "rl_module" , "default_policy")
+        rl_module = RLModule.from_checkpoint(rl_module_checkpoint_dir)
+
+    else:
+        # sb3
+        rllib = False
+        sb3_rl_model.set_parameters(checkpoint_abs_path)
+        rl_module = sb3_rl_model
 
     for _ in range(times):
         observation, info = env.reset()
@@ -76,7 +93,7 @@ def ai_control(
         clock = pygame.time.Clock()
         
         while not done:
-            action = model_action(observation, rl_module)
+            action = model_action(observation, rl_module, rllib)
             observation, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             env.render()

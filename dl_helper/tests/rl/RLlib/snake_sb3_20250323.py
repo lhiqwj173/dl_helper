@@ -1,11 +1,24 @@
 import os
 import torch
 import torch.nn as nn
+import numpy as np
+import pandas as pd
+
+from py_ext.lzma import decompress, compress_folder
 from py_ext.alist import alist
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.utils import obs_as_tensor, safe_mean
+
+from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
+from py_ext.tool import init_logger, log
+import sys
+
+model_type = 'cnn'
+train_folder = train_title = f'20250323_snake_sb3' + f'_{model_type}'
+init_logger(train_title, home=train_folder, timestamp=False)
 
 # 自定义 CNN 特征提取器
 class CustomCNN(BaseFeaturesExtractor):
@@ -42,64 +55,68 @@ class CustomCNN(BaseFeaturesExtractor):
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
 
-class CustomCheckpointCallback(CheckpointCallback):
+class CustomCheckpointCallback(BaseCallback):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, save_freq, train_folder: str):
+        super().__init__()
 
-    def _checkpoint_path(self, checkpoint_type: str = "", extension: str = "") -> str:
-        """
-        Helper to get checkpoint path for each type of checkpoint.
+        self.save_freq = save_freq
+        self.train_folder = train_folder
 
-        :param checkpoint_type: empty for the model, "replay_buffer_"
-            or "vecnormalize_" for the other checkpoints.
-        :param extension: Checkpoint file extension (zip for model, pkl for others)
-        :return: Path to the checkpoint
-        """
-        file = os.path.join(self.save_path, f"{self.name_prefix}_{checkpoint_type}.{extension}")
-        # 删除文件
-        if os.path.exists(file):
-            os.remove(file)
-        return file
+        self.metrics = []
+
+        self.checkpoint_path = os.path.join(self.train_folder, 'checkpoint')
+        os.makedirs(self.checkpoint_path, exist_ok=True)
+
+    def _on_rollout_end(self) -> None:
+        # This method is called after each rollout
+        # Collect metrics from logger
+        metrics_dict = {}
+        
+        # Rollout metrics
+        metrics_dict['rollout/ep_len_mean'] = safe_mean([ep_info["l"] for ep_info in self.model.ep_info_buffer])
+        metrics_dict['rollout/ep_rew_mean'] = safe_mean([ep_info["r"] for ep_info in self.model.ep_info_buffer])
+        
+        # Training metrics from the last update
+        if hasattr(self.model, 'logger') and self.model.logger is not None:
+            for key in ['train/approx_kl', 'train/clip_fraction', 'train/clip_range', 
+                        'train/entropy_loss', 'train/explained_variance', 'train/learning_rate',
+                        'train/loss', 'train/n_updates', 'train/policy_gradient_loss', 'train/value_loss']:
+                if key in self.model.logger.name_to_value:
+                    metrics_dict[key] = self.model.logger.name_to_value[key]
+        self.log(metrics_dict)
+
+        self.metrics.append(metrics_dict)
+        pd.DataFrame(self.metrics).to_csv(os.path.join(self.train_folder, "training_metrics.csv"), index=False)
+
+    def log(self, metrics_dict):
+        # 将数据保存到文件
+        log("------------------------------------------\n")
+        for key, value in metrics_dict.items():
+            log(f"{key}: {value}")
+        log("------------------------------------------\n\n")
 
     def _on_step(self) -> bool:
         if self.n_calls % self.save_freq == 0:
-            model_path = self._checkpoint_path(extension="zip")
+            # 保存检查点
+            model_path = os.path.join(self.checkpoint_path, f'model_{self.n_calls}.zip')
             self.model.save(model_path)
-            if self.verbose >= 2:
-                print(f"Saving model checkpoint to {model_path}")
 
-            if self.save_replay_buffer and hasattr(self.model, "replay_buffer") and self.model.replay_buffer is not None:
-                # If model has a replay buffer, save it too
-                replay_buffer_path = self._checkpoint_path("replay_buffer_", extension="pkl")
-                self.model.save_replay_buffer(replay_buffer_path)  # type: ignore[attr-defined]
-                if self.verbose > 1:
-                    print(f"Saving model replay buffer checkpoint to {replay_buffer_path}")
-
-            if self.save_vecnormalize and self.model.get_vec_normalize_env() is not None:
-                # Save the VecNormalize statistics
-                vec_normalize_path = self._checkpoint_path("vecnormalize_", extension="pkl")
-                self.model.get_vec_normalize_env().save(vec_normalize_path)  # type: ignore[union-attr]
-                if self.verbose >= 2:
-                    print(f"Saving model VecNormalize to {vec_normalize_path}")
-
+            # 打包文训练件夹，并上传到alist
+            zip_file = f'{train_folder}.7z'
+            if os.path.exists(zip_file):
+                os.remove(zip_file)
+            compress_folder(train_folder, zip_file, 9, inplace=False)
+            log('compress_folder done')
             # 上传更新到alist
             ALIST_UPLOAD_FOLDER = 'rl_learning_process'
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             upload_folder = f'/{ALIST_UPLOAD_FOLDER}/'
             client.mkdir(upload_folder)
-            client.upload(model_path, upload_folder)
+            client.upload(zip_file, upload_folder)
             log('upload done')
 
         return True
-
-from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
-from py_ext.tool import init_logger, log
-import sys
-
-model_type = 'cnn'
-train_folder = train_title = f'20250323_snake_sb3' + f'_{model_type}'
-init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
 STD_EAT_FOOD_REWARD = 100
@@ -141,12 +158,8 @@ if __name__ == "__main__":
         config=env_config,
     )
 
-    # 设置保存参数
-    save_path = os.path.join(train_folder, 'checkpoint')
-    save_freq = 10000           # 每 10000 步保存一次
-
     # 创建回调实例
-    checkpoint_callback = CustomCheckpointCallback(save_freq=save_freq, save_path=save_path)
+    checkpoint_callback = CustomCheckpointCallback(save_freq=10000, train_folder=train_folder)
 
     # 配置 policy_kwargs
     policy_kwargs = dict(
@@ -156,6 +169,11 @@ if __name__ == "__main__":
 
     model = PPO("CnnPolicy", env, verbose=1, policy_kwargs=policy_kwargs)
     log(model.policy)
+
+    # 测试
+    # from dl_helper.rl.rl_env.tool import ai_control
+    # ai_control(env_class=SnakeEnv, env_config=env_config, checkpoint_abs_path=r"C:\Users\lh\Downloads\rl_model_1.zip", times=10, sb3_rl_model=model)
+    # sys.exit()
 
     model.learn(
         total_timesteps=int(100000000),
