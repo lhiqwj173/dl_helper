@@ -221,136 +221,124 @@ class BaseCustomPlotter:
 
 def plot_training_curve(train_title, train_folder, out_file, total_time=None, pic_name=None, y_axis_max=None, custom_plotter=None):
     """
-    total_time: 训练总时间 sec
-    custom_plotter: Object with two methods:
-        - get_additional_plot_count(): Returns number of additional plots needed
-        - plot(out_data, axes_list): Performs custom plotting across given list of axes
+    total_time: 训练总时间（秒）
+    custom_plotter: 自定义绘图对象，需包含两个方法：
+        - get_additional_plot_count(): 返回所需的额外子图数量
+        - plot(out_data, axes_list): 在给定的轴列表上执行自定义绘图
     """
     out_data = pd.read_csv(out_file)
 
     # 填充 NaN 值
     out_data = out_data.ffill()
     
-    # Extract data
-    datetime = pd.to_datetime(out_data['datetime'])  # Convert to datetime objects
-    mean_reward = out_data['env_runner_episode_return_mean'].tolist()
-    max_reward = out_data['env_runner_episode_return_max'].tolist()
-    val_mean_reward = out_data['val_episode_return_mean'].tolist()
-    val_max_reward = out_data['val_episode_return_max'].tolist()
+    # 提取数据
+    datetime = pd.to_datetime(out_data['datetime'])  # 转换为日期时间对象
+    mean_reward = out_data['env_runner_episode_return_mean'].tolist()  # 平均奖励
+    max_reward = out_data['env_runner_episode_return_max'].tolist()    # 最大奖励
+    val_mean_reward = out_data['val_episode_return_mean'].tolist()     # 验证集平均奖励
+    val_max_reward = out_data['val_episode_return_max'].tolist()       # 验证集最大奖励
+    learning_rates = out_data['learning_rate'].values                  # 学习率
+    loss = out_data.get('learner_default_policy_total_loss', pd.Series()).tolist()                  # 损失
     
     if len(mean_reward) == 0:
-        log('No mean_reward data found')
+        log('未找到 mean_reward 数据')
         return
 
-    # Filter out NaN values
+    # 过滤 NaN 值
     _mean_reward = [x for x in mean_reward if not np.isnan(x)]
     _max_reward = [x for x in max_reward if not np.isnan(x)]
     _val_mean_reward = [x for x in val_mean_reward if not np.isnan(x)]
     _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
+    _learning_rates = [x for x in learning_rates if not np.isnan(x)]
+    _loss = [x for x in loss if not np.isnan(x)]
 
-    # latest values
+    # 获取最新值
     mean_reward_latest = _mean_reward[-1] if len(_mean_reward) > 0 else np.nan
     max_reward_latest = _max_reward[-1] if len(_max_reward) > 0 else np.nan
     val_mean_reward_latest = _val_mean_reward[-1] if len(_val_mean_reward) > 0 else np.nan
     val_max_reward_latest = _val_max_reward[-1] if len(_val_max_reward) > 0 else np.nan
+    lr_latest = _learning_rates[-1] if len(_learning_rates) > 0 else np.nan
+    loss_latest = _loss[-1] if len(_loss) > 0 else np.nan
 
-    # Determine number of subplots
+    # 确定子图数量（2个固定子图：奖励、学习率/损失，加上自定义子图）
     additional_plots = custom_plotter.get_additional_plot_count() if custom_plotter else 0
-    total_plots = 1 + additional_plots
+    total_plots = 2 + additional_plots  # 主奖励图、学习率图/损失图，加上自定义图
 
-    # Create figure with subplots
-    # 主图高度6，其他子图高度为2
-    heights = [6] + [2] * (total_plots-1)  # 第一个图高度6，其余图高度2
+    # 创建带有子图的图形
+    heights = [3]*2 + [2] * (total_plots-2)  # 主图/第一个附图高度3，其他子图高度2
     fig = plt.figure(figsize=(10, sum(heights)))
     gs = plt.GridSpec(total_plots, 1, height_ratios=heights)
     axes = [plt.subplot(gs[i]) for i in range(total_plots)]
     
-    # Main training curves plot (first subplot)
+    # 主训练曲线图（第一个子图）- 仅显示奖励
     ax = axes[0]
-
-    # 创建右侧y轴
-    ax2 = ax.twinx()
-
-    # ax.plot(datetime, mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_latest:.4f})')
-    # ax.plot(datetime, max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_latest:.4f})')
-    # ax.plot(datetime, val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_latest:.4f})')
-    # ax.plot(datetime, val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_latest:.4f})')
-    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_latest:.4f})')
-    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_latest:.4f})')
-    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_latest:.4f})')
-    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_latest:.4f})')
+    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'平均奖励({mean_reward_latest:.4f})')
+    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'最大奖励({max_reward_latest:.4f})')
+    l3 = ax.plot(val_mean_reward, color='blue', label=f'验证平均奖励({val_mean_reward_latest:.4f})')
+    l4 = ax.plot(val_max_reward, color='orange', label=f'验证最大奖励({val_max_reward_latest:.4f})')
     
-    # 右侧y轴绘制学习率曲线
-    learning_rates = out_data['learning_rate'].values
-    l5 = ax2.plot(learning_rates, color='lightblue', linestyle='--', label=f'learning_rate({learning_rates[-1]:.2e})', alpha=0.3)
-    
-    # 设置右侧y轴标签
-    ax2.set_ylabel('Learning Rate', color='blue')
-    ax2.tick_params(axis='y', labelcolor='blue')
-    
-    # 合并两个坐标轴的图例
-    lns = l1 + l2 + l3 + l4 + l5
-    labs = [l.get_label() for l in lns]
-    ax.legend(lns, labs, loc='upper right')
-
-    ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} hours' if total_time is not None else ''))
+    ax.legend(loc='upper left')
+    ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} 小时' if total_time is not None else ''))
     if y_axis_max is not None:
         ax.set_ylim(0, y_axis_max)
     else:
-        # 只显示 mean_reward 和 val_mean_reward 的范围
         values = _mean_reward + _val_mean_reward
         min_y = min(values) if len(values) > 0 else 0
         max_y = max(values) if len(values) > 0 else 1
         ax.set_ylim(min_y, max_y)
 
+    # 损失图和学习率图（第二个子图）
+    ax_loss = axes[1]
+    # 绘制损失曲线(左y轴)
+    l1 = ax_loss.plot(loss, color='red', label=f'loss({loss_latest:.4f})')
+    ax_loss.set_ylabel('loss')
+    ax_loss.tick_params(axis='y')
+    
+    # 创建右侧y轴并绘制学习率曲线
+    ax_lr = ax_loss.twinx()
+    l2 = ax_lr.plot(learning_rates, color='blue', label=f'lr({lr_latest:.6f})', alpha=0.4)
+    ax_lr.set_ylabel('lr', color='blue')
+    ax_lr.tick_params(axis='y', labelcolor='blue')
+    
+    # 合并两个图例
+    lines = l1 + l2
+    labels = [l.get_label() for l in lines]
+    ax_loss.legend(lines, labels, loc='upper left')
+
     # 计算每4小时的时间点
     min_time = datetime.min()
     max_time = datetime.max()
-    time_range = pd.date_range(start=min_time, end=max_time, freq='4H')
-    
-    # Add custom plots if provided
-    if custom_plotter and additional_plots > 0:
-        # Pass the list of additional axes (excluding the first one used for main plot)
-        custom_plotter.plot(out_data, axes[1:])
+    time_range = pd.date_range(start=min_time, end=max_time, freq='4h')  # 将 'H' 改为 'h'
+    indices = [(datetime - t).abs().idxmin() for t in time_range]
 
-    # 找到每个4小时时间点对应的索引
-    indices = []
-    for t in time_range:
-        idx = (datetime - t).abs().idxmin()  # 找到最接近的时间点索引
-        indices.append(idx)
-    
-    # 在图表上添加竖线和时间标注
-    for idx in indices:
-        # 绘制浅色虚线
-        ax.axvline(x=idx, color='gray', linestyle='--', alpha=0.5)
-        # 添加时间标注
-        y_max = ax.get_ylim()[1]  # 获取 y 轴最大值
-        ax.text(idx, y_max, datetime[idx].strftime('%Y-%m-%d %H:%M'), 
-                rotation=90, verticalalignment='top', horizontalalignment='right', 
-                fontsize=8, color='gray')
-
-    # 在附图上添加竖线
-    for ax_i in axes[1:]:
-        for idx in indices:
-            # 绘制浅色虚线
+    # 在所有子图上添加竖线和时间标注
+    for ax_i in axes:
+        for	idx in indices:
             ax_i.axvline(x=idx, color='gray', linestyle='--', alpha=0.5)
+        if ax_i == axes[0]:  # 仅在主图上添加时间标签
+            y_max = ax_i.get_ylim()[1]
+            for idx in indices:
+                ax_i.text(idx, y_max, datetime[idx].strftime('%Y-%m-%d %H:%M'), 
+                         rotation=90, verticalalignment='top', horizontalalignment='right', 
+                         fontsize=8, color='gray')
 
-    # Set x-label only on bottom plot
-    axes[-1].set_xlabel('Iteration')
+    # 添加自定义绘图（若提供）
+    if custom_plotter and additional_plots > 0:
+        custom_plotter.plot(out_data, axes[2:])
 
-    # # Rotate x-axis labels for better readability
-    # plt.setp(axes[-1].xaxis.get_majorticklabels(), rotation=45)
+    # 仅在最下方子图设置x轴标签
+    axes[-1].set_xlabel('迭代次数')
     
-    # Adjust layout to prevent overlap
+    # 调整布局以防止重叠
     plt.tight_layout()
     
-    # Save figure
+    # 保存图形
     save_path = os.path.join(train_folder, 
-                           f'training_curve_{beijing_time().strftime("%Y%m%d")}.png' 
+                           f'训练曲线_{beijing_time().strftime("%Y%m%d")}.png' 
                            if pic_name is None else pic_name)
     plt.savefig(save_path)
     
-    plt.close(fig)  # Close the figure
+    plt.close(fig)  # 关闭图形
 
 class GradientAccumulator:
     def __init__(self, momentum=0.9, eps=1e-5):
@@ -1316,4 +1304,4 @@ def calculate_importance_loss(loss: torch.Tensor) -> float:
 
 if __name__ == "__main__":
     # plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out_20250304.csv")
-    plot_training_curve(r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Downloads\out.csv")
+    plot_training_curve('temp', r"C:\Users\lh\Desktop\temp", out_file=r"C:\Users\lh\Desktop\temp\out_20250324.csv")

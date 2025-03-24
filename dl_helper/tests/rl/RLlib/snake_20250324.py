@@ -48,10 +48,10 @@ init_logger(train_title, home=train_folder, timestamp=False)
 
 
 # 吃到食物标准奖励
-STD_EAT_FOOD_REWARD = 100
+STD_REWARD = 100
 
 # 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 10
+STD_MOVE_REWARD = STD_REWARD / 100
 
 """
 激励函数
@@ -77,19 +77,30 @@ shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃�
 # 吃到食物标准奖励
 STD_EAT_FOOD_REWARD = 100
 # 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 1000
+STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 10
 shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD * (距离 == 0)
 撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000, 是游戏中可能的最大惩罚，持续移动的惩罚需要很久才能抵消吃到食物的奖励
+模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
+
+
+# 20250324 2 ####################################
+# 吃到食物标准奖励
+STD_REWARD = 100
+# 移动到实物的标准奖励
+STD_MOVE_REWARD = STD_REWARD / 100
+shaping = -(距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
+撞击惩罚 = -STD_REWARD/2 # 避免惩罚过大，倾向于避免任何风险行为
 模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
 """
 
 def crash_reward(snake, food, grid_size):
-    # 10 * 10 的网格, 最大惩罚: -10000
-    return -(grid_size[0] * grid_size[1]) * STD_EAT_FOOD_REWARD
+    return -STD_REWARD / 2
 
 def keep_alive_reward(snake, food, grid_size):
-    distance_sqrt = (snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2
-    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD * int(distance_sqrt == 0)
+    # 计算当前曼哈顿距离
+    distance = abs(snake[0][0] - food[0]) + abs(snake[0][1] - food[1])
+    max_distance = grid_size[0] + grid_size[1]  # 10x10 网格的最大曼哈顿距离为 20
+    return -(distance/max_distance) * STD_MOVE_REWARD + STD_REWARD * int(distance == 0)
 
 def eat_reward(snake, food, grid_size):
     return 1
