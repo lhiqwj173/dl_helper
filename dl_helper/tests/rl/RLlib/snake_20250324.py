@@ -36,7 +36,7 @@ from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
-model_type = 'cnn'
+model_type = 'mlp'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
@@ -115,10 +115,10 @@ if __name__ == "__main__":
     # import sys
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    import sys
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # import sys
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
