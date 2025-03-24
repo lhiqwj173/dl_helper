@@ -29,7 +29,7 @@ class CustomCNN(BaseFeaturesExtractor):
         n_input_channels = observation_space.shape[0]
         # 定义 CNN 架构
         self.cnn = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.1),
             nn.MaxPool2d(kernel_size=2, stride=2),

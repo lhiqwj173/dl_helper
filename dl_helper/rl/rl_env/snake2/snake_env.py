@@ -1,6 +1,6 @@
 import math
 
-import gym
+import gymnasium as gym
 import numpy as np
 
 from dl_helper.rl.rl_env.snake2.snake_game import SnakeGame
@@ -41,13 +41,15 @@ class SnakeEnv(gym.Env):
             self.step_limit = 1e9 # Basically no limit.
         self.reward_step_counter = 0
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
+        super().reset(*args, **kwargs)
         self.game.reset()
 
         self.done = False
         self.reward_step_counter = 0
 
         obs = self._generate_observation()
+        obs = obs.astype(np.float32)
         obs /= np.float32(255.0)
         obs = np.transpose(obs, (2, 0, 1))
 
@@ -56,6 +58,7 @@ class SnakeEnv(gym.Env):
     def step(self, action):
         self.done, info = self.game.step(action) # info = {"snake_size": int, "snake_head_pos": np.array, "prev_snake_head_pos": np.array, "food_pos": np.array, "food_obtained": bool}
         obs = self._generate_observation()
+        obs = obs.astype(np.float32)
         obs /= np.float32(255.0)
         obs = np.transpose(obs, (2, 0, 1))
 
@@ -65,7 +68,7 @@ class SnakeEnv(gym.Env):
         if info["snake_size"] == self.grid_size: # Snake fills up the entire board. Game over.
             reward = self.max_growth * 0.1 # Victory reward
             self.done = True
-            return obs, reward, self.done, info
+            return obs, reward, self.done, False, info
         
         if self.reward_step_counter > self.step_limit: # Step limit reached, game over.
             self.reward_step_counter = 0
@@ -75,7 +78,7 @@ class SnakeEnv(gym.Env):
             # Game Over penalty is based on snake size.
             reward = - math.pow(self.max_growth, (self.grid_size - info["snake_size"]) / self.max_growth) # (-max_growth, -1)            
             reward = reward * 0.1
-            return obs, reward, self.done, info
+            return obs, reward, self.done, False, info
           
         elif info["food_obtained"]: # Food eaten. Reward boost on snake size.
             reward = info["snake_size"] / self.grid_size
@@ -93,7 +96,7 @@ class SnakeEnv(gym.Env):
         # max_score: 72 + 14.1 = 86.1
         # min_score: -14.1
 
-        return obs, reward, self.done, info
+        return obs, reward, self.done, False, info
     
     def render(self):
         self.game.render()
