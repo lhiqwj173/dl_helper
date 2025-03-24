@@ -3,11 +3,17 @@ import math
 import gym
 import numpy as np
 
-from snake_game import SnakeGame
+from dl_helper.rl.rl_env.snake2.snake_game import SnakeGame
 
 class SnakeEnv(gym.Env):
-    def __init__(self, seed=None, board_size=10, silent_mode=True, limit_step=True):
+    def __init__(self, config: dict):
         super().__init__()
+
+        seed = config.get('seed', None)
+        board_size = config.get('board_size', 10)
+        silent_mode = config.get('silent_mode', True)
+        limit_step = config.get('limit_step', False)
+
         self.game = SnakeGame(seed=seed, board_size=board_size, silent_mode=silent_mode)
         self.game.reset()
 
@@ -16,9 +22,10 @@ class SnakeEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(4) # 0: UP, 1: LEFT, 2: RIGHT, 3: DOWN
         
         self.observation_space = gym.spaces.Box(
-            low=0, high=255,
-            shape=(int(board_size * 7), int(board_size * 7), 3),
-            dtype=np.uint8
+            low=0, high=1,
+            # shape=(int(board_size * 7), int(board_size * 7), 3),
+            shape=(3,int(board_size * 7), int(board_size * 7)),
+            dtype=np.float32
         )
 
         self.board_size = board_size
@@ -41,11 +48,16 @@ class SnakeEnv(gym.Env):
         self.reward_step_counter = 0
 
         obs = self._generate_observation()
+        obs /= np.float32(255.0)
+        obs = np.transpose(obs, (2, 0, 1))
+
         return obs, {}
     
     def step(self, action):
         self.done, info = self.game.step(action) # info = {"snake_size": int, "snake_head_pos": np.array, "prev_snake_head_pos": np.array, "food_pos": np.array, "food_obtained": bool}
         obs = self._generate_observation()
+        obs /= np.float32(255.0)
+        obs = np.transpose(obs, (2, 0, 1))
 
         reward = 0.0
         self.reward_step_counter += 1
@@ -53,8 +65,6 @@ class SnakeEnv(gym.Env):
         if info["snake_size"] == self.grid_size: # Snake fills up the entire board. Game over.
             reward = self.max_growth * 0.1 # Victory reward
             self.done = True
-            if not self.silent_mode:
-                self.game.sound_victory.play()
             return obs, reward, self.done, info
         
         if self.reward_step_counter > self.step_limit: # Step limit reached, game over.

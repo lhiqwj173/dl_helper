@@ -31,6 +31,7 @@ if '__main__' == __name__:
             'pip install --upgrade torch ray[rllib]',
             # 'pip install --upgrade ray[rllib]',
             'pip install --upgrade stable-baselines3',
+            'pip install shimmy',
             'pip install uvloop',
             'pip install dill',
             'pip install ale_py',

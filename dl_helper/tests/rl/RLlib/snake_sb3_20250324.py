@@ -13,12 +13,12 @@ from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import obs_as_tensor, safe_mean
 
-from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.snake2.snake_env import SnakeEnv
 from py_ext.tool import init_logger, log
 import sys
 
 model_type = 'cnn'
-train_folder = train_title = f'20250323_snake_sb3' + f'_{model_type}'
+train_folder = train_title = f'20250324_snake_linyiLYi_sb3' + f'_{model_type}'
 init_logger(f"{train_title}_{datetime.datetime.now().strftime('%Y%m%d')}", home=train_folder, timestamp=False)
 
 # 自定义 CNN 特征提取器
@@ -119,41 +119,8 @@ class CustomCheckpointCallback(BaseCallback):
 
         return True
 
-# 吃到食物标准奖励
-STD_EAT_FOOD_REWARD = 100
-
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
-
-"""
-激励函数
-
-# 最大吃食物数量
-MAX_EAT_FOOD_NUM = 10 *10 - 1
-
-# 奖励函数
-shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃到食物数量) * STD_EAT_FOOD_REWARD
-"""
-
-def crash_reward(snake, food, grid_size):
-    # 10 * 10 的网格, 最大惩罚: -10000
-    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
-    return -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD
-
-def keep_alive_reward(snake, food, grid_size):
-    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
-    eat_food_num = len(snake) - 1
-    distance_sqrt = (snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2
-    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - eat_food_num) * STD_EAT_FOOD_REWARD
-
 if __name__ == "__main__":
-    env_config = {
-        'grid_size': (10, 10),
-        'crash_reward': crash_reward,
-        'eat_reward': keep_alive_reward,
-        'move_reward': keep_alive_reward,
-        'model_type': model_type,
-    }
+    env_config = {}
 
     env = SnakeEnv(
         config=env_config,
