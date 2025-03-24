@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
+import datetime
 
 from py_ext.lzma import decompress, compress_folder
 from py_ext.alist import alist
@@ -18,7 +19,7 @@ import sys
 
 model_type = 'cnn'
 train_folder = train_title = f'20250323_snake_sb3' + f'_{model_type}'
-init_logger(train_title, home=train_folder, timestamp=False)
+init_logger(f"{train_title}_{datetime.datetime.now().strftime('%Y%m%d')}", home=train_folder, timestamp=False)
 
 # 自定义 CNN 特征提取器
 class CustomCNN(BaseFeaturesExtractor):
