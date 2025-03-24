@@ -51,7 +51,7 @@ init_logger(train_title, home=train_folder, timestamp=False)
 STD_EAT_FOOD_REWARD = 100
 
 # 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
+STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 10
 
 """
 激励函数
@@ -59,8 +59,28 @@ STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
 # 最大吃食物数量
 MAX_EAT_FOOD_NUM = 10 *10 - 1
 
+# 20250321 ####################################
+# 吃到食物标准奖励
+STD_EAT_FOOD_REWARD = 100
+# 移动到实物的标准奖励
+STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
 # 奖励函数
 shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃到食物数量) * STD_EAT_FOOD_REWARD
+撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000
+
+分析:
+    每一步都有巨大的惩罚, 而撞击的惩罚不够大
+    导致模型自杀来避免每步的累计惩罚
+
+
+# 20250324 ####################################
+# 吃到食物标准奖励
+STD_EAT_FOOD_REWARD = 100
+# 移动到实物的标准奖励
+STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 1000
+shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD
+撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000, 是游戏中可能的最大惩罚，持续移动的惩罚需要很久才能抵消吃到食物的奖励
+模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
 """
 
 def crash_reward(snake, food, grid_size):

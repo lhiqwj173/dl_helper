@@ -39,6 +39,11 @@ class CustomCNN(BaseFeaturesExtractor):
             nn.LeakyReLU(0.1),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
+            # nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(64),
+            # nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=2, stride=2),
+
             nn.Flatten(),  # 展平特征图
         )
 
@@ -170,6 +175,8 @@ if __name__ == "__main__":
 
     model = PPO("CnnPolicy", env, verbose=1, policy_kwargs=policy_kwargs)
     log(model.policy)
+    log(f'total parameters: {sum(p.numel() for p in model.policy.parameters())}')# total parameters: 37021
+    sys.exit()
 
     # 测试
     # from dl_helper.rl.rl_env.tool import ai_control

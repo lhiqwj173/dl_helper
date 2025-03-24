@@ -8,7 +8,10 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame
 
 class SnakeGame:
-    def __init__(self, seed=None, board_size=10, silent_mode=True):
+    def __init__(self, seed=None, board_size=10, render_mode='none'):
+        """
+        render_mode: 'none' or 'human'
+        """
         self.board_size = board_size
         self.grid_size = self.board_size ** 2
         self.cell_size = 40
@@ -18,8 +21,8 @@ class SnakeGame:
         self.display_width = self.width + 2 * self.border_size
         self.display_height = self.height + 2 * self.border_size + 40
 
-        self.silent_mode = silent_mode
-        if not silent_mode:
+        self.render_mode = render_mode
+        if render_mode == 'human':
             pygame.init()
             pygame.display.set_caption("Snake Game")
             self.screen = pygame.display.set_mode((self.display_width, self.display_height))
@@ -234,7 +237,7 @@ class SnakeGame:
 if __name__ == "__main__":
     import time
 
-    game = SnakeGame(board_size=10, silent_mode=True)
+    game = SnakeGame(board_size=10, render_mode='none')
     pygame.init()
     game.screen = pygame.display.set_mode((game.display_width, game.display_height))
     pygame.display.set_caption("Snake Game")

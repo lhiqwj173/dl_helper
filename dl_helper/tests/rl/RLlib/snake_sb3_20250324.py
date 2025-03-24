@@ -137,11 +137,12 @@ if __name__ == "__main__":
 
     model = PPO("CnnPolicy", env, verbose=1, policy_kwargs=policy_kwargs)
     log(model.policy)
+    log(f'total parameters: {sum(p.numel() for p in model.policy.parameters())}')# total parameters: 475357
 
     # 测试
-    # from dl_helper.rl.rl_env.tool import ai_control
-    # ai_control(env_class=SnakeEnv, env_config=env_config, checkpoint_abs_path=r"C:\Users\lh\Downloads\rl_model_1.zip", times=10, sb3_rl_model=model)
-    # sys.exit()
+    from dl_helper.rl.rl_env.tool import ai_control
+    ai_control(env_class=SnakeEnv, env_config=env_config, checkpoint_abs_path=r"C:\Users\lh\Downloads\checkpoint.zip", times=10, sb3_rl_model=model)
+    sys.exit()
 
     model.learn(
         total_timesteps=int(100000000),

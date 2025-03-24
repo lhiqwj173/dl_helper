@@ -11,13 +11,13 @@ class SnakeEnv(gym.Env):
 
         seed = config.get('seed', None)
         board_size = config.get('board_size', 10)
-        silent_mode = config.get('silent_mode', True)
+        render_mode = config.get('render_mode', 'none')
         limit_step = config.get('limit_step', False)
 
-        self.game = SnakeGame(seed=seed, board_size=board_size, silent_mode=silent_mode)
+        self.game = SnakeGame(seed=seed, board_size=board_size, render_mode=render_mode)
         self.game.reset()
 
-        self.silent_mode = silent_mode
+        self.render_mode = render_mode
 
         self.action_space = gym.spaces.Discrete(4) # 0: UP, 1: LEFT, 2: RIGHT, 3: DOWN
         
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt
     import time
 
-    env = SnakeEnv(silent_mode=False)
+    env = SnakeEnv(render_mode=False)
     
     # Test Init Efficiency
     num_success = 0
