@@ -36,7 +36,7 @@ from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
-model_type = 'mlp'
+model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
@@ -78,7 +78,7 @@ shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃�
 STD_EAT_FOOD_REWARD = 100
 # 移动到实物的标准奖励
 STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 1000
-shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD
+shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD * (距离 == 0)
 撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000, 是游戏中可能的最大惩罚，持续移动的惩罚需要很久才能抵消吃到食物的奖励
 模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
 """
@@ -89,7 +89,7 @@ def crash_reward(snake, food, grid_size):
 
 def keep_alive_reward(snake, food, grid_size):
     distance_sqrt = (snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2
-    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD
+    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD * int(distance_sqrt == 0)
 
 def eat_reward(snake, food, grid_size):
     return 1
@@ -115,10 +115,10 @@ if __name__ == "__main__":
     # import sys
     # sys.exit()
 
-    # # 模型控制
-    # ai_control(env_config, checkpoint_abs_path=r'C:\Users\lh\Desktop\temp\checkpoint')
-    # import sys
-    # sys.exit()
+    # 模型控制
+    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    import sys
+    sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0

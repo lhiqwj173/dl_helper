@@ -58,6 +58,8 @@ def ai_control(
     def model_action(obs, rl_module, rllib=True):
         obs = torch.tensor(obs, dtype=torch.float32) if not isinstance(obs, torch.Tensor) else obs
         if rllib:
+            # 增加batch维度
+            obs = obs.unsqueeze(0)  # 从 (C,H,W) 变为 (B,C,H,W)
             results = rl_module.forward_inference({"obs":obs})
             action_logits = results['action_dist_inputs']  # 获取 logits 张量
             action = torch.argmax(action_logits).item()    # 取最大值索引并转为 Python 标量
