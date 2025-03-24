@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
     # 训练循环
     begin_time = time.time()
-    rounds = 50000
+    rounds = 500000000
     # rounds = 30
     for i in range(rounds):
         log(f"Training iteration {i+1}/{rounds}")
@@ -264,7 +264,7 @@ if __name__ == "__main__":
         out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
         simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
-        if i>0 and (i % 500 == 0 or i == rounds - 1):
+        if i>0 and (i % 100 == 0 or i == rounds - 1):
             if not in_windows():
                 # 保存检查点
                 checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
