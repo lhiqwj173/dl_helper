@@ -100,7 +100,7 @@ class CustomCheckpointCallback(BaseCallback):
     def _on_step(self) -> bool:
         if self.n_calls % self.save_freq == 0:
             # 保存检查点
-            model_path = os.path.join(self.checkpoint_path, f'model_{self.n_calls}.zip')
+            model_path = os.path.join(self.checkpoint_path, f'checkpoint.zip')
             self.model.save(model_path)
 
             # 打包文训练件夹，并上传到alist
