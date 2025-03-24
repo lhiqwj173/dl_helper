@@ -111,13 +111,13 @@ if __name__ == "__main__":
         'need_flatten': True if model_type == 'mlp' else False,
     }
 
-    # 人控制
-    human_control(
-        env_class=SnakeEnv,
-        env_config=env_config,
-    )
-    import sys
-    sys.exit()
+    # # 人控制
+    # human_control(
+    #     env_class=SnakeEnv,
+    #     env_config=env_config,
+    # )
+    # import sys
+    # sys.exit()
 
     # # 模型控制
     # ai_control(env_config, checkpoint_abs_path=r'C:\Users\lh\Desktop\temp\checkpoint')
