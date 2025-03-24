@@ -36,14 +36,17 @@ from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
-model_type = 'cnn'
+new_lr = 0.0
+model_type = 'mlp'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
     elif arg == 'cnn':
         model_type = 'cnn'
+    elif arg.startswith('lr='):
+        new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250324_2_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250325_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 
@@ -93,8 +96,8 @@ shaping = -(距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
 模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
 """
 
-def crash_reward(snake, food, grid_size):
-    return -STD_REWARD / 2
+def stop_reward(snake, food, grid_size):
+    return -STD_REWARD
 
 def keep_alive_reward(snake, food, grid_size):
     # 计算当前曼哈顿距离
@@ -102,19 +105,14 @@ def keep_alive_reward(snake, food, grid_size):
     max_distance = grid_size[0] + grid_size[1]  # 10x10 网格的最大曼哈顿距离为 20
     return -(distance/max_distance) * STD_MOVE_REWARD + STD_REWARD * int(distance == 0)
 
-def eat_reward(snake, food, grid_size):
-    return 1
-
-def move_reward(snake, food, grid_size):
-    return 0
-
 if __name__ == "__main__":
 
     env_config = {
         'grid_size': (10, 10),
-        'crash_reward': crash_reward,
+        'crash_reward': stop_reward,
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
+        'truncated_reward': stop_reward,
         'model_type': model_type,
     }
 
@@ -136,23 +134,23 @@ if __name__ == "__main__":
     log(f"num_learners: {num_learners}")
 
     if model_type == 'mlp':
-        # 模型参数量: 33048
+        # total params: 65540
         model_config = {
             'input_dims': (10, 10),
-            'hidden_sizes': [128, 128],
-            'output_dims': 24,
+            'hidden_sizes': [64, 128, 256],
+            'output_dims': 64,
         } 
     elif model_type == 'cnn':
-        # 模型参数量: 25176
+        # total params: 66820
         model_config = {
             'input_dims': (1, 10, 10),
-            'hidden_sizes': [32, 64],
-            'output_dims': 24,
+            'hidden_sizes': [64, 128],
+            'output_dims': 64,
         }
 
     # 验证配置
     eval_config = {
-        'evaluation_interval': 30,
+        'evaluation_interval': 100,
         'evaluation_duration': 4000,
         'evaluation_duration_unit': 'timesteps',
         'evaluation_sample_timeout_s': 24*60*60,
@@ -201,13 +199,7 @@ if __name__ == "__main__":
                         learner_only=True,
                         # Configure the architecture of the ICM here.
                         model_config={
-                            "feature_dim": 24,
-                            "feature_net_hiddens": (128, 256),
-                            "feature_net_activation": "relu",
-                            "inverse_net_hiddens": (128, 256),
-                            "inverse_net_activation": "relu",
-                            "forward_net_hiddens": (128, 256),
-                            "forward_net_activation": "relu",
+                            "feature_dim": 64,
                         },
                     ),
                 }
@@ -219,6 +211,7 @@ if __name__ == "__main__":
         )
 
         config = config.training(
+            lr=3e-4 if new_lr == 0.0 else new_lr,
             learner_config_dict={
                 # Intrinsic reward coefficient.
                 "intrinsic_reward_coeff": 0.05,
@@ -236,20 +229,21 @@ if __name__ == "__main__":
             model_config=model_config,
         )
 
+        config = config.training(
+            lr=3e-4 if new_lr == 0.0 else new_lr,
+        )
+
     # 构建算法
     algo = config.build()
     log(algo.get_module())
-    # mlp total params: 33196
-    # cnn total params: 14924
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
-    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
         train_folder_manager = TrainFolderManager(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(algo)
+            train_folder_manager.load_checkpoint(algo, only_params=new_lr != 0.0)# 修改了学习率，只需要加载模型参数
 
     # 训练循环
     begin_time = time.time()

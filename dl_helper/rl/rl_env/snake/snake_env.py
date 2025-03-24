@@ -14,6 +14,9 @@ def default_eat_reward(snake, food, grid_size):
 def default_move_reward(snake, food, grid_size):
     return 0
 
+def default_truncated_reward(snake, food, grid_size):
+    return -1
+
 class SnakeEnv(gym.Env):
     """贪吃蛇环境，用于强化学习，带有Pygame可视化功能"""
     
@@ -27,12 +30,16 @@ class SnakeEnv(gym.Env):
         self.crash_reward = config.get('crash_reward', default_crash_reward)
         self.eat_reward = config.get('eat_reward', default_eat_reward)
         self.move_reward = config.get('move_reward', default_move_reward)
+        self.truncated_reward = config.get('truncated_reward', default_truncated_reward)
         
         self.grid_size = config.get('grid_size', (10, 10))
         self.model_type = config.get('model_type', 'cnn')
 
         self.render_mode = config.get('render_mode', 'none')
-        self.total_time = 300000  # 5分钟，单位毫秒
+
+        # 最大步数
+        self.max_steps = self.grid_size[0] * self.grid_size[1]
+        self.steps = 0
         
         if self.render_mode == 'human':
             pygame.init()
@@ -70,11 +77,13 @@ class SnakeEnv(gym.Env):
         self.food = self._generate_food()
         self.done = False
         self.score = 0
-        self.start_time = time.time()  # 记录开始时间，适用于所有模式
         if self.render_mode == 'human':
             self.pygame_start_time = pygame.time.get_ticks()  # 用于渲染显示
         observation = self._get_state()
         
+        # 重置步数
+        self.steps = 0
+
         # 标准化
         observation = self._std_obs(observation)
 
@@ -103,6 +112,8 @@ class SnakeEnv(gym.Env):
         if self.done:
             raise Exception("游戏已结束，请先调用 reset()")
         
+        self.steps += 1
+
         direction = [(0, -1), (0, 1), (-1, 0), (1, 0)]
         head = self.snake[0]
         new_head = (head[0] + direction[action][0], head[1] + direction[action][1])
@@ -120,6 +131,8 @@ class SnakeEnv(gym.Env):
                 reward = self.eat_reward(self.snake, self.food, self.grid_size)
                 self.food = self._generate_food()
                 self.score += 1
+                # 奖励重置步数
+                self.steps = 0
             else:
                 # 正常移动
                 self.snake.pop()
@@ -127,19 +140,17 @@ class SnakeEnv(gym.Env):
         
         self.reward = reward
 
-        # 检查是否超时
-        truncated = False
-        elapsed_time = time.time() - self.start_time
-        if elapsed_time >= self.total_time / 1000:  # 转换为秒
-            self.done = True
-            truncated = True
+        # 达到最大步数，需要截断
+        truncated = self.steps >= self.max_steps
+        if truncated:
+            reward = self.truncated_reward(self.snake, self.food, self.grid_size)
         
         observation = self._get_state()
 
         # 标准化
         observation = self._std_obs(observation)
 
-        terminated = self.done and not truncated
+        terminated = self.done
         info = {}
         return observation, reward, terminated, truncated, info
     
@@ -184,13 +195,13 @@ class SnakeEnv(gym.Env):
         # 显示分数和剩余时间
         if self.render_mode == 'human':
             pygame_elapsed_time = (pygame.time.get_ticks() - self.pygame_start_time) / 1000
-            remaining_time = max(0, (self.total_time / 1000) - pygame_elapsed_time)
+            remaining_steps = max(0, (self.max_steps) - self.steps)
             score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
-            time_text = self.font.render(f"Time: {int(remaining_time)}s", True, (255, 255, 255))
+            steps_text = self.font.render(f"Remaining Steps: {remaining_steps}", True, (255, 255, 255))
             reward_text = self.font.render(f"Reward: {self.reward:.2f}", True, (255, 255, 255)) 
             self.screen.blit(score_text, (10, 10))
-            self.screen.blit(time_text, (10, 50))
-            self.screen.blit(reward_text, (10, 100))
+            self.screen.blit(steps_text, (10, 50))
+            self.screen.blit(reward_text, (10, 90))
         
         pygame.display.flip()
         self.clock.tick(self.metadata['render_fps'])

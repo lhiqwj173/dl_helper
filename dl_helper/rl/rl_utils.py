@@ -239,6 +239,8 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     val_max_reward = out_data['val_episode_return_max'].tolist()       # 验证集最大奖励
     learning_rates = out_data['learning_rate'].values                  # 学习率
     loss = out_data.get('learner_default_policy_total_loss', pd.Series()).tolist()                  # 损失
+    mean_steps = out_data['env_runner_episode_len_mean'].tolist()       # 平均步数
+    val_mean_steps = out_data['val_episode_len_mean'].tolist()         # 验证集平均步数
     
     if len(mean_reward) == 0:
         log('未找到 mean_reward 数据')
@@ -251,6 +253,8 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
     _learning_rates = [x for x in learning_rates if not np.isnan(x)]
     _loss = [x for x in loss if not np.isnan(x)]
+    _mean_steps = [x for x in mean_steps if not np.isnan(x)]
+    _val_mean_steps = [x for x in val_mean_steps if not np.isnan(x)]
 
     # 获取最新值
     mean_reward_latest = _mean_reward[-1] if len(_mean_reward) > 0 else np.nan
@@ -259,26 +263,28 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     val_max_reward_latest = _val_max_reward[-1] if len(_val_max_reward) > 0 else np.nan
     lr_latest = _learning_rates[-1] if len(_learning_rates) > 0 else np.nan
     loss_latest = _loss[-1] if len(_loss) > 0 else np.nan
+    mean_steps_latest = _mean_steps[-1] if len(_mean_steps) > 0 else np.nan
+    val_mean_steps_latest = _val_mean_steps[-1] if len(_val_mean_steps) > 0 else np.nan
 
     # 确定子图数量（2个固定子图：奖励、学习率/损失，加上自定义子图）
     additional_plots = custom_plotter.get_additional_plot_count() if custom_plotter else 0
-    total_plots = 2 + additional_plots  # 主奖励图、学习率图/损失图，加上自定义图
+    total_plots = 3 + additional_plots  # 主奖励图、学习率图/损失图, 平均步数，加上自定义图
 
     # 创建带有子图的图形
-    heights = [3]*2 + [2] * (total_plots-2)  # 主图/第一个附图高度3，其他子图高度2
+    heights = [3] + [2] * (total_plots-1)  # 主图高度4，其他子图高度2
     fig = plt.figure(figsize=(10, sum(heights)))
     gs = plt.GridSpec(total_plots, 1, height_ratios=heights)
     axes = [plt.subplot(gs[i]) for i in range(total_plots)]
     
     # 主训练曲线图（第一个子图）- 仅显示奖励
     ax = axes[0]
-    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'平均奖励({mean_reward_latest:.4f})')
-    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'最大奖励({max_reward_latest:.4f})')
-    l3 = ax.plot(val_mean_reward, color='blue', label=f'验证平均奖励({val_mean_reward_latest:.4f})')
-    l4 = ax.plot(val_max_reward, color='orange', label=f'验证最大奖励({val_max_reward_latest:.4f})')
+    l1 = ax.plot(mean_reward, color='blue', alpha=0.4, label=f'mean_reward({mean_reward_latest:.4f})')
+    l2 = ax.plot(max_reward, color='orange', alpha=0.4, label=f'max_reward({max_reward_latest:.4f})')
+    l3 = ax.plot(val_mean_reward, color='blue', label=f'val_mean_reward({val_mean_reward_latest:.4f})')
+    l4 = ax.plot(val_max_reward, color='orange', label=f'val_max_reward({val_max_reward_latest:.4f})')
     
     ax.legend(loc='upper left')
-    ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} 小时' if total_time is not None else ''))
+    ax.set_title(f'{train_title} ' + (f' {total_time/3600:.2f} H' if total_time is not None else ''))
     if y_axis_max is not None:
         ax.set_ylim(0, y_axis_max)
     else:
@@ -305,6 +311,14 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     labels = [l.get_label() for l in lines]
     ax_loss.legend(lines, labels, loc='upper left')
 
+    # 平均步数图（第三个子图）
+    ax_mean_steps = axes[2]
+    l1 = ax_mean_steps.plot(mean_steps, color='green', label=f'mean_steps({mean_steps_latest:.4f})', alpha=0.4)
+    l2 = ax_mean_steps.plot(val_mean_steps, color='green', label=f'val_mean_steps({val_mean_steps_latest:.4f})')
+    ax_mean_steps.set_ylabel('mean_steps')
+    ax_mean_steps.tick_params(axis='y')
+    ax_mean_steps.legend(loc='upper left')
+
     # 计算每4小时的时间点
     min_time = datetime.min()
     max_time = datetime.max()
@@ -327,7 +341,7 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
         custom_plotter.plot(out_data, axes[2:])
 
     # 仅在最下方子图设置x轴标签
-    axes[-1].set_xlabel('迭代次数')
+    axes[-1].set_xlabel('iteration')
     
     # 调整布局以防止重叠
     plt.tight_layout()
