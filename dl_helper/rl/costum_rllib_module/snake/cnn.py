@@ -30,21 +30,25 @@ class CNNEncoder(TorchModel, Encoder):
         in_channels = self.in_channels
         for hidden_size in self.hidden_sizes:
             convs.extend([
-                nn.Conv2d(in_channels, hidden_size, kernel_size=3, stride=1, padding=1),
+                # 使用更小的kernel_size，去掉MaxPool2d
+                nn.Conv2d(in_channels, hidden_size, kernel_size=2, stride=2, padding=0),
                 nn.BatchNorm2d(hidden_size),
-                nn.LeakyReLU(0.1),
-                nn.MaxPool2d(kernel_size=2, stride=2)
+                nn.ReLU(),  # 使用普通ReLU替代LeakyReLU，因为这种小网络不太可能出现梯度消失
             ])
             in_channels = hidden_size
 
         self.convs = nn.Sequential(*convs)
         
         # 计算展平后的特征维度
-        h = self.height // (2 ** len(self.hidden_sizes))  # 每次MaxPool2d都会将尺寸减半
+        h = self.height // (2 ** len(self.hidden_sizes))  # 每次stride=2的卷积操作都会将尺寸减半
         w = self.width // (2 ** len(self.hidden_sizes))
         self.flatten_size = self.hidden_sizes[-1] * h * w
         
-        self.fc = nn.Linear(self.flatten_size, self.output_dims[0])
+        self.output_layer = nn.Sequential(
+            nn.Linear(self.flatten_size, self.output_dims[0]),
+            nn.LayerNorm(self.output_dims[0]),
+            nn.ReLU(),
+        )
 
         self.error_count = 0
 
@@ -59,7 +63,7 @@ class CNNEncoder(TorchModel, Encoder):
         x = x.view(x.size(0), -1)  # 展平
         
         # 通过全连接层
-        x = self.fc(x)
+        x = self.output_layer(x)
 
         return {ENCODER_OUT: x}
 

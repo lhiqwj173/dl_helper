@@ -31,7 +31,8 @@ from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
 from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
-from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv, human_control, ai_control
+from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 model_type = 'mlp'
 for arg in sys.argv:
@@ -78,11 +79,10 @@ if __name__ == "__main__":
 
     env_config = {
         'grid_size': (10, 10),
-        'need_flatten': True,
         'crash_reward': crash_reward,
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
-        'need_flatten': True if model_type == 'mlp' else False,
+        'model_type': model_type,
     }
 
     # 人控制
@@ -165,7 +165,10 @@ if __name__ == "__main__":
 
     # 构建算法
     algo = config.build()
-    print(algo.get_module())
+    log(algo.get_module())
+    log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
+
+    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():

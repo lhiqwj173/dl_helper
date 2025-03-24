@@ -85,14 +85,11 @@ shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD
 
 def crash_reward(snake, food, grid_size):
     # 10 * 10 的网格, 最大惩罚: -10000
-    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
-    return -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD
+    return -(grid_size[0] * grid_size[1]) * STD_EAT_FOOD_REWARD
 
 def keep_alive_reward(snake, food, grid_size):
-    MAX_EAT_FOOD_NUM = grid_size[0] * grid_size[1] - 1
-    eat_food_num = len(snake) - 1
     distance_sqrt = (snake[0][0] - food[0])**2 + (snake[0][1] - food[1])**2
-    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - eat_food_num) * STD_EAT_FOOD_REWARD
+    return -(distance_sqrt/(grid_size[0]**2 + grid_size[1]**2)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD
 
 def eat_reward(snake, food, grid_size):
     return 1
@@ -104,11 +101,10 @@ if __name__ == "__main__":
 
     env_config = {
         'grid_size': (10, 10),
-        'need_flatten': True,
         'crash_reward': crash_reward,
         'eat_reward': keep_alive_reward,
         'move_reward': keep_alive_reward,
-        'need_flatten': True if model_type == 'mlp' else False,
+        'model_type': model_type,
     }
 
     # # 人控制
@@ -231,9 +227,8 @@ if __name__ == "__main__":
 
     # 构建算法
     algo = config.build()
-    print(algo.get_module())
-
-    sys.exit()
+    log(algo.get_module())
+    log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
 
     # 训练文件夹管理
     if not in_windows():

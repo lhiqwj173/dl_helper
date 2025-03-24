@@ -35,7 +35,12 @@ class MLPEncoder(TorchModel, Encoder):
             input_size = hidden_size
 
         self.layers = nn.Sequential(*layers)
-        self.output_layer = nn.Linear(input_size, self.output_dims[0])
+
+        self.output_layer = nn.Sequential(
+            nn.Linear(input_size, self.output_dims[0]),
+            nn.LayerNorm(self.output_dims[0]),
+            nn.ReLU(),
+        )
 
         self.error_count = 0
 
