@@ -238,7 +238,7 @@ if __name__ == "__main__":
     algo = config.build()
     log(algo.get_module())
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
-    sys.exit()
+    # sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
