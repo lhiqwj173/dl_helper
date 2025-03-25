@@ -6,6 +6,7 @@ import pandas as pd
 import gymnasium as gym
 import gymnasium.spaces as spaces
 import pickle
+from multiprocessing import Process, Queue
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
@@ -92,7 +93,6 @@ class data_producer:
             data_std=True, 
             save_folder="", 
             debug_date=[],
-            new_data = True,
 
             # 数据增强
             use_random_his_window=False,
@@ -119,9 +119,6 @@ class data_producer:
         self.use_gaussian_noise = use_gaussian_noise  # 高斯噪声开关
         self.use_impact_noise = use_impact_noise   # 冲击噪声开关
         self.use_progressive_mask = use_progressive_mask  # 渐进式遮挡开关
-
-        # 新数据集
-        self.new_data = new_data
 
         # 快速测试
         self.simple_test = simple_test
@@ -178,18 +175,15 @@ class data_producer:
 
         # 数据索引
         self.idxs = []
-        self.col_idx = {}
-        # 用于绘图的索引
-        self.plot_begin = 0
-        self.plot_end = 0
-        self.plot_cur = 0
-        self.plot_cur_pre = -1
-        self.plot_data = None
-        # 买卖1档价格 序列
-        self.ask_price = []
+
+        # 最近一个数据的索引
+        self.last_data_idx = 0
+
+        # 记录价格用于成交/计算潜在收益
         self.bid_price = []
-        # 最近一个平仓的idx
+        self.ask_price = []
         self.last_close_idx = 0
+
         # id
         self.id = ''
 
@@ -363,11 +357,6 @@ class data_producer:
             for col in ['BASE买1价', 'BASE卖1价']:
                 self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
 
-            # 初始化绘图索引
-            self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
-            self.plot_cur -= 1
-            self.plot_cur_pre = -1
-            _, self.plot_end = self.x[self.idxs[0][1]]
             # 准备绘图数据
             self.pre_plot_data()
 
@@ -412,7 +401,7 @@ class data_producer:
 
     def get(self):
         """
-        输出观察值
+        输出观察值 TODO
             返回 symbol_id, before_market_close_sec, x, need_close, self.id
 
             若data_std=False
@@ -424,6 +413,9 @@ class data_producer:
         if self.plot_cur_pre != -1:
             # 更新绘图数据
             self.plot_cur = self.plot_cur_pre
+
+        # 记录数据索引
+        self.last_data_idx = self.idxs[0][0]
 
         # 准备观察值
         a, b = self.x[self.idxs[0][0]]
@@ -446,17 +438,12 @@ class data_producer:
         # 2. use_impact_noise 添加冲击噪声，随机增减某些档位数量 ±5%
         # 3. use_progressive_mask 按概率逐步遮挡历史数据（如越早的时间点遮挡概率越高），模拟渐进式信息衰减。
 
-
         # 数据标准化
-        if self.new_data:
-            std_data = self.mean_std[self.idxs[0][0]]
-            # 未实现收益率 使用 zscore
-            unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
-            # 价格量 使用 robust
-            ms = pd.DataFrame(std_data['price_vol_each']['robust'])
-        else:
-            unrealized_log_return_std_data = None
-            ms = pd.DataFrame(self.mean_std[self.idxs[0][0]])
+        std_data = self.mean_std[self.idxs[0][0]]
+        # 未实现收益率 使用 zscore
+        unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
+        # 价格量 使用 robust
+        ms = pd.DataFrame(std_data['price_vol_each']['robust'])
         x, ms = self.use_data_split(raw, ms)
 
         if self.data_std:
@@ -527,7 +514,14 @@ class data_producer:
         """
         获取绘图数据, 当前状态(时间点)索引, 当前状态(时间点)id
         """
-        return self.plot_data, self.plot_cur - self.plot_begin, self.ids[self.plot_cur]
+        a, b = self.x[self.last_data_idx]
+        a = max(b - self.his_len, a)
+
+        extra_data_length = 15
+        extra_a, extra_b = a - extra_data_length, b + extra_data_length
+        extra_data = self.plot_data.iloc[max(0, extra_a): min(len(self.plot_data), extra_b)]
+
+        return extra_data, self.plot_data.iloc[b-1].name
 
     def reset(self):
         while True:
@@ -654,6 +648,14 @@ class Account:
         print("acc::step", action, self.status, self.pos, self.cash)
         return self.status, inday_return, unrealized_return, close_net_raw, act_result
 
+    def get_plot_data(self):
+        """
+        获取绘图数据
+
+        net_raw, net_raw_bm, status
+        """
+        return [i for i in self.net_raw], [i for i in self.net_raw_bm], self.status
+
     @staticmethod
     def cal_res(net_raw, net_raw_bm):
         # 评价指标
@@ -764,7 +766,6 @@ class LOB_trade_env(gym.Env):
                 'simple_test': False,# 是否为简单测试
                 'need_cols': [],# 需要读取的列
                 'use_symbols': [],# 只使用某些标的
-                'new_data': True,# 是否为新数据
                 'use_random_his_window': False,# 是否使用随机历史窗口
                 'use_time_scaling': False,# 是否使用时间缩放
                 'use_gaussian_noise': False,# 是否使用高斯噪声
@@ -774,52 +775,39 @@ class LOB_trade_env(gym.Env):
                 # 终止游戏的回撤阈值
                 'max_drawdown_threshold': 0.005,# 最大回测阈值
 
+                # 渲染模式
+                'render_mode': 'none',
+
                 # 奖励策略
-                'reward_strategy_class_dict': {
-                    'end_position': ClosePositionRewardStrategy,
-                    'close_position': ClosePositionRewardStrategy,
-                    'open_position_step': BlankRewardStrategy,
-                    'hold_position': HoldPositionRewardStrategy,
-                    'no_position': NoPositionRewardStrategy,
-                }
-            }
-        """
-        super().__init__()
-
-        defult_config = {
-            # 用于实例化 数据生产器
-            'data_type': 'train',# 训练/测试
-            'his_len': 100,# 每个样本的 历史数据长度
-            'simple_test': False,# 是否为简单测试
-            'need_cols': [],# 需要读取的列
-            'use_symbols': [],# 只使用某些标的
-            'new_data': True,# 是否为新数据
-            'use_random_his_window': False,# 是否使用随机历史窗口
-            'use_time_scaling': False,# 是否使用时间缩放
-            'use_gaussian_noise': False,# 是否使用高斯噪声
-            'use_impact_noise': False,# 是否使用冲击噪声
-            'use_progressive_mask': False,# 是否使用渐进式掩码
-
-            # 终止游戏的回撤阈值
-            'max_drawdown_threshold': 0.01,# 最大回测阈值
-
-            # 奖励策略
-            'reward_strategy_class_dict': {
                 'end_position': ClosePositionRewardStrategy,
                 'close_position': ClosePositionRewardStrategy,
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
                 'no_position': NoPositionRewardStrategy,
             }
-        }
+        """
+        super().__init__()
 
-        # 用户配置更新
-        for k, v in defult_config.items():
-            config[k] = config.get(k, v)
-        for k, v in defult_config['reward_strategy_class_dict'].items():
-            config['reward_strategy_class_dict'][k] = config['reward_strategy_class_dict'].get(k, v)
+        self.data_type = config.get('data_type', 'train')
+        self.his_len = config.get('his_len', 100)
+        self.simple_test = config.get('simple_test', False)
+        self.need_cols = config.get('need_cols', [])
+        self.use_symbols = config.get('use_symbols', [])
+        self.use_random_his_window = config.get('use_random_his_window', False)
+        self.use_time_scaling = config.get('use_time_scaling', False)
+        self.use_gaussian_noise = config.get('use_gaussian_noise', False)
+        self.use_impact_noise = config.get('use_impact_noise', False)
+        self.use_progressive_mask = config.get('use_progressive_mask', False)
 
-        self.max_drawdown_threshold = abs(config['max_drawdown_threshold'])
+        self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.005))
+
+        self.render_mode = config.get('render_mode', 'none')
+
+        end_position_reward_strategy = config.get('end_position', ClosePositionRewardStrategy)
+        close_position_reward_strategy = config.get('close_position', ClosePositionRewardStrategy)
+        open_position_step_reward_strategy = config.get('open_position_step', BlankRewardStrategy)
+        hold_position_reward_strategy = config.get('hold_position', HoldPositionRewardStrategy)
+        no_position_reward_strategy = config.get('no_position', NoPositionRewardStrategy)
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -827,8 +815,17 @@ class LOB_trade_env(gym.Env):
             os.makedirs(self.save_folder)
 
         # 奖励计算器
-        self.reward_calculator = RewardCalculator(config['max_drawdown_threshold'], config['reward_strategy_class_dict'])
-
+        self.reward_calculator = RewardCalculator(
+            self.max_drawdown_threshold, 
+            {
+                'end_position': end_position_reward_strategy,
+                'close_position': close_position_reward_strategy,
+                'open_position_step': open_position_step_reward_strategy,
+                'hold_position': hold_position_reward_strategy,
+                'no_position': no_position_reward_strategy,
+            },
+        )
+    
         # 是否标准化数据
         self.data_std = data_std
 
@@ -844,20 +841,19 @@ class LOB_trade_env(gym.Env):
         
         # 数据生产器
         self.data_producer = data_producer(
-            config['data_type'], 
-            config['his_len'], 
-            config['simple_test'], 
-            config['need_cols'], 
-            config['use_symbols'], 
-            data_std=data_std, 
+            self.data_type, 
+            self.his_len, 
+            self.simple_test, 
+            self.need_cols, 
+            self.use_symbols, 
+            data_std=self.data_std, 
             save_folder=self.save_folder, 
             debug_date=self.debug_date,
-            new_data=config['new_data'],
-            use_random_his_window=config['use_random_his_window'],
-            use_time_scaling=config['use_time_scaling'],
-            use_gaussian_noise=config['use_gaussian_noise'],
-            use_impact_noise=config['use_impact_noise'],
-            use_progressive_mask=config['use_progressive_mask'],
+            use_random_his_window=self.use_random_his_window,
+            use_time_scaling=self.use_time_scaling,
+            use_gaussian_noise=self.use_gaussian_noise,
+            use_impact_noise=self.use_impact_noise,
+            use_progressive_mask=self.use_progressive_mask,
         )
 
         # 账户数据
@@ -873,18 +869,8 @@ class LOB_trade_env(gym.Env):
         # 观察空间 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 5,), dtype=np.float32)
 
-        # 记录上一个买入的idx
-        self.last_buy_idx = -1
-        
-        # Add notification system
-        self.notification_window = None
-
         # 样本计数
         self.sample_count = 0
-
-        # 记录上一个step的时间戳
-        self.last_step_time = 0
-        self.iteration = 0
 
         # 环境输出文件
         self.need_upload_file = ''
@@ -894,7 +880,17 @@ class LOB_trade_env(gym.Env):
         self.mean_episode_lengths = 0
         self.episode_count = 0
 
+        # 渲染模式
+        if self.render_mode == 'human':
+            self.input_queue = Queue()  # 创建多进程队列用于传递数据
+            self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
+            self.update_process.start()  # 启动更新进程
+            self.need_std = True
+
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
+
+    def update_plot(self, input_queue):
+        pass
 
     @staticmethod
     def iteration_done():
@@ -912,12 +908,6 @@ class LOB_trade_env(gym.Env):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
         self.need_upload_file = os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.iteration}.csv')
         
-    def no_need_track_info_item(self):
-        return ['act_criteria']
-
-    def need_wait_close(self):
-        return True
-
     def _set_data_type(self, data_type):
         if self.data_producer.data_type != data_type:
             log(f'[{id(self)}][{self.data_producer.data_type}] set data type: {data_type}')
@@ -1179,10 +1169,9 @@ class LOB_trade_env(gym.Env):
             
             # 重置
             self.need_reset = False
-            # 清理图形对象
-            if hasattr(self, 'fig'):
-                plt.close(self.fig)
-                del self.fig
+
+            # 绘图相关
+            self.need_std = True
 
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
@@ -1202,8 +1191,8 @@ class LOB_trade_env(gym.Env):
 
             # 账户
             self.acc.reset()
-            # 账户需要用动作2走一步, 会初始记录act之前的净值
-            _, pos, inday_return, unrealized_return, _ = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 2)
+            # 账户需要用动作0(空仓)走一步, 会初始记录act之前的净值
+            pos, inday_return, unrealized_return, _, _ = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 0)
             # 标准化 未实现收益率
             if not unrealized_log_return_std_data is None:
                 unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
@@ -1214,8 +1203,6 @@ class LOB_trade_env(gym.Env):
 
             # 添加 静态特征
             x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
-            # 初始化skip计数器
-            self.skip_steps = 0
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
@@ -1234,299 +1221,22 @@ class LOB_trade_env(gym.Env):
             log(f'[{id(self)}][{self.data_producer.data_type}] reset error: {get_exception_msg()}')
             raise e
 
-    def show_notification(self, title, message, fig=None):
-        """
-        显示一个模态通知窗口，包含标题和消息内容。
-        会阻塞主绘图窗口直到用户关闭通知。
-        可选择性地显示一个图形。
-
-        参数:
-            title: 通知窗口标题
-            message: 通知消息内容
-            fig: 可选的matplotlib图形对象
-        """
-        try:
-            from PyQt5.QtWidgets import QDialog, QLabel, QVBoxLayout, QPushButton
-            from PyQt5.QtCore import Qt
-            from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-            
-            # 关闭已存在的通知窗口
-            if self.notification_window is not None:
-                self.notification_window.close()
-            
-            # 创建模态对话框
-            self.notification_window = QDialog()
-            self.notification_window.setWindowTitle(title)
-            self.notification_window.setModal(True)  # 设置为模态窗口，会阻塞其他窗口的交互
-            layout = QVBoxLayout()
-            
-            # 添加消息文本
-            msg_label = QLabel(message)
-            msg_label.setWordWrap(True)  # 允许文本自动换行
-            layout.addWidget(msg_label)
-            
-            # 如果提供了图形，添加到窗口中
-            if fig is not None:
-                canvas = FigureCanvasQTAgg(fig)
-                layout.addWidget(canvas)
-            
-            # 添加确定按钮
-            ok_button = QPushButton("确定")
-            ok_button.clicked.connect(self.notification_window.accept)
-            layout.addWidget(ok_button)
-            
-            self.notification_window.setLayout(layout)
-            
-            # 设置窗口属性
-            self.notification_window.setWindowFlags(Qt.Dialog)
-            self.notification_window.resize(1000, 700)
-            
-            # 显示对话框并等待用户响应
-            # exec_() 会阻塞程序执行直到用户关闭窗口
-            self.notification_window.exec_()
-            
-        except ImportError:
-            # 如果没有PyQt5，回退到命令行显示
-            print(f"\n{title}\n{message}")
-            input("按回车键继续...") # 阻塞执行直到用户输入
-
-    def render(self):
-        pass
-
     def close(self):
         pass
 
-    def plot(self, state):
-        # 如果在skip模式中，直接返回hold动作
-        if self.skip_steps > 0:
-            self.skip_steps -= 1
-            return 2
+    def render(self):
+        if self.render_mode != 'human':
+            return
+        
+        # 获取绘图数据
+        # 包含列名: index(ts), bid, ask, mid_price
+        plot_data, latest_tick_time = self.data_producer.get_plot_data()
+        net_raw, net_raw_bm, status = self.acc.get_plot_data()
 
-        # 重置选择的动作
-        self.selected_action = None
-        
-        # 获取其他数据
-        before_market_close_sec, symbol_id, pos, profit = state[-4:].astype(float)
-        plot_data, plot_cur, id = self.data_producer.get_plot_data()
-
-        # before_market_close_sec 逆标准化
-        before_market_close_sec = before_market_close_sec * STD_SEC_BEFORE_CLOSE + MEAN_SEC_BEFORE_CLOSE
-        
-        # 创建图形和轴
-        if not hasattr(self, 'fig'):
-            # 创建一个新的窗口，并设置窗口标题
-            self.fig = plt.figure(figsize=(15, 8))
-            self.fig.canvas.manager.set_window_title('Trading Visualization')
-            plt.subplots_adjust(bottom=0.2)
-            self.ax = self.fig.add_subplot(111)
-            
-            # 创建右侧y轴用于显示收益率
-            self.ax_return = self.ax.twinx()
-            
-            # 创建初始线条
-            self.hist_bid_line, = self.ax.plot([], [], color='red', label='Historical Bid Price')
-            self.hist_ask_line, = self.ax.plot([], [], color='green', label='Historical Ask Price')
-            self.future_bid_line, = self.ax.plot([], [], color='red', alpha=0.3, label='Future Bid Price')
-            self.future_ask_line, = self.ax.plot([], [], color='green', alpha=0.3, label='Future Ask Price')
-            self.current_line = self.ax.axvline(x=0, color='blue', linestyle='--', label='Current Position')
-            self.buy_point = self.ax.plot([], [], marker='^', color='red', markersize=10, label='Buy Point')[0]
-            
-            # 创建文本显示
-            self.info_text = self.ax.text(0.02, 0.98, '', transform=self.ax.transAxes, 
-                                        verticalalignment='top')
-            
-            # 创建按钮
-            self.btn_sell = Button(plt.axes([0.1, 0.05, 0.15, 0.075]), 'SELL')
-            self.btn_hold = Button(plt.axes([0.3, 0.05, 0.15, 0.075]), 'HOLD')
-            self.btn_buy = Button(plt.axes([0.5, 0.05, 0.15, 0.075]), 'BUY')
-            self.btn_skip = Button(plt.axes([0.7, 0.05, 0.15, 0.05]), 'SKIP')
-            
-            # 创建skip步数滑块
-            self.skip_slider_ax = plt.axes([0.7, 0.10, 0.15, 0.03])
-            self.skip_slider = Slider(self.skip_slider_ax, 'Skip', 1, 2400, valinit=10, valstep=1)
-            
-            # 修改回调函数
-            def make_callback(action):
-                def callback(event):
-                    self.selected_action = action
-                return callback
-            
-            def skip_callback(event):
-                self.skip_steps = int(self.skip_slider.val)
-                self.selected_action = 2  # Hold动作
-            
-            self.btn_buy.on_clicked(make_callback(0))
-            self.btn_sell.on_clicked(make_callback(1))
-            self.btn_hold.on_clicked(make_callback(2))
-            self.btn_skip.on_clicked(skip_callback)
-            
-            self.ax.grid(True)
-            self.ax.legend()
-            plt.ion()  # 打开交互模式
-
-            # 设置窗口属性
-            try:
-                from PyQt5.QtCore import Qt
-                window = self.fig.canvas.manager.window
-                # 设置窗口为普通窗口，不置顶
-                window.setWindowFlags(Qt.Window)
-                window.show()
-            except ImportError:
-                pass
-        
-        # 更新数据
-        bid_price = plot_data['bid'].values
-        ask_price = plot_data['ask'].values
-        
-        # 修改数据范围计算，固定显示450个点
-        display_points = 450
-        half_before = 150  # 当前位置前150条数据
-        half_after = 300   # 当前位置后300条数据
-        
-        # 计算实际可用的数据范围
-        total_points = len(bid_price)
-        
-        # 根据当前位置计算起始和结束索引
-        start_idx = max(0, min(plot_cur - half_before, total_points - display_points))
-        end_idx = min(total_points, start_idx + display_points)
-        
-        # 如果end_idx到达末尾，向前调整start_idx确保显示450个点
-        if end_idx == total_points:
-            start_idx = max(0, end_idx - display_points)
-        
-        # 计算x轴坐标，保持实际数据索引
-        x_coords = range(start_idx, end_idx)
-        current_x = plot_cur
-
-        # 计算价格显示范围
-        visible_bid = bid_price[start_idx:end_idx]
-        visible_ask = ask_price[start_idx:end_idx]
-        price_min = np.min(visible_bid)
-        price_max = np.max(visible_ask)
-        price_range = price_max - price_min
-        
-        # 为价格图留出70%的空间，上下各留5%边距
-        price_min = price_min - price_range * 0.05
-        price_max = price_max + price_range * 0.05
-        
-        # 将最小和最大价格调整为0.001的整数倍
-        price_min = np.floor(price_min * 1000) / 1000
-        price_max = np.ceil(price_max * 1000) / 1000
-        
-        # 设置y轴范围
-        self.ax.set_ylim(price_min, price_max)
-        
-        # 计算合适的刻度间隔（确保是0.001的整数倍）
-        # 根据显示范围自动计算合适的刻度数量（约8-12个刻度）
-        desired_ticks = 10
-        tick_range = price_max - price_min
-        tick_step = tick_range / desired_ticks
-        # 将步长调整为0.001的整数倍
-        tick_step = np.ceil(tick_step * 1000) / 1000
-        
-        # 生成刻度位置
-        ticks = np.arange(price_min, price_max + tick_step, tick_step)
-        self.ax.set_yticks(ticks)
-        # 设置刻度标签格式，保证显示3位小数
-        self.ax.set_yticklabels([f'{tick:.3f}' for tick in ticks])
-
-        # 更新线条数据，使用实际索引
-        self.hist_bid_line.set_data(x_coords[:current_x-start_idx], bid_price[start_idx:current_x])
-        self.hist_ask_line.set_data(x_coords[:current_x-start_idx], ask_price[start_idx:current_x])
-        self.future_bid_line.set_data(x_coords[current_x-start_idx:], bid_price[current_x:end_idx])
-        self.future_ask_line.set_data(x_coords[current_x-start_idx:], ask_price[current_x:end_idx])
-        self.current_line.set_xdata([current_x, current_x])
-        
-        # 设置x轴显示范围
-        self.ax.set_xlim(start_idx, end_idx)
-        
-        # 更新买入点和收益率图
-        self.ax_return.clear()  # 清除旧的收益率图
-        if self.last_buy_idx != -1:
-            # 修改买入点显示逻辑
-            buy_point_set_idx = max(start_idx, self.last_buy_idx)
-            # 限制买入点价格在可视范围内
-            buy_point_set_price = ask_price[self.last_buy_idx] - 0.0003
-            buy_point_set_price = min(max(buy_point_set_price, price_min), price_max)
-            self.buy_point.set_data([buy_point_set_idx], [buy_point_set_price])
-            
-            # 计算收益率序列
-            buy_price = ask_price[self.last_buy_idx] * (1 + 5e-5)  # 买入价加手续费
-            sell_prices = bid_price[self.last_buy_idx:] * (1 - 5e-5)  # 卖出价减手续费
-            returns = np.log(sell_prices / buy_price)
-            
-            # 为收益率图设置独立的显示范围
-            # 使用价格范围下方30%的空间显示收益率
-            returns_base = price_min  # 基准线位置
-            returns_height = price_range * 0.3  # 收益率图高度
-            
-            # 计算可视范围内的收益率
-            valid_start = max(0, start_idx - self.last_buy_idx)
-            valid_end = current_x - self.last_buy_idx
-            future_start = valid_end
-            future_end = end_idx - self.last_buy_idx
-
-            # 使用可视范围内的收益率计算缩放比例
-            visible_returns = returns[valid_start:future_end]  # 包含历史和未来部分
-            max_abs_return = max(abs(np.min(visible_returns)), abs(np.max(visible_returns)))
-            if max_abs_return > 0:
-                returns_scaled = returns * (returns_height / (2 * max_abs_return)) + returns_base
-            else:
-                returns_scaled = returns + returns_base
-
-            # 历史收益率
-            if len(returns_scaled) > 0 and valid_end > valid_start:
-                hist_returns = returns_scaled[valid_start:valid_end]
-                x_coords_returns = range(start_idx + (valid_start-(start_idx-self.last_buy_idx)), current_x)
-                
-                if len(x_coords_returns) == len(hist_returns):
-                    # 使用原始returns来判断颜色，而不是缩放后的值
-                    orig_returns = returns[valid_start:valid_end]
-                    colors = ['green' if r > 0 else 'red' for r in orig_returns]
-                    self.ax_return.bar(x_coords_returns, hist_returns-returns_base, bottom=returns_base,
-                                    color=colors, width=1.0, alpha=0.7)
-            
-                # 未来收益率（淡显）
-                if future_start < len(returns_scaled):
-                    future_returns = returns_scaled[future_start:future_end]
-                    if len(future_returns) > 0:
-                        x_coords_future = range(current_x, current_x + len(future_returns))
-                        # 使用原始returns来判断颜色，而不是缩放后的值
-                        orig_returns = returns[future_start:future_end]
-                        colors = ['green' if r > 0 else 'red' for r in orig_returns]
-                        self.ax_return.bar(x_coords_future, future_returns-returns_base, bottom=returns_base,
-                                        color=colors, alpha=0.3, width=1.0)
-                
-            # 添加基准线
-            self.ax_return.axhline(y=returns_base, color='black', linestyle='-', linewidth=0.5)
-            
-            # 设置右侧y轴的刻度标签为实际收益率值
-            self.ax_return.set_ylim(price_min, price_max)
-            # 只在收益率区域显示刻度
-            returns_ticks = np.linspace(returns_base, returns_base + returns_height, 5)
-            self.ax_return.set_yticks(returns_ticks)
-            self.ax_return.set_yticklabels([f'{((y-returns_base)/returns_height * max_abs_return):.2%}' for y in returns_ticks])
-        else:
-            self.buy_point.set_data([], [])
-        
-        # 更新信息文本
-        text = f'Position: {pos:.0f}\nProfit: {profit:.4f}\n'
-        text += f'Time to Close: {before_market_close_sec:.0f}s'
-        self.info_text.set_text(text)
-        log(text)
-        
-        # 更新标题
-        self.ax.set_title(f'Trading Data {self.data_producer.code} {self.data_producer.date} (ID: {id})')
-        
-        # 刷新图形
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-        
-        # 等待按钮被点击，使用更温和的循环
-        while self.selected_action is None:
-            plt.pause(0.1)  # 降低检查频率
-            
-        return self.selected_action
+        # 将数据放入队列，交给更新线程处理
+        self.input_queue.put((plot_data, latest_tick_time, net_raw, net_raw_bm, status, self.need_std))
+        if self.need_std:
+            self.need_std = False
 
 def test_quick_produce_train_sdpk(date, code):
     """
@@ -1774,7 +1484,7 @@ def play_lob_data(render=True):
 
         return
 
-    dt= env.data_producer.step_use_data.iloc[-1]
+    dt= env.data_producer.step_use_data.iloc[-1].name
     if render:
         env.render()
     act = 1

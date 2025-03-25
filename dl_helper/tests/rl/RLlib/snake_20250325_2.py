@@ -49,7 +49,6 @@ for arg in sys.argv:
 train_folder = train_title = f'20250325_2_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
-
 # 吃到食物标准奖励
 STD_REWARD = 100
 

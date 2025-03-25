@@ -587,20 +587,21 @@ class MATCH_trade_env(gym.Env):
         :param config: 配置
             {
                 # 用于实例化 数据生产器
-                'data_type': 'train'/'val'/'test',# 训练/测试
+                'data_type': 'train',# 训练/测试
                 'his_daily_len': 5,# 每个样本的 历史日的价差长度
                 'his_tick_len': 10,# 每个样本的 历史tick的价差长度
 
                 # 终止游戏的超额亏损阈值
                 'loss_threshold': -0.005,# 最大超额亏损阈值
 
+                # 渲染模式
+                'render_mode': 'none',
+
                 # 奖励策略
-                'reward_strategy_class_dict': {
-                    'end_position': EndPositionRewardStrategy,  
-                    'close_position': ClosePositionRewardStrategy,
-                    'hold_position': HoldPositionRewardStrategy,
-                    'balance': BalanceRewardStrategy
-                }
+                'end_position': EndPositionRewardStrategy,
+                'close_position': ClosePositionRewardStrategy,
+                'hold_position': HoldPositionRewardStrategy,
+                'balance': BalanceRewardStrategy
             }
 
         :param render_mode: 渲染模式
@@ -609,31 +610,16 @@ class MATCH_trade_env(gym.Env):
         """
         super().__init__()
 
-        defult_config = {
-            # 用于实例化 数据生产器
-            'data_type': 'train',# 训练/测试
-            'his_daily_len': 5,# 每个样本的 历史日的价差长度
-            'his_tick_len': 10,# 每个样本的 历史tick的价差长度
+        self.data_type = config.get('data_type', 'train')
+        self.his_daily_len = config.get('his_daily_len', 5)
+        self.his_tick_len = config.get('his_tick_len', 10)
+        self.loss_threshold = config.get('loss_threshold', -0.005)
+        self.render_mode = config.get('render_mode', 'none')
 
-            # 终止游戏的超额亏损阈值
-            'loss_threshold': -0.005,# 最大超额亏损阈值
-
-            # 奖励策略
-            'reward_strategy_class_dict': {
-                'end_position': EndPositionRewardStrategy,
-                'close_position': ClosePositionRewardStrategy,
-                'hold_position': HoldPositionRewardStrategy,
-                'balance': BalanceRewardStrategy
-            }
-        }
-
-        # 用户配置更新
-        for k, v in defult_config.items():
-            config[k] = config.get(k, v)
-        for k, v in defult_config['reward_strategy_class_dict'].items():
-            config['reward_strategy_class_dict'][k] = config['reward_strategy_class_dict'].get(k, v)
-
-        self.loss_threshold = config['loss_threshold']
+        end_position_reward_strategy = config.get('end_position', EndPositionRewardStrategy)
+        close_position_reward_strategy = config.get('close_position', ClosePositionRewardStrategy)
+        hold_position_reward_strategy = config.get('hold_position', HoldPositionRewardStrategy)
+        balance_reward_strategy = config.get('balance', BalanceRewardStrategy)
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -641,7 +627,12 @@ class MATCH_trade_env(gym.Env):
             os.makedirs(self.save_folder)
 
         # 奖励计算器
-        self.reward_calculator = RewardCalculator(config['reward_strategy_class_dict'])
+        self.reward_calculator = RewardCalculator({
+                'end_position': end_position_reward_strategy,
+                'close_position': close_position_reward_strategy,
+                'hold_position': hold_position_reward_strategy,
+                'balance': balance_reward_strategy
+            })
 
         # 测试日期
         self.debug_dates = debug_dates
@@ -653,9 +644,9 @@ class MATCH_trade_env(gym.Env):
         
         # 数据生产器
         self.data_producer = data_producer(
-            config['data_type'], 
-            config['his_daily_len'], 
-            config['his_tick_len'], 
+            self.data_type, 
+            self.his_daily_len, 
+            self.his_tick_len, 
             save_folder=self.save_folder, 
             debug_dates=self.debug_dates,
         )
@@ -691,7 +682,6 @@ class MATCH_trade_env(gym.Env):
         # 最新的评价数据
         self.latest_data = {}
 
-        self.render_mode = render_mode
         if self.render_mode == 'human':
             self.input_queue = Queue()  # 创建多进程队列用于传递数据
             self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
@@ -1166,12 +1156,10 @@ def test_env():
             'loss_threshold': -0.005,# 最大超额亏损阈值
 
             # 奖励策略
-            'reward_strategy_class_dict': {
-                'end_position': EndPositionRewardStrategy,
-                'close_position': ClosePositionRewardStrategy,
-                'hold_position': HoldPositionRewardStrategy,
-                'balance': BalanceRewardStrategy
-            },
+            'end_position': EndPositionRewardStrategy,
+            'close_position': ClosePositionRewardStrategy,
+            'hold_position': HoldPositionRewardStrategy,
+            'balance': BalanceRewardStrategy,
 
             'train_folder': r'C:\Users\lh\Desktop\temp\match_env',
             'train_title': 'test',
@@ -1225,19 +1213,19 @@ def play_env(render=True):
             # 终止游戏的超额亏损阈值
             'loss_threshold': -0.005,# 最大超额亏损阈值
 
+            # 渲染模式
+            'render_mode': 'human' if render else 'none',
+
             # 奖励策略
-            'reward_strategy_class_dict': {
-                'end_position': EndPositionRewardStrategy,
-                'close_position': ClosePositionRewardStrategy,
-                'hold_position': HoldPositionRewardStrategy,
-                'balance': BalanceRewardStrategy
-            },
+            'end_position': EndPositionRewardStrategy,
+            'close_position': ClosePositionRewardStrategy,
+            'hold_position': HoldPositionRewardStrategy,
+            'balance': BalanceRewardStrategy,
 
             'train_folder': r'C:\Users\lh\Desktop\temp\match_env',
             'train_title': 'test',
         },
         debug_dates=['20250317.pkl'],
-        render_mode='human' if render else 'none',
     )
 
     print('reset')
