@@ -28,10 +28,10 @@ class CNNEncoder(TorchModel, Encoder):
 
         convs = []
         in_channels = self.in_channels
-        for hidden_size in self.hidden_sizes:
+        for i, hidden_size in enumerate(self.hidden_sizes):
             convs.extend([
-                # 使用更小的kernel_size，去掉MaxPool2d
-                nn.Conv2d(in_channels, hidden_size, kernel_size=2, stride=2, padding=0),
+                # 使用更大的卷积核，步幅减小为1，保留更多空间信息
+                nn.Conv2d(in_channels, hidden_size, kernel_size=3, stride=1, padding=1 if i != len(self.hidden_sizes) - 1 else 0),
                 nn.BatchNorm2d(hidden_size),
                 nn.ReLU(),  # 使用普通ReLU替代LeakyReLU，因为这种小网络不太可能出现梯度消失
             ])
@@ -39,10 +39,12 @@ class CNNEncoder(TorchModel, Encoder):
 
         self.convs = nn.Sequential(*convs)
         
-        # 计算展平后的特征维度
-        h = self.height // (2 ** len(self.hidden_sizes))  # 每次stride=2的卷积操作都会将尺寸减半
-        w = self.width // (2 ** len(self.hidden_sizes))
-        self.flatten_size = self.hidden_sizes[-1] * h * w
+        # 计算卷积后的特征图大小
+        with torch.no_grad():
+            # 假设输入是 (batch_size, channels, height, width)
+            dummy_input = torch.zeros(1, *self.input_dims)
+            dummy_output = self.convs(dummy_input)
+            self.flatten_size = int(np.prod(dummy_output.shape[1:]))  # 计算展平后的特征维度
         
         self.output_layer = nn.Sequential(
             nn.Linear(self.flatten_size, self.output_dims[0]),

@@ -38,6 +38,7 @@ from dl_helper.rl.rl_env.tool import human_control, ai_control
 use_intrinsic_curiosity = False
 new_lr = 0.0
 model_type = 'mlp'
+model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
@@ -141,10 +142,10 @@ if __name__ == "__main__":
             'output_dims': 64,
         } 
     elif model_type == 'cnn':
-        # total params: 66820
+        # total params: 69636
         model_config = {
             'input_dims': (1, 10, 10),
-            'hidden_sizes': [64, 128],
+            'hidden_sizes': [8, 16, 16], 
             'output_dims': 64,
         }
 
@@ -237,6 +238,7 @@ if __name__ == "__main__":
     algo = config.build()
     log(algo.get_module())
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
+    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
