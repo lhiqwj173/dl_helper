@@ -38,7 +38,6 @@ from dl_helper.rl.rl_env.tool import human_control, ai_control
 use_intrinsic_curiosity = False
 new_lr = 0.0
 model_type = 'mlp'
-model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
