@@ -17,12 +17,11 @@ from py_ext.tool import log
         其他: 未达成目标 and 最大回撤 <= 0.5%
     最终奖励: min(策略收益率累计 / (日内可盈利收益率累计 * 0.3), 1) * FINAL_REWARD TODO
     终止惩罚: (最大回撤 > 0.5%) * -STD_REWARD
-    违法惩罚: ILLEGAL_REWARD
 """
 
 class RewardStrategy(ABC):
     @abstractmethod
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         """计算奖励和是否结束游戏"""
         pass
 
@@ -31,15 +30,15 @@ class BlankRewardStrategy(RewardStrategy):
     空白奖励策略
     无奖励 不结束游戏
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         return 0, False
 
 class ClosePositionRewardStrategy(RewardStrategy):
     """
     平仓奖励策略
-    处理已经开仓且需要平仓（need_close 或 action == 1）的情况。
+    处理已经开仓且需要平仓（need_close 或 action_result == 0）的情况。
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         potential_return = res['potential_return']
         acc_return = res['acc_return']
 
@@ -56,7 +55,7 @@ class HoldPositionRewardStrategy(RewardStrategy):
     持仓奖励策略
     处理已经开仓且既不平仓也不为开仓步的情况。
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         reward = res['step_return']  # 持仓每步收益率
         return reward, False
 
@@ -75,7 +74,7 @@ class NoPositionRewardStrategy(RewardStrategy):
 
         return reward, acc_done
 
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         punish = 0
         acc_done = False
         if res['max_drawup_ticks_bm'] >= 10:
@@ -102,14 +101,6 @@ class NoPositionRewardStrategy_00(NoPositionRewardStrategy):
         acc_done = True
         reward = -STD_REWARD / 10
         return reward, acc_done
-    
-class IllegalRewardStrategy(RewardStrategy):
-    """
-    非法动作奖励策略
-    处理非法动作的情况，包括非法动作的惩罚逻辑。
-    """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, max_drawdown_threshold):
-        return -STD_REWARD * 1000, True
 
 class RewardCalculator:
     def __init__(self, 
@@ -120,7 +111,6 @@ class RewardCalculator:
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
                 'no_position': NoPositionRewardStrategy,
-                'illegal': IllegalRewardStrategy,
             },
         ):
         """
@@ -134,23 +124,20 @@ class RewardCalculator:
         self.max_drawdown_threshold = max_drawdown_threshold    
         self.strategies = {k: v() for k, v in strategies_class.items()}
 
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc):
+    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc):
         # 当天结束
-        if legal:
-            if need_close:
-                strategy = self.strategies['end_position']
-            else:
-                if acc_opened:
-                    if action == 1:
-                        strategy = self.strategies['close_position']
-                    elif action == 0:
-                        strategy = self.strategies['open_position_step']
-                    else:
-                        strategy = self.strategies['hold_position']
-                else:
-                    strategy = self.strategies['no_position']
+        if need_close:
+            strategy = self.strategies['end_position']
         else:
-            strategy = self.strategies['illegal']
+            if acc_opened:
+                if action_result == 0:
+                    strategy = self.strategies['close_position']
+                elif action_result == 1:
+                    strategy = self.strategies['open_position_step']
+                else:
+                    strategy = self.strategies['hold_position']
+            else:
+                strategy = self.strategies['no_position']
     
-        reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, acc_opened, legal, need_close, action, res, data_producer, acc, self.max_drawdown_threshold)
+        reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, self.max_drawdown_threshold)
         return reward, acc_done

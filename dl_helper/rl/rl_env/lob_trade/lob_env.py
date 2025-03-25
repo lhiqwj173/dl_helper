@@ -18,7 +18,7 @@ from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown,
 from dl_helper.train_param import in_kaggle
 
 from dl_helper.rl.rl_env.lob_trade.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, IllegalRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, RewardCalculator
 
 USE_CODES = [
     '513050',
@@ -202,7 +202,8 @@ class data_producer:
         """
         # 直接选择需要的列并创建DataFrame
         cols = ['BASE买1价', 'BASE卖1价']
-        self.plot_data = pd.DataFrame(self.all_raw_data[self.plot_begin:self.plot_end, [self.col_idx[col] for col in cols]], columns=['bid', 'ask'])
+        self.plot_data = self.all_raw_data.iloc[self.plot_begin:self.plot_end, [self.col_idx[col] for col in cols]].copy()
+        self.plot_data.columns = ['bid', 'ask']
         # 高效计算中间价格
         self.plot_data['mid_price'] = self.plot_data.mean(axis=1)
 
@@ -242,6 +243,7 @@ class data_producer:
             self.cur_data_file = self.files.pop(0)
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
+            self.all_raw_data = self.all_raw_data.set_index('时间')
 
             # 列过滤
             if self.need_cols:
@@ -360,9 +362,6 @@ class data_producer:
             # BASE买1价 / BASE卖1价
             for col in ['BASE买1价', 'BASE卖1价']:
                 self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
-        
-            # self.all_raw_data 转为 numpy
-            self.all_raw_data = self.all_raw_data.values
 
             # 初始化绘图索引
             self.plot_begin, self.plot_cur = self.x[self.idxs[0][0]]
@@ -428,7 +427,8 @@ class data_producer:
 
         # 准备观察值
         a, b = self.x[self.idxs[0][0]]
-        raw_0 = self.all_raw_data[max(b - int(self.his_len * 1.5), a): b, :].copy()# 多截取 50% 数据，用于增强 TODO copy 是否必要
+        self.step_use_data = self.all_raw_data.iloc[max(b - int(self.his_len * 1.5), a): b, :].copy()# 多截取 50% 数据，用于增强 TODO copy 是否必要
+        raw_0 = self.step_use_data.copy().values# 多截取 50% 数据，用于增强 TODO copy 是否必要
 
         # 原始数据增强
         # 1. use_random_his_window 从更长的历史窗口（如1ls5个）随机截取 所需的时间窗口的数据
@@ -571,18 +571,9 @@ class Account:
         执行交易
         :param bid_price: 最优买价
         :param ask_price: 最优卖价 
-        :param action: 0-买入 1-卖出 2-不操作
+        :param action: 0-空仓 1-持仓
 
-        :return: (动作是否合法, 持仓状态, 对数收益率, 评价指标)
-            评价指标(年化):
-                'max_drawdown'
-                'max_drawdown_ticks'
-                'trade_return'
-                'hold_length'
-                'max_drawdown_bm'
-                'max_drawdown_ticks_bm'
-                'max_drawup_ticks_bm'
-                'trade_return_bm'
+        :return: (持仓状态, 日内对数收益率, 未实现对数收益率, 本次操作平仓的净值序列, 动作结果(0-平仓 1-开仓 -1-无))
         """
         # nan 检查
         assert not np.isnan(bid_price), f'bid_price is nan, {bid_price}'
@@ -625,9 +616,8 @@ class Account:
         # 本次操作平仓的净值序列
         close_net_raw = []
 
-        # 无操作任何时间都允许
-        legal = True
-        if action == 0:  # 买入
+        act_result = -1
+        if action == 1:  # 持仓动作
             if self.status == 0:  # 空仓可以买入
                 self.status = 1
                 self.hold_length += 1
@@ -638,9 +628,14 @@ class Account:
 
                 # 更新净值
                 self.net_raw[-1] = self.pos * bid_price * (1 - Account.fee_rate)
-            else:
-                legal = False
-        elif action == 1:  # 卖出
+
+                # 新的一次持仓序列
+                self.net_raw_last_change.append(self.net_raw[-1])
+
+                # 开仓
+                act_result = 1
+                
+        elif action == 0:  # 空仓动作
             if self.status == 1:  # 有多仓可以卖出
                 self.status = 0
                 self.hold_length -= 1# 时刻开始就卖出了，需要把多加的剪掉
@@ -652,14 +647,15 @@ class Account:
                 # 更新 pos/cash
                 self.cash = self.net_raw[-1]
                 self.pos = 0
-            else:
-                legal = False
+
+                # 平仓
+                act_result = 0
 
         print("acc::step", action, self.status, self.pos, self.cash)
-        return legal, self.status, inday_return, unrealized_return, close_net_raw
+        return self.status, inday_return, unrealized_return, close_net_raw, act_result
 
     @staticmethod
-    def cal_res(legal, net_raw, net_raw_bm):
+    def cal_res(net_raw, net_raw_bm):
         # 评价指标
         res = {
             'max_drawdown': np.nan,
@@ -674,27 +670,27 @@ class Account:
             'trade_return_bm': np.nan,
             'step_return_bm': np.nan,
         }
-        if legal:
-            # 数据足够 > 1
-            # 需要计算评价指标， 储存在info中
-            if (len(net_raw) > 1):
-                # 计算策略净值的评价指标
-                net = np.array(net_raw)
-                # 计算对数收益率序列
-                log_returns = np.diff(np.log(net))
-                # 计算指标
-                res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(net)
-                res['trade_return'] = calc_return(log_returns, annualize=False)
-                res['step_return'] = log_returns[-1]
 
-                # 计算基准净值的评价指标
-                net_bm = np.array(net_raw_bm)
-                # 计算对数收益率序列
-                log_returns_bm = np.diff(np.log(net_bm))
-                res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(net_bm)
-                res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(net_bm)
-                res['trade_return_bm'] = calc_return(log_returns_bm, annualize=False)
-                res['step_return_bm'] = log_returns_bm[-1]
+        # 数据足够 > 1
+        # 需要计算评价指标， 储存在info中
+        if (len(net_raw) > 1):
+            # 计算策略净值的评价指标
+            net = np.array(net_raw)
+            # 计算对数收益率序列
+            log_returns = np.diff(np.log(net))
+            # 计算指标
+            res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(net)
+            res['trade_return'] = calc_return(log_returns, annualize=False)
+            res['step_return'] = log_returns[-1]
+
+            # 计算基准净值的评价指标
+            net_bm = np.array(net_raw_bm)
+            # 计算对数收益率序列
+            log_returns_bm = np.diff(np.log(net_bm))
+            res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(net_bm)
+            res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(net_bm)
+            res['trade_return_bm'] = calc_return(log_returns_bm, annualize=False)
+            res['step_return_bm'] = log_returns_bm[-1]
 
         return res
         
@@ -785,7 +781,6 @@ class LOB_trade_env(gym.Env):
                     'open_position_step': BlankRewardStrategy,
                     'hold_position': HoldPositionRewardStrategy,
                     'no_position': NoPositionRewardStrategy,
-                    'illegal': IllegalRewardStrategy,
                 }
             }
         """
@@ -815,7 +810,6 @@ class LOB_trade_env(gym.Env):
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
                 'no_position': NoPositionRewardStrategy,
-                'illegal': IllegalRewardStrategy,
             }
         }
 
@@ -873,8 +867,8 @@ class LOB_trade_env(gym.Env):
         self.need_reset = False
 
         # 动作空间 
-        # 买 卖 不操作
-        self.action_space = spaces.Discrete(3)
+        # 持仓/空仓
+        self.action_space = spaces.Discrete(2)
 
         # 观察空间 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 5,), dtype=np.float32)
@@ -957,18 +951,21 @@ class LOB_trade_env(gym.Env):
         计算奖励
         
         act_criteria 动作评价:
-            -1 非法动作
             0 交易获利
             1 交易亏损
             2 触发止损
+
+        act_result: 动作结果
+            0 平仓
+            1 开仓
+            -1 无
         """
         # 游戏是否终止
-        # 1. 非法操作                                 -ILLEGAL_REWARD
-        # 2. 最大回测超过阈值                           -STD_REWARD
+        # 1. 最大回测超过阈值                           -STD_REWARD
         acc_done = False
 
-        legal, pos, inday_return, unrealized_return, close_net_raw = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
-        res = self.acc.cal_res(legal, self.acc.net_raw, self.acc.net_raw_bm)
+        pos, inday_return, unrealized_return, close_net_raw, act_result = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
+        res = self.acc.cal_res(self.acc.net_raw, self.acc.net_raw_bm)
         res['hold_length'] = self.acc.hold_length
         
         # 记录net/net_bm
@@ -979,66 +976,59 @@ class LOB_trade_env(gym.Env):
         res['data_type'] = self.data_producer.data_type
 
         reward = 0
-        if legal:
-            # 动作合法
 
-            # 同时记录评价指标
-            if need_close or action==1:
-                # 增加操作交易评价结果
-                # 体现 非法/win/loss
-                res['act_criteria'] = 0 if res['trade_return'] > 0 else 1
+        # 同时记录评价指标
+        if need_close or act_result==0:
+            # 增加操作交易评价结果
+            # 体现 win/loss/止损
+            res['act_criteria'] = 0 if res['trade_return'] > 0 else 1
 
-            # 检查最大回测 
-            if abs(res['max_drawdown']) > self.max_drawdown_threshold:
-                # 游戏被终止，计入交易失败
-                res['act_criteria'] = 2
-                acc_done = True
-                reward = -STD_REWARD
-
-            else:
-                # 游戏正常进行
-
-                # 平仓时更新一次记录
-                if need_close or action==1:
-                    if action==1:
-                        # 交易对数
-                        self.trades += 1
-
-                    if not need_close:
-                        # 潜在收益率（针对最近的交易序列）
-                        _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
-                        acc_return = np.log(close_net_raw[-1]) - np.log(close_net_raw[0])
-                    else:
-                        # 游戏完成，使用所有数据完整计算
-                        _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
-                        # 日内完整的策略收益率
-                        acc_return = res['trade_return']
-
-                    res['potential_return'] = max_profit_reachable_bm
-                    res['acc_return'] = acc_return
-
-                # 交易对数
-                res['trades'] = self.trades
-
-                # 账户是否开仓过
-                acc_opened = len(self.acc.net_raw) > 0
-
-                # 计算奖励
-                reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, acc_opened, legal, need_close, action, res, self.data_producer, self.acc)
-
-                # 奖励范围
-                assert abs(reward) <= FINAL_REWARD, f'reward({reward}) > FINAL_REWARD({FINAL_REWARD})'
+        # 检查最大回测 
+        if abs(res['max_drawdown']) > self.max_drawdown_threshold:
+            # 游戏被终止，计入交易失败
+            res['act_criteria'] = 2
+            acc_done = True
+            reward = -STD_REWARD
 
         else:
-            # 非法动作, 游戏终止，任务失败
-            info['act_criteria'] = -1
-            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, None, legal, need_close, action, res, self.data_producer, self.acc)
+            # 游戏正常进行
+
+            # 平仓时更新一次记录
+            if need_close or act_result==0:
+                if act_result==0:
+                    # 交易对数
+                    self.trades += 1
+
+                if not need_close:
+                    # 潜在收益率（针对最近的交易序列）
+                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.data_producer.last_close_idx:], self.data_producer.ask_price[self.data_producer.last_close_idx:])
+                    acc_return = np.log(close_net_raw[-1]) - np.log(close_net_raw[0])
+                else:
+                    # 游戏完成，使用所有数据完整计算
+                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                    # 日内完整的策略收益率
+                    acc_return = res['trade_return']
+
+                res['potential_return'] = max_profit_reachable_bm
+                res['acc_return'] = acc_return
+
+            # 交易对数
+            res['trades'] = self.trades
+
+            # 账户是否开仓过
+            acc_opened = len(self.acc.net_raw) > 0
+
+            # 计算奖励
+            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, acc_opened, need_close, act_result, res, self.data_producer, self.acc)
+
+            # 奖励范围
+            assert abs(reward) <= FINAL_REWARD, f'reward({reward}) > FINAL_REWARD({FINAL_REWARD})'
 
         # 拷贝 res > info
         for k, v in res.items():
             info[k] = v
 
-        return reward, acc_done, pos, inday_return, unrealized_return
+        return reward, acc_done, pos, inday_return, unrealized_return, act_result
 
     def out_test_predict(self, out_text):
         """
@@ -1048,7 +1038,7 @@ class LOB_trade_env(gym.Env):
         id,before_market_close_sec,pos,inday_return,unrealized_return,predict,data_file,episode,step,net,net_bm,
 
         # 其他
-        terminated,truncated,legal,
+        terminated,truncated,
 
         # 奖励评价相关
         reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,potential_return,acc_return,
@@ -1059,15 +1049,20 @@ class LOB_trade_env(gym.Env):
         # 输出列名
         if not os.path.exists(self.need_upload_file):
             with open(self.need_upload_file, 'w') as f:
-                f.write('id,before_market_close_sec,pos,inday_return,unrealized_return,predict,data_file,episode,step,net,net_bm,terminated,truncated,legal,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
+                f.write('id,before_market_close_sec,pos,inday_return,unrealized_return,predict,data_file,episode,step,net,net_bm,terminated,truncated,reward,max_drawdown,max_drawdown_ticks,trade_return,step_return,hold_length,potential_return,acc_return,max_drawdown_bm,max_drawdown_ticks_bm,max_drawup_ticks_bm,drawup_ticks_bm_count,trade_return_bm,step_return_bm\n')
         with open(self.need_upload_file, 'a') as f:
             f.write(out_text)
             f.write('\n')
     
     def step(self, action):
-        self.steps += 1
+        """
+        0 空仓
+        1 持仓
+        """
         try:
             assert not self.need_reset, "LOB env need reset"
+            
+            self.steps += 1
 
             # 更新样本计数
             self.sample_count += 1
@@ -1100,10 +1095,10 @@ class LOB_trade_env(gym.Env):
                 info['id_std'] = id_std
 
             # 计算奖励
-            reward, acc_done, pos, inday_return, unrealized_return = self._cal_reward(action, need_close, info)
+            reward, acc_done, pos, inday_return, unrealized_return, act_result = self._cal_reward(action, need_close, info)
 
             # 记录平仓
-            if action==1:
+            if act_result==0:
                 self.data_producer.order_close()
 
             # 准备输出数据
@@ -1115,6 +1110,7 @@ class LOB_trade_env(gym.Env):
             out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
 
             # 记录静态数据，用于输出预测数据
+            # 属于下个step的数据
             self.static_data = {
                 'before_market_close_sec': before_market_close_sec,
                 'pos': pos,
@@ -1122,10 +1118,10 @@ class LOB_trade_env(gym.Env):
                 'unrealized_return': unrealized_return,
             }
 
-            if action == 1 or need_close or info.get('act_criteria', None) == -1:
-                # 平仓 / 强制平仓 / 非法平仓， 重置idx
+            if act_result == 0 or need_close or info.get('act_criteria', None) == 2:
+                # 平仓 / 日内数据结束 / 止损平仓， 重置idx
                 self.last_buy_idx = -1
-            elif action == 0:
+            elif act_result == 1:
                 # 记录交易idx
                 self.last_buy_idx = self.data_producer.plot_cur - self.data_producer.plot_begin
 
@@ -1141,11 +1137,11 @@ class LOB_trade_env(gym.Env):
             observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
 
             # 检查是否结束
-            terminated = acc_done or need_close# 游戏终止，最终回报: 非法操作 / 消极操作，多次错失机会 / 连续3次平仓奖励为负 / 当天连续数据结束时，平均平仓奖励为正
-            # 环境中没有截断结束
+            terminated = acc_done or need_close# 游戏终止
+            # 环境中没有截断结束的情况
             truncated = False
 
-            out_text += f",{terminated},{truncated},{info.get('act_criteria', None) != -1}"
+            out_text += f",{terminated},{truncated}"
             out_text += out_text2
             # 记录数据
             self.out_test_predict(out_text)
@@ -1662,7 +1658,7 @@ def check(obs, info, data, mean, std):
 
 def test_lob_data(check_data = True):
     from tqdm import tqdm
-    from dl_helper.rl.rl_env.lob_env_reward import BlankRewardStrategy
+    from dl_helper.rl.rl_env.lob_trade.lob_env_reward import BlankRewardStrategy
 
     code = '513050'
     env = LOB_trade_env({
@@ -1685,7 +1681,7 @@ def test_lob_data(check_data = True):
         }
     },
     data_std=False,
-    # debug_date=['20240521'],
+    debug_date=['20240521'],
     )
 
     acts = [0, 1, 0, 1, 0, 1]
@@ -1714,6 +1710,86 @@ def test_lob_data(check_data = True):
 
     print('all done')
 
+def play_lob_data(render=True):
+    from tqdm import tqdm
+    from dl_helper.rl.rl_env.lob_trade.lob_env_reward import BlankRewardStrategy
+
+    code = '513050'
+    env = LOB_trade_env({
+        # 'data_type': 'val',# 训练/测试
+        'data_type': 'train',# 训练/测试
+        'his_len': 10,# 每个样本的 历史数据长度
+        'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+        'use_symbols': [code],
+
+        'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
+        'train_title': 'test',
+
+        # 奖励策略
+        'reward_strategy_class_dict': {
+            'end_position': BlankRewardStrategy,
+            'close_position': BlankRewardStrategy,
+            'open_position_step': BlankRewardStrategy,
+            'hold_position': BlankRewardStrategy,
+            'no_position': BlankRewardStrategy
+        }
+    },
+    data_std=False,
+    debug_date=['20240521'],
+    )
+
+    act_dict = None
+    act_dict = {
+        '2024/5/21 09:37:05':1,
+        '2024/5/21 09:14:17':0,
+        '2024/5/21 10:19:50':1,
+        '2024/5/21 10:27:53':0,
+        '2024/5/21 10:51:29':1,
+        '2024/5/21 11:07:14':0,
+    }
+
+    print('reset')
+    obs, info = env.reset()
+
+    if None is act_dict:
+        # 保存数据文件 
+        data = env.data_producer.all_raw_data
+        data.to_csv(r'C:\Users\lh\Desktop\temp\lob_data.csv', encoding='gbk')
+
+        # # notebook 打开快速查找买卖点
+
+        # import pandas as pd
+        # import plotly.express as px
+
+        # d = pd.read_csv(r"C:\Users\lh\Desktop\temp\lob_data.csv", encoding='gbk').loc[:, ['时间', 'BASE卖1价','BASE买1价']]
+        # d['mid'] = (d['BASE卖1价'] + d['BASE买1价']) / 2
+        # d = d.set_index('时间')
+
+        # # 使用 Plotly 绘制交互式折线图
+        # fig = px.line(d, x=d.index, y='mid', title='MID 值随时间变化',
+        #             labels={'mid': 'MID 值', '时间': '时间'})
+
+        # # 显示图表
+        # fig.show()
+
+        return
+
+    dt= env.data_producer.step_use_data.iloc[-1]
+    if render:
+        env.render()
+    act = 1
+    need_close = False
+    while True:
+        act = acts[act_idx] if act_idx < len(acts) else 2
+        act_idx += 1
+        obs, reward, terminated, truncated, info = env.step(act)
+        if terminated or truncated:
+            break
+        
+    print('all done')
+
+
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    test_lob_data(check_data=False)
+    # test_lob_data(check_data=False)
+    play_lob_data(render = True)

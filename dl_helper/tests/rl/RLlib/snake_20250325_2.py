@@ -46,7 +46,7 @@ for arg in sys.argv:
     elif arg.startswith('lr='):
         new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250325_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250325_2_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 
@@ -94,6 +94,16 @@ STD_MOVE_REWARD = STD_REWARD / 100
 shaping = -(距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
 撞击惩罚 = -STD_REWARD # 避免惩罚过大，倾向于避免任何风险行为
 模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
+
+# 20250325 ####################################
+# 吃到食物标准奖励
+STD_REWARD = 100
+# 移动到实物的标准奖励
+STD_MOVE_REWARD = STD_REWARD / 100
+shaping = (1 - 距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
+撞击惩罚 = -STD_REWARD # 避免惩罚过大，倾向于避免任何风险行为
+模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
+距离的距离变成正的，查看与负距离的区别
 """
 
 def stop_reward(snake, food, grid_size):
@@ -103,7 +113,7 @@ def keep_alive_reward(snake, food, grid_size):
     # 计算当前曼哈顿距离
     distance = abs(snake[0][0] - food[0]) + abs(snake[0][1] - food[1])
     max_distance = grid_size[0] + grid_size[1]  # 10x10 网格的最大曼哈顿距离为 20
-    return -(distance/max_distance) * STD_MOVE_REWARD + STD_REWARD * int(distance == 0)
+    return (1 - distance/max_distance) * STD_MOVE_REWARD + STD_REWARD * int(distance == 0)
 
 if __name__ == "__main__":
 
@@ -124,10 +134,10 @@ if __name__ == "__main__":
     # import sys
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    import sys
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # import sys
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
