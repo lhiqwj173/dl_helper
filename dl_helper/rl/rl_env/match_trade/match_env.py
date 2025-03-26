@@ -1193,7 +1193,7 @@ def test_env():
 
 def play_env(render=True):
     """可视化玩游戏"""
-    act_dict = None
+    act_dict = {}
     act_dict = {
         '2025/3/17 09:30:15':2,
         '2025/3/17 09:31:54':0,

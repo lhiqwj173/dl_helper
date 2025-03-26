@@ -632,7 +632,7 @@ class Account:
                 # 平仓
                 act_result = 0
 
-        print("acc::step", action, self.status, self.pos, self.cash)
+        # print("acc::step", action, self.status, self.pos, self.cash)
         return self.status, inday_return, unrealized_return, close_net_raw, act_result
 
     def get_plot_data(self):
@@ -793,6 +793,7 @@ class LOB_trade_env(gym.Env):
         open_position_step_reward_strategy = config.get('open_position_step', BlankRewardStrategy)
         hold_position_reward_strategy = config.get('hold_position', HoldPositionRewardStrategy)
         no_position_reward_strategy = config.get('no_position', NoPositionRewardStrategy)
+        force_stop_reward_strategy = config.get('force_stop', BlankRewardStrategy)
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -808,6 +809,7 @@ class LOB_trade_env(gym.Env):
                 'open_position_step': open_position_step_reward_strategy,
                 'hold_position': hold_position_reward_strategy,
                 'no_position': no_position_reward_strategy,
+                'force_stop': force_stop_reward_strategy,
             },
         )
     
@@ -945,6 +947,8 @@ class LOB_trade_env(gym.Env):
         acc_done = False
 
         pos, inday_return, unrealized_return, close_net_raw, act_result = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
+        log(f'[{id(self)}][{self.data_producer.data_type}][{self.data_producer.step_use_data.iloc[-1].name}] act: {action}, act_result: {act_result}')
+        
         res = self.acc.cal_res(self.acc.net_raw, self.acc.net_raw_bm, self.last_close_idx)
         res['hold_length'] = self.acc.hold_length
         
@@ -964,12 +968,15 @@ class LOB_trade_env(gym.Env):
             res['act_criteria'] = 0 if res['trade_return'] > 0 else 1
 
         # 检查最大回测 
+        force_stop = False
         if abs(res['max_drawdown']) > self.max_drawdown_threshold:
             # 游戏被终止，计入交易失败
             res['act_criteria'] = 2
-            acc_done = True
-            reward = -STD_REWARD
-            log(f'[{id(self)}][{self.data_producer.data_type}] max drawdown: {res["max_drawdown"]}, terminated')
+            force_stop = True
+
+            # 计算奖励
+            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, force_stop, need_close, act_result, res, self.data_producer, self.acc)
+            log(f'[{id(self)}][{self.data_producer.data_type}] max drawdown: {res["max_drawdown"]}, force_stop')
 
         else:
             # 游戏正常进行
@@ -997,7 +1004,7 @@ class LOB_trade_env(gym.Env):
             res['trades'] = self.trades
 
             # 计算奖励
-            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, need_close, act_result, res, self.data_producer, self.acc)
+            reward, acc_done = self.reward_calculator.calculate_reward(id(self), STD_REWARD, force_stop, need_close, act_result, res, self.data_producer, self.acc)
 
             # 奖励范围
             assert abs(reward) <= FINAL_REWARD, f'reward({reward}) > FINAL_REWARD({FINAL_REWARD})'
@@ -1461,7 +1468,6 @@ def test_lob_data(check_data = True):
 
 def play_lob_data(render=True):
     from tqdm import tqdm
-    from dl_helper.rl.rl_env.lob_trade.lob_env_reward import BlankRewardStrategy
 
     code = '513050'
     env = LOB_trade_env({
@@ -1475,34 +1481,30 @@ def play_lob_data(render=True):
         'train_title': 'test',
 
         'render_mode': 'human',
-
-        # 奖励策略
-        'reward_strategy_class_dict': {
-            'end_position': BlankRewardStrategy,
-            'close_position': BlankRewardStrategy,
-            'open_position_step': BlankRewardStrategy,
-            'hold_position': BlankRewardStrategy,
-            'no_position': BlankRewardStrategy
-        }
     },
     data_std=False,
     debug_date=['20240521'],
     )
 
-    act_dict = None
+    act_dict = {}
     act_dict = {
         '2024/5/21 09:37:05':1,
-        '2024/5/21 09:14:17':0,
+        '2024/5/21 09:41:11':0,
         '2024/5/21 10:19:50':1,
         '2024/5/21 10:27:53':0,
         '2024/5/21 10:51:29':1,
         '2024/5/21 11:07:14':0,
     }
 
+    act_dict = {
+        datetime.datetime.strptime(key, '%Y/%m/%d %H:%M:%S'): value
+        for key, value in act_dict.items()
+    }
+
     print('reset')
     obs, info = env.reset()
 
-    if None is act_dict:
+    if not act_dict:
         # 保存数据文件 
         data = env.data_producer.all_raw_data
         data.to_csv(r'C:\Users\lh\Desktop\temp\lob_data.csv', encoding='gbk')
