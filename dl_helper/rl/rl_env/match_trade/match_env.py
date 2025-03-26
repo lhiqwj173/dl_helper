@@ -998,26 +998,21 @@ class MATCH_trade_env(gym.Env):
         while True:
             try:
                 # 从队列中获取数据，非阻塞方式
-                df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, match_data = input_queue.get_nowait()
-                self._plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, std_data, match_data)
+                hist_end, df, codes, net_raw, net_raw_bm, status, need_std, match_data = input_queue.get_nowait()
+                self._plot_data(fig, ax1, ax2, hist_end, df, codes, net_raw, net_raw_bm, status, need_std, std_data, match_data)
             except queue.Empty:
                 pass  # 队列为空时跳过
             plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
 
     @staticmethod
-    def _plot_data(fig, ax1, ax2, df, codes, latest_tick_time, net_raw, net_raw_bm, status, need_std, std_data, match_data):
+    def _plot_data(fig, ax1, ax2, hist_end, df, codes, net_raw, net_raw_bm, status, need_std, std_data, match_data):
         """绘制图形的具体实现"""
         # 清空当前的axes
         ax1.clear()
         ax2.clear()
 
-        # 确定历史数据和未来数据的分界点
         n = len(df)
-        hist_end = df.index.get_loc(latest_tick_time) + 1
 
-        # 截取账户净值并标准化
-        net_raw = np.array(net_raw[-hist_end:])
-        net_raw_bm = np.array(net_raw_bm[-hist_end:])
         # 记录标准化数据
         if need_std:
             std_data['net_raw'] = net_raw[0]
@@ -1084,8 +1079,15 @@ class MATCH_trade_env(gym.Env):
         df, codes, latest_tick_time = self.data_producer.get_plot_data()
         net_raw, net_raw_bm, status = self.acc.get_plot_data()
 
+        # 确定历史数据和未来数据的分界点
+        hist_end = df.index.get_loc(latest_tick_time) + 1
+
+        # 截取账户净值并标准化
+        net_raw = np.array(net_raw[-hist_end:])
+        net_raw_bm = np.array(net_raw_bm[-hist_end:])
+
         # 将数据放入队列，交给更新线程处理
-        self.input_queue.put((df, codes, latest_tick_time, net_raw, net_raw_bm, status, self.need_std, self.data_producer.match_data))
+        self.input_queue.put((hist_end, df, codes, net_raw, net_raw_bm, status, self.need_std, self.data_producer.match_data))
         if self.need_std:
             self.need_std = False
 

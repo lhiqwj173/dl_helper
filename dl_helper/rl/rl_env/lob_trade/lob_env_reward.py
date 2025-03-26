@@ -21,7 +21,7 @@ from py_ext.tool import log
 
 class RewardStrategy(ABC):
     @abstractmethod
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         """计算奖励和是否结束游戏"""
         pass
 
@@ -30,7 +30,7 @@ class BlankRewardStrategy(RewardStrategy):
     空白奖励策略
     无奖励 不结束游戏
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         return 0, False
 
 class ClosePositionRewardStrategy(RewardStrategy):
@@ -38,7 +38,7 @@ class ClosePositionRewardStrategy(RewardStrategy):
     平仓奖励策略
     处理已经开仓且需要平仓（need_close 或 action_result == 0）的情况。
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         potential_return = res['potential_return']
         acc_return = res['acc_return']
 
@@ -55,7 +55,7 @@ class HoldPositionRewardStrategy(RewardStrategy):
     持仓奖励策略
     处理已经开仓且既不平仓也不为开仓步的情况。
     """
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         reward = res['step_return']  # 持仓每步收益率
         return reward, False
 
@@ -74,7 +74,7 @@ class NoPositionRewardStrategy(RewardStrategy):
 
         return reward, acc_done
 
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, max_drawdown_threshold):
         punish = 0
         acc_done = False
         if res['max_drawup_ticks_bm'] >= 10:
@@ -124,12 +124,13 @@ class RewardCalculator:
         self.max_drawdown_threshold = max_drawdown_threshold    
         self.strategies = {k: v() for k, v in strategies_class.items()}
 
-    def calculate_reward(self, env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc):
+    def calculate_reward(self, env_id, STD_REWARD, need_close, action_result, res, data_producer, acc):
         # 当天结束
         if need_close:
             strategy = self.strategies['end_position']
         else:
-            if acc_opened:
+            if acc.status == 1:
+                # 持仓状态
                 if action_result == 0:
                     strategy = self.strategies['close_position']
                 elif action_result == 1:
@@ -137,7 +138,8 @@ class RewardCalculator:
                 else:
                     strategy = self.strategies['hold_position']
             else:
+                # 空仓状态
                 strategy = self.strategies['no_position']
     
-        reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, acc_opened, need_close, action_result, res, data_producer, acc, self.max_drawdown_threshold)
+        reward, acc_done = strategy.calculate_reward(env_id, STD_REWARD, need_close, action_result, res, data_producer, acc, self.max_drawdown_threshold)
         return reward, acc_done
