@@ -129,12 +129,12 @@ class SnakeEnv(gym.Env):
             new_head in self.snake):
             # 检查是否撞击边界或自身
             self.done = True
-            reward = self.crash_reward(self.snake, self.food, self.grid_size, self.share_data)
+            reward = self.crash_reward(self.snake, self.food, self.grid_size, self.shared_data)
         else:
             self.snake.insert(0, new_head)
             if new_head == self.food:
                 # 吃到食物
-                reward = self.eat_reward(self.snake, self.food, self.grid_size, self.share_data)
+                reward = self.eat_reward(self.snake, self.food, self.grid_size, self.shared_data)
                 self.food = self._generate_food()
                 self.score += 1
                 # 奖励重置步数
@@ -142,14 +142,14 @@ class SnakeEnv(gym.Env):
             else:
                 # 正常移动
                 self.snake.pop()
-                reward = self.move_reward(self.snake, self.food, self.grid_size, self.share_data)
+                reward = self.move_reward(self.snake, self.food, self.grid_size, self.shared_data)
         
         self.reward = reward
 
         # 达到最大步数，需要截断
         truncated = self.steps >= self.max_steps
         if truncated:
-            reward = self.truncated_reward(self.snake, self.food, self.grid_size, self.share_data)
+            reward = self.truncated_reward(self.snake, self.food, self.grid_size, self.shared_data)
         
         observation = self._get_state()
 

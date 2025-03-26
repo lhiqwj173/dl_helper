@@ -683,12 +683,17 @@ class MATCH_trade_env(gym.Env):
         self.latest_data = {}
 
         if self.render_mode == 'human':
-            self.input_queue = Queue()  # 创建多进程队列用于传递数据
+            self.input_queue = Queue(maxsize=50)  # 创建多进程队列用于传递数据
             self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
             self.update_process.start()  # 启动更新进程
             self.need_std = True
         
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
+
+    def close(self):
+        if self.render_mode == 'human':
+            self.input_queue.put(None)
+            self.update_process.join()
 
     @staticmethod
     def iteration_done():
@@ -998,14 +1003,17 @@ class MATCH_trade_env(gym.Env):
         while True:
             try:
                 # 从队列中获取数据，非阻塞方式
-                hist_end, df, codes, net_raw, net_raw_bm, status, need_std, match_data = input_queue.get_nowait()
-                self._plot_data(fig, ax1, ax2, hist_end, df, codes, net_raw, net_raw_bm, status, need_std, std_data, match_data)
+                data = input_queue.get_nowait()
+                if None is data:    
+                    # 结束
+                    return
+                self._plot_data(fig, ax1, ax2, *data, std_data)
             except queue.Empty:
                 pass  # 队列为空时跳过
-            plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+            # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
 
     @staticmethod
-    def _plot_data(fig, ax1, ax2, hist_end, df, codes, net_raw, net_raw_bm, status, need_std, std_data, match_data):
+    def _plot_data(fig, ax1, ax2, hist_end, df, codes, net_raw, net_raw_bm, status, need_std, match_data, std_data):
         """绘制图形的具体实现"""
         # 清空当前的axes
         ax1.clear()
@@ -1255,6 +1263,7 @@ def play_env(render=True):
         if render:
             time.sleep(0.1)
 
+    env.close()
     print('done')
 
 if __name__ == '__main__':

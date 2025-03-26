@@ -644,7 +644,7 @@ class Account:
         return [i for i in self.net_raw], self.status
 
     @staticmethod
-    def cal_res(net_raw, net_raw_bm, last_close_idx):
+    def cal_res(net_raw, net_raw_bm, last_close_idx, need_cal_drawup=True):
         # 评价指标
         res = {
             'max_drawdown': np.nan,
@@ -676,7 +676,10 @@ class Account:
             # 计算对数收益率序列
             log_returns_bm = np.diff(np.log(net_bm))
             res['max_drawdown_bm'], res['max_drawdown_ticks_bm'] = calc_drawdown(net_bm)
-            res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(net_bm[last_close_idx:])# 针对上一次平仓到当前的数据
+            if need_cal_drawup:
+                res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = calc_drawup_ticks(net_bm[last_close_idx:])# 针对上一次平仓到当前的数据
+            else:
+                res['max_drawup_ticks_bm'], res['drawup_ticks_bm_count'] = 0, 0
             res['trade_return_bm'] = calc_return(log_returns_bm, annualize=False)
             res['step_return_bm'] = log_returns_bm[-1]
 
@@ -877,7 +880,7 @@ class LOB_trade_env(gym.Env):
 
         # 渲染模式
         if self.render_mode == 'human':
-            self.input_queue = Queue()  # 创建多进程队列用于传递数据
+            self.input_queue = Queue(maxsize=50)  # 创建多进程队列用于传递数据
             self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
             self.update_process.start()  # 启动更新进程
             self.need_std = True
@@ -947,9 +950,9 @@ class LOB_trade_env(gym.Env):
         acc_done = False
 
         pos, inday_return, unrealized_return, close_net_raw, act_result = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
-        log(f'[{id(self)}][{self.data_producer.data_type}][{self.data_producer.step_use_data.iloc[-1].name}] act: {action}, act_result: {act_result}')
-        
-        res = self.acc.cal_res(self.acc.net_raw, self.acc.net_raw_bm, self.last_close_idx)
+        log(f'[{id(self)}][{self.data_producer.data_type}][{self.data_producer.step_use_data.iloc[-1].name}] act: {action}, act_result: {act_result}, last_close_idx: {self.last_close_idx}')
+        need_cal_drawup = pos == 0 and act_result == -1
+        res = self.acc.cal_res(self.acc.net_raw, self.acc.net_raw_bm, self.last_close_idx, need_cal_drawup)
         res['hold_length'] = self.acc.hold_length
         
         # 记录net/net_bm
@@ -1200,7 +1203,9 @@ class LOB_trade_env(gym.Env):
             raise e
 
     def close(self):
-        pass
+        if self.render_mode == 'human':
+            self.input_queue.put(None)
+            self.update_process.join()
 
     def update_plot(self, input_queue):
         """线程中运行的图形更新函数"""
@@ -1212,11 +1217,14 @@ class LOB_trade_env(gym.Env):
         while True:
             try:
                 # 从队列中获取数据，非阻塞方式
-                hist_end, plot_data, latest_tick_time, net_raw, status, need_std = input_queue.get_nowait()
-                self._plot_data(fig, ax, hist_end, plot_data, latest_tick_time, net_raw, status, need_std, std_data)
+                data = input_queue.get_nowait()
+                if None is data:
+                    # 结束
+                    return
+                self._plot_data(fig, ax, *data, std_data)
             except queue.Empty:
                 pass  # 队列为空时跳过
-            plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+            # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
 
     @staticmethod
     def _plot_data(fig, ax, hist_end, plot_data, latest_tick_time, net_raw, status, need_std, std_data):
@@ -1544,6 +1552,7 @@ def play_lob_data(render=True):
         if render:
             time.sleep(0.1)
         
+    env.close()
     print('all done')
 
 
