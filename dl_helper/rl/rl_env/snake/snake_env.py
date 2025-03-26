@@ -55,9 +55,15 @@ class SnakeEnv(gym.Env):
             self.clock = pygame.time.Clock()
             self.font = pygame.font.Font(None, 36)
         
-        self.action_space = spaces.Discrete(4)
+        # 0 前进
+        # 1 左转
+        # 2 右转
+        self.action_space = spaces.Discrete(3)
         self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if self.model_type == 'cnn' else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
         
+        # 前进方向
+        self.direction = (0, -1) # 初始朝向向上
+
         # 共享数据
         self.shared_data = {}
 
@@ -120,9 +126,16 @@ class SnakeEnv(gym.Env):
         
         self.steps += 1
 
-        direction = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+        # 根据动作改变朝向
+        # 0: 前进, 1: 左转, 2: 右转
+        if action == 1:  # 左转
+            self.direction = (self.direction[1], -self.direction[0])
+        elif action == 2:  # 右转
+            self.direction = (-self.direction[1], self.direction[0])
+
+        # 计算新的蛇头位置
         head = self.snake[0]
-        new_head = (head[0] + direction[action][0], head[1] + direction[action][1])
+        new_head = (head[0] + self.direction[0], head[1] + self.direction[1])
         
         if (new_head[0] < 0 or new_head[0] >= self.grid_size[0] or
             new_head[1] < 0 or new_head[1] >= self.grid_size[1] or
@@ -220,5 +233,10 @@ if __name__ == "__main__":
     from dl_helper.rl.rl_env.tool import human_control
     human_control(
         env_class=SnakeEnv,
-        env_config={},
+        control_map={
+            pygame.K_UP: 0,
+            pygame.K_LEFT: 1,
+            pygame.K_RIGHT: 2,
+        },
+        default_action=0,
     )

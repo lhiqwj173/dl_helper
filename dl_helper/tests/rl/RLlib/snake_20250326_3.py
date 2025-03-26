@@ -46,7 +46,7 @@ for arg in sys.argv:
     elif arg.startswith('lr='):
         new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250326_2_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250326_3_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
@@ -163,27 +163,27 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
     log(f"num_learners: {num_learners}")
 
     if model_type == 'mlp':
-        # total params: 34276
+        # total params: 9347
         model_config = {
             'input_dims': (10, 10),
-            'hidden_sizes': [128, 128],
-            'output_dims': 32,
+            'hidden_sizes': [64, 32],
+            'output_dims': 16,
         } 
     elif model_type == 'cnn':
-        # total params: 34292
+        # total params: 8987
         model_config = {
             'input_dims': (1, 10, 10),
-            'hidden_sizes': [8, 16], 
-            'output_dims': 32,
+            'hidden_sizes': [8, 8], 
+            'output_dims': 16,
         }
 
     # 验证配置
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     algo = config.build()
     log(algo.get_module())
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
-    # sys.exit()
+    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
