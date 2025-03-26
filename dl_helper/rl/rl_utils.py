@@ -239,6 +239,7 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     val_max_reward = out_data['val_episode_return_max'].tolist()       # 验证集最大奖励
     learning_rates = out_data['learning_rate'].values                  # 学习率
     loss = out_data.get('learner_default_policy_total_loss', pd.Series()).tolist()                  # 损失
+    loss_ma = smooth_metrics(loss)
     mean_steps = out_data['env_runner_episode_len_mean'].tolist()       # 平均步数
     val_mean_steps = out_data['val_episode_len_mean'].tolist()         # 验证集平均步数
     entropy = out_data['learner_default_policy_entropy'].tolist()     # 熵
@@ -255,6 +256,7 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     _val_max_reward = [x for x in val_max_reward if not np.isnan(x)]
     _learning_rates = [x for x in learning_rates if not np.isnan(x)]
     _loss = [x for x in loss if not np.isnan(x)]
+    _loss_ma = [x for x in loss_ma if not np.isnan(x)]
     _mean_steps = [x for x in mean_steps if not np.isnan(x)]
     _val_mean_steps = [x for x in val_mean_steps if not np.isnan(x)]
     _entropy = [x for x in entropy if not np.isnan(x)]
@@ -267,6 +269,7 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     val_max_reward_latest = _val_max_reward[-1] if len(_val_max_reward) > 0 else np.nan
     lr_latest = _learning_rates[-1] if len(_learning_rates) > 0 else np.nan
     loss_latest = _loss[-1] if len(_loss) > 0 else np.nan
+    loss_ma_latest = _loss_ma[-1] if len(_loss_ma) > 0 else np.nan
     mean_steps_latest = _mean_steps[-1] if len(_mean_steps) > 0 else np.nan
     val_mean_steps_latest = _val_mean_steps[-1] if len(_val_mean_steps) > 0 else np.nan
     entropy_latest = _entropy[-1] if len(_entropy) > 0 else np.nan
@@ -302,18 +305,19 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     # 损失图和学习率图（第二个子图）
     ax_loss = axes[1]
     # 绘制损失曲线(左y轴)
-    l1 = ax_loss.plot(loss, color='red', label=f'loss({loss_latest:.4f})')
+    l1 = ax_loss.plot(loss, color='red', label=f'loss({loss_latest:.4f})', alpha=0.4)
+    l2 = ax_loss.plot(loss_ma, color='red', label=f'loss_ma({loss_ma_latest:.4f})')
     ax_loss.set_ylabel('loss')
     ax_loss.tick_params(axis='y')
     
     # 创建右侧y轴并绘制学习率曲线
     ax_lr = ax_loss.twinx()
-    l2 = ax_lr.plot(learning_rates, color='blue', label=f'lr({lr_latest:.6f})', alpha=0.4)
+    l3 = ax_lr.plot(learning_rates, color='blue', label=f'lr({lr_latest:.6f})', alpha=0.4)
     ax_lr.set_ylabel('lr', color='blue')
     ax_lr.tick_params(axis='y', labelcolor='blue')
     
     # 合并两个图例
-    lines = l1 + l2
+    lines = l1 + l2 + l3
     labels = [l.get_label() for l in lines]
     ax_loss.legend(lines, labels, loc='upper left')
 
