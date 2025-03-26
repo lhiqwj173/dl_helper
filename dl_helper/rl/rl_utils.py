@@ -241,6 +241,8 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     loss = out_data.get('learner_default_policy_total_loss', pd.Series()).tolist()                  # 损失
     mean_steps = out_data['env_runner_episode_len_mean'].tolist()       # 平均步数
     val_mean_steps = out_data['val_episode_len_mean'].tolist()         # 验证集平均步数
+    entropy = out_data['learner_default_policy_entropy'].tolist()     # 熵
+    entropy_ma = smooth_metrics(entropy)
     
     if len(mean_reward) == 0:
         log('未找到 mean_reward 数据')
@@ -255,6 +257,8 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     _loss = [x for x in loss if not np.isnan(x)]
     _mean_steps = [x for x in mean_steps if not np.isnan(x)]
     _val_mean_steps = [x for x in val_mean_steps if not np.isnan(x)]
+    _entropy = [x for x in entropy if not np.isnan(x)]
+    _entropy_ma = [x for x in entropy_ma if not np.isnan(x)]
 
     # 获取最新值
     mean_reward_latest = _mean_reward[-1] if len(_mean_reward) > 0 else np.nan
@@ -265,10 +269,12 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     loss_latest = _loss[-1] if len(_loss) > 0 else np.nan
     mean_steps_latest = _mean_steps[-1] if len(_mean_steps) > 0 else np.nan
     val_mean_steps_latest = _val_mean_steps[-1] if len(_val_mean_steps) > 0 else np.nan
+    entropy_latest = _entropy[-1] if len(_entropy) > 0 else np.nan
+    entropy_ma_latest = _entropy_ma[-1] if len(_entropy_ma) > 0 else np.nan
 
-    # 确定子图数量（2个固定子图：奖励、学习率/损失，加上自定义子图）
+    # 确定子图数量（4个固定子图：奖励、学习率/损失，加上自定义子图）
     additional_plots = custom_plotter.get_additional_plot_count() if custom_plotter else 0
-    total_plots = 3 + additional_plots  # 主奖励图、学习率图/损失图, 平均步数，加上自定义图
+    total_plots = 4 + additional_plots  # 主奖励图、学习率图/损失图, 平均步数, 熵，加上自定义图
 
     # 创建带有子图的图形
     heights = [3] + [2] * (total_plots-1)  # 主图高度4，其他子图高度2
@@ -318,6 +324,14 @@ def plot_training_curve(train_title, train_folder, out_file, total_time=None, pi
     ax_mean_steps.set_ylabel('mean_steps')
     ax_mean_steps.tick_params(axis='y')
     ax_mean_steps.legend(loc='upper left')
+
+    # 熵图（第四个子图）
+    ax_entropy = axes[3]
+    l1 = ax_entropy.plot(entropy, color='purple', label=f'entropy({entropy_latest:.4f})', alpha=0.4)
+    l2 = ax_entropy.plot(entropy_ma, color='purple', label=f'entropy_ma({entropy_ma_latest:.4f})')
+    ax_entropy.set_ylabel('entropy')
+    ax_entropy.tick_params(axis='y')
+    ax_entropy.legend(loc='upper left')
 
     # 计算每4小时的时间点
     min_time = datetime.min()
@@ -1221,13 +1235,31 @@ class PrioritizedReplayBufferWaitClose(PrioritizedReplayBuffer):
         self.temp_experiences.clear()
         self.temp_indices.clear()
 
-def moving_average(a, window_size):
-    cumulative_sum = np.cumsum(np.insert(a, 0, 0)) 
-    middle = (cumulative_sum[window_size:] - cumulative_sum[:-window_size]) / window_size
-    r = np.arange(1, window_size-1, 2)
-    begin = np.cumsum(a[:window_size-1])[::2] / r
-    end = (np.cumsum(a[:-window_size:-1])[::2] / r)[::-1]
-    return np.concatenate((begin, middle, end))
+def smooth_metrics(data, window_size=50):
+    """
+    平滑训练指标的函数，使用滑动窗口均值。
+    
+    参数:
+        data (list or array): 输入的训练指标序列
+        window_size (int): 窗口大小，默认为 50
+    
+    返回:
+        np.ndarray: 平滑后的指标序列
+    """
+    data = np.asarray(data)
+    if len(data) == 0 or window_size <= 0:
+        return np.array([])
+    
+    # 计算累积和
+    cumsum = np.cumsum(np.insert(data, 0, 0))
+    # 完整窗口的均值
+    full_window_means = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
+    
+    # 处理前缀（不足窗口大小的部分）
+    prefix = np.array([data[:i + 1].mean() for i in range(min(window_size - 1, len(data)))])
+    
+    # 合并结果
+    return np.concatenate([prefix, full_window_means[:len(data) - len(prefix)]])
 
 def train_on_policy_agent(env, agent, num_episodes):
     return_list = []
