@@ -121,12 +121,12 @@ STD_REWARD = 100 * 身体长度
 STD_MOVE_REWARD = STD_REWARD / 100
 # 使用距离更远还是更近来给与奖励
 shaping = (距离是否缩小) * STD_MOVE_REWARD - (距离是否增大) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0) * 身体长度
-撞击惩罚/最大步数终止惩罚 = -STD_REWARD / 100 # 减小撞击惩罚，鼓励探索
+撞击惩罚/最大步数终止惩罚 = -STD_REWARD / 1000 # 减小撞击惩罚，鼓励探索
 模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(每一步都是正奖励, 不会自杀)
 """
 
 def stop_reward(snake, food, grid_size, shared_data):
-    return -STD_REWARD / 100
+    return -STD_REWARD / 1000
 
 def keep_alive_reward(snake, food, grid_size, shared_data):
     # 计算当前曼哈顿距离
