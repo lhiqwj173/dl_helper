@@ -5,16 +5,16 @@ import gymnasium as gym
 from gymnasium import spaces
 import time
 
-def default_crash_reward(snake, food, grid_size):
+def default_crash_reward(snake, food, grid_size, shared_data):
     return -1
 
-def default_eat_reward(snake, food, grid_size):
+def default_eat_reward(snake, food, grid_size, shared_data):
     return 1
 
-def default_move_reward(snake, food, grid_size):
+def default_move_reward(snake, food, grid_size, shared_data):
     return 0
 
-def default_truncated_reward(snake, food, grid_size):
+def default_truncated_reward(snake, food, grid_size, shared_data):
     return -1
 
 class SnakeEnv(gym.Env):
@@ -58,6 +58,9 @@ class SnakeEnv(gym.Env):
         self.action_space = spaces.Discrete(4)
         self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if self.model_type == 'cnn' else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
         
+        # 共享数据
+        self.shared_data = {}
+
         self.reset()
     
     def _std_obs(self, obs):
@@ -86,6 +89,9 @@ class SnakeEnv(gym.Env):
 
         # 标准化
         observation = self._std_obs(observation)
+
+        # 重置共享数据
+        self.shared_data = {}
 
         info = {}
         return observation, info
@@ -123,12 +129,12 @@ class SnakeEnv(gym.Env):
             new_head in self.snake):
             # 检查是否撞击边界或自身
             self.done = True
-            reward = self.crash_reward(self.snake, self.food, self.grid_size)
+            reward = self.crash_reward(self.snake, self.food, self.grid_size, self.share_data)
         else:
             self.snake.insert(0, new_head)
             if new_head == self.food:
                 # 吃到食物
-                reward = self.eat_reward(self.snake, self.food, self.grid_size)
+                reward = self.eat_reward(self.snake, self.food, self.grid_size, self.share_data)
                 self.food = self._generate_food()
                 self.score += 1
                 # 奖励重置步数
@@ -136,14 +142,14 @@ class SnakeEnv(gym.Env):
             else:
                 # 正常移动
                 self.snake.pop()
-                reward = self.move_reward(self.snake, self.food, self.grid_size)
+                reward = self.move_reward(self.snake, self.food, self.grid_size, self.share_data)
         
         self.reward = reward
 
         # 达到最大步数，需要截断
         truncated = self.steps >= self.max_steps
         if truncated:
-            reward = self.truncated_reward(self.snake, self.food, self.grid_size)
+            reward = self.truncated_reward(self.snake, self.food, self.grid_size, self.share_data)
         
         observation = self._get_state()
 
