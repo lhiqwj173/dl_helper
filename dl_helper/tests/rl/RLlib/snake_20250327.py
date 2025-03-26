@@ -46,7 +46,7 @@ for arg in sys.argv:
     elif arg.startswith('lr='):
         new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250326_5_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250327_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
@@ -95,9 +95,9 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     # 验证配置
     eval_config = {
-        'evaluation_interval': 100,
+        'evaluation_interval': 40,
         'evaluation_duration': 4000,
         'evaluation_duration_unit': 'timesteps',
         'evaluation_sample_timeout_s': 24*60*60,
@@ -182,6 +182,11 @@ if __name__ == "__main__":
 
         config = config.training(
             lr=3e-4 if new_lr == 0.0 else new_lr,
+            gamma=0.94,
+            entropy_coeff=0.1,
+            train_batch_size_per_learner=10000,
+
+            # ICM 配置
             learner_config_dict={
                 # Intrinsic reward coefficient.
                 "intrinsic_reward_coeff": 0.05,
@@ -200,7 +205,10 @@ if __name__ == "__main__":
         )
 
         config = config.training(
-            lr=5e-5 if new_lr == 0.0 else new_lr,
+            lr=3e-4 if new_lr == 0.0 else new_lr,
+            gamma=0.94,
+            entropy_coeff=0.1,
+            train_batch_size_per_learner=10000,
         )
 
     # 构建算法
@@ -219,7 +227,7 @@ if __name__ == "__main__":
     # 训练循环
     begin_time = time.time()
     rounds = 500000000
-    # rounds = 30
+    rounds = 200
     for i in range(rounds):
         log(f"Training iteration {i+1}/{rounds}")
         result = algo.train()
@@ -232,10 +240,10 @@ if __name__ == "__main__":
         out_file = os.path.join(train_folder, f'out_{beijing_time().strftime("%Y%m%d")}.csv')
         simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
-        if i>0 and (i % 100 == 0 or i == rounds - 1):
+        if i>0 and (i % 40 == 0 or i == rounds - 1):
             if not in_windows():
                 # 保存检查点
-                checkpoint_dir = algo.save_to_path(train_folder_manager.checkpoint_folder)
+                checkpoint_dir = algo.save_to_path(os.path.join(train_folder_manager.checkpoint_folder, f'iter_{i}'))
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
             # 绘制训练曲线
             plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time)
