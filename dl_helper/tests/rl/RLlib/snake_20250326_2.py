@@ -38,7 +38,6 @@ from dl_helper.rl.rl_env.tool import human_control, ai_control
 use_intrinsic_curiosity = False
 new_lr = 0.0
 model_type = 'mlp'
-model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
@@ -164,27 +163,27 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
     log(f"num_learners: {num_learners}")
 
     if model_type == 'mlp':
-        # total params: 65540
+        # total params: 34276
         model_config = {
             'input_dims': (10, 10),
-            'hidden_sizes': [64, 128, 256],
-            'output_dims': 64,
+            'hidden_sizes': [128, 128],
+            'output_dims': 32,
         } 
     elif model_type == 'cnn':
-        # total params: 69636
+        # total params: 34292
         model_config = {
             'input_dims': (1, 10, 10),
-            'hidden_sizes': [8, 16, 16], 
-            'output_dims': 64,
+            'hidden_sizes': [8, 16], 
+            'output_dims': 32,
         }
 
     # 验证配置
@@ -269,7 +268,7 @@ if __name__ == "__main__":
         )
 
         config = config.training(
-            lr=3e-4 if new_lr == 0.0 else new_lr,
+            lr=5e-5 if new_lr == 0.0 else new_lr,
         )
 
     # 构建算法
