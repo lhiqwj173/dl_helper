@@ -46,7 +46,7 @@ for arg in sys.argv:
     elif arg.startswith('lr='):
         new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250326_3_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250326_5_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
@@ -58,92 +58,24 @@ STD_MOVE_REWARD = STD_REWARD / 100
 """
 激励函数
 
-# 最大吃食物数量
-MAX_EAT_FOOD_NUM = 10 *10 - 1
-
-# 20250321 ####################################
-# 吃到食物标准奖励
-STD_EAT_FOOD_REWARD = 100
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 2
-# 奖励函数
-shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD - (MAX_EAT_FOOD_NUM - 吃到食物数量) * STD_EAT_FOOD_REWARD
-撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000
-
-分析:
-    每一步都有巨大的惩罚, 而撞击的惩罚不够大
-    导致模型自杀来避免每步的累计惩罚
-
-
-# 20250324 ####################################
-# 吃到食物标准奖励
-STD_EAT_FOOD_REWARD = 100
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_EAT_FOOD_REWARD / 10
-shaping = -(距离²/(10² + 10²)) * STD_MOVE_REWARD + STD_EAT_FOOD_REWARD * (距离 == 0)
-撞击惩罚 = -(MAX_EAT_FOOD_NUM + 1) * STD_EAT_FOOD_REWARD # 10 * 10 的网格, 最大惩罚: -10000, 是游戏中可能的最大惩罚，持续移动的惩罚需要很久才能抵消吃到食物的奖励
-模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
-
-
-# 20250324 2 ####################################
-# 吃到食物标准奖励
-STD_REWARD = 100
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_REWARD / 100
-shaping = -(距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
-撞击惩罚 = -STD_REWARD # 避免惩罚过大，倾向于避免任何风险行为
-模型应该会尽可能少的移动，来获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
-
-# 20250325 ####################################
-# 吃到食物标准奖励
-STD_REWARD = 100
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_REWARD / 100
-shaping = (1 - 距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
-撞击惩罚 = -STD_REWARD # 避免惩罚过大，倾向于避免任何风险行为
-模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(自杀会获得最大的惩罚)
-距离的距离变成正的，查看与负距离的区别
-
-
-# 20250326 ####################################
-# 吃到食物标准奖励
-STD_REWARD = 100
-# 移动到实物的标准奖励
-STD_MOVE_REWARD = STD_REWARD / 100
-shaping = (1 - 距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0)
-撞击惩罚 = -STD_REWARD / 100 # 减小撞击惩罚，鼓励探索
-模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(每一步都是正奖励, 不会自杀)
-
-# 20250326 2 ####################################
+# 20250326 4 ####################################
 # 吃到食物标准奖励与身体长度成正比
 STD_REWARD = 100 * 身体长度
 # 移动到实物的标准奖励
 STD_MOVE_REWARD = STD_REWARD / 100
 # 使用距离更远还是更近来给与奖励
-shaping = (距离是否缩小) * STD_MOVE_REWARD - (距离是否增大) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0) * (身体长度 - 1)
-撞击惩罚/最大步数终止惩罚 = -STD_REWARD / 1000 # 减小撞击惩罚，鼓励探索
-模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(每一步都是正奖励, 不会自杀)
+shaping = -(距离/(10 + 10)) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0) * (身体长度 - 1)
+模型应该会尽可能靠近，并获取尽可能多的食物
 """
 
 def stop_reward(snake, food, grid_size, shared_data):
-    return -STD_REWARD / 1000
+    return 0
 
 def keep_alive_reward(snake, food, grid_size, shared_data):
     # 计算当前曼哈顿距离
     distance = abs(snake[0][0] - food[0]) + abs(snake[0][1] - food[1])
-    
-    # 初始化前距离
-    if 'last_distance' not in shared_data:
-        shared_data['last_distance'] = distance
 
-    # 计算距离变化
-    distance_change = distance - shared_data['last_distance']
-    shared_data['last_distance'] = distance
-
-    # 转为 -1 / 0 / 1
-    distance_change = 1 if distance_change > 0 else 0 if distance_change == 0 else -1
-
-    return distance_change * STD_MOVE_REWARD + STD_REWARD * int(distance == 0) * (len(snake) - 1)
+    return -(distance / (grid_size[0] + grid_size[1])) * STD_MOVE_REWARD + STD_REWARD * int(distance == 0) * (len(snake) - 1)
 
 if __name__ == "__main__":
 
@@ -163,9 +95,9 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
