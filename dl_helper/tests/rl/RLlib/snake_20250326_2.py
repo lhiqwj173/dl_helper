@@ -38,6 +38,7 @@ from dl_helper.rl.rl_env.tool import human_control, ai_control
 use_intrinsic_curiosity = False
 new_lr = 0.0
 model_type = 'mlp'
+model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
@@ -120,7 +121,7 @@ STD_REWARD = 100 * 身体长度
 # 移动到实物的标准奖励
 STD_MOVE_REWARD = STD_REWARD / 100
 # 使用距离更远还是更近来给与奖励
-shaping = (距离是否缩小) * STD_MOVE_REWARD - (距离是否增大) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0) * 身体长度
+shaping = (距离是否缩小) * STD_MOVE_REWARD - (距离是否增大) * STD_MOVE_REWARD + STD_REWARD * (距离 == 0) * (身体长度 - 1)
 撞击惩罚/最大步数终止惩罚 = -STD_REWARD / 1000 # 减小撞击惩罚，鼓励探索
 模型应该会尽可能靠近，并获取尽可能多的食物，同时避免撞击(每一步都是正奖励, 不会自杀)
 """
@@ -143,7 +144,7 @@ def keep_alive_reward(snake, food, grid_size, shared_data):
     # 转为 -1 / 0 / 1
     distance_change = 1 if distance_change > 0 else 0 if distance_change == 0 else -1
 
-    return distance_change * STD_MOVE_REWARD + STD_REWARD * int(distance == 0) * len(snake)
+    return distance_change * STD_MOVE_REWARD + STD_REWARD * int(distance == 0) * (len(snake) - 1)
 
 if __name__ == "__main__":
 
@@ -163,9 +164,9 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # # 模型控制
-    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
-    # sys.exit()
+    # 模型控制
+    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint")
+    sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0

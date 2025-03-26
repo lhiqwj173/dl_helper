@@ -498,16 +498,16 @@ class data_producer:
 
     def get_plot_data(self):
         """
-        获取绘图数据, 当前状态(时间点)索引, 当前状态(时间点)id
+        获取绘图数据,
+        返回 绘图范围 a, b, 当前时点的时间索引
         """
         a, b = self.x[self.last_data_idx]
         a = max(b - self.his_len, a)
 
-        extra_data_length = 30
+        extra_data_length = 50
         extra_a, extra_b = a - extra_data_length, b + extra_data_length
-        extra_data = self.plot_data.iloc[max(0, extra_a): min(len(self.plot_data), extra_b)]
 
-        return extra_data, self.plot_data.iloc[b-1].name
+        return max(0, extra_a), min(len(self.plot_data), extra_b), self.plot_data.iloc[b-1].name
 
     def reset(self):
         while True:
@@ -641,7 +641,7 @@ class Account:
 
         net_raw, status
         """
-        return [i for i in self.net_raw], self.status
+        return self.net_raw[-1], self.status
 
     @staticmethod
     def cal_res(net_raw, net_raw_bm, last_close_idx, need_cal_drawup=True):
@@ -766,6 +766,9 @@ class LOB_trade_env(gym.Env):
                 # 渲染模式
                 'render_mode': 'none',
 
+                # 渲染频率, 每N步渲染一次
+                'render_freq': 5,
+
                 # 奖励策略
                 'end_position': ClosePositionRewardStrategy,
                 'close_position': ClosePositionRewardStrategy,
@@ -790,6 +793,7 @@ class LOB_trade_env(gym.Env):
         self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.005))
 
         self.render_mode = config.get('render_mode', 'none')
+        self.render_freq = config.get('render_freq', 5)
 
         end_position_reward_strategy = config.get('end_position', ClosePositionRewardStrategy)
         close_position_reward_strategy = config.get('close_position', ClosePositionRewardStrategy)
@@ -880,10 +884,9 @@ class LOB_trade_env(gym.Env):
 
         # 渲染模式
         if self.render_mode == 'human':
-            self.input_queue = Queue(maxsize=50)  # 创建多进程队列用于传递数据
+            self.input_queue = Queue(maxsize=30)  # 创建多进程队列用于传递数据
             self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
             self.update_process.start()  # 启动更新进程
-            self.need_std = True
 
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
@@ -1155,9 +1158,6 @@ class LOB_trade_env(gym.Env):
             # 最近一次平仓的idx
             self.last_close_idx = 0
 
-            # 绘图相关
-            self.need_std = True
-
             # 数据
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
 
@@ -1173,6 +1173,9 @@ class LOB_trade_env(gym.Env):
                     log(f'[{id(self)}][{self.data_producer.data_type}] need_close: True, reset data_producer again')
                 else:
                     break
+            
+            full_plot_data = self.data_producer.plot_data
+            self.input_queue.put({'full_plot_data': full_plot_data})
 
             # 账户
             self.acc.reset()
@@ -1209,33 +1212,61 @@ class LOB_trade_env(gym.Env):
 
     def update_plot(self, input_queue):
         """线程中运行的图形更新函数"""
-        fig, ax = plt.subplots(figsize=(12, 6))
-        plt.show(block=False)  # 添加这行，非阻塞方式显示图形
+        try:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            plt.show(block=False)  # 添加这行，非阻塞方式显示图形
 
-        std_data = {}
+            std_data = {}
+            full_plot_data = None
+            net_raw = []
 
-        while True:
-            try:
-                # 从队列中获取数据，非阻塞方式
-                data = input_queue.get_nowait()
-                if None is data:
-                    # 结束
-                    return
-                self._plot_data(fig, ax, *data, std_data)
-            except queue.Empty:
-                pass  # 队列为空时跳过
-            # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+            while True:
+                try:
+                    # 从队列中获取数据，非阻塞方式
+                    data = input_queue.get_nowait()
+                    if None is data:
+                        # 结束
+                        return
+                    if 'render' in data:
+                        self._plot_data(fig, ax, *data['render'], std_data, full_plot_data, net_raw)
+                    elif 'full_plot_data' in data:
+                        full_plot_data = data['full_plot_data']
+                        # 全reset
+                        std_data = {}
+                        net_raw = []
+                except queue.Empty:
+                    pass  # 队列为空时跳过
+                # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+        except Exception as e:
+            log(f'[{id(self)}][{self.data_producer.data_type}] update_plot error: {get_exception_msg()}')
+            raise e
 
     @staticmethod
-    def _plot_data(fig, ax, hist_end, plot_data, latest_tick_time, net_raw, status, need_std, std_data):
+    def _plot_data(fig, ax, a, b, latest_tick_time, latest_net_raw, status, need_render, std_data, full_plot_data, net_raw):
         """绘制图形的具体实现"""
+        # 更新净值
+        net_raw.append(latest_net_raw)
+
+        if not need_render:
+            return
+
         # 清空当前的axes
         ax.clear()
+
+        # 截取绘图数据
+        plot_data = full_plot_data.iloc[a:b]
+
+        # 确定历史数据和未来数据的分界点
+        hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+
+        # 截取账户净值并标准化
+        net_raw = net_raw[-hist_end:]
+        net_raw = np.array(net_raw)
 
         n = len(plot_data)
 
         # 记录标准化数据
-        if need_std:
+        if 'net_raw' not in std_data:
             std_data['net_raw'] = net_raw[0]
         # 标准化
         net_raw = net_raw / std_data['net_raw']
@@ -1245,10 +1276,10 @@ class LOB_trade_env(gym.Env):
             net_raw = np.concatenate([[net_raw[0]] * (hist_end - len(net_raw)), net_raw])
 
         # 记录标准化数据
-        if need_std:
+        if 'mid_price' not in std_data:
             std_data['mid_price'] = plot_data['mid_price'].iloc[0]
         # 标准化成净值
-        plot_data['mid_price'] = plot_data['mid_price'] / std_data[f'mid_price']
+        plot_data['mid_price'] = plot_data['mid_price'] / std_data['mid_price']
 
         # 
         ax.plot(range(hist_end), plot_data['mid_price'].iloc[:hist_end].values, label=f'mid_price({plot_data[f"mid_price"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
@@ -1276,21 +1307,18 @@ class LOB_trade_env(gym.Env):
         if self.render_mode != 'human':
             return
         
+        need_render = (self.steps+1) % self.render_freq == 0
+        
         # 获取绘图数据
-        # 包含列名: index(ts), bid, ask, mid_price
-        plot_data, latest_tick_time = self.data_producer.get_plot_data()
-        net_raw, status = self.acc.get_plot_data()
-
-        # 确定历史数据和未来数据的分界点
-        hist_end = plot_data.index.get_loc(latest_tick_time) + 1
-
-        # 截取账户净值并标准化
-        net_raw = np.array(net_raw[-hist_end:])
+        if need_render:
+            # 包含列名: index(ts), bid, ask, mid_price
+            a, b, latest_tick_time = self.data_producer.get_plot_data()
+        else:
+            a, b, latest_tick_time = 0, 0, 0
+        latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        self.input_queue.put((hist_end, plot_data, latest_tick_time, net_raw, status, self.need_std))
-        if self.need_std:
-            self.need_std = False
+        self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render)})
 
 def test_quick_produce_train_sdpk(date, code):
     """
