@@ -23,13 +23,14 @@ class MLPEncoder(TorchModel, Encoder):
         self.hidden_sizes = config.hidden_sizes
         self.output_dims = config.output_dims
         input_size = np.prod(self.input_dims)
+        need_layer_norm = config.need_layer_norm
 
         # 使用层归一化来提高模型性能
         layers = []
         for hidden_size in self.hidden_sizes:
             layers.extend([
                 nn.Linear(input_size, hidden_size),
-                nn.LayerNorm(hidden_size),
+                nn.LayerNorm(hidden_size) if need_layer_norm else nn.Identity(),
                 nn.ReLU(),
             ])
             input_size = hidden_size
@@ -38,7 +39,7 @@ class MLPEncoder(TorchModel, Encoder):
 
         self.output_layer = nn.Sequential(
             nn.Linear(input_size, self.output_dims[0]),
-            nn.LayerNorm(self.output_dims[0]),
+            nn.LayerNorm(self.output_dims[0]) if need_layer_norm else nn.Identity(),
             nn.ReLU(),
         )
 
@@ -62,6 +63,7 @@ class MLPEncoderConfig(ModelConfig):
     input_dims: Union[int] = (10, 10)
     hidden_sizes: Tuple[int] = (128, 128)
     _output_dims: int = 24
+    need_layer_norm: bool = True
     always_check_shapes: bool = True
 
     def build(self, framework: str = "torch"):
@@ -84,9 +86,10 @@ class MLPPPOCatalog(PPOCatalog):
         # 获取输入参数
         input_dims = tuple(self._model_config_dict["input_dims"])   
         hidden_sizes = self._model_config_dict["hidden_sizes"]
+        need_layer_norm = self._model_config_dict["need_layer_norm"]
         output_dims = self._model_config_dict["output_dims"]
         # 生成配置
-        self._encoder_config = MLPEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, _output_dims=output_dims)
+        self._encoder_config = MLPEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, _output_dims=output_dims, need_layer_norm=need_layer_norm)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the

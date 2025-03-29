@@ -32,22 +32,19 @@ from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
 from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
-from dl_helper.rl.rl_env.snake.snake_env import SnakeEnv
+from dl_helper.rl.rl_env.snake.snake_env_simple import SnakeEnv
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
 new_lr = 0.0
 model_type = 'mlp'
-model_type = 'cnn'
 for arg in sys.argv:
     if arg == 'ICM':
         use_intrinsic_curiosity = True
-    elif arg == 'cnn':
-        model_type = 'cnn'
     elif arg.startswith('lr='):
         new_lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250329_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
+train_folder = train_title = f'20250330_snake' + ("" if not use_intrinsic_curiosity else '_ICM') + f'_{model_type}'
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
@@ -91,9 +88,9 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # 模型控制
-    ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint\iter_2200")
-    sys.exit()
+    # # 模型控制
+    # ai_control(SnakeEnv, env_config, checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\checkpoint\iter_2200")
+    # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0
@@ -102,9 +99,10 @@ if __name__ == "__main__":
     if model_type == 'mlp':
         # total params: 9347
         model_config = {
-            'input_dims': (10, 10),
-            'hidden_sizes': [64, 32],
-            'output_dims': 16,
+            'input_dims': (4,),
+            'hidden_sizes': [8, 16],
+            'need_layer_norm': False,
+            'output_dims': 8,
         } 
     elif model_type == 'cnn':
         # total params: 8987
@@ -207,7 +205,7 @@ if __name__ == "__main__":
     algo = config.build()
     log(algo.get_module())
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
-    # sys.exit()
+    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():

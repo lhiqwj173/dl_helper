@@ -393,7 +393,7 @@ def make_env():
 model_type = 'MlpPolicy'
 model_type = 'CnnPolicy'
 run_type = 'train'# 'train' or 'test'
-# run_type = 'test'# 'train' or 'test'
+run_type = 'test'# 'train' or 'test'
 train_folder = f'simple_snake11_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 
@@ -471,7 +471,7 @@ if run_type == 'train':
     print("模型结构:")
     print(model.policy)
     print(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
-    sys.exit()
+    # sys.exit()
 
     # model.learn(total_timesteps=3000000, callback=[checkpoint_callback])
     # model.save(os.path.join(train_folder,f"{train_folder}.zip"))
