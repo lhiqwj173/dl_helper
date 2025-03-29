@@ -5,6 +5,12 @@ import torch
 from ray.rllib.core.rl_module.rl_module import RLModule
 from stable_baselines3.common.evaluation import evaluate_policy
 
+import gymnasium
+import gym
+
+ENV_TYPE_NAMES = ['GYM', 'GYMNAIUM']
+GYM, GYMNAIUM = range(2)
+
 def human_control(
         env_class,
         env_config={},
@@ -23,7 +29,19 @@ def human_control(
     env = env_class(
         env_config,
     )
-    observation, info = env.reset()
+
+    # 判断是什么环境类型
+    if isinstance(env, gymnasium.Env):
+        env_type = GYMNAIUM
+    elif isinstance(env, gym.Env):
+        env_type = GYM
+    print(f'环境类型: {ENV_TYPE_NAMES[env_type]}')
+
+    if env_type == GYMNAIUM:
+        observation, info = env.reset()
+    else:
+        observation = env.reset()
+
     done = False
     action = 3  # 初始方向：右
     clock = pygame.time.Clock()
@@ -39,7 +57,11 @@ def human_control(
                 if event.key in control_map:
                     action = control_map[event.key]
         
-        observation, reward, terminated, truncated, info = env.step(action)
+        if env_type == GYMNAIUM:
+            observation, reward, terminated, truncated, info = env.step(action)
+        else:
+            observation, reward, terminated, info = env.step(action)
+            truncated = False
         done = terminated or truncated
         env.render()
         clock.tick(game_speed)  # 控制游戏速度
@@ -76,6 +98,13 @@ def ai_control(
         env_config,
     )
 
+    # 判断是什么环境类型
+    if isinstance(env, gymnasium.Env):
+        env_type = GYMNAIUM
+    elif isinstance(env, gym.Env):
+        env_type = GYM
+    print(f'环境类型: {ENV_TYPE_NAMES[env_type]}')
+
     rllib = True if sb3_rl_model is None else False
 
     if rllib:
@@ -90,13 +119,20 @@ def ai_control(
         rl_module = sb3_rl_model
 
     for _ in range(times):
-        observation, info = env.reset()
+        if env_type == GYMNAIUM:
+            observation, info = env.reset()
+        else:
+            observation = env.reset()
         done = False
         clock = pygame.time.Clock()
         
         while not done:
             action = model_action(observation, rl_module, rllib)
-            observation, reward, terminated, truncated, info = env.step(action)
+            if env_type == GYMNAIUM:
+                observation, reward, terminated, truncated, info = env.step(action)
+            else:
+                observation, reward, terminated, info = env.step(action)
+                truncated = False
             done = terminated or truncated
             env.render()
             clock.tick(4)  # 控制游戏速度为10帧每秒

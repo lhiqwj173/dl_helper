@@ -59,7 +59,9 @@ class SnakeEnv(gym.Env):
         # 1 左转
         # 2 右转
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if self.model_type == 'cnn' else spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
+        self.observation_space = \
+            spaces.Box(low=0, high=1, shape=(1, *self.grid_size), dtype=np.float32) if self.model_type == 'cnn' else \
+            spaces.Box(low=0, high=1, shape=(np.prod(self.grid_size), ), dtype=np.float32)
         
         # 前进方向
         self.direction = (0, -1) # 初始朝向向上
@@ -67,8 +69,6 @@ class SnakeEnv(gym.Env):
         # 共享数据
         self.shared_data = {}
 
-        self.reset()
-    
     def _std_obs(self, obs):
         obs /= np.float32(3)
         if self.model_type == 'mlp':

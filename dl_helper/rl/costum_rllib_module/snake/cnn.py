@@ -22,6 +22,7 @@ class CNNEncoder(TorchModel, Encoder):
         self.input_dims = config.input_dims
         self.hidden_sizes = config.hidden_sizes
         self.output_dims = config.output_dims
+        self.need_layer_norm = config.need_layer_norm
 
         # 假设形状为(C, H, W)
         self.in_channels, self.height, self.width = self.input_dims
@@ -31,8 +32,8 @@ class CNNEncoder(TorchModel, Encoder):
         for i, hidden_size in enumerate(self.hidden_sizes):
             convs.extend([
                 # 使用更大的卷积核，步幅减小为1，保留更多空间信息
-                nn.Conv2d(in_channels, hidden_size, kernel_size=3, stride=1, padding=1 if i != len(self.hidden_sizes) - 1 else 0),
-                nn.BatchNorm2d(hidden_size),
+                nn.Conv2d(in_channels, hidden_size, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(hidden_size) if self.need_layer_norm else nn.Identity(),
                 nn.ReLU(),  # 使用普通ReLU替代LeakyReLU，因为这种小网络不太可能出现梯度消失
             ])
             in_channels = hidden_size
@@ -48,7 +49,7 @@ class CNNEncoder(TorchModel, Encoder):
         
         self.output_layer = nn.Sequential(
             nn.Linear(self.flatten_size, self.output_dims[0]),
-            nn.LayerNorm(self.output_dims[0]),
+            nn.LayerNorm(self.output_dims[0]) if self.need_layer_norm else nn.Identity(),
             nn.ReLU(),
         )
 
@@ -77,6 +78,7 @@ class CNNEncoderConfig(ModelConfig):
     # 默认: 1, 10, 10
     input_dims: Union[int] = (1, 10, 10)
     hidden_sizes: Tuple[int] = (32, 64)
+    need_layer_norm: bool = True
     _output_dims: int = 24
     always_check_shapes: bool = True
 
@@ -101,8 +103,9 @@ class CNNPPOCatalog(PPOCatalog):
         input_dims = tuple(self._model_config_dict["input_dims"])   
         hidden_sizes = self._model_config_dict["hidden_sizes"]
         output_dims = self._model_config_dict["output_dims"]
+        need_layer_norm = self._model_config_dict["need_layer_norm"]
         # 生成配置
-        self._encoder_config = CNNEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, _output_dims=output_dims)
+        self._encoder_config = CNNEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, need_layer_norm=need_layer_norm, _output_dims=output_dims)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the

@@ -42,6 +42,8 @@ mobilenet_v2_data_v6/
 *.pkl
 *.csv
 *.png
+*.zip
+*.7z
 
 AutogluonModels
 
