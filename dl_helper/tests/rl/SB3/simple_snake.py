@@ -1,12 +1,14 @@
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 import torch
-import gym
-from gym import spaces
 import pygame
 import numpy as np
 import random
 import sys
+
+import gym
+from gym import spaces
+
 # since number of actions == 4 that means that the action value is from 0 to 3 inclusive
 class SnakeEnv(gym.Env):
     """Custom Environment that follows gym interface"""
@@ -166,6 +168,7 @@ class SnakeEnv(gym.Env):
         pygame.display.update()
         # Refresh rate
         self.fps_controller.tick(self.difficulty)
+
     def close (self):
         pygame.quit()
         sys.exit()
@@ -188,7 +191,7 @@ def make_env():
     return env
 
 run_type = 'train'
-# run_type = 'test'
+run_type = 'test'
 if run_type == 'train':
 
     # 创建并行环境（4 个环境）

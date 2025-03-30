@@ -151,13 +151,24 @@ class SnakeEnv(gym.Env):
         info = {}
         return observation, reward, terminated, truncated, info
     
+    def _get_render_state(self):
+        grid = np.zeros(self.grid_size, dtype=np.float32)
+        for i, segment in enumerate(self.snake):
+            if i == 0:
+                grid[segment[1], segment[0]] = 2  # 蛇头
+            else:
+                grid[segment[1], segment[0]] = 1  # 蛇身
+        grid[self.food[1], self.food[0]] = 3  # 食物
+
+        return grid
+
     def render(self):
         if self.render_mode != 'human':
             return
         
         self.screen.fill((0, 0, 0))  # 清屏
         
-        state = self._get_state()
+        state = self._get_render_state()
         for y in range(self.grid_size[1]):
             for x in range(self.grid_size[0]):
                 if state[y, x] == 1 or state[y, x] == 2:  # 蛇身或蛇头
