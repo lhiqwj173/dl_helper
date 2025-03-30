@@ -23,6 +23,12 @@ class CNNEncoder(TorchModel, Encoder):
         self.hidden_sizes = config.hidden_sizes
         self.output_dims = config.output_dims
         self.need_layer_norm = config.need_layer_norm
+        if config.active_func == "relu":
+            active_func_class = nn.ReLU
+        elif config.active_func == "tanh":
+            active_func_class = nn.Tanh
+        else:
+            raise ValueError(f"不支持的激活函数: {config.active_func}")
 
         # 假设形状为(C, H, W)
         self.in_channels, self.height, self.width = self.input_dims
@@ -34,12 +40,12 @@ class CNNEncoder(TorchModel, Encoder):
                 # 使用更大的卷积核，步幅减小为1，保留更多空间信息
                 nn.Conv2d(in_channels, hidden_size, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm2d(hidden_size) if self.need_layer_norm else nn.Identity(),
-                nn.ReLU(),  # 使用普通ReLU替代LeakyReLU，因为这种小网络不太可能出现梯度消失
+                active_func_class(),
             ])
             in_channels = hidden_size
 
         self.convs = nn.Sequential(*convs)
-        
+            
         # 计算卷积后的特征图大小
         with torch.no_grad():
             # 假设输入是 (batch_size, channels, height, width)
@@ -50,7 +56,7 @@ class CNNEncoder(TorchModel, Encoder):
         self.output_layer = nn.Sequential(
             nn.Linear(self.flatten_size, self.output_dims[0]),
             nn.LayerNorm(self.output_dims[0]) if self.need_layer_norm else nn.Identity(),
-            nn.ReLU(),
+            active_func_class(),
         )
 
         self.error_count = 0
@@ -81,6 +87,7 @@ class CNNEncoderConfig(ModelConfig):
     need_layer_norm: bool = True
     _output_dims: int = 24
     always_check_shapes: bool = True
+    active_func: str = "relu"
 
     def build(self, framework: str = "torch"):
         if framework == "torch":
@@ -104,8 +111,9 @@ class CNNPPOCatalog(PPOCatalog):
         hidden_sizes = self._model_config_dict["hidden_sizes"]
         output_dims = self._model_config_dict["output_dims"]
         need_layer_norm = self._model_config_dict["need_layer_norm"]
+        active_func = self._model_config_dict["active_func"]
         # 生成配置
-        self._encoder_config = CNNEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, need_layer_norm=need_layer_norm, _output_dims=output_dims)
+        self._encoder_config = CNNEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, need_layer_norm=need_layer_norm, _output_dims=output_dims, active_func=active_func)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the

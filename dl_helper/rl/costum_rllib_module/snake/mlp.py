@@ -24,6 +24,12 @@ class MLPEncoder(TorchModel, Encoder):
         self.output_dims = config.output_dims
         input_size = np.prod(self.input_dims)
         need_layer_norm = config.need_layer_norm
+        if config.active_func == "relu":
+            active_func_class = nn.ReLU
+        elif config.active_func == "tanh":
+            active_func_class = nn.Tanh
+        else:
+            raise ValueError(f"不支持的激活函数: {config.active_func}")
 
         # 使用层归一化来提高模型性能
         layers = []
@@ -31,7 +37,7 @@ class MLPEncoder(TorchModel, Encoder):
             layers.extend([
                 nn.Linear(input_size, hidden_size),
                 nn.LayerNorm(hidden_size) if need_layer_norm else nn.Identity(),
-                nn.ReLU(),
+                active_func_class(),
             ])
             input_size = hidden_size
 
@@ -40,7 +46,7 @@ class MLPEncoder(TorchModel, Encoder):
         self.output_layer = nn.Sequential(
             nn.Linear(input_size, self.output_dims[0]),
             nn.LayerNorm(self.output_dims[0]) if need_layer_norm else nn.Identity(),
-            nn.ReLU(),
+            active_func_class(),
         )
 
         self.error_count = 0
@@ -65,6 +71,7 @@ class MLPEncoderConfig(ModelConfig):
     _output_dims: int = 24
     need_layer_norm: bool = True
     always_check_shapes: bool = True
+    active_func: str = "tanh"
 
     def build(self, framework: str = "torch"):
         if framework == "torch":
@@ -87,9 +94,10 @@ class MLPPPOCatalog(PPOCatalog):
         input_dims = tuple(self._model_config_dict["input_dims"])   
         hidden_sizes = self._model_config_dict["hidden_sizes"]
         need_layer_norm = self._model_config_dict["need_layer_norm"]
+        active_func = self._model_config_dict["active_func"]
         output_dims = self._model_config_dict["output_dims"]
         # 生成配置
-        self._encoder_config = MLPEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, _output_dims=output_dims, need_layer_norm=need_layer_norm)
+        self._encoder_config = MLPEncoderConfig(input_dims=input_dims, hidden_sizes=hidden_sizes, _output_dims=output_dims, need_layer_norm=need_layer_norm, active_func=active_func)
 
         # 不变
         # Create a function that can be called when framework is known to retrieve the

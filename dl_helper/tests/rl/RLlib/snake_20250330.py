@@ -297,8 +297,9 @@ if __name__ == "__main__":
         # total params: 9347
         model_config = {
             'input_dims': (4,),
-            'hidden_sizes': [64, 64],
+            'hidden_sizes': [64],
             'need_layer_norm': False,
+            'active_func': 'tanh',
             'output_dims': 64,
         } 
     elif model_type == 'cnn':
@@ -307,6 +308,7 @@ if __name__ == "__main__":
             'input_dims': (1, 10, 10),
             'hidden_sizes': [6], 
             'need_layer_norm': False,
+            'active_func': 'relu',
             'output_dims': 8,
         }
 
@@ -345,9 +347,28 @@ if __name__ == "__main__":
     )
 
     training_config = {
-        # 'lr': 1e-4 if new_lr == 0.0 else new_lr,
-        # 'gamma': 0.97,
-        # 'entropy_coeff': 0.2,
+        # 通用参数
+        'lr': 3e-4 if new_lr == 0.0 else new_lr,
+        'gamma': 0.99,
+        'train_batch_size_per_learner': 2048,
+        'minibatch_size': 64,
+        'num_epochs': 10,
+
+        # ppo 参数
+        'use_critic': True,
+        'use_gae': True,
+        'lambda_': 0.95,
+
+        # SB3中没有使用 > 关闭
+        'use_kl_loss': False,
+        'kl_coeff': 0.2,
+        'kl_target': 0.01,
+
+        'vf_loss_coeff': 0.5,
+        'entropy_coeff': 0.0,
+        'clip_param':0.2,
+        'vf_clip_param':float("inf"),
+        'grad_clip':0.5,
     }
 
     catalog_class = MLPPPOCatalog if model_type == 'mlp' else CNNPPOCatalog
@@ -401,8 +422,9 @@ if __name__ == "__main__":
 
     # 构建算法
     algo = config.build()
-    log(algo.get_module())
-    log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
+    params = algo.learner_group._learner._module._rl_modules['default_policy']
+    log(params)
+    log(f'total params: {sum(p.numel() for p in params.parameters())}')
     # sys.exit()
 
     # 训练文件夹管理
@@ -435,7 +457,7 @@ if __name__ == "__main__":
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
             else:
                 # 保存检查点
-                checkpoint_dir = algo.save_to_path(os.path.join(train_folder, f'iter_{i}'))
+                checkpoint_dir = algo.save_to_path(os.path.join(os.path.abspath(train_folder), f'iter_{i}'))
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
                 zip_file = f'{train_title}.7z'
                 if os.path.exists(zip_file):

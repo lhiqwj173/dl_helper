@@ -191,7 +191,7 @@ def make_env():
     return env
 
 run_type = 'train'
-run_type = 'test'
+# run_type = 'test'
 if run_type == 'train':
 
     # 创建并行环境（4 个环境）
@@ -207,7 +207,13 @@ if run_type == 'train':
     # 打印模型结构
     print("模型结构:")
     print(model.policy)
-    # sys.exit()
+    print(f'total params: {sum(p.numel() for p in model.policy.parameters())}')
+    # # 可选：打印所有属性
+    # print("\nAll Attributes:")
+    # for key, value in model.__dict__.items():
+    #     print(f"{key}: {value}")
+
+    sys.exit()
 
     model.learn(total_timesteps=1000000)
     model.save(r"D:\code\dl_helper\dl_helper\tests\rl\SB3\simple_snake.zip")
