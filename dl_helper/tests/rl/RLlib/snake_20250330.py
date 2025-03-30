@@ -23,7 +23,7 @@ from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig, PPOConfi
 from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
 from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
-from dl_helper.train_param import match_num_processes
+from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
@@ -146,7 +146,7 @@ if __name__ == "__main__":
         .debugging(log_level='DEBUG')
         .learners(    
             num_learners=num_learners,
-            num_gpus_per_learner=1,
+            num_gpus_per_learner=1 if get_gpu_info() != 'CPU' else 0,
         )
         .evaluation(**eval_config)
     )
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     algo = config.build()
     log(algo.get_module())
     log(f'total params: {sum(p.numel() for p in algo.get_module().parameters())}')
-    # sys.exit()
+    sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
