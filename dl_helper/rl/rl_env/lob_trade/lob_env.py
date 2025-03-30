@@ -227,6 +227,8 @@ class data_producer:
                             ordered_files.append(file)
                 self.files = ordered_files
             log(f'[{self.data_type}] prepare files: {self.files}')
+        
+        assert self.files, f'[{self.data_type}] no datas'
             
     def _load_data(self):
         """

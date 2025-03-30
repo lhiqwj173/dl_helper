@@ -58,7 +58,7 @@ class SnakeEnv(gym.Env):
         # 1 左转
         # 2 右转
         self.action_space = spaces.Discrete(3)
-        self.observation_space = spaces.Box(low=0, high=1, shape=(4, ), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(4, ), dtype=np.float32)
         
         # 前进方向
         self.direction = (0, -1) # 初始朝向向上
@@ -94,10 +94,10 @@ class SnakeEnv(gym.Env):
     
     def _get_state(self):
         state = np.array([
-            self.snake[0][0] / self.grid_size[0], 
-            self.snake[0][1] / self.grid_size[1], 
-            self.food[0] / self.grid_size[0], 
-            self.food[1] / self.grid_size[1]
+            self.snake[0][0], 
+            self.snake[0][1], 
+            self.food[0], 
+            self.food[1]
         ], dtype=np.float32)
         return state
     

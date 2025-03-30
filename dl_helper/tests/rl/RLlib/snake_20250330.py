@@ -100,9 +100,9 @@ if __name__ == "__main__":
         # total params: 9347
         model_config = {
             'input_dims': (4,),
-            'hidden_sizes': [8, 16],
+            'hidden_sizes': [64, 64],
             'need_layer_norm': False,
-            'output_dims': 8,
+            'output_dims': 64,
         } 
     elif model_type == 'cnn':
         # total params: 8987
