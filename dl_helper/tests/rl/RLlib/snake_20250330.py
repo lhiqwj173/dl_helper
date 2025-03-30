@@ -28,6 +28,7 @@ from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, sim
 from dl_helper.rl.socket_base import request_need_val
 from py_ext.tool import init_logger, log
 from py_ext.datetime import beijing_time
+from py_ext.lzma import decompress, compress_folder
 from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
@@ -36,6 +37,7 @@ from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 
 use_intrinsic_curiosity = False
+use_alist = False
 new_lr = 0.0
 model_type = 'mlp'
 for arg in sys.argv:
@@ -404,7 +406,7 @@ if __name__ == "__main__":
     # sys.exit()
 
     # 训练文件夹管理
-    if not in_windows():
+    if not in_windows() and use_alist:
         train_folder_manager = TrainFolderManager(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
@@ -427,13 +429,23 @@ if __name__ == "__main__":
         simplify_rllib_metrics(result, out_func=log, out_file=out_file)
 
         if i>0 and (i % 100 == 0 or i == rounds - 1):
-            if not in_windows():
+            if not in_windows() and use_alist:
                 # 保存检查点
                 checkpoint_dir = algo.save_to_path(os.path.join(train_folder_manager.checkpoint_folder, f'iter_{i}'))
                 log(f"Checkpoint saved in directory {checkpoint_dir}")
+            else:
+                # 保存检查点
+                checkpoint_dir = algo.save_to_path(os.path.join(train_folder, f'iter_{i}'))
+                log(f"Checkpoint saved in directory {checkpoint_dir}")
+                zip_file = f'{train_title}.7z'
+                if os.path.exists(zip_file):
+                    os.remove(zip_file)
+                compress_folder(train_folder, zip_file, 9, inplace=False)
+                log('compress_folder done')
+
             # 绘制训练曲线
             plot_training_curve(train_title, train_folder, out_file, time.time() - begin_time)
-            if not in_windows():
+            if not in_windows() and use_alist:
                 # 压缩并上传
                 train_folder_manager.push()
 
