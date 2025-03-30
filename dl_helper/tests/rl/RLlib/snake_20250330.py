@@ -48,17 +48,15 @@ train_folder = train_title = f'20250330_snake' + ("" if not use_intrinsic_curios
 init_logger(train_title, home=train_folder, timestamp=False)
 
 # 吃到食物标准奖励
-STD_REWARD = 1
+STD_REWARD = 100
 
 """
 激励函数
 
 # 20250329 ####################################
-# 吃到食物标准奖励与身体长度成正比
-STD_REWARD = 身体长度
+# 吃到食物标准奖励
 # 使用距离更远还是更近来给与奖励
-shaping = -(距离/(10 + 10)) * STD_REWARD + STD_REWARD * (距离 == 0) * (身体长度 - 1)
-模型应该会尽可能靠近，并获取尽可能多的食物
+# 更近 1 分，更远 -1 分，吃到食物 100 分
 """
 
 def stop_reward(snake, food, grid_size, shared_data):
@@ -68,7 +66,14 @@ def keep_alive_reward(snake, food, grid_size, shared_data):
     # 计算当前曼哈顿距离
     distance = abs(snake[0][0] - food[0]) + abs(snake[0][1] - food[1])
 
-    return -(distance / (grid_size[0] + grid_size[1])) * STD_REWARD + STD_REWARD * int(distance == 0) * (len(snake) - 1)
+    if 'prev_distance' not in shared_data:
+        shared_data['prev_distance'] = distance
+
+    better = distance < shared_data['prev_distance']
+    worse = distance > shared_data['prev_distance']
+    shared_data['prev_distance'] = distance
+
+    return (1 if better else -1 if worse else 0) + STD_REWARD * int(distance == 0)
 
 if __name__ == "__main__":
 

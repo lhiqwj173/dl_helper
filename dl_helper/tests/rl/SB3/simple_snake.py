@@ -13,8 +13,8 @@ class SnakeEnv(gym.Env):
     metadata = {'render.modes': ['human']}
     difficulty = 20
     # Window size
-    frame_size_x = 360
-    frame_size_y = 240
+    frame_size_x = 100
+    frame_size_y = 100
     # Colors (R, G, B)
     black = pygame.Color(0, 0, 0)
     white = pygame.Color(255, 255, 255)
@@ -33,9 +33,9 @@ class SnakeEnv(gym.Env):
         pygame.init()
 
         # Game variables
-        self.snake_pos = [100, 50]
-        self.prev_snake_pos = [100, 50]
-        self.snake_body = [[100, 50], [100 - 10, 50], [100 - (2 * 10), 50]]
+        self.snake_pos = [50, 50]
+        self.prev_snake_pos = [50, 50]
+        self.snake_body = [[50, 50], [50 - 10, 50], [50 - (2 * 10), 50]]
 
         self.food_pos = [random.randrange(1, (self.frame_size_x // 10)) * 10, random.randrange(1, (self.frame_size_y // 10)) * 10]
         self.food_spawn = True
@@ -135,9 +135,9 @@ class SnakeEnv(gym.Env):
     
     def reset(self):
         # Game variables
-        self.snake_pos = [100, 50]
-        self.prev_snake_pos = [100, 50]
-        self.snake_body = [[100, 50], [100 - 10, 50], [100 - (2 * 10), 50]]
+        self.snake_pos = [50, 50]
+        self.prev_snake_pos = [50, 50]
+        self.snake_body = [[50, 50], [50 - 10, 50], [50 - (2 * 10), 50]]
         self.counter = 0
         self.food_pos = [random.randrange(1, (self.frame_size_x // 10)) * 10,
                         random.randrange(1, (self.frame_size_y // 10)) * 10]
@@ -188,7 +188,7 @@ def make_env():
     return env
 
 run_type = 'train'
-run_type = 'test'
+# run_type = 'test'
 if run_type == 'train':
 
     # 创建并行环境（4 个环境）
@@ -206,10 +206,12 @@ if run_type == 'train':
     print(model.policy)
     # sys.exit()
 
-    # model.learn(total_timesteps=1000000)
-    for i in range(1000):
-        model.learn(total_timesteps=1000000)
-        model.save(f"simple_snake_{i}")
+    model.learn(total_timesteps=1000000)
+    model.save(r"D:\code\dl_helper\dl_helper\tests\rl\SB3\simple_snake.zip")
+
+    # for i in range(1000):
+    #     model.learn(total_timesteps=1000000)
+    #     model.save(f"simple_snake_{i}")
 else:
     env = SnakeEnv()
     model = PPO.load(r"D:\code\dl_helper\dl_helper\tests\rl\SB3\simple_snake.zip")
