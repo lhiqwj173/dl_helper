@@ -422,10 +422,11 @@ if __name__ == "__main__":
 
     # 构建算法
     algo = config.build()
-    params = algo.learner_group._learner._module._rl_modules['default_policy']
-    log(params)
-    log(f'total params: {sum(p.numel() for p in params.parameters())}')
-    # sys.exit()
+    if in_windows():
+        params = algo.learner_group._learner._module._rl_modules['default_policy']
+        log(params)
+        log(f'total params: {sum(p.numel() for p in params.parameters())}')
+        # sys.exit()
 
     # 训练文件夹管理
     if not in_windows() and use_alist:
