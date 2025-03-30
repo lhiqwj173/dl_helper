@@ -217,7 +217,7 @@ if __name__ == "__main__":
     # 训练循环
     begin_time = time.time()
     rounds = 500000000
-    rounds = 200
+    rounds = 100
     for i in range(rounds):
         log(f"Training iteration {i+1}/{rounds}")
         result = algo.train()
