@@ -20,7 +20,7 @@ def default_truncated_reward(snake, food, grid_size, shared_data):
 class SnakeEnv(gym.Env):
     """贪吃蛇环境，用于强化学习，带有Pygame可视化功能"""
     
-    REG_NAME = 'snake'
+    REG_NAME = 'snake_simple'
     metadata = {'render_modes': ['human', 'none'], 'render_fps': 10}
     
     def __init__(self, config: dict):
@@ -98,7 +98,7 @@ class SnakeEnv(gym.Env):
             self.snake[0][1] / self.grid_size[1], 
             self.food[0] / self.grid_size[0], 
             self.food[1] / self.grid_size[1]
-        ])
+        ], dtype=np.float32)
         return state
     
     def step(self, action):
