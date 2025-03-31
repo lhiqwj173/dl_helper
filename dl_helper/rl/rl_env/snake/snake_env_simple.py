@@ -68,7 +68,15 @@ class SnakeEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.snake = [(self.grid_size[0] // 2, self.grid_size[1] // 2)]
+        # 0.0 只初始化一个蛇头
+        # self.snake = [(self.grid_size[0] // 2, self.grid_size[1] // 2)]
+        # 0.1 初始化蛇头 + 2蛇身
+        self.snake = [
+            (self.grid_size[0] // 2, self.grid_size[1] // 2), 
+            (self.grid_size[0] // 2, self.grid_size[1] // 2 - 1), 
+            (self.grid_size[0] // 2, self.grid_size[1] // 2 - 2)
+        ]
+        
         self.food = self._generate_food()
         self.done = False
         self.score = 0

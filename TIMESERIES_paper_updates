@@ -1,0 +1,52 @@
+
+2025-03-31
+arXiv:2502.02148,Can linear algebra create perfect knockoffs?
+arXiv:2502.03245,Calibrated Unsupervised Anomaly Detection in Multivariate Time-series using Reinforcement Learning
+arXiv:2502.03264,General Time-series Model for Universal Knowledge Representation of Multivariate Time-Series data
+arXiv:2502.03383,Transformers and Their Roles as Time Series Foundation Models
+arXiv:2502.03571,A Multi-Task Learning Approach to Linear Multivariate Forecasting
+arXiv:2502.06380,Structure-preserving contrastive learning for spatial time series
+arXiv:2502.07244,Linear Transformers as VAR Models: Aligning Autoregressive Attention Mechanisms with Autoregressive Forecasting
+arXiv:2502.07489,Physiome-ODE: A Benchmark for Irregularly Sampled Multivariate Time Series Forecasting Based on Biological ODEs
+arXiv:2502.08262,GenIAS: Generator for Instantiating Anomalies in time Series
+arXiv:2502.08302,HDT: Hierarchical Discrete Transformer for Multivariate Time Series Forecasting
+arXiv:2502.08869,Harnessing Vision Models for Time Series Analysis: A Survey
+arXiv:2502.10235,AdaPTS: Adapting Univariate Foundation Models to Probabilistic Multivariate Time Series Forecasting
+arXiv:2502.10721,A Comprehensive Survey of Deep Learning for Multivariate Time Series Forecasting: A Channel Strategy Perspective
+arXiv:2502.11340,S2TX: Cross-Attention Multi-Scale State-Space Transformer for Time Series Forecasting
+arXiv:2502.11680,Spectral structure learning for clinical time series
+arXiv:2502.11816,IMTS-Mixer: Mixer-Networks for Irregular Multivariate Time Series Forecasting
+arXiv:2502.15296,Beyond Fixed Variables: Expanding-variate Time Series Forecasting via Flat Scheme and Spatio-temporal Focal Learning
+arXiv:2502.15637,Mantis: Lightweight Calibrated Foundation Model for User-Friendly Time Series Classification
+arXiv:2502.15901,TS-OOD: Evaluating Time-Series Out-of-Distribution Detection and Prospective Directions for Progress
+arXiv:2502.16294,TimePFN: Effective Multivariate Time Series Forecasting with Synthetic Data
+arXiv:2502.16365,Demand Forecasting for Electric Vehicle Charging Stations using Multivariate Time-Series Analysis
+arXiv:2502.16874,A dynamic copula model for probabilistic forecasting of non-Gaussian multivariate time series
+arXiv:2502.16890,ReFocus: Reinforcing Mid-Frequency and Key-Frequency Modeling for Multivariate Time Series Forecasting
+arXiv:2502.17457,MoEMba: A Mamba-based Mixture of Experts for High-Density EMG-based Hand Gesture Recognition
+arXiv:2502.17495,Spatiotemporal Forecasting in Climate Data Using EOFs and Machine Learning Models: A Case Study in Chile
+arXiv:2502.17812,Can Multimodal LLMs Perform Time Series Anomaly Detection?
+arXiv:2502.18970,Empirical likelihood approach for high-dimensional moment restrictions with dependent data
+arXiv:2502.20571,PFformer: A Position-Free Transformer Variant for Extreme-Adaptive Multivariate Time Series Forecasting
+arXiv:2502.20634,A Compact Model for Large-Scale Time Series Forecasting
+arXiv:2502.21245,TimesBERT: A BERT-Style Foundation Model for Time Series Understanding
+arXiv:2503.00900,S4M: S4 for multivariate time series forecasting with Missing values
+arXiv:2503.01669,An Efficient Continual Learning Framework for Multivariate Time Series Prediction Tasks with Application to Vehicle State Estimation
+arXiv:2503.01737,Self-attention-based Diffusion Model for Time-series Imputation in Partial Blackout Scenarios
+arXiv:2503.01858,A Review of Artificial Intelligence Impacting Statistical Process Monitoring and Future Directions
+arXiv:2503.03729,Graph-Augmented LSTM for Forecasting Sparse Anomalies in Graph-Structured Time Series
+arXiv:2503.04169,Spectral Extremal Connectivity of Two-State Seizure Brain Waves
+arXiv:2503.04593,Bayesian estimation of a multivariate TAR model when the noise process distribution belongs to the class of Gaussian variance mixtures
+arXiv:2503.05582,MPTSNet: Integrating Multiscale Periodic Local Patterns and Global Dependencies for Multivariate Time Series Classification
+arXiv:2503.06536,Extremes of structural causal models
+arXiv:2503.07882,ReLATE: Resilient Learner Selection for Multivariate Time-Series Classification Against Adversarial Attacks
+arXiv:2503.08328,MFRS: A Multi-Frequency Reference Series Approach to Scalable and Accurate Time-Series Forecasting
+arXiv:2503.10433,Generalized network autoregressive modelling of longitudinal networks with application to presidential elections in the USA
+arXiv:2503.11255,Federated Koopman-Reservoir Learning for Large-Scale Multivariate Time-Series Anomaly Detection
+arXiv:2503.12258,Lithium-ion Battery Capacity Prediction via Conditional Recurrent Generative Adversarial Network-based Time-Series Regeneration
+arXiv:2503.15946,Multivariate Time Series Anomaly Detection in Industry 5.0
+arXiv:2503.17353,NdLinear Is All You Need for Representation Learning
+arXiv:2503.17410,Comparative Analysis of Deep Learning Models for Real-World ISP Network Traffic Forecasting
+arXiv:2503.17546,Communities in the Kuramoto Model: Dynamics and Detection via Path Signatures
+arXiv:2503.17658,Sentinel: Multi-Patch Transformer with Temporal and Channel Attention for Time Series Forecasting
+arXiv:2503.20144,Physics-Informed Neural Networks with Unknown Partial Differential Equations: an Application in Multivariate Time Series

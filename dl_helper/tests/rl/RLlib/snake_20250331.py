@@ -95,13 +95,13 @@ if __name__ == "__main__":
     # )
     # sys.exit()
 
-    # # 模型控制
-    # ai_control(
-    #     SnakeEnv, 
-    #     env_config, 
-    #     checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\iter_99",
-    # )
-    # sys.exit()
+    # 模型控制
+    ai_control(
+        SnakeEnv, 
+        env_config, 
+        checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\iter_99",
+    )
+    sys.exit()
 
     # 根据设备gpu数量选择 num_learners
     num_learners = match_num_processes() if not in_windows() else 0

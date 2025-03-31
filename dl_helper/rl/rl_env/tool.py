@@ -135,6 +135,6 @@ def ai_control(
                 truncated = False
             done = terminated or truncated
             env.render()
-            clock.tick(4)  # 控制游戏速度为10帧每秒
+            clock.tick(10)  # 控制游戏速度为10帧每秒
 
     env.close()
