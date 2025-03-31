@@ -88,13 +88,19 @@ if __name__ == "__main__":
         'model_type': model_type,
     }
 
-    # # 人控制
-    # human_control(
-    #     env_class=SnakeEnv,
-    #     env_config=env_config,
-    #     default_action=0,
-    # )
-    # sys.exit()
+    # 人控制
+    import pygame
+    human_control(
+        env_class=SnakeEnv,
+        env_config=env_config,
+        control_map={
+            pygame.K_UP: 0,
+            pygame.K_LEFT: 1,
+            pygame.K_RIGHT: 2,
+        },
+        default_action=0,
+    )
+    sys.exit()
 
     # # 模型控制
     # ai_control(
