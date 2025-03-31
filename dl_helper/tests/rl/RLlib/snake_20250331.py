@@ -167,14 +167,18 @@ if __name__ == "__main__":
     )
 
     training_config = {
+        ##################
         # 通用参数
+        ##################
         'lr': 3e-4 if new_lr == 0.0 else new_lr,
         'gamma': 0.99,
         'train_batch_size_per_learner': 2048,
         'minibatch_size': 64,
         'num_epochs': 10,
 
+        ##################
         # ppo 参数
+        ##################
         'use_critic': True,
         'use_gae': True,
         'lambda_': 0.95,
@@ -259,6 +263,7 @@ if __name__ == "__main__":
     begin_time = time.time()
     rounds = 500000000
     rounds = 100
+    rounds = 300
     for i in range(rounds):
         log(f"Training iteration {i+1}/{rounds}")
         result = algo.train()
