@@ -54,18 +54,18 @@ class SnakeEnv(gym.Env):
             self.clock = pygame.time.Clock()
             self.font = pygame.font.Font(None, 36)
         
-        # 0.0 3个动作空间
-        # 0 前进
-        # 1 左转
-        # 2 右转
-        self.action_space = spaces.Discrete(3)
-
-        # # 0.1 4个动作空间
+        # # 0.0 3个动作空间
         # # 0 前进
         # # 1 左转
         # # 2 右转
-        # # 3 不动
-        # self.action_space = spaces.Discrete(4)
+        # self.action_space = spaces.Discrete(3)
+
+        # 0.1 4个动作空间
+        # 0 前进
+        # 1 左转
+        # 2 右转
+        # 3 不动
+        self.action_space = spaces.Discrete(4)
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(4, ), dtype=np.float32)
         
@@ -94,7 +94,6 @@ class SnakeEnv(gym.Env):
             self.pygame_start_time = pygame.time.get_ticks()  # 用于渲染显示
         observation = self._get_state()
 
-        
         # 重置步数
         self.steps = 0
 
@@ -126,27 +125,27 @@ class SnakeEnv(gym.Env):
         
         self.steps += 1
 
-        # 0.0 3个动作空间
-        # 根据动作改变朝向
-        # 0: 前进, 1: 左转, 2: 右转
-        if action == 1:  # 左转
-            self.direction = (self.direction[1], -self.direction[0])
-        elif action == 2:  # 右转
-            self.direction = (-self.direction[1], self.direction[0])
+        # # 0.0 3个动作空间
+        # # 根据动作改变朝向
+        # # 0: 前进, 1: 左转, 2: 右转
+        # if action == 1:  # 左转
+        #     self.direction = (self.direction[1], -self.direction[0])
+        # elif action == 2:  # 右转
+        #     self.direction = (-self.direction[1], self.direction[0])
 
-        # # 0.1 4个动作空间
-        # # 0 上
-        # # 1 下
-        # # 2 左
-        # # 3 右
-        # if action == 0:
-        #     self.direction = (0, -1)  # 上：y减小
-        # elif action == 1:
-        #     self.direction = (0, 1)   # 下：y增加
-        # elif action == 2:
-        #     self.direction = (-1, 0)  # 左：x减小
-        # elif action == 3:
-        #     self.direction = (1, 0)   # 右：x增加
+        # 0.1 4个动作空间
+        # 0 上
+        # 1 下
+        # 2 左
+        # 3 右
+        if action == 0:
+            self.direction = (0, -1)  # 上：y减小
+        elif action == 1:
+            self.direction = (0, 1)   # 下：y增加
+        elif action == 2:
+            self.direction = (-1, 0)  # 左：x减小
+        elif action == 3:
+            self.direction = (1, 0)   # 右：x增加
 
         # 计算新的蛇头位置
         head = self.snake[0]
