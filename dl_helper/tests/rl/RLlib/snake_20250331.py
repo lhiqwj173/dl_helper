@@ -100,7 +100,7 @@ if __name__ == "__main__":
     #     SnakeEnv, 
     #     env_config, 
     #     checkpoint_abs_path=r"C:\Users\lh\Desktop\temp\iter_99",
-    # )
+    # ) 
     # sys.exit()
 
     # 根据设备gpu数量选择 num_learners
