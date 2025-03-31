@@ -92,6 +92,7 @@ if __name__ == "__main__":
     # human_control(
     #     env_class=SnakeEnv,
     #     env_config=env_config,
+    #     default_action=0,
     # )
     # sys.exit()
 

@@ -70,7 +70,7 @@ class SnakeEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(4, ), dtype=np.float32)
         
         # 前进方向
-        self.direction = (0, -1) # 初始朝向向上
+        self.direction = (0, 1)  # 改为向下，这样不会立即撞到自己
 
         # 共享数据
         self.shared_data = {}
@@ -85,6 +85,7 @@ class SnakeEnv(gym.Env):
             (self.grid_size[0] // 2, self.grid_size[1] // 2 - 1), 
             (self.grid_size[0] // 2, self.grid_size[1] // 2 - 2)
         ]
+        self.direction = (0, 1)  # 改为向下，这样不会立即撞到自己
 
         self.food = self._generate_food()
         self.done = False
@@ -93,7 +94,6 @@ class SnakeEnv(gym.Env):
             self.pygame_start_time = pygame.time.get_ticks()  # 用于渲染显示
         observation = self._get_state()
 
-        self.direction = (0, -1)
         
         # 重置步数
         self.steps = 0
@@ -140,13 +140,13 @@ class SnakeEnv(gym.Env):
         # # 2 左
         # # 3 右
         # if action == 0:
-        #     self.direction = (-1, 0)
+        #     self.direction = (0, -1)  # 上：y减小
         # elif action == 1:
-        #     self.direction = (1, 0)
+        #     self.direction = (0, 1)   # 下：y增加
         # elif action == 2:
-        #     self.direction = (0, -1)
+        #     self.direction = (-1, 0)  # 左：x减小
         # elif action == 3:
-        #     self.direction = (0, 1)
+        #     self.direction = (1, 0)   # 右：x增加
 
         # 计算新的蛇头位置
         head = self.snake[0]
