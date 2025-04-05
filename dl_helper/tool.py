@@ -391,12 +391,13 @@ def _find_plateaus(prices):
         i += 1
     return plateaus
 
-def _identify_peaks_valleys(plateaus):
+def _identify_peaks_valleys(plateaus, rep_select):
     """
     根据平台期识别波峰和波谷。
     
     参数:
     plateaus (list): 平台期列表
+    rep_select: 波峰波谷的选取方式, 'mid' 表示中间点, 'random' 表示随机点
     
     返回:
     tuple: (peaks, valleys)，分别为波峰和波谷的代表点列表
@@ -407,7 +408,15 @@ def _identify_peaks_valleys(plateaus):
     
     for i in range(n):
         start, end, value = plateaus[i]
-        rep = (start + end) // 2  # 选择中间点作为代表
+
+        if rep_select == 'mid':
+            rep = (start + end) // 2  # 选择中间点作为代表
+        elif rep_select == 'random':
+            if start == end:
+                rep = start
+            else:
+                rep = np.random.randint(start, end)
+
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:
                 valleys.append(rep)
@@ -498,9 +507,10 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
 
     return trades, total_log_return
 
-def max_profit_reachable(bid, ask):
+def max_profit_reachable(bid, ask, rep_select='mid'):
     """
     计算bid/ask序列中 潜在的最大利润
+    rep_select: 波峰波谷的选取方式, 'mid' 表示中间点, 'random' 表示随机点
 
     返回 
     trades: 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
@@ -521,7 +531,7 @@ def max_profit_reachable(bid, ask):
     plateaus = _find_plateaus(mid)
 
     # 识别波峰和波谷
-    peaks, valleys = _identify_peaks_valleys(plateaus)
+    peaks, valleys = _identify_peaks_valleys(plateaus, rep_select)
 
     # 匹配交易对
     # 计算可盈利交易的对数收益率总和

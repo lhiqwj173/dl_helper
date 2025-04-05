@@ -12,59 +12,21 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
-from py_ext.tool import log, init_logger,get_exception_msg, get_log_file
+from py_ext.tool import log, init_logger,get_exception_msg, get_log_file, share_tensor
 from py_ext.datetime import beijing_time
 from py_ext.wechat import send_wx
 
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks, max_profit_reachable
 from dl_helper.train_param import in_kaggle
 
-from dl_helper.rl.rl_env.lob_trade.lob_env_data_augmentation import random_his_window
-from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, RewardCalculator
+from dl_helper.rl.rl_env.lob_trade.lob_env_data_augmentation import random_his_window, gaussian_noise_vol
+from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, ForceStopRewardStrategy, RewardCalculator
 
-USE_CODES = [
-    '513050',
-    '513330',
-    '518880',
-    '159941',
-    '513180',
-    '159920',
-    '513500',
-    '513130',
-    '159792',
-    '513100',
-    '159937',
-    '510900',
-    '513060',
-    '159934',
-    '159509',
-    '159632',
-    '159605',
-    '513010',
-    '159513',
-    '513120',
-    '159501',
-    '518800',
-    '513300',
-    '513660',
-    '513090',
-    '513980',
-    '159892',
-    '159740',
-    '159636',
-    '159659',
-]
-MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
-STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
-MAX_CODE_ID = len(USE_CODES) - 1
-
-STD_REWARD = 100
-FINAL_REWARD = STD_REWARD * 1000
-
-# 时间标准化
-MEAN_SEC_BEFORE_CLOSE = 10024.17
-STD_SEC_BEFORE_CLOSE = 6582.91
-MAX_SEC_BEFORE_CLOSE = 5.5*60*60
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID, STD_REWARD, FINAL_REWARD
+from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
+from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
+from dl_helper.rl.rl_env.lob_trade.lob_const import RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD
+from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER
 
 class data_producer:
     """
@@ -94,13 +56,12 @@ class data_producer:
             data_std=True, 
             save_folder="", 
             debug_date=[],
+            random_begin_in_day=True,
 
             # 数据增强
             use_random_his_window=False,
-            use_time_scaling=False,
-            use_gaussian_noise=False,
-            use_impact_noise=False,
-            use_progressive_mask=False,
+            use_gaussian_noise_vol=False,
+            use_spread_add_small_limit_order=False,
         ):
         """
         'data_type': 'train',# 训练/测试
@@ -108,18 +69,16 @@ class data_producer:
         'simple_test': False,# 是否为简单测试
         'need_cols': [],# 需要的特征列名
         'use_symbols': []# 只使用指定的标的
+        'random_begin_in_day': True,# 是否在日内随机开始
+
         'use_random_his_window': True,# 随机窗口开关
-        'use_time_scaling': True,# 时间缩放开关
-        'use_gaussian_noise': True,# 高斯噪声开关
-        'use_impact_noise': True,# 冲击噪声开关
-        'use_progressive_mask': True,# 渐进式遮挡开关
+        'use_gaussian_noise_vol': True,# 高斯噪声开关
+        'use_spread_add_small_limit_order': True,# 价差中添加小单
         """
         # 数据增强
         self.use_random_his_window = use_random_his_window  # 随机窗口开关
-        self.use_time_scaling = use_time_scaling   # 时间缩放开关
-        self.use_gaussian_noise = use_gaussian_noise  # 高斯噪声开关
-        self.use_impact_noise = use_impact_noise   # 冲击噪声开关
-        self.use_progressive_mask = use_progressive_mask  # 渐进式遮挡开关
+        self.use_gaussian_noise_vol = use_gaussian_noise_vol  # 高斯噪声开关
+        self.use_spread_add_small_limit_order = use_spread_add_small_limit_order  # 价差中添加小单
 
         # 快速测试
         self.simple_test = simple_test
@@ -132,7 +91,8 @@ class data_producer:
             log(f'[{data_type}] debug_date: {self.debug_date}')
 
         self.use_symbols = use_symbols
-        
+        self.random_begin_in_day = random_begin_in_day
+
         # 需要的特征列名
         self.need_cols = need_cols
         self.need_cols_idx = []
@@ -154,7 +114,7 @@ class data_producer:
             except:
                 self.data_folder = r''
         else:
-            self.data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_10level_20250316'
+            self.data_folder = LOCAL_DATA_FOLDER
 
         self.data_type = data_type
         self.cur_data_type = data_type
@@ -240,6 +200,7 @@ class data_producer:
             self.cur_data_type = self.data_type
 
             self.cur_data_file = self.files.pop(0)
+
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
             self.all_raw_data = self.all_raw_data.set_index('时间')
@@ -275,7 +236,11 @@ class data_producer:
             for symbol in unique_symbols:
                 symbol_mask = symbols == symbol
                 symbol_indices = np.where(symbol_mask)[0]
-                self.idxs.append([symbol_indices[0], symbol_indices[-1], USE_CODES.index(symbol)])
+                begin = symbol_indices[0]
+                end = symbol_indices[-1]
+                if self.random_begin_in_day and self.data_type == 'train':
+                    begin = random.randint(begin, end-50)# 至少50个数据
+                self.idxs.append([begin, end, USE_CODES.index(symbol)])
 
             if not self.idxs:
                 log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
@@ -285,6 +250,9 @@ class data_producer:
             # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
             if self.data_type == 'train':
                 self.idxs = [random.choice(self.idxs)]
+
+            # 当前的标的
+            self.cur_symbol = USE_CODES[self.idxs[0][2]]
 
             log(f'[{self.data_type}] init idxs: {self.idxs}')
 
@@ -398,6 +366,18 @@ class data_producer:
         self.bid_price.append(last_row[self.col_idx['BASE买1价']])
         self.ask_price.append(last_row[self.col_idx['BASE卖1价']])
 
+    def get_ask_bid(self):
+        """
+        获取 ask/bid
+        """
+        a, b = self.x[self.last_data_idx]
+        ask = self.all_raw_data.iloc[b-1, self.col_idx['BASE卖1价']]
+        bid = self.all_raw_data.iloc[b-1, self.col_idx['BASE买1价']]
+
+        assert ask == self.ask_price[-1], f'ask: {ask} != {self.ask_price[-1]}'
+        assert bid == self.bid_price[-1], f'bid: {bid} != {self.bid_price[-1]}'
+        return ask, bid
+
     def get(self):
         """
         输出观察值
@@ -414,14 +394,13 @@ class data_producer:
 
         # 准备观察值
         a, b = self.x[self.idxs[0][0]]
-        self.step_use_data = self.all_raw_data.iloc[max(b - int(self.his_len * 1.5), a): b, :].copy()# 多截取 50% 数据，用于增强 TODO copy 是否必要
+        self.step_use_data = self.all_raw_data.iloc[max(b - int(self.his_len * 1.5), a): b, :]# 多截取 50% 数据，用于增强
         raw_0 = self.step_use_data.copy().values# 多截取 50% 数据，用于增强 TODO copy 是否必要
 
         # 原始数据增强
-        # 1. use_random_his_window 从更长的历史窗口（如1ls5个）随机截取 所需的时间窗口的数据
+        # 1. use_random_his_window 从更长的历史窗口（如15个）随机截取 所需的时间窗口的数据
         if self.use_random_his_window and self.data_type == 'train':
             raw_0 = random_his_window(raw_0, self.his_len)
-        # 2. use_time_scaling 时间缩放：对时间轴进行非线性缩放，例如加速或减速某些时段的价格变化，以模拟市场的波动性变化。
 
         # 修正历史数据长度
         raw = raw_0[-self.his_len:]
@@ -429,9 +408,19 @@ class data_producer:
         self.store_bid_ask_1st_data(raw)
 
         # 截断数据后的增强
-        # 1. use_gaussian_noise 添加高斯噪声，在买卖五档价格和成交量上添加符合正态分布的小幅随机噪声，模拟市场中的微小波动
-        # 2. use_impact_noise 添加冲击噪声，随机增减某些档位数量 ±5%
-        # 3. use_progressive_mask 按概率逐步遮挡历史数据（如越早的时间点遮挡概率越高），模拟渐进式信息衰减。
+        # 1. use_gaussian_noise_vol 添加高斯噪声，在成交量上添加符合正态分布的小幅随机噪声，模拟市场中的微小波动(50以内)。
+        # 判断是否有 _gaussian_noise_vol_col_idxs 属性
+        if self.use_gaussian_noise_vol and self.data_type == 'train':
+            if not hasattr(self, '_gaussian_noise_vol_col_idxs'):
+                vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
+                self._gaussian_noise_vol_col_idxs = [self.all_raw_data.columns.get_loc(col) for col in vol_cols]
+            # 噪音控制在 -50 到 50 之间
+            raw[:, self._gaussian_noise_vol_col_idxs] += gaussian_noise_vol(raw[:, self._gaussian_noise_vol_col_idxs].shape)
+            # 控制最小值为 1    
+            raw[:, self._gaussian_noise_vol_col_idxs] = np.clip(raw[:, self._gaussian_noise_vol_col_idxs], 1, None)
+
+        # 2. use_spread_add_small_limit_order 在价差（若可以）中添加小单（5以内）
+        # TODO
 
         # 数据标准化
         std_data = self.mean_std[self.idxs[0][0]]
@@ -460,10 +449,10 @@ class data_producer:
         self.id = self.ids[self.idxs[0][0]]
 
         # 检查本次数据是否是最后一个数据
-        need_close = False
+        self.need_close = False
         if self.idxs[0][0] == self.idxs[0][1]:
             # 当组 begin/end 完成，需要平仓
-            need_close = True
+            self.need_close = True
             log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
@@ -472,6 +461,9 @@ class data_producer:
                 # 当天的数据没有下一个可读取的 begin/end 组
                 log(f'[{self.data_type}] date file done')
             else:
+                # 更新当前的标的
+                self.cur_symbol = USE_CODES[self.idxs[0][2]]
+
                 # 准备绘图数据
                 self.pre_plot_data()
         else:
@@ -492,11 +484,11 @@ class data_producer:
             # symbol_id /= STD_CODE_ID
             # 归一化
             symbol_id /= MAX_CODE_ID
-            return symbol_id, before_market_close_sec, x, need_close, self.id, unrealized_log_return_std_data
+            return symbol_id, before_market_close_sec, x, self.need_close, self.id, unrealized_log_return_std_data
         else:
             sec_std = (MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE)
             id_std = (MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID)
-            return symbol_id, before_market_close_sec, x, need_close, self.id, unrealized_log_return_std_data, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, self.need_close, self.id, unrealized_log_return_std_data, x_std, sec_std, id_std
 
     def get_plot_data(self):
         """
@@ -535,8 +527,6 @@ class Account:
     def __init__(self):
         # 持仓状态 
         self.status = 0
-        # 是否初始化了策略净值
-        self.init_net_raw = False
         # 持仓量
         self.pos = 0
         self.cash = 0
@@ -545,9 +535,8 @@ class Account:
         # 净值序列
         self.net_raw = []
         self.net_raw_bm = []# 基准，一直持有
-        self.net_raw_last_change = []# 最近一次开仓策略净值
 
-    def step(self, bid_price, ask_price, action):
+    def step(self, bid_price, ask_price, action, last_close_idx):
         """
         执行交易
         :param bid_price: 最优买价, 用于结算
@@ -566,8 +555,31 @@ class Account:
             assert self.cash == 0 and self.pos>0, f'status:{self.status} cash:{self.cash} pos:{self.pos}'
         else:
             # 空仓状态
-            assert not self.net_raw_last_change, f'status:{self.status} net_raw_last_change:{self.net_raw_last_change}'
-            assert self.pos == 0 and (self.cash >0 or not self.init_net_raw), f'status:{self.status} cash:{self.cash} pos:{self.pos}'
+            assert self.pos == 0 and self.cash >0, f'status:{self.status} cash:{self.cash} pos:{self.pos}'
+
+        # 先处理动作
+        act_result = RESULT_HOLD # 无
+        if action == ACTION_BUY:  # 持仓动作
+            if self.status == 0:  # 空仓可以买入
+                self.status = 1
+
+                # 更新 pos/cash
+                self.pos = self.cash / (ask_price * (1 + Account.fee_rate))
+                self.cash = 0
+
+                # 动作结果:开仓
+                act_result = RESULT_OPEN
+
+        elif action == ACTION_SELL:  # 空仓动作
+            if self.status == 1:  # 有多仓可以卖出
+                self.status = 0
+
+                # 更新 pos/cash
+                self.cash = self.pos * bid_price * (1 - Account.fee_rate)
+                self.pos = 0
+
+                # 动作结果:平仓
+                act_result = RESULT_CLOSE
 
         # 持仓时间
         if self.status == 1:
@@ -577,65 +589,21 @@ class Account:
         # 转为现金的价值
         net_bm = bid_price * (1 - Account.fee_rate)
         self.net_raw_bm.append(net_bm)
-        # 初始化策略净值（与基准净值一致）
-        if len(self.net_raw) == 0:
-            net = self.cash = self.net_raw_bm[0]# 现金
-            self.init_net_raw = True
-        else:
-            net = self.cash + self.pos * bid_price * (1 - Account.fee_rate)
+        net = self.cash + self.pos * bid_price * (1 - Account.fee_rate)
         self.net_raw.append(net)
-        if self.status == 1:
-            self.net_raw_last_change.append(net)
 
-        # 计算持仓对数收益率(最近一次的在持仓位)
+        # 计算持仓对数收益率
+        # 上一次平仓后至今的对数收益率
         unrealized_return = 0
         if self.status == 1:
-            # 未实现收益需考虑卖出时的手续费
-            unrealized_return = np.log(self.net_raw_last_change[-1] / self.net_raw_last_change[0])
+            latest_trade_net = self.net_raw[last_close_idx:]
+            unrealized_return = np.log(latest_trade_net[-1] / latest_trade_net[0])
 
         # 日内收益率
         inday_return = np.log(self.net_raw[-1] / self.net_raw[0])
 
-        # 本次操作平仓的净值序列
-        close_net_raw = []
-
-        act_result = -1 # 无
-        if action == 1:  # 持仓动作
-            if self.status == 0:  # 空仓可以买入
-                self.status = 1
-                self.hold_length += 1
-
-                # 更新 pos/cash
-                self.pos = self.cash / (ask_price * (1 + Account.fee_rate))
-                self.cash = 0
-
-                # 更新净值
-                self.net_raw[-1] = self.pos * bid_price * (1 - Account.fee_rate)
-
-                # 新的一次持仓序列
-                self.net_raw_last_change.append(self.net_raw[-1])
-
-                # 开仓
-                act_result = 1
-                
-        elif action == 0:  # 空仓动作
-            if self.status == 1:  # 有多仓可以卖出
-                self.status = 0
-                self.hold_length -= 1# 时刻开始就卖出了，需要把多加的剪掉
-
-                # 备份重置 net_raw_last_change
-                close_net_raw = self.net_raw_last_change
-                self.net_raw_last_change = []
-
-                # 更新 pos/cash
-                self.cash = self.net_raw[-1]
-                self.pos = 0
-
-                # 平仓
-                act_result = 0
-
         # print("acc::step", action, self.status, self.pos, self.cash)
-        return self.status, inday_return, unrealized_return, close_net_raw, act_result
+        return self.status, inday_return, unrealized_return, act_result
 
     def get_plot_data(self):
         """
@@ -672,6 +640,7 @@ class Account:
             res['max_drawdown'], res['max_drawdown_ticks'] = calc_drawdown(net)
             res['trade_return'] = calc_return(log_returns, annualize=False)
             res['step_return'] = log_returns[-1]
+            # log(f'step_return: {res["step_return"]}')
 
             # 计算基准净值的评价指标
             net_bm = np.array(net_raw_bm)
@@ -687,7 +656,7 @@ class Account:
 
         return res
         
-    def reset(self):
+    def reset(self, bid_price):
         """
         重置账户状态
         """
@@ -697,8 +666,12 @@ class Account:
         self.hold_length = 0
         self.net_raw = []
         self.net_raw_bm = []
-        self.net_raw_last_change = []
-        self.init_net_raw = False
+
+        # 初始化净值 / cash
+        net_bm = bid_price * (1 - Account.fee_rate)
+        self.net_raw_bm.append(net_bm)
+        self.net_raw.append(net_bm)
+        self.cash = net_bm
 
 class RewardTracker:
     def __init__(self):
@@ -756,14 +729,16 @@ class LOB_trade_env(gym.Env):
                 'simple_test': False,# 是否为简单测试
                 'need_cols': [],# 需要读取的列
                 'use_symbols': [],# 只使用某些标的
+                'random_begin_in_day': True,# 是否在日内随机开始
+                'close_trade_need_reset': True,# 平仓后需要重置
+
+                # 数据增强
                 'use_random_his_window': False,# 是否使用随机历史窗口
-                'use_time_scaling': False,# 是否使用时间缩放
-                'use_gaussian_noise': False,# 是否使用高斯噪声
-                'use_impact_noise': False,# 是否使用冲击噪声
-                'use_progressive_mask': False,# 是否使用渐进式掩码
+                'use_gaussian_noise_vol': False,# 是否使用高斯噪声
+                'use_spread_add_small_limit_order': False,# 是否使用价差添加小单
 
                 # 终止游戏的回撤阈值
-                'max_drawdown_threshold': 0.005,# 最大回测阈值
+                'max_drawdown_threshold': 0.01,# 最大回测阈值
 
                 # 渲染模式
                 'render_mode': 'none',
@@ -777,6 +752,7 @@ class LOB_trade_env(gym.Env):
                 'open_position_step': BlankRewardStrategy,
                 'hold_position': HoldPositionRewardStrategy,
                 'no_position': NoPositionRewardStrategy,
+                'force_stop': ForceStopRewardStrategy,
             }
         """
         super().__init__()
@@ -786,13 +762,13 @@ class LOB_trade_env(gym.Env):
         self.simple_test = config.get('simple_test', False)
         self.need_cols = config.get('need_cols', [])
         self.use_symbols = config.get('use_symbols', [])
+        self.random_begin_in_day = config.get('random_begin_in_day', True)
+        self.close_trade_need_reset = config.get('close_trade_need_reset', True)
         self.use_random_his_window = config.get('use_random_his_window', False)
-        self.use_time_scaling = config.get('use_time_scaling', False)
-        self.use_gaussian_noise = config.get('use_gaussian_noise', False)
-        self.use_impact_noise = config.get('use_impact_noise', False)
-        self.use_progressive_mask = config.get('use_progressive_mask', False)
+        self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', False)
+        self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', False)
 
-        self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.005))
+        self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.01))
 
         self.render_mode = config.get('render_mode', 'none')
         self.render_freq = config.get('render_freq', 5)
@@ -802,7 +778,7 @@ class LOB_trade_env(gym.Env):
         open_position_step_reward_strategy = config.get('open_position_step', BlankRewardStrategy)
         hold_position_reward_strategy = config.get('hold_position', HoldPositionRewardStrategy)
         no_position_reward_strategy = config.get('no_position', NoPositionRewardStrategy)
-        force_stop_reward_strategy = config.get('force_stop', BlankRewardStrategy)
+        force_stop_reward_strategy = config.get('force_stop', ForceStopRewardStrategy)
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -845,11 +821,10 @@ class LOB_trade_env(gym.Env):
             data_std=self.data_std, 
             save_folder=self.save_folder, 
             debug_date=self.debug_date,
+            random_begin_in_day=self.random_begin_in_day,
             use_random_his_window=self.use_random_his_window,
-            use_time_scaling=self.use_time_scaling,
-            use_gaussian_noise=self.use_gaussian_noise,
-            use_impact_noise=self.use_impact_noise,
-            use_progressive_mask=self.use_progressive_mask,
+            use_gaussian_noise_vol=self.use_gaussian_noise_vol,
+            use_spread_add_small_limit_order=self.use_spread_add_small_limit_order,
         )
 
         # 最近一次step的时间, 用于判断 迭代次数
@@ -864,7 +839,7 @@ class LOB_trade_env(gym.Env):
         self.need_reset = False
 
         # 动作空间 
-        # 持仓/空仓
+        # 持仓/空仓 ACTION_BUY/ACTION_SELL
         self.action_space = spaces.Discrete(2)
 
         # 观察空间 
@@ -946,17 +921,15 @@ class LOB_trade_env(gym.Env):
             2 触发止损
 
         act_result: 动作结果
-            0 平仓
-            1 开仓
-            -1 无
+            RESULT_OPEN / RESULT_CLOSE / RESULT_HOLD
         """
         # 游戏是否终止
         # 1. 最大回测超过阈值                           -STD_REWARD
         acc_done = False
 
-        pos, inday_return, unrealized_return, close_net_raw, act_result = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action)
-        log(f'[{id(self)}][{self.data_producer.data_type}][{self.data_producer.step_use_data.iloc[-1].name}] act: {action}, act_result: {act_result}, last_close_idx: {self.last_close_idx}')
-        need_cal_drawup = pos == 0 and act_result == -1
+        pos, inday_return, unrealized_return, act_result = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], action, self.last_close_idx)
+        # log(f'[{id(self)}][{self.data_producer.data_type}][{self.data_producer.step_use_data.iloc[-1].name}] act: {action}, act_result: {act_result}, last_close_idx: {self.last_close_idx}')
+        need_cal_drawup = pos == 0 and act_result == RESULT_HOLD
         res = self.acc.cal_res(self.acc.net_raw, self.acc.net_raw_bm, self.last_close_idx, need_cal_drawup)
         res['hold_length'] = self.acc.hold_length
         
@@ -970,7 +943,7 @@ class LOB_trade_env(gym.Env):
         reward = 0
 
         # 同时记录评价指标
-        if need_close or act_result==0:
+        if need_close or act_result==RESULT_CLOSE:
             # 增加操作交易评价结果
             # 体现 win/loss/止损
             res['act_criteria'] = 0 if res['trade_return'] > 0 else 1
@@ -990,18 +963,19 @@ class LOB_trade_env(gym.Env):
             # 游戏正常进行
 
             # 平仓时更新一次记录
-            if need_close or act_result==0:
-                if act_result==0:
+            if need_close or act_result==RESULT_CLOSE:
+                if act_result==RESULT_CLOSE:
                     # 交易对数
                     self.trades += 1
 
                 if not need_close:
-                    # 潜在收益率（针对最近的交易序列）
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.last_close_idx:], self.data_producer.ask_price[self.last_close_idx:])
-                    acc_return = np.log(close_net_raw[-1]) - np.log(close_net_raw[0])
+                    # 潜在收益率（针对最近的交易序列） 需要剔除掉第一个数据，因为第一个数据无法成交
+                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:])
+                    latest_trade_net = self.acc.net_raw[self.last_close_idx:]# 最近一次交易净值序列, 重上一次平仓的净值开始计算 > 上一次平仓后的净值序列
+                    acc_return = np.log(latest_trade_net[-1]) - np.log(latest_trade_net[0])
                 else:
                     # 游戏完成，使用所有数据完整计算
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price, self.data_producer.ask_price)
+                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:])
                     # 日内完整的策略收益率
                     acc_return = res['trade_return']
 
@@ -1049,8 +1023,8 @@ class LOB_trade_env(gym.Env):
     
     def step(self, action):
         """
-        0 空仓
-        1 持仓
+        动作:
+            ACTION_BUY / ACTION_SELL
         """
         try:
             assert not self.need_reset, "LOB env need reset"
@@ -1099,9 +1073,13 @@ class LOB_trade_env(gym.Env):
                 'unrealized_return': unrealized_return,
             }
 
-            # 记录平仓
-            if act_result==0:
+            # 记录平仓，需要放在 _cal_reward 之后
+            if act_result==RESULT_CLOSE:
                 self.last_close_idx = self.steps
+
+                if self.close_trade_need_reset and self.data_type == 'train':
+                    # 平仓后游戏结束
+                    acc_done = True
 
             # 准备输出数据
             # net,net_bm,
@@ -1135,6 +1113,10 @@ class LOB_trade_env(gym.Env):
                 self.episode_count += 1
                 log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}')
 
+            # 记录最近的reward
+            self.recent_reward = reward
+            # log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} reward: {self.recent_reward}')
+
             return observation, reward, terminated, truncated, info
 
         except Exception as e:
@@ -1153,6 +1135,8 @@ class LOB_trade_env(gym.Env):
 
             # 重置累计收益率
             self.acc_return = 0
+
+            self.recent_reward = 0
             
             # 重置
             self.need_reset = False
@@ -1176,26 +1160,22 @@ class LOB_trade_env(gym.Env):
                 else:
                     break
             
-            full_plot_data = self.data_producer.plot_data
-            self.input_queue.put({'full_plot_data': full_plot_data})
+            if self.render_mode == 'human':
+                full_plot_data = self.data_producer.plot_data
+                self.input_queue.put({'full_plot_data': full_plot_data})
 
             # 账户
-            self.acc.reset()
-            # 账户需要用动作0(空仓)走一步, 会初始记录act之前的净值
-            pos, inday_return, unrealized_return, _, _ = self.acc.step(self.data_producer.bid_price[-1], self.data_producer.ask_price[-1], 0)
-            # 标准化 未实现收益率
-            unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
-            inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            self.acc.reset(self.data_producer.bid_price[-1])
 
             # 添加 静态特征
-            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
+            x = np.concatenate([x, [before_market_close_sec, symbol_id, 0.0, 0.0, 0.0]])
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
                 'before_market_close_sec': before_market_close_sec,
-                'pos': pos,
-                'inday_return': inday_return,
-                'unrealized_return': unrealized_return,
+                'pos': 0.0,
+                'inday_return': 0.0,
+                'unrealized_return': 0.0,
             }
 
             if self.data_std:
@@ -1216,11 +1196,13 @@ class LOB_trade_env(gym.Env):
         """线程中运行的图形更新函数"""
         try:
             fig, ax = plt.subplots(figsize=(12, 6))
+            ax2 = ax.twinx()  # 创建共享x轴的第二个y轴
             plt.show(block=False)  # 添加这行，非阻塞方式显示图形
 
             std_data = {}
             full_plot_data = None
             net_raw = []
+            rewards = []
 
             while True:
                 try:
@@ -1230,12 +1212,13 @@ class LOB_trade_env(gym.Env):
                         # 结束
                         return
                     if 'render' in data:
-                        self._plot_data(fig, ax, *data['render'], std_data, full_plot_data, net_raw)
+                        self._plot_data(fig, ax, ax2, *data['render'], std_data, full_plot_data, net_raw, rewards)
                     elif 'full_plot_data' in data:
                         full_plot_data = data['full_plot_data']
                         # 全reset
                         std_data = {}
                         net_raw = []
+                        rewards = []
                 except queue.Empty:
                     pass  # 队列为空时跳过
                 # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
@@ -1244,19 +1227,23 @@ class LOB_trade_env(gym.Env):
             raise e
 
     @staticmethod
-    def _plot_data(fig, ax, a, b, latest_tick_time, latest_net_raw, status, need_render, std_data, full_plot_data, net_raw):
+    def _plot_data(fig, ax, ax2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, net_raw, rewards):
         """绘制图形的具体实现"""
         # 更新净值
         net_raw.append(latest_net_raw)
+
+        # 记录reward
+        rewards.append(recent_reward)
 
         if not need_render:
             return
 
         # 清空当前的axes
         ax.clear()
+        ax2.clear()
 
         # 截取绘图数据
-        plot_data = full_plot_data.iloc[a:b]
+        plot_data = full_plot_data.iloc[a:b].copy()
 
         # 确定历史数据和未来数据的分界点
         hist_end = plot_data.index.get_loc(latest_tick_time) + 1
@@ -1264,6 +1251,12 @@ class LOB_trade_env(gym.Env):
         # 截取账户净值并标准化
         net_raw = net_raw[-hist_end:]
         net_raw = np.array(net_raw)
+
+        # 截取reward
+        cumsum_rewards = np.cumsum(rewards)
+        cumsum_rewards = cumsum_rewards[-hist_end:]
+        rewards = rewards[-hist_end:]
+        rewards = np.array(rewards)
 
         n = len(plot_data)
 
@@ -1276,6 +1269,7 @@ class LOB_trade_env(gym.Env):
         # 对齐长度
         if len(net_raw) < hist_end:
             net_raw = np.concatenate([[net_raw[0]] * (hist_end - len(net_raw)), net_raw])
+            cumsum_rewards = np.concatenate([[0] * (hist_end - len(cumsum_rewards)), cumsum_rewards])
 
         # 记录标准化数据
         if 'mid_price' not in std_data:
@@ -1299,6 +1293,21 @@ class LOB_trade_env(gym.Env):
         # 设置x轴标签
         ax.set_xlabel('Tick Index')
 
+        # 创建右侧y轴并绘制cumsum_rewards
+        ax2.plot(range(hist_end), cumsum_rewards, label=f'Cumulative Rewards({cumsum_rewards[hist_end-1]:.6f})', color='green', alpha=0.5)
+        ax2.legend(loc='upper right')
+
+        # 标注rewards不为0的点
+        for i in range(len(rewards)):
+            if rewards[i] != 0:  # 只标注变化点
+                ax2.annotate(f'{rewards[i]:.6f}', 
+                            xy=(i, cumsum_rewards[i]), 
+                            xytext=(5, 5),  # 文本偏移量
+                            textcoords='offset points',
+                            color='green',
+                            fontsize=8,
+                            arrowprops=dict(arrowstyle='->', color='green'))
+
         # 调整布局并刷新图形
         fig.tight_layout()
         fig.canvas.draw()
@@ -1320,7 +1329,7 @@ class LOB_trade_env(gym.Env):
         latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render)})
+        self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward)})
 
 def test_quick_produce_train_sdpk(date, code):
     """
@@ -1450,11 +1459,12 @@ def check(obs, info, data, mean, std):
 
     return True
 
-def test_lob_data(check_data = True):
+def test_lob_data(check_data = True, check_reward = True):
     from tqdm import tqdm
     from dl_helper.rl.rl_env.lob_trade.lob_env_reward import BlankRewardStrategy
 
     code = '513050'
+    max_drawdown_threshold = 0.01
     env = LOB_trade_env({
         # 'data_type': 'val',# 训练/测试
         'data_type': 'train',# 训练/测试
@@ -1465,36 +1475,39 @@ def test_lob_data(check_data = True):
         'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
         'train_title': 'test',
 
-        # 奖励策略
-        'reward_strategy_class_dict': {
-            'end_position': BlankRewardStrategy,
-            'close_position': BlankRewardStrategy,
-            'open_position_step': BlankRewardStrategy,
-            'hold_position': BlankRewardStrategy,
-            'no_position': BlankRewardStrategy
-        }
+        'max_drawdown_threshold': max_drawdown_threshold,
+
+        # 'no_position': BlankRewardStrategy,
+
     },
     data_std=False,
     debug_date=['20240521'],
     )
 
-    acts = [0, 1, 0, 1, 0, 1]
-    acts = [0] * 10# 违法操作, 多次买入
-    acts = [0,1,2,0,1,2]# 合法操作
+    if check_reward:
+        from dl_helper.rl.rl_env.lob_trade.lob_env_checker import LobEnvChecker
+        checker = LobEnvChecker(env, max_drawdown_threshold=max_drawdown_threshold)
+
+    acts = ([ACTION_BUY]* 30 + [ACTION_SELL] * 30) * 3
     act_idx = 0
 
-    for i in tqdm(range(5000)):
+    # for i in tqdm(range(5000)):
+    for i in range(1):
         print(f'iter: {i}, begin')
         obs, info = env.reset()
+        if check_reward:
+            checker.reset()
         if check_data:
             cur_date = env.data_producer.date
             data, mean, std = test_quick_produce_train_sdpk(cur_date, code)
             check(obs, info, data, mean, std)
 
         while True:
-            act = acts[act_idx] if act_idx < len(acts) else 2
+            act = acts[act_idx] if act_idx < len(acts) else ACTION_SELL
             act_idx += 1
             obs, reward, terminated, truncated, info = env.step(act)
+            if check_reward:
+                checker.step(act, reward, info)
             if check_data:
                 check(obs, info, data, mean, std)
             if terminated or truncated:
@@ -1585,8 +1598,7 @@ def play_lob_data(render=True):
     env.close()
     print('all done')
 
-
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    # test_lob_data(check_data=False)
+    # test_lob_data(check_data=False, check_reward=True)
     play_lob_data(render = True)

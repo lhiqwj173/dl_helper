@@ -4,7 +4,7 @@ def random_his_window(raw_data: np.ndarray, his_len: int, max_random_num: int = 
     """
     raw_data 为更大的历史窗口数据
     随机在 raw_data[-his_len: ] 范围内删除历史切片(行),
-    返回的数据历史长度(行)大于等于his_len, 之后会截断his_len个长度使用
+    返回的数据历史长度(行)大于等于his_len, 之后需要截断his_len个长度使用
 
     若有修改，会返回一个新的数据，否则返回原始数据
 
@@ -54,16 +54,24 @@ def random_his_window(raw_data: np.ndarray, his_len: int, max_random_num: int = 
     
     return data
 
-
+def gaussian_noise_vol(shape, limit=50):
+    """
+    返回符合正态分布的小幅随机噪声(int)，模拟市场中的微小波动(limit以内)。
+    """
+    noise = np.random.normal(0, limit/3, size=shape)
+    noise = np.clip(np.round(noise).astype(int), -limit, limit)
+    return noise
 
 
 if __name__ == "__main__":
-    raw_data = np.arange(20).reshape(10, 2)
-    print(len(raw_data))
-    print(raw_data[-5:])
-    print('')
+    # raw_data = np.arange(30).reshape(15, 2)
+    # print(len(raw_data))
+    # print(raw_data[-10:])
+    # print('')
 
-    his_len = 5
-    result = random_his_window(raw_data, his_len)
-    print(len(result))
-    print(result[-5:])
+    # his_len = 10
+    # result = random_his_window(raw_data, his_len)
+    # print(len(result))
+    # print(result[-10:])
+
+    print(gaussian_noise_vol((10, 2)))
