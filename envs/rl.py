@@ -30,6 +30,7 @@ if '__main__' == __name__:
     for cmd in [
             'pip install --upgrade torch ray[rllib]',
             # 'pip install --upgrade ray[rllib]',
+            'pip install imitation',
             'pip install --upgrade stable-baselines3',
             'pip install shimmy',
             'pip install uvloop',
