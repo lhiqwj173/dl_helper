@@ -13,11 +13,17 @@ from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
 from imitation.util.logger import HierarchicalLogger
+from imitation.util import logger as imit_logger
 
 from py_ext.tool import log, init_logger, logger
 
 train_folder = train_title = f'bc_test'
 init_logger(train_title, home=train_folder, timestamp=False)
+
+custom_logger = imit_logger.configure(
+    folder=train_folder,
+    format_strs=["csv", "stdout"],
+)
 
 rng = np.random.default_rng(0)
 env = make_vec_env(
@@ -75,7 +81,7 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     demonstrations=transitions,
     rng=rng,
-    custom_logger=HierarchicalLogger(logger),
+    custom_logger=custom_logger,
 )
 
 evaluation_env = make_vec_env(
@@ -94,7 +100,7 @@ reward, _ = evaluate_policy(
 log(f"Reward before training: {reward}")
 
 log("Training a policy using Behavior Cloning")
-bc_trainer.train(n_epochs=500)
+bc_trainer.train(n_epochs=50)
 
 log("Evaluating the trained policy.")
 reward, _ = evaluate_policy(
