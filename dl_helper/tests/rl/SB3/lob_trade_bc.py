@@ -68,7 +68,7 @@ class CausalConvLSTM(BaseFeaturesExtractor):
             
             nn.Conv1d(
                 in_channels=64,
-                out_channels=32,
+                out_channels=64,
                 kernel_size=3,
                 padding=4,
                 dilation=4
@@ -80,7 +80,7 @@ class CausalConvLSTM(BaseFeaturesExtractor):
         
         # LSTM层
         self.lstm = nn.LSTM(
-            input_size=32,
+            input_size=64,
             hidden_size=64,
             batch_first=True,
             bidirectional=False
@@ -96,11 +96,11 @@ class CausalConvLSTM(BaseFeaturesExtractor):
         
         # 融合层
         self.fusion = nn.Sequential(
-            nn.Linear(64 + self.extra_input_dims * 4, 32),
-            nn.LayerNorm(32),
+            nn.Linear(64 + self.extra_input_dims * 4, 64),
+            nn.LayerNorm(64),
             nn.LeakyReLU(),
             nn.Dropout(0.2),
-            nn.Linear(32, features_dim)
+            nn.Linear(64, features_dim)
         )
 
 
@@ -307,7 +307,7 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 policy_kwargs = dict(
     features_extractor_class=CausalConvLSTM,
     features_extractor_kwargs=model_config,
-    net_arch = [32,16]
+    net_arch = [32,32]
 )
 
 if run_type == 'train':
