@@ -30,6 +30,75 @@ def stop():
     import signal
     os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
 
+def plot_bc_train_progress(train_file, train_folder):
+    """
+    图1 绘制 bc/loss / bc/loss平滑
+    图2 绘制 bc/entropy / bc/entropy平滑
+    图3 绘制 bc/neglogp / bc/neglogp平滑
+    图4 绘制 bc/l2_norm / bc/l2_norm平滑
+    竖向排列，对齐 x 轴
+    """
+
+    # 读取训练进度文件
+    df = pd.read_csv(train_file)
+
+    # 定义平滑函数
+    def smooth_data(data, window_size=10):
+        return data.rolling(window=window_size, min_periods=1).mean()
+
+    # 创建绘图，4 个子图竖向排列，共享 x 轴
+    fig, axs = plt.subplots(nrows=4, ncols=1, figsize=(10, 12), sharex=True)  # 宽度 10，高度 12
+
+    # 数据长度，用于对齐 x 轴
+    data_len = len(df)
+
+    # 图 1: bc/loss
+    if 'bc/loss' in df.columns:
+        axs[0].plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2f})', alpha=0.5)
+        axs[0].plot(smooth_data(df['bc/loss']), label='smoothed', linewidth=2)
+        axs[0].set_title('BC Loss')
+        axs[0].set_ylabel('Loss')
+        axs[0].legend()
+        axs[0].grid(True)
+
+    # 图 2: bc/entropy
+    if 'bc/entropy' in df.columns:
+        axs[1].plot(df['bc/entropy'], label=f'entropy({df.iloc[-1]["bc/entropy"]:.2f})', alpha=0.5)
+        axs[1].plot(smooth_data(df['bc/entropy']), label='smoothed', linewidth=2)
+        axs[1].set_title('BC Entropy')
+        axs[1].set_ylabel('Entropy')
+        axs[1].legend()
+        axs[1].grid(True)
+
+    # 图 3: bc/neglogp
+    if 'bc/neglogp' in df.columns:
+        axs[2].plot(df['bc/neglogp'], label=f'neglogp({df.iloc[-1]["bc/neglogp"]:.2f})', alpha=0.5)
+        axs[2].plot(smooth_data(df['bc/neglogp']), label='smoothed', linewidth=2)
+        axs[2].set_title('BC Negative Log Probability')
+        axs[2].set_ylabel('Neglogp')
+        axs[2].legend()
+        axs[2].grid(True)
+
+    # 图 4: bc/l2_norm
+    if 'bc/l2_norm' in df.columns:
+        axs[3].plot(df['bc/l2_norm'], label=f'l2_norm({df.iloc[-1]["bc/l2_norm"]:.2f})', alpha=0.5)
+        axs[3].plot(smooth_data(df['bc/l2_norm']), label='smoothed', linewidth=2)
+        axs[3].set_title('BC L2 Norm')
+        axs[3].set_xlabel('Batch')  # x 轴表示批次
+        axs[3].set_ylabel('L2 Norm')
+        axs[3].legend()
+        axs[3].grid(True)
+
+    # 设置统一的 x 轴范围
+    for ax in axs:
+        ax.set_xlim(0, data_len - 1)
+
+    # 调整布局并保存
+    plt.tight_layout()
+    plt.savefig(os.path.join(train_folder, 'training_plots.png'), dpi=300)
+    plt.close()
+
+
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """
     自定义指标统一放在 custom_metrics 下

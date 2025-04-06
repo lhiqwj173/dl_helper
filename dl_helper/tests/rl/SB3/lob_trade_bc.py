@@ -35,6 +35,7 @@ from py_ext.wechat import send_wx
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert
+from dl_helper.rl.rl_utils import plot_bc_train_progress
 from dl_helper.tool import report_memory_usage
 
 train_folder = train_title = f'20250406_lob_trade_bc'
@@ -444,7 +445,27 @@ if run_type == 'train':
     reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
     log(f"Reward before training: {reward_before_training}")
 
-    bc_trainer.train(n_epochs=30)
+    total_epochs = 50000
+    checkpoint_interval = 50
+    for epoch in range(total_epochs // checkpoint_interval):
+        bc_trainer.train(n_epochs=checkpoint_interval)
+        # 保存模型
+        bc_trainer.policy.save(os.path.join(train_folder, f"bc_policy"))
+        # 训练进度可视化
+        plot_bc_train_progress(os.path.join(train_folder, f"progress.csv"), train_folder)
+        # 打包
+        zip_file = f'{train_folder}.7z'
+        if os.path.exists(zip_file):
+            os.remove(zip_file)
+        compress_folder(train_folder, zip_file, 9, inplace=False)
+        log('compress_folder done')
+        # 上传更新到alist
+        ALIST_UPLOAD_FOLDER = 'rl_learning_process'
+        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+        upload_folder = f'/{ALIST_UPLOAD_FOLDER}/'
+        client.mkdir(upload_folder)
+        client.upload(zip_file, upload_folder)
+        log('upload done')
 
     reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
     log(f"Reward after training: {reward_after_training}")
