@@ -133,13 +133,16 @@ class LobExpert:
             self.lob_data['before_market_close_sec'] = self.lob_data['before_market_close_sec'].astype(np.float32)
 
         # 计算潜在收益
-        trades, total_log_return, valleys, peaks = max_profit_reachable(
+        trades, total_log_return, self.valleys, self.peaks = max_profit_reachable(
             # 去掉第一个, 第一个数据无法成交
             self.lob_data['BASE买1价'].iloc[1:], 
             self.lob_data['BASE卖1价'].iloc[1:], 
             rep_select='random'
         )# 增加随机泛化
         # plot_trades((self.lob_data['BASE买1价']+self.lob_data['BASE卖1价'])/2, trades, valleys, peaks)
+        # 需要 +1
+        self.valleys = [i+1 for i in self.valleys]
+        self.peaks = [i+1 for i in self.peaks]
 
         # b/s/h
         # 无需提前一个k线，发出信号
@@ -149,8 +152,8 @@ class LobExpert:
         sell_idx = [i[1] for i in trades]
         self.lob_data.loc[buy_idx, 'action'] = ACTION_BUY
         self.lob_data.loc[sell_idx, 'action'] = ACTION_SELL
-        self.lob_data['action'] = self.lob_data['action'].ffill()
-        self.lob_data['action'] = self.lob_data['action'].fillna(ACTION_SELL)
+        # self.lob_data['action'] = self.lob_data['action'].ffill()
+        # self.lob_data['action'] = self.lob_data['action'].fillna(ACTION_SELL)
 
     def get_action(self, obs):
         """
@@ -172,12 +175,14 @@ class LobExpert:
         #     self.cur_symbol = _env_code
         #     self.prepare_train_data_file(dtype=obs.dtype)
 
-        # 距离市场关闭的秒数
+        # 距离市场关闭的秒数 / pos
         if len(obs.shape) == 1:
-            before_market_close_sec = obs[-5]
+            before_market_close_sec = obs[-3]
+            pos = obs[-1]
         elif len(obs.shape) == 2:
             assert obs.shape[0] == 1
-            before_market_close_sec = obs[0][-5]
+            before_market_close_sec = obs[0][-3]
+            pos = obs[0][-1]
         else:
             raise ValueError(f'obs.shape: {obs.shape}')
         
@@ -185,7 +190,56 @@ class LobExpert:
         data = self.lob_data[self.lob_data['before_market_close_sec'] == before_market_close_sec]
         assert len(data) == 1, f'len(data): {len(data)}'
 
-        res = data['action'].iloc[0]
+        cur_idx = data.index[0]
+        try:
+            next_valley_idx = [i for i in self.valleys if i > cur_idx][0]
+            next_peak_idx = [i for i in self.peaks if i > cur_idx][0]
+        except:
+            next_valley_idx = None
+            next_peak_idx = None
+
+        if pos:
+            if next_valley_idx is None or next_peak_idx is None:
+                # 之后没有 底部/顶部
+                # 维持仓位
+                res = ACTION_BUY
+
+            elif next_valley_idx < next_peak_idx:
+                # 最近的是底部
+
+                # 未来的数据
+                future_data = self.lob_data.iloc[cur_idx:]
+                # 下一个时刻的bid价格(卖出成交的价格) next_bid
+                next_bid = self.lob_data['BASE买1价'].iloc[cur_idx+1]
+                # 检查下一个买入信号之后的下一时刻的ask价格(之后买入成交的价格) buy_next_ask
+                next_buy_idx = future_data[future_data['action'] == ACTION_BUY].index[0]
+                buy_next_ask = self.lob_data['BASE卖1价'].iloc[next_buy_idx + 1]
+                if next_bid > buy_next_ask+0.0005:# 最小刻度 0.001，+0.0005 避免误差
+                    # 立即卖出可以减少亏损
+                    res = ACTION_SELL
+                else:
+                    # 无法减少亏损，平添手续费
+                    # 继续持有
+                    res = ACTION_BUY
+            else:
+                if data['action'].iloc[0] == ACTION_SELL:
+                    assert next_peak_idx - cur_idx == 1, f'ACTION_SELL, next_peak_idx - cur_idx: {next_peak_idx - cur_idx}(should be 1)'
+                # 最近的是顶部
+                if next_peak_idx - cur_idx == 1:
+                    # 下一个时刻即为顶点
+                    # 若有持仓，立即平仓, 下一个时刻成交 > 顶部平仓
+                    res = ACTION_SELL
+                else:
+                    # 下一个时刻不是顶点
+                    # 继续持有
+                    res = ACTION_BUY
+
+        else:
+            # 按照 action 操作
+            res = data['action'].iloc[0]
+            if np.isnan(res):
+                res = ACTION_SELL
+
         if len(obs.shape) == 2:
             res = np.array([res])
 

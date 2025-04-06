@@ -12,6 +12,7 @@ from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.policies.serialize import load_policy
 from imitation.util.util import make_vec_env
+from imitation.util.logger import HierarchicalLogger
 
 from py_ext.tool import log, init_logger, logger
 
@@ -74,7 +75,7 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     demonstrations=transitions,
     rng=rng,
-    custom_logger=logger,
+    custom_logger=HierarchicalLogger(logger),
 )
 
 evaluation_env = make_vec_env(

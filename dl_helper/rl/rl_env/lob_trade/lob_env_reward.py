@@ -68,9 +68,9 @@ class ClosePositionRewardStrategy(RewardStrategy):
         potential_return = res['potential_return']
         acc_return = res['acc_return']
 
-        if acc_return > 0:
-            if potential_return == 0:
-                raise ValueError(f'Maximum potential log return is 0, but closing log return({acc_return}) is not 0')
+        if acc_return >= 0:
+            # if potential_return == 0:
+            #     assert acc_return == 0, f'Maximum potential log return is 0, but closing log return({acc_return}) is not 0'
             reward = acc_return / potential_return * STD_REWARD if potential_return != 0 else STD_REWARD
         else:
             reward = max((acc_return - potential_return) / max_drawdown_threshold, -1) * STD_REWARD

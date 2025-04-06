@@ -31,7 +31,7 @@ class CausalConvLSTM(BaseFeaturesExtractor):
             observation_space, 
             features_dim: int = 64,
             input_dims: tuple = (10, 20),
-            extra_input_dims: int = 5,
+            extra_input_dims: int = 3,
         ):
         super().__init__(observation_space, features_dim)
 
@@ -263,7 +263,7 @@ os.makedirs(train_folder, exist_ok=True)
 model_config={
     # 自定义编码器参数  
     'input_dims' : (10, 20),
-    'extra_input_dims' : 5,
+    'extra_input_dims' : 3,
     'features_dim' : 32,
 }
 env_config ={

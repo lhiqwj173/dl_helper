@@ -660,7 +660,9 @@ class Account:
         """
         重置账户状态
         """
-        self.status = 0
+        # 随机持仓
+        self.status = random.randint(0, 1)
+        self.status = 1# FOR DEBUG
         self.pos = 0
         self.cash = 0
         self.hold_length = 0
@@ -671,7 +673,13 @@ class Account:
         net_bm = bid_price * (1 - Account.fee_rate)
         self.net_raw_bm.append(net_bm)
         self.net_raw.append(net_bm)
-        self.cash = net_bm
+
+        if self.status == 0:
+            self.cash = net_bm
+        else:
+            self.pos = 1
+
+        return self.status
 
 class RewardTracker:
     def __init__(self):
@@ -843,7 +851,7 @@ class LOB_trade_env(gym.Env):
         self.action_space = spaces.Discrete(2)
 
         # 观察空间 
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 5,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 3,), dtype=np.float32)
 
         # 样本计数
         self.sample_count = 0
@@ -1094,7 +1102,9 @@ class LOB_trade_env(gym.Env):
             inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
 
             # 添加 静态特征
-            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
+            # observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
+            # 20250406 取消收益率
+            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos]])
 
             # 检查是否结束
             terminated = acc_done or need_close# 游戏终止
@@ -1111,7 +1121,7 @@ class LOB_trade_env(gym.Env):
                 # 计算平均步数
                 self.mean_episode_lengths = (self.mean_episode_lengths * self.episode_count + self.steps) / (self.episode_count + 1)
                 self.episode_count += 1
-                log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}')
+                log(f'[{id(self)}][{self.data_producer.data_type}] episode {self.episode_count} done, mean episode length: {self.mean_episode_lengths}, latest episode length: {self.steps}, reward: {reward}')
 
             # 记录最近的reward
             self.recent_reward = reward
@@ -1165,10 +1175,11 @@ class LOB_trade_env(gym.Env):
                 self.input_queue.put({'full_plot_data': full_plot_data})
 
             # 账户
-            self.acc.reset(self.data_producer.bid_price[-1])
+            pos = self.acc.reset(self.data_producer.bid_price[-1])
+            log(f'acc reset: {pos}')
 
             # 添加 静态特征
-            x = np.concatenate([x, [before_market_close_sec, symbol_id, 0.0, 0.0, 0.0]])
+            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos]])
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {

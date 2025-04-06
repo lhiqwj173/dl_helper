@@ -45,7 +45,7 @@ class CausalConvLSTM(BaseFeaturesExtractor):
             observation_space, 
             features_dim: int = 64,
             input_dims: tuple = (10, 20),
-            extra_input_dims: int = 5,
+            extra_input_dims: int = 3,
         ):
         super().__init__(observation_space, features_dim)
 
@@ -276,7 +276,7 @@ os.makedirs(train_folder, exist_ok=True)
 model_config={
     # 自定义编码器参数  
     'input_dims' : (10, 20),
-    'extra_input_dims' : 5,
+    'extra_input_dims' : 3,
     'features_dim' : 32,
 }
 env_config ={
@@ -382,7 +382,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=5000),
+        rollout.make_sample_until(min_timesteps=None, min_episodes=int(5000*2)),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -399,13 +399,13 @@ if run_type == 'train':
         rng=rng,
     )
 
-    # env.test()
-    # reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-    # log(f"Reward before training: {reward_before_training}")
+    env.test()
+    reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    log(f"Reward before training: {reward_before_training}")
 
-    # bc_trainer.train(n_epochs=30)
+    bc_trainer.train(n_epochs=30)
 
-    # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-    # log(f"Reward after training: {reward_after_training}")
+    reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    log(f"Reward after training: {reward_after_training}")
 else:
     pass
