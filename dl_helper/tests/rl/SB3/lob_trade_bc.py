@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import time
 import numpy as np
-import random
+import random, psutil
 import sys, os, shutil
 import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
@@ -378,15 +378,18 @@ if run_type == 'train':
     vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
     rng = np.random.default_rng(0)
     t = time.time()
+    memory_usage = psutil.virtual_memory()
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=100000),
+        rollout.make_sample_until(min_timesteps=None, min_episodes=5000),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
     log(f'生成专家数据耗时: {time.time() - t:.2f} 秒')
-    report_memory_usage('', log_func=log)
+    memory_usage2 = psutil.virtual_memory()
+    log(f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)")
+    log(f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB")
 
     # bc_trainer = bc.BC(
     #     observation_space=env.observation_space,
