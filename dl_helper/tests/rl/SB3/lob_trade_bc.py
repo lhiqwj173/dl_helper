@@ -29,9 +29,14 @@ os.environ['ALIST_PWD'] = 'LHss6632673'
 
 from py_ext.lzma import decompress, compress_folder
 from py_ext.alist import alist
+from py_ext.tool import init_logger,log
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert
+from dl_helper.tool import report_memory_usage
+
+train_folder = train_title = f'20250406_lob_trade_bc'
+init_logger(train_title, home=train_folder, timestamp=False)
 
 # 自定义特征提取器
 class CausalConvLSTM(BaseFeaturesExtractor):
@@ -123,7 +128,6 @@ class CausalConvLSTM(BaseFeaturesExtractor):
             raise ValueError(f'fused_out is nan or inf')
 
         return fused_out
-
 
 class CustomCheckpointCallback(BaseCallback):
 
@@ -326,7 +330,7 @@ if run_type == 'train':
     # 生成模型实例    
     kaggle_keep_trained_file = rf'/kaggle/input/checkpoint/{train_folder}.checkpoint'
     if os.path.exists(kaggle_keep_trained_file):
-        print(f'加载模型参数, 继续训练')
+        log(f'加载模型参数, 继续训练')
         # 从kaggle保存的模型文件中拷贝到当前目录
         shutil.copy(kaggle_keep_trained_file, f'./{train_folder}_checkpoint.zip')
         # load model
@@ -349,7 +353,7 @@ if run_type == 'train':
         model.policy.load_state_dict(policy_state_dict)  
 
     else:
-        print(f'新训练 {model_type}')
+        log(f'新训练 {model_type}')
         lr_schedule = linear_schedule(1e-3, 5e-4)
         clip_range_schedule = linear_schedule(0.15, 0.3)
         model = PPO(
@@ -364,15 +368,16 @@ if run_type == 'train':
         )
 
     # 打印模型结构
-    print("模型结构:")
-    print(model.policy)
-    print(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
+    log("模型结构:")
+    log(model.policy)
+    log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
     # sys.exit()
 
     # 生成专家数据
     # 包装为 DummyVecEnv
     vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
     rng = np.random.default_rng(0)
+    t = time.time()
     rollouts = rollout.rollout(
         expert,
         vec_env,
@@ -380,22 +385,24 @@ if run_type == 'train':
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
+    log(f'生成专家数据耗时: {time.time() - t:.2f} 秒')
+    report_memory_usage('', log_func=log)
 
-    bc_trainer = bc.BC(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        demonstrations=transitions,
-        policy=model.policy,
-        rng=rng,
-    )
+    # bc_trainer = bc.BC(
+    #     observation_space=env.observation_space,
+    #     action_space=env.action_space,
+    #     demonstrations=transitions,
+    #     policy=model.policy,
+    #     rng=rng,
+    # )
 
-    env.test()
-    reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-    print(f"Reward before training: {reward_before_training}")
+    # env.test()
+    # reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    # log(f"Reward before training: {reward_before_training}")
 
-    bc_trainer.train(n_epochs=30)
+    # bc_trainer.train(n_epochs=30)
 
-    reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-    print(f"Reward after training: {reward_after_training}")
+    # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    # log(f"Reward after training: {reward_after_training}")
 else:
     pass
