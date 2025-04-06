@@ -415,7 +415,8 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=1e6),
+        rollout.make_sample_until(min_timesteps=1000),
+        # rollout.make_sample_until(min_timesteps=1e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -447,6 +448,7 @@ if run_type == 'train':
 
     total_epochs = 50000
     checkpoint_interval = 50
+    bc_trainer.policy.train()
     for epoch in range(total_epochs // checkpoint_interval):
         bc_trainer.train(n_epochs=checkpoint_interval)
         # 保存模型
