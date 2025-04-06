@@ -411,8 +411,8 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=500),
-        # rollout.make_sample_until(min_timesteps=1e6),
+        # rollout.make_sample_until(min_timesteps=500),
+        rollout.make_sample_until(min_timesteps=1.3e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -442,8 +442,8 @@ if run_type == 'train':
     reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
     log(f"Reward before training: {reward_before_training}")
 
-    total_epochs = 50000
-    checkpoint_interval = 50
+    total_epochs = 500000
+    checkpoint_interval = 100
     bc_trainer.policy.train()
     for epoch in range(total_epochs // checkpoint_interval):
         bc_trainer.train(n_epochs=checkpoint_interval)
