@@ -250,26 +250,6 @@ class CustomCheckpointCallback(BaseCallback):
         plt.savefig(os.path.join(self.train_folder, 'training_plots.png'), dpi=300)
         plt.close()
 
-        # # 分别保存每个图表（可选）
-        # for key, title in [
-        #     ('rollout/ep_len_mean', 'Episode_Length_Mean'),
-        #     ('rollout/ep_rew_mean', 'Episode_Reward_Mean'),
-        #     ('train/loss', 'Training_Loss'),
-        #     ('train/entropy_loss', 'Entropy_Loss')
-        # ]:
-        #     if key in df.columns:
-        #         plt.figure(figsize=(10, 3))  # 单独图表尺寸
-        #         plt.plot(df[key], label=key.split('/')[-1], alpha=0.5)
-        #         plt.plot(smooth_data(df[key]), label='smoothed', linewidth=2)
-        #         plt.title(title)
-        #         plt.xlabel('Rollout')
-        #         plt.ylabel(key.split('/')[-1].replace('_', ' ').title())
-        #         plt.legend()
-        #         plt.grid(True)
-        #         plt.xlim(0, data_len - 1)  # 对齐 x 轴
-        #         plt.savefig(os.path.join(self.plot_path, f'{title}.png'), dpi=300)
-        #         plt.close()
-
     def _on_step(self):
         return True
 
