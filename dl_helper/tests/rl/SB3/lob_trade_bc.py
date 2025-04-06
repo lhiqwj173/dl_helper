@@ -292,12 +292,8 @@ class CustomCheckpointCallback(BaseCallback):
     def _on_step(self):
         return True
 
-
 model_type = 'CnnPolicy'
 run_type = 'train'# 'train' or 'test'
-# run_type = 'test'# 'train' or 'test'
-train_folder = f'lob_trade_bc_{model_type}'
-os.makedirs(train_folder, exist_ok=True)
 
 model_config={
     # 自定义编码器参数  
@@ -415,7 +411,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=1000),
+        rollout.make_sample_until(min_timesteps=500),
         # rollout.make_sample_until(min_timesteps=1e6),
         rng=rng,
     )
