@@ -391,13 +391,13 @@ if run_type == 'train':
     log(f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)")
     log(f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB")
 
-    # bc_trainer = bc.BC(
-    #     observation_space=env.observation_space,
-    #     action_space=env.action_space,
-    #     demonstrations=transitions,
-    #     policy=model.policy,
-    #     rng=rng,
-    # )
+    bc_trainer = bc.BC(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        demonstrations=transitions,
+        policy=model.policy,
+        rng=rng,
+    )
 
     # env.test()
     # reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
