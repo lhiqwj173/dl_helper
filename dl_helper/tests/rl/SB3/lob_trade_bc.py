@@ -46,93 +46,131 @@ custom_logger = imit_logger.configure(
 )
 
 # 自定义特征提取器
-class CausalConvLSTM(BaseFeaturesExtractor):
+class DeepLob(BaseFeaturesExtractor):
     def __init__(
-            self, 
-            observation_space, 
+            self,
+            observation_space,
             features_dim: int = 64,
             input_dims: tuple = (10, 20),
             extra_input_dims: int = 3,
-        ):
+    ):
         super().__init__(observation_space, features_dim)
 
         self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims    
+        self.extra_input_dims = extra_input_dims
 
-        # 因果卷积网络
-        self.causal_conv = nn.Sequential(
-            nn.Conv1d(
-                in_channels=self.input_dims[1],
-                out_channels=64,
-                kernel_size=3,
-                padding=2,  # 保持时间维度不变
-                dilation=2
-            ),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(64),
-            nn.Dropout(0.1),
-            
-            nn.Conv1d(
-                in_channels=64,
-                out_channels=64,
-                kernel_size=3,
-                padding=4,
-                dilation=4
-            ),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(32),
-            nn.Dropout(0.1)
+        # 卷积块
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=(1, 2), stride=(1, 2)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
         )
-        
-        # LSTM层
-        self.lstm = nn.LSTM(
-            input_size=64,
-            hidden_size=64,
-            batch_first=True,
-            bidirectional=False
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
+            nn.Tanh(),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.Tanh(),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.Tanh(),
+            nn.BatchNorm2d(32),
         )
-        
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(32, 32, kernel_size=(1, 5)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(32),
+        )
+
+        # Inception 模块
+        self.inp1 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(64),
+            nn.Conv2d(64, 64, kernel_size=(3, 1), padding=(1, 0)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(64),
+        )
+        self.inp2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(64),
+            nn.Conv2d(64, 64, kernel_size=(5, 1), padding=(2, 0)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(64),
+        )
+        self.inp3 = nn.Sequential(
+            nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.BatchNorm2d(64),
+        )
+
+        # LSTM 层 
+        self.lstm = nn.LSTM(input_size=192, hidden_size=64, num_layers=1, batch_first=True)
+
         # 静态特征处理
         self.static_net = nn.Sequential(
             nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
             nn.LayerNorm(self.extra_input_dims * 4),
             nn.LeakyReLU(),
-            nn.Dropout(0.1)
+            nn.Dropout(0.1),
         )
-        
+
         # 融合层
         self.fusion = nn.Sequential(
             nn.Linear(64 + self.extra_input_dims * 4, 64),
             nn.LayerNorm(64),
             nn.LeakyReLU(),
             nn.Dropout(0.2),
-            nn.Linear(64, features_dim)
+            nn.Linear(64, features_dim),
         )
 
-
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        # 分离时间序列和静态特征
         extra_x = observations[:, -self.extra_input_dims:]
-        x = observations[:,:-self.extra_input_dims].reshape(-1, *self.input_dims)
+        x = observations[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)  # (B, 1, 10, 20)
 
-        # 因果卷积处理
-        conv_in = x.permute(0, 2, 1)  # [B,20,10]
-        conv_out = self.causal_conv(conv_in)     # [B,32,10]
-        conv_out = conv_out.permute(0, 2, 1)     # [B,10,32]
+        # 卷积块
+        x = self.conv1(x)  # (B, 32, 28, 10)
+        x = self.conv2(x)  # (B, 32, 26, 5)
+        x = self.conv3(x)  # (B, 32, 24, 1)
 
-        # LSTM处理
-        lstm_out, (h_n, c_n) = self.lstm(conv_out)
-        temporal_feat = lstm_out[:, -1, :]  # 取最后一个时间步 [B,64]
+        # Inception 模块
+        x_inp1 = self.inp1(x)  # (B, 64, 24, 1)
+        x_inp2 = self.inp2(x)  # (B, 64, 24, 1)
+        x_inp3 = self.inp3(x)  # (B, 64, 24, 1)
+        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)  # (B, 192, 24, 1)
+
+        # 调整形状以适配 LSTM
+        x = x.permute(0, 2, 1, 3).squeeze(3)  # (B, 24, 192)
+
+        # LSTM 处理 取最后一个时间步
+        lstm_out, _ = self.lstm(x)  # (B, 24, 64)
+        temporal_feat = lstm_out[:, -1, :]  # (B, 64)
 
         # 静态特征处理
-        static_out = self.static_net(extra_x)  # [B,16]
+        static_out = self.static_net(extra_x)  # (B, self.extra_input_dims * 4)
 
         # 融合层
-        fused_out = torch.cat([temporal_feat, static_out], dim=1)  # [B,80]
-        fused_out = self.fusion(fused_out)  # [B,self.output_dims]
+        fused_out = torch.cat([temporal_feat, static_out], dim=1)  # (B, 64 + self.extra_input_dims * 4)
+        fused_out = self.fusion(fused_out)  # (B, features_dim)
 
         # 数值检查
         if torch.isnan(fused_out).any() or torch.isinf(fused_out).any():
-            raise ValueError(f'fused_out is nan or inf')
+            raise ValueError("fused_out is nan or inf")
 
         return fused_out
 
@@ -262,13 +300,13 @@ os.makedirs(train_folder, exist_ok=True)
 
 model_config={
     # 自定义编码器参数  
-    'input_dims' : (10, 20),
+    'input_dims' : (30, 20),
     'extra_input_dims' : 3,
     'features_dim' : 32,
 }
 env_config ={
     'data_type': 'train',# 训练/测试
-    'his_len': 10,# 每个样本的 历史数据长度
+    'his_len': 30,# 每个样本的 历史数据长度
     'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
     'train_folder': train_folder,
     'train_title': train_folder,
@@ -291,7 +329,7 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 
 # 配置 policy_kwargs
 policy_kwargs = dict(
-    features_extractor_class=CausalConvLSTM,
+    features_extractor_class=DeepLob,
     features_extractor_kwargs=model_config,
     net_arch = [32,32]
 )
@@ -358,6 +396,13 @@ if run_type == 'train':
     log("模型结构:")
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
+
+    # test_x = env.observation_space.sample()
+    # test_x = torch.from_numpy(test_x).unsqueeze(0)
+    # print(test_x.shape)
+    # test_x = test_x.float().to(device)
+    # out = model.policy.features_extractor(test_x)
+    # print(out.shape)
     # sys.exit()
 
     # 生成专家数据
@@ -369,7 +414,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=int(5000*2.5)),
+        rollout.make_sample_until(min_timesteps=5000*4*50),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
