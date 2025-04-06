@@ -193,8 +193,8 @@ class LobExpert:
                 # 最近的是底部
 
                 if lob_data['action'].isna().all():
-                    # 没有 action 维持仓位
-                    res = ACTION_BUY
+                    # 没有 action 卖出
+                    res = ACTION_SELL
                 else:
                     # 未来的数据
                     future_data = lob_data.iloc[cur_idx:]
