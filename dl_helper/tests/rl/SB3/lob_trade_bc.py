@@ -7,11 +7,12 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import safe_mean
+from stable_baselines3.common.evaluation import evaluate_policy
 
 from imitation.algorithms import bc
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
-from stable_baselines3.common.evaluation import evaluate_policy
+from imitation.util import logger as imit_logger
 
 import pandas as pd
 import torch
@@ -38,6 +39,11 @@ from dl_helper.tool import report_memory_usage
 
 train_folder = train_title = f'20250406_lob_trade_bc'
 init_logger(train_title, home=train_folder, timestamp=False)
+
+custom_logger = imit_logger.configure(
+    folder=train_folder,
+    format_strs=["csv", "stdout"],
+)
 
 # 自定义特征提取器
 class CausalConvLSTM(BaseFeaturesExtractor):
@@ -406,6 +412,7 @@ if run_type == 'train':
         demonstrations=transitions,
         policy=model.policy,
         rng=rng,
+        custom_logger=custom_logger,
     )
 
     env.test()
