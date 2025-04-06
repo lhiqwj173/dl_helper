@@ -30,6 +30,7 @@ os.environ['ALIST_PWD'] = 'LHss6632673'
 from py_ext.lzma import decompress, compress_folder
 from py_ext.alist import alist
 from py_ext.tool import init_logger,log
+from py_ext.wechat import send_wx
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert
@@ -386,10 +387,18 @@ if run_type == 'train':
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
-    log(f'生成专家数据耗时: {time.time() - t:.2f} 秒')
     memory_usage2 = psutil.virtual_memory()
-    log(f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)")
-    log(f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB")
+    msg = ''
+    cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
+    log(cost_msg)
+    msg += cost_msg + '\n'
+    mem_pct_msg = f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
+    log(mem_pct_msg)
+    msg += mem_pct_msg + '\n'
+    mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
+    log(mem_expert_msg)
+    msg += mem_expert_msg + '\n'
+    send_wx(msg)
 
     bc_trainer = bc.BC(
         observation_space=env.observation_space,
