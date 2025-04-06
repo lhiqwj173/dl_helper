@@ -662,7 +662,7 @@ class Account:
         """
         # 随机持仓
         self.status = random.randint(0, 1)
-        self.status = 1# FOR DEBUG
+        # self.status = 1# FOR DEBUG
         self.pos = 0
         self.cash = 0
         self.hold_length = 0

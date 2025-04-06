@@ -155,26 +155,11 @@ class LobExpert:
         # self.lob_data['action'] = self.lob_data['action'].ffill()
         # self.lob_data['action'] = self.lob_data['action'].fillna(ACTION_SELL)
 
-    def get_action(self, obs):
+    @staticmethod
+    def _get_action(obs, lob_data, valleys, peaks):
         """
         获取专家动作
         """
-        # 检查数据是否一致 使用 self.env
-        if self.cur_data_file != self.env.data_producer.cur_data_file or self.cur_symbol != self.env.data_producer.cur_symbol:
-            log(f'prepare train data: {self.env.data_producer.cur_data_file}, {self.env.data_producer.cur_symbol}')
-            self.prepare_train_data(dtype=obs.dtype)
-            self.cur_data_file = self.env.data_producer.cur_data_file
-            self.cur_symbol = self.env.data_producer.cur_symbol
-
-        # # 检查数据是否一致 使用共享内存
-        # _env_date = self.shared_data.data[0]
-        # _env_code = self.shared_data.data[1]
-        # if self.cur_data_file != _env_date or self.cur_symbol != _env_code:
-        #     log(f'prepare train data: {_env_date}, {_env_code}')
-        #     self.cur_data_file = _env_date
-        #     self.cur_symbol = _env_code
-        #     self.prepare_train_data_file(dtype=obs.dtype)
-
         # 距离市场关闭的秒数 / pos
         if len(obs.shape) == 1:
             before_market_close_sec = obs[-3]
@@ -187,13 +172,13 @@ class LobExpert:
             raise ValueError(f'obs.shape: {obs.shape}')
         
         # 查找 action
-        data = self.lob_data[self.lob_data['before_market_close_sec'] == before_market_close_sec]
+        data = lob_data[lob_data['before_market_close_sec'] == before_market_close_sec]
         assert len(data) == 1, f'len(data): {len(data)}'
 
         cur_idx = data.index[0]
         try:
-            next_valley_idx = [i for i in self.valleys if i > cur_idx][0]
-            next_peak_idx = [i for i in self.peaks if i > cur_idx][0]
+            next_valley_idx = [i for i in valleys if i > cur_idx][0]
+            next_peak_idx = [i for i in peaks if i > cur_idx][0]
         except:
             next_valley_idx = None
             next_peak_idx = None
@@ -207,20 +192,24 @@ class LobExpert:
             elif next_valley_idx < next_peak_idx:
                 # 最近的是底部
 
-                # 未来的数据
-                future_data = self.lob_data.iloc[cur_idx:]
-                # 下一个时刻的bid价格(卖出成交的价格) next_bid
-                next_bid = self.lob_data['BASE买1价'].iloc[cur_idx+1]
-                # 检查下一个买入信号之后的下一时刻的ask价格(之后买入成交的价格) buy_next_ask
-                next_buy_idx = future_data[future_data['action'] == ACTION_BUY].index[0]
-                buy_next_ask = self.lob_data['BASE卖1价'].iloc[next_buy_idx + 1]
-                if next_bid > buy_next_ask+0.0005:# 最小刻度 0.001，+0.0005 避免误差
-                    # 立即卖出可以减少亏损
-                    res = ACTION_SELL
-                else:
-                    # 无法减少亏损，平添手续费
-                    # 继续持有
+                if lob_data['action'].isna().all():
+                    # 没有 action 维持仓位
                     res = ACTION_BUY
+                else:
+                    # 未来的数据
+                    future_data = lob_data.iloc[cur_idx:]
+                    # 下一个时刻的bid价格(卖出成交的价格) next_bid
+                    next_bid = lob_data['BASE买1价'].iloc[cur_idx+1]
+                    # 检查下一个买入信号之后的下一时刻的ask价格(之后买入成交的价格) buy_next_ask
+                    next_buy_idx = future_data[future_data['action'] == ACTION_BUY].index[0]
+                    buy_next_ask = lob_data['BASE卖1价'].iloc[next_buy_idx + 1]
+                    if next_bid > buy_next_ask+0.0005:# 最小刻度 0.001，+0.0005 避免误差
+                        # 立即卖出可以减少亏损
+                        res = ACTION_SELL
+                    else:
+                        # 无法减少亏损，平添手续费
+                        # 继续持有
+                        res = ACTION_BUY
             else:
                 if data['action'].iloc[0] == ACTION_SELL:
                     assert next_peak_idx - cur_idx == 1, f'ACTION_SELL, next_peak_idx - cur_idx: {next_peak_idx - cur_idx}(should be 1)'
@@ -244,6 +233,31 @@ class LobExpert:
             res = np.array([res])
 
         return res
+
+    def get_action(self, obs):
+        """
+        获取专家动作
+        """
+        # 检查数据是否一致 使用 self.env
+        if self.cur_data_file != self.env.data_producer.cur_data_file or self.cur_symbol != self.env.data_producer.cur_symbol:
+            log(f'prepare train data: {self.env.data_producer.cur_data_file}, {self.env.data_producer.cur_symbol}')
+            self.prepare_train_data(dtype=obs.dtype)
+            self.cur_data_file = self.env.data_producer.cur_data_file
+            self.cur_symbol = self.env.data_producer.cur_symbol
+
+        # # 检查数据是否一致 使用共享内存
+        # _env_date = self.shared_data.data[0]
+        # _env_code = self.shared_data.data[1]
+        # if self.cur_data_file != _env_date or self.cur_symbol != _env_code:
+        #     log(f'prepare train data: {_env_date}, {_env_code}')
+        #     self.cur_data_file = _env_date
+        #     self.cur_symbol = _env_code
+        #     self.prepare_train_data_file(dtype=obs.dtype)
+
+        # FOR DEBUG
+        pickle.dump((obs, self.lob_data, self.valleys, self.peaks), open(r'get_action.pkl', 'wb'))
+
+        return self._get_action(obs, self.lob_data, self.valleys, self.peaks)
 
     def __call__(self, obs, state, dones):
         return self.get_action(obs), None
@@ -358,4 +372,10 @@ def eval_expert():
 if __name__ == '__main__':
     # test_expert()
     # play_lob_data_with_expert()
-    eval_expert()
+    # eval_expert()
+
+    dump_file = r"D:\code\dl_helper\get_action.pkl"
+    data = pickle.load(open(dump_file, 'rb'))
+    obs, lob_data, valleys, peaks = data
+    action = LobExpert._get_action(obs, lob_data, valleys, peaks)
+    print(action)
