@@ -44,8 +44,9 @@ train_folder = train_title = f'20250406_lob_trade_bc'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
-df_progress = pd.read_csv(r"C:\Users\lh\Downloads\progress_all (1).csv")
-plot_bc_train_progress(train_folder, df_progress=df_progress)
+# FOR DEBUG
+# df_progress = pd.read_csv(r"C:\Users\lh\Downloads\progress_all (1).csv")
+# plot_bc_train_progress(train_folder, df_progress=df_progress)
 
 custom_logger = imit_logger.configure(
     folder=train_folder,
