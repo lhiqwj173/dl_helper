@@ -443,7 +443,7 @@ if run_type == 'train':
     log(f"Reward before training: {reward_before_training}")
 
     total_epochs = 500000
-    checkpoint_interval = 5
+    checkpoint_interval = 1
     for i in range(total_epochs // checkpoint_interval):
         bc_trainer.policy.train()
         bc_trainer.train(n_epochs=checkpoint_interval)
