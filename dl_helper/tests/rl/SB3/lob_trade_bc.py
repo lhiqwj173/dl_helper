@@ -344,7 +344,6 @@ if run_type == 'train':
 
     # 创建环境
     env = LOB_trade_env(env_config)
-    # env = VecCheckNan(env, raise_exception=True)
 
     # 专家
     expert = LobExpert(env)
@@ -388,6 +387,7 @@ if run_type == 'train':
     # 生成专家数据
     # 包装为 DummyVecEnv
     vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
+    vec_env = VecCheckNan(vec_env, raise_exception=True)
     rng = np.random.default_rng()
     t = time.time()
     memory_usage = psutil.virtual_memory()
