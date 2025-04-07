@@ -78,7 +78,7 @@ def sample_expert_transitions():
     rollouts = rollout.rollout(
         expert,
         env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=1),
+        rollout.make_sample_until(min_timesteps=None, min_episodes=500),
         rng=rng,
     )
     return rollout.flatten_trajectories(rollouts)
@@ -110,14 +110,29 @@ log(f"Reward before training: {reward}")
     
 log("Training a policy using Behavior Cloning")
 
-total_epochs = 500
-checkpoint_interval = 50
-for epoch in range(total_epochs):
+total_epochs = 100
+checkpoint_interval = 5
+for i in range(total_epochs // checkpoint_interval):
+    bc_trainer.policy.train()
     bc_trainer.train(n_epochs=checkpoint_interval)
     # 保存模型
     bc_trainer.policy.save(os.path.join(train_folder, f"bc_policy"))
+    progress_file = os.path.join(train_folder, f"progress.csv")
+    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+    # 验证模型
+    reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+    log(f"Reward after training: {reward_after_training}")
+    if os.path.exists(progress_file_all):
+        df_progress = pd.read_csv(progress_file_all)
+    else:
+        df_progress = pd.DataFrame()
+    df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
+    df_progress = pd.concat([df_progress, df_new])
+    df_progress.loc[df_progress['bc/epoch'] == i * checkpoint_interval-1, 'val/mean_reward'] = reward_after_training
+    df_progress.ffill(inplace=True)
+    df_progress.to_csv(progress_file_all, index=False)
     # 训练进度可视化
-    plot_bc_train_progress(os.path.join(train_folder, f"progress.csv"), train_folder)
+    plot_bc_train_progress(train_folder, df_progress=df_progress)
     # 打包
     zip_file = f'{train_folder}.7z'
     if os.path.exists(zip_file):
@@ -131,12 +146,3 @@ for epoch in range(total_epochs):
     client.mkdir(upload_folder)
     client.upload(zip_file, upload_folder)
     log('upload done')
-
-log("Evaluating the trained policy.")
-reward, _ = evaluate_policy(
-    bc_trainer.policy,  # type: ignore[arg-type]
-    evaluation_env,
-    n_eval_episodes=3,
-    render=True,  # comment out to speed up
-)
-log(f"Reward after training: {reward}")
