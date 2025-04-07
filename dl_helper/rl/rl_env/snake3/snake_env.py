@@ -5,8 +5,11 @@ import pygame
 class SnakeEnv(gym.Env):
     def __init__(self, config: dict):
         super(SnakeEnv, self).__init__()
+        
+        # 环境参数
         self.s = config.get('size', 10)  # 网格大小
         self.render_mode = config.get('render_mode', 'none')  # 渲染模式
+        self.obs_type = config.get('obs_type', 'state')  # 观测类型 state, image
         
         self.orientation = 0  # 初始方向：0-上, 1-右, 2-下, 3-左
         self.actions = np.array([[-1, 0], [0, 1], [1, 0], [0, -1]])  # 动作对应的移动
@@ -22,7 +25,10 @@ class SnakeEnv(gym.Env):
         # 定义动作空间和观测空间
         self.action_space = gym.spaces.Discrete(3)  # 0-左转, 1-前进, 2-右转
         # self.observation_space = gym.spaces.Discrete(256 * 32 * 8 * 2 * 2)
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
+        if self.obs_type == 'state':
+            self.observation_space = gym.spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
+        elif self.obs_type == 'image':
+            self.observation_space = gym.spaces.Box(low=0, high=1, shape=(1, self.s, self.s), dtype=np.float32)
 
         # 初始化 Pygame
         if self.render_mode == 'human':
@@ -44,7 +50,13 @@ class SnakeEnv(gym.Env):
         self.time = 0
         self.reward = 0
         self.reset_apple()
-        return self.state()
+
+        if self.obs_type == 'state':
+            observation = self.state()
+        elif self.obs_type == 'image':
+            observation = self.image()
+            
+        return observation
 
     def step(self, action):
         self.time += 1
@@ -78,50 +90,15 @@ class SnakeEnv(gym.Env):
             self.reward = -1000  # 撞墙或撞尾的惩罚
             terminated = True
 
-        observation = self.state()
+        if self.obs_type == 'state':
+            observation = self.state()
+        elif self.obs_type == 'image':
+            observation = self.image()
+
         truncated = False  # 可根据需要添加截断逻辑
         info = {}
 
         return observation, self.reward, terminated, info
-
-    def state_0(self):
-        x, y = self.snake[0, 0], self.snake[0, 1]
-        ori = self.orientation
-
-        surrounding = np.empty(3)
-        for i in range(3):
-            new_ori = (ori + i - 1) % 4
-            new_pos = np.array([x, y]) + self.actions[new_ori]
-            no_wall_collision = (0 <= new_pos[0] < self.s) and (0 <= new_pos[1] < self.s)
-            no_tail_collision = not any(np.array_equal(pos, new_pos) for pos in self.snake)
-            surrounding[i] = not (no_wall_collision and no_tail_collision)
-        vis1 = int(surrounding[0] * 4 + surrounding[1] * 2 + surrounding[2])
-
-        tail = np.zeros(4)
-        for pos in self.snake[1:]:
-            if pos[0] == x:
-                if pos[1] > y: tail[(2 - ori) % 4] = 1
-                elif pos[1] < y: tail[(0 - ori) % 4] = 1
-            elif pos[1] == y:
-                if pos[0] > x: tail[(3 - ori) % 4] = 1
-                elif pos[0] < x: tail[(1 - ori) % 4] = 1
-        vis2 = int(tail[0] * 4 + tail[1] * 2 + tail[2])
-
-        ax, ay = self.apple[0], self.apple[1]
-        if ax < x and ay == y: vis3 = (0 + 2 * ori) % 8
-        elif ax < x and ay < y: vis3 = (1 + 2 * ori) % 8
-        elif ax == x and ay < y: vis3 = (2 + 2 * ori) % 8
-        elif ax > x and ay < y: vis3 = (3 + 2 * ori) % 8
-        elif ax > x and ay == y: vis3 = (4 + 2 * ori) % 8
-        elif ax > x and ay > y: vis3 = (5 + 2 * ori) % 8
-        elif ax == x and ay > y: vis3 = (6 + 2 * ori) % 8
-        elif ax < x and ay > y: vis3 = (7 + 2 * ori) % 8
-        else: vis3 = 0
-
-        vis4 = self.last_turn
-        vis5 = int(len(self.snake) < self.s ** 2 / 3)
-
-        return vis1 * 256 + vis2 * 32 + vis3 * 4 + vis4 * 2 + vis5
 
     def state(self):
         x, y = self.snake[0, 0], self.snake[0, 1]
@@ -170,9 +147,13 @@ class SnakeEnv(gym.Env):
         obs = np.array([vis1, vis2, vis3, vis4, vis5], dtype=np.float32)
 
         # 归一化，最大值np.array([7, 7, 7, 1, 1])
-        obs = obs / np.array([7, 7, 7, 1, 1])
+        obs = (obs / np.array([7, 7, 7, 1, 1])).astype(np.float32)
 
         return obs
+
+    def image(self):
+        # 归一化并增加一个维度
+        return np.expand_dims(self._get_state().astype(np.float32) / np.float32(3.0), axis=0)
 
     def reset_apple(self):
         possible_positions = [(i, j) for i in range(self.s) for j in range(self.s) 
@@ -239,12 +220,11 @@ class SnakeEnv(gym.Env):
     def close(self):
         pygame.quit()
 
-
 if __name__ == "__main__":
     from dl_helper.rl.rl_env.tool import human_control, ai_control
     human_control(
         SnakeEnv, 
-        {},         
+        {'obs_type': 'image'},         
         control_map={
             pygame.K_UP: 1,
             pygame.K_LEFT: 0,

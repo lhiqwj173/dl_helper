@@ -129,3 +129,19 @@ class TrainFolderManagerBC(TrainFolderManager):
         加载检查点
         """
         policy.load(os.path.join(self.checkpoint_folder, 'bc_policy'))
+
+class TrainFolderManagerSB3(TrainFolderManager):
+
+    def exists(self):
+        """
+        检查是否存在训练记录
+        """
+        return os.path.exists(os.path.join(self.checkpoint_folder, 'checkpoint.zip'))
+
+    def load_checkpoint(self, model, custom_objects=None):
+        """
+        加载检查点
+        """
+        _model = model.load(os.path.join(self.checkpoint_folder, 'checkpoint.zip'), custom_objects= custom_objects)
+        policy_state_dict = _model.policy.state_dict()  
+        model.policy.load_state_dict(policy_state_dict)  

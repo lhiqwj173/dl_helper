@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import threading
 import matplotlib.pyplot as plt
 from collections import OrderedDict
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 
 from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
@@ -29,6 +30,143 @@ root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl
 def stop():
     import signal
     os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
+
+class CustomCheckpointCallback(BaseCallback):
+
+    def __init__(self, train_folder: str):
+        super().__init__()
+
+        self.train_folder = train_folder
+
+        self.metrics = []
+
+        self.checkpoint_path = os.path.join(self.train_folder, 'checkpoint')
+        os.makedirs(self.checkpoint_path, exist_ok=True)
+
+    def _on_rollout_end(self) -> None:
+        # This method is called after each rollout
+        # Collect metrics from logger
+        metrics_dict = {}
+        
+        # Rollout metrics
+        metrics_dict['rollout/ep_len_mean'] = safe_mean([ep_info["l"] for ep_info in self.model.ep_info_buffer])
+        metrics_dict['rollout/ep_rew_mean'] = safe_mean([ep_info["r"] for ep_info in self.model.ep_info_buffer])
+        
+        # Training metrics from the last update
+        if hasattr(self.model, 'logger') and self.model.logger is not None:
+            for key in ['train/approx_kl', 'train/clip_fraction', 'train/clip_range', 
+                        'train/entropy_loss', 'train/explained_variance', 'train/learning_rate',
+                        'train/loss', 'train/n_updates', 'train/policy_gradient_loss', 'train/value_loss']:
+                if key in self.model.logger.name_to_value:
+                    metrics_dict[key] = self.model.logger.name_to_value[key]
+
+        # 增加时间戳
+        metrics_dict['timestamp'] = int(time.time())
+        self.metrics.append(metrics_dict)
+
+        # 如果存在历史指标文件,读取并合并去重
+        metrics_file = os.path.join(self.train_folder, "training_metrics.csv")
+        if os.path.exists(metrics_file):
+            # 读取历史数据
+            history_df = pd.read_csv(metrics_file)
+            # 将当前指标转为DataFrame
+            current_df = pd.DataFrame(self.metrics)
+            # 基于timestamp去重合并
+            merged_df = pd.concat([history_df, current_df]).drop_duplicates(subset=['timestamp'], keep='last')
+            # 按timestamp排序
+            merged_df = merged_df.sort_values('timestamp')
+            df = merged_df
+        else:
+            df = pd.DataFrame(self.metrics)
+        df.to_csv(metrics_file, index=False)
+        self._plot(df)
+
+    def _plot(self, df):
+        """
+        图1 绘制 ep_len_mean / ep_len_mean平滑
+        图2 绘制 ep_rew_mean / ep_rew_mean平滑
+        图3 绘制 train/loss / train/loss平滑
+        图4 绘制 train/entropy_loss / train/entropy_loss平滑
+        竖向排列，对齐 x 轴
+        """
+        # 定义平滑函数
+        def smooth_data(data, window_size=10):
+            return data.rolling(window=window_size, min_periods=1).mean()
+
+        # 创建绘图，4 个子图竖向排列，共享 x 轴
+        fig, axs = plt.subplots(nrows=4, ncols=1, figsize=(10, 12), sharex=True)  # 宽度 10，高度 12
+
+        # 数据长度，用于对齐 x 轴
+        data_len = len(df)
+
+        # 图 1: ep_len_mean
+        if 'rollout/ep_len_mean' in df.columns:
+            axs[0].plot(df['rollout/ep_len_mean'], label=f'ep_len_mean({df.iloc[-1]["rollout/ep_len_mean"]:.2f})', alpha=0.5)
+            axs[0].plot(smooth_data(df['rollout/ep_len_mean']), label='smoothed', linewidth=2)
+            axs[0].set_title('Episode Length Mean')
+            axs[0].set_ylabel('Length')
+            axs[0].legend()
+            axs[0].grid(True)
+
+        # 图 2: ep_rew_mean
+        if 'rollout/ep_rew_mean' in df.columns:
+            axs[1].plot(df['rollout/ep_rew_mean'], label=f'ep_rew_mean({df.iloc[-1]["rollout/ep_rew_mean"]:.2f})', alpha=0.5)
+            axs[1].plot(smooth_data(df['rollout/ep_rew_mean']), label='smoothed', linewidth=2)
+            axs[1].set_title('Episode Reward Mean')
+            axs[1].set_ylabel('Reward')
+            axs[1].legend()
+            axs[1].grid(True)
+
+        # 图 3: train/loss
+        if 'train/loss' in df.columns:
+            axs[2].plot(df['train/loss'], label=f'loss({df.iloc[-1]["train/loss"]:.2f})', alpha=0.5)
+            axs[2].plot(smooth_data(df['train/loss']), label='smoothed', linewidth=2)
+            axs[2].set_title('Training Loss')
+            axs[2].set_ylabel('Loss')
+            axs[2].legend()
+            axs[2].grid(True)
+
+        # 图 4: train/entropy_loss
+        if 'train/entropy_loss' in df.columns:
+            axs[3].plot(df['train/entropy_loss'], label=f'entropy_loss({df.iloc[-1]["train/entropy_loss"]:.2f})', alpha=0.5)
+            axs[3].plot(smooth_data(df['train/entropy_loss']), label='smoothed', linewidth=2)
+            axs[3].set_title('Entropy Loss')
+            axs[3].set_xlabel('Rollout')  # 只有最下方子图显示 x 轴标签
+            axs[3].set_ylabel('Entropy Loss')
+            axs[3].legend()
+            axs[3].grid(True)
+
+        # 设置统一的 x 轴范围（可选，手动设置）
+        for ax in axs:
+            ax.set_xlim(0, data_len - 1)
+
+        # 调整布局并保存
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.train_folder, 'training_plots.png'), dpi=300)
+        plt.close()
+
+        # # 分别保存每个图表（可选）
+        # for key, title in [
+        #     ('rollout/ep_len_mean', 'Episode_Length_Mean'),
+        #     ('rollout/ep_rew_mean', 'Episode_Reward_Mean'),
+        #     ('train/loss', 'Training_Loss'),
+        #     ('train/entropy_loss', 'Entropy_Loss')
+        # ]:
+        #     if key in df.columns:
+        #         plt.figure(figsize=(10, 3))  # 单独图表尺寸
+        #         plt.plot(df[key], label=key.split('/')[-1], alpha=0.5)
+        #         plt.plot(smooth_data(df[key]), label='smoothed', linewidth=2)
+        #         plt.title(title)
+        #         plt.xlabel('Rollout')
+        #         plt.ylabel(key.split('/')[-1].replace('_', ' ').title())
+        #         plt.legend()
+        #         plt.grid(True)
+        #         plt.xlim(0, data_len - 1)  # 对齐 x 轴
+        #         plt.savefig(os.path.join(self.plot_path, f'{title}.png'), dpi=300)
+        #         plt.close()
+
+    def _on_step(self):
+        return True
 
 def plot_bc_train_progress(train_folder, df_progress=None, train_file=''):
     """
