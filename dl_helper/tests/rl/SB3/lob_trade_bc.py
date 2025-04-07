@@ -17,7 +17,7 @@ from imitation.util import logger as imit_logger
 import pandas as pd
 import torch
 import torch.nn as nn
-import time
+import time, pickle
 import numpy as np
 import random, psutil
 import sys, os, shutil
@@ -43,6 +43,9 @@ from dl_helper.train_folder_manager import TrainFolderManagerBC
 train_folder = train_title = f'20250406_lob_trade_bc'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
+
+df_progress = pd.read_csv(r"C:\Users\lh\Downloads\progress_all (1).csv")
+plot_bc_train_progress(train_folder, df_progress=df_progress)
 
 custom_logger = imit_logger.configure(
     folder=train_folder,
@@ -381,14 +384,14 @@ if run_type == 'train':
     # 生成专家数据
     # 包装为 DummyVecEnv
     vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng()
     t = time.time()
     memory_usage = psutil.virtual_memory()
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        # rollout.make_sample_until(min_timesteps=500),
-        rollout.make_sample_until(min_timesteps=1.35e6),
+        rollout.make_sample_until(min_timesteps=5000),
+        # rollout.make_sample_until(min_timesteps=1.35e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -418,7 +421,12 @@ if run_type == 'train':
 
     total_epochs = 500000
     checkpoint_interval = 1
-    for i in range(total_epochs // checkpoint_interval):
+    begin = 0
+    # 读取之前的i
+    loop_i_file = os.path.join(train_folder, 'checkpoint', 'loop_i')
+    if os.path.exists(loop_i_file):
+        begin = int(open(loop_i_file, 'r').read()) + 1
+    for i in range(begin, total_epochs // checkpoint_interval):
         bc_trainer.policy.train()
         bc_trainer.train(n_epochs=checkpoint_interval)
         # 保存模型
@@ -438,7 +446,14 @@ if run_type == 'train':
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
         # 训练进度可视化
-        plot_bc_train_progress(train_folder, df_progress=df_progress)
+        try:
+            plot_bc_train_progress(train_folder, df_progress=df_progress)
+        except Exception as e:
+            pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
+            log(f"训练进度可视化失败")
+            raise e
+        # 记录当前训练进度
+        open(loop_i_file, 'w').write(str(i))
         # 上传
         if not in_windows():
             train_folder_manager.push()

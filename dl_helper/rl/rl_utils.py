@@ -113,7 +113,6 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file=''):
     plt.savefig(os.path.join(train_folder, 'training_plots.png'), dpi=300)
     plt.close()
 
-
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """
     自定义指标统一放在 custom_metrics 下
