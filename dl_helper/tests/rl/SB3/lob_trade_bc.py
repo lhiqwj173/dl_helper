@@ -391,7 +391,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=1000),
+        rollout.make_sample_until(min_timesteps=4000),
         # rollout.make_sample_until(min_timesteps=1.35e6),
         rng=rng,
     )
@@ -428,8 +428,11 @@ if run_type == 'train':
     if os.path.exists(loop_i_file):
         begin = int(open(loop_i_file, 'r').read()) + 1
     for i in range(begin, total_epochs // checkpoint_interval):
+        t = time.time()
         bc_trainer.policy.train()
         bc_trainer.train(n_epochs=checkpoint_interval)
+        cost_msg = f'训练耗时: {time.time() - t:.2f} 秒'
+        log(cost_msg)
         # 保存模型
         bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))
         progress_file = os.path.join(train_folder, f"progress.csv")

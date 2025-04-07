@@ -78,7 +78,7 @@ def sample_expert_transitions():
     rollouts = rollout.rollout(
         expert,
         env,
-        rollout.make_sample_until(min_timesteps=None, min_episodes=500),
+        rollout.make_sample_until(min_timesteps=500, min_episodes=None),
         rng=rng,
     )
     return rollout.flatten_trajectories(rollouts)
