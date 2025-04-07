@@ -11,6 +11,7 @@ class SnakeEnv(gym.Env):
         self.render_mode = config.get('render_mode', 'none')  # 渲染模式
         self.obs_type = config.get('obs_type', 'state')  # 观测类型 state, image
         
+        self.grid_size = (self.s, self.s)  # 网格大小
         self.orientation = 0  # 初始方向：0-上, 1-右, 2-下, 3-左
         self.actions = np.array([[-1, 0], [0, 1], [1, 0], [0, -1]])  # 动作对应的移动
 
@@ -34,7 +35,6 @@ class SnakeEnv(gym.Env):
         if self.render_mode == 'human':
             pygame.init()
             self.cell_size = 60  # 每个单元格的像素大小
-            self.grid_size = (self.s, self.s)  # 网格大小
             self.window_size = (self.s * self.cell_size, self.s * self.cell_size)
             self.screen = pygame.display.set_mode(self.window_size)
             pygame.display.set_caption("Snake Game")
