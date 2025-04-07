@@ -32,14 +32,17 @@ from py_ext.lzma import decompress, compress_folder
 from py_ext.alist import alist
 from py_ext.tool import init_logger,log
 from py_ext.wechat import send_wx
+from py_ext.datetime import beijing_time
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert
 from dl_helper.rl.rl_utils import plot_bc_train_progress
-from dl_helper.tool import report_memory_usage
+from dl_helper.tool import report_memory_usage, in_windows
+from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 train_folder = train_title = f'20250406_lob_trade_bc'
-init_logger(train_title, home=train_folder, timestamp=False)
+log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
+init_logger(log_name, home=train_folder, timestamp=False)
 
 custom_logger = imit_logger.configure(
     folder=train_folder,
@@ -292,6 +295,19 @@ class CustomCheckpointCallback(BaseCallback):
     def _on_step(self):
         return True
 
+# Linear scheduler
+def linear_schedule(initial_value, final_value=0.0):
+
+    if isinstance(initial_value, str):
+        initial_value = float(initial_value)
+        final_value = float(final_value)
+        assert (initial_value > 0.0)
+
+    def scheduler(progress):
+        return final_value + progress * (initial_value - final_value)
+
+    return scheduler
+
 model_type = 'CnnPolicy'
 run_type = 'train'# 'train' or 'test'
 
@@ -308,19 +324,6 @@ env_config ={
     'train_folder': train_folder,
     'train_title': train_folder,
 }
-
-# Linear scheduler
-def linear_schedule(initial_value, final_value=0.0):
-
-    if isinstance(initial_value, str):
-        initial_value = float(initial_value)
-        final_value = float(final_value)
-        assert (initial_value > 0.0)
-
-    def scheduler(progress):
-        return final_value + progress * (initial_value - final_value)
-
-    return scheduler
 
 checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 
@@ -342,52 +345,18 @@ if run_type == 'train':
     # 指定设备为 GPU (cuda)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    lr = 1e-3
-    # lr = 5e-3
-    # lr = 1e-4
-    # lr = 5e-4
-    # lr = 1e-5
-    # lr = 5e-5
-
-    # 生成模型实例    
-    kaggle_keep_trained_file = rf'/kaggle/input/checkpoint/{train_folder}.checkpoint'
-    if os.path.exists(kaggle_keep_trained_file):
-        log(f'加载模型参数, 继续训练')
-        # 从kaggle保存的模型文件中拷贝到当前目录
-        shutil.copy(kaggle_keep_trained_file, f'./{train_folder}_checkpoint.zip')
-        # load model
-        model = PPO.load(f'./{train_folder}_checkpoint.zip', custom_objects= {"policy_kwargs": policy_kwargs} if model_type == 'CnnPolicy' else None)
-        # 提取权重
-        policy_state_dict = model.policy.state_dict()  
-        # 新建模型
-        model = PPO(
-            model_type, 
-            env, 
-            verbose=1, 
-            learning_rate=5e-4,
-            ent_coef=0.2,
-            gamma=0.98,
-            clip_range=0.3,
-            device=device, 
-            policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
-        )
-        # 加载权重
-        model.policy.load_state_dict(policy_state_dict)  
-
-    else:
-        log(f'新训练 {model_type}')
-        lr_schedule = linear_schedule(1e-3, 5e-4)
-        clip_range_schedule = linear_schedule(0.15, 0.3)
-        model = PPO(
-            model_type, 
-            env, 
-            verbose=1, 
-            learning_rate=1e-4,
-            ent_coef=0.2,
-            gamma=0.97,
-            device=device, 
-            policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
-        )
+    # lr_schedule = linear_schedule(1e-3, 5e-4)
+    # clip_range_schedule = linear_schedule(0.15, 0.3)
+    model = PPO(
+        model_type, 
+        env, 
+        verbose=1, 
+        learning_rate=1e-4,
+        ent_coef=0.2,
+        gamma=0.97,
+        device=device, 
+        policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+    )
 
     # 打印模型结构
     log("模型结构:")
@@ -402,6 +371,13 @@ if run_type == 'train':
     # print(out.shape)
     # sys.exit()
 
+    # 训练文件夹管理
+    if not in_windows():
+        train_folder_manager = TrainFolderManagerBC(train_folder)
+        if train_folder_manager.exists():
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            train_folder_manager.load_checkpoint(model.policy)
+
     # 生成专家数据
     # 包装为 DummyVecEnv
     vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
@@ -412,7 +388,7 @@ if run_type == 'train':
         expert,
         vec_env,
         # rollout.make_sample_until(min_timesteps=500),
-        rollout.make_sample_until(min_timesteps=1.3e6),
+        rollout.make_sample_until(min_timesteps=1.5e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -439,8 +415,6 @@ if run_type == 'train':
     )
 
     env.test()
-    reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-    log(f"Reward before training: {reward_before_training}")
 
     total_epochs = 500000
     checkpoint_interval = 1
@@ -448,7 +422,7 @@ if run_type == 'train':
         bc_trainer.policy.train()
         bc_trainer.train(n_epochs=checkpoint_interval)
         # 保存模型
-        bc_trainer.policy.save(os.path.join(train_folder, f"bc_policy"))
+        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))
         progress_file = os.path.join(train_folder, f"progress.csv")
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         # 验证模型
@@ -460,23 +434,13 @@ if run_type == 'train':
             df_progress = pd.DataFrame()
         df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
         df_progress = pd.concat([df_progress, df_new])
-        df_progress.loc[df_progress['bc/epoch'] == i * checkpoint_interval-1, 'val/mean_reward'] = reward_after_training
+        df_progress.loc[df_progress['bc/epoch'] == i * checkpoint_interval, 'val/mean_reward'] = reward_after_training
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
         # 训练进度可视化
         plot_bc_train_progress(train_folder, df_progress=df_progress)
-        # 打包
-        zip_file = f'{train_folder}.7z'
-        if os.path.exists(zip_file):
-            os.remove(zip_file)
-        compress_folder(train_folder, zip_file, 9, inplace=False)
-        log('compress_folder done')
-        # 上传更新到alist
-        ALIST_UPLOAD_FOLDER = 'rl_learning_process'
-        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
-        upload_folder = f'/{ALIST_UPLOAD_FOLDER}/'
-        client.mkdir(upload_folder)
-        client.upload(zip_file, upload_folder)
-        log('upload done')
+        # 上传
+        if not in_windows():
+            train_folder_manager.push()
 else:
     pass
