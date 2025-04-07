@@ -391,7 +391,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=5000),
+        rollout.make_sample_until(min_timesteps=1000),
         # rollout.make_sample_until(min_timesteps=1.35e6),
         rng=rng,
     )
@@ -435,16 +435,16 @@ if run_type == 'train':
         progress_file = os.path.join(train_folder, f"progress.csv")
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         # 验证模型
-        reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+        reward_after_training, _ = evaluate_policy(bc_trainer.policy, env)
         log(f"Reward after training: {reward_after_training}")
         if os.path.exists(progress_file_all):
             df_progress = pd.read_csv(progress_file_all)
         else:
             df_progress = pd.DataFrame()
         df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
+        df_new['bc/epoch'] += i * checkpoint_interval
+        df_new['val/mean_reward'] = reward_after_training
         df_progress = pd.concat([df_progress, df_new])
-        df_progress.loc[df_progress['bc/epoch'] == i * checkpoint_interval, 'val/mean_reward'] = reward_after_training
-        df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
         # 训练进度可视化
         try:
@@ -458,5 +458,7 @@ if run_type == 'train':
         # 上传
         if not in_windows():
             train_folder_manager.push()
+        # 删除每次训练的进度文件，只保留all版本的
+        os.remove(progress_file)
 else:
     pass
