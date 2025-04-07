@@ -443,8 +443,10 @@ if run_type == 'train':
             df_progress = pd.DataFrame()
         df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
         df_new['bc/epoch'] += i * checkpoint_interval
-        df_new['val/mean_reward'] = reward_after_training
+        df_new['val/mean_reward'] = np.nan
+        df_new['val/mean_reward'].iloc[-1] = reward_after_training
         df_progress = pd.concat([df_progress, df_new])
+        df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
         # 训练进度可视化
         try:
