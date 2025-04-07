@@ -17,6 +17,8 @@ from imitation.util import logger as imit_logger
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch as th
+th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
 import random, psutil
@@ -342,7 +344,7 @@ if run_type == 'train':
 
     # 创建环境
     env = LOB_trade_env(env_config)
-    env = VecCheckNan(env, raise_exception=True)
+    # env = VecCheckNan(env, raise_exception=True)
 
     # 专家
     expert = LobExpert(env)
