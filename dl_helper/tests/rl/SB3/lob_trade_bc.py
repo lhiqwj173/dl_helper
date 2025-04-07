@@ -394,8 +394,8 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=4000),
-        # rollout.make_sample_until(min_timesteps=1.35e6),
+        # rollout.make_sample_until(min_timesteps=4000),
+        rollout.make_sample_until(min_timesteps=1.35e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
