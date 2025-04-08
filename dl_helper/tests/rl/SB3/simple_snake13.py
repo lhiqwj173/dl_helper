@@ -46,7 +46,7 @@ def linear_schedule(initial_value, final_value=0.0):
     return scheduler
 
 # 自定义 CNN 特征提取器
-class CustomCNN(BaseFeaturesExtractor):
+class CustomCNN_0(BaseFeaturesExtractor):
     def __init__(self, observation_space, features_dim: int = 64):
         super().__init__(observation_space, features_dim)
         # 获取输入通道数，例如 (3, 10, 10) 的 RGB 图像，n_input_channels = 3
@@ -75,9 +75,34 @@ class CustomCNN(BaseFeaturesExtractor):
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
+class CustomCNN(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim: int = 256):
+        super(CustomCNN, self).__init__(observation_space, features_dim)
+        self.cnn = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+        )
+        
+        # 计算全连接层输入维度
+        with th.no_grad():
+            sample = th.as_tensor(observation_space.sample()[None]).float()
+            n_flatten = self.cnn(sample).shape[1]
+            
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+            nn.ReLU()
+        )
+
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        return self.linear(self.cnn(observations))
 
 model_type = 'MlpPolicy'
-# model_type = 'CnnPolicy'
+model_type = 'CnnPolicy'
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -101,11 +126,17 @@ def make_env():
 checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 
 # 配置 policy_kwargs
-policy_kwargs = dict(
+policy_kwargs_0 = dict(
     features_extractor_class=CustomCNN,
     features_extractor_kwargs=dict(features_dim=8),
     net_arch = []
 )
+policy_kwargs = {
+    "features_extractor_class": CustomCNN,
+    "features_extractor_kwargs": {"features_dim": 256},
+    "net_arch": [dict(pi=[128, 64], vf=[128, 64])],  # 自定义策略网络架构
+    "activation_fn": nn.ReLU
+}
 
 if run_type == 'train':
     # 创建并行环境（4 个环境）
@@ -116,13 +147,24 @@ if run_type == 'train':
 
     # lr_schedule = linear_schedule(1e-3, 5e-4)
     # clip_range_schedule = linear_schedule(0.15, 0.3)
+    # model = PPO(
+    #     model_type, 
+    #     env, 
+    #     verbose=1, 
+    #     learning_rate=1e-4,
+    #     ent_coef=0.2,
+    #     gamma=0.97,
+    #     policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+    # )
     model = PPO(
         model_type, 
         env, 
+        learning_rate=3e-4,
+        batch_size=512,
+        gamma=0.995,
+        clip_range_vf=0.2,
+        ent_coef=0.01,
         verbose=1, 
-        learning_rate=1e-4,
-        ent_coef=0.2,
-        gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
@@ -137,7 +179,7 @@ if run_type == 'train':
     log("模型结构:")
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
-    # sys.exit()
+    sys.exit()
 
     for i in range(1000000):
         model.learn(total_timesteps=100_000, callback=[checkpoint_callback])
