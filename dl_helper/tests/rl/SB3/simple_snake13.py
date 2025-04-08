@@ -76,18 +76,27 @@ class CustomCNN(BaseFeaturesExtractor):
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
 
-# 创建带 Monitor 的环境函数
-def make_env():
-    env = SnakeEnv({
-        'obs_type': 'image',
-    })
-    return env
+model_type = 'MlpPolicy'
+# model_type = 'CnnPolicy'
 
-model_type = 'CnnPolicy'
+if len(sys.argv) > 1:
+    for arg in sys.argv[1:]:
+        if arg == 'cnn':
+            model_type = 'CnnPolicy'
+        elif arg == 'mlp':
+            model_type = 'MlpPolicy'
+
 run_type = 'train'# 'train' or 'test'
 # run_type = 'test'# 'train' or 'test'
 train_folder = f'simple_snake13_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
+
+# 创建带 Monitor 的环境函数
+def make_env():
+    env = SnakeEnv({
+        'obs_type': 'image' if model_type == 'CnnPolicy' else 'state',
+    })
+    return env
 
 checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 
@@ -105,9 +114,6 @@ if run_type == 'train':
     env = VecCheckNan(env)  # 添加nan检查
     env = VecMonitor(env)  # 添加监控器
 
-    # 指定设备为 GPU (cuda)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
     # lr_schedule = linear_schedule(1e-3, 5e-4)
     # clip_range_schedule = linear_schedule(0.15, 0.3)
     model = PPO(
@@ -117,7 +123,6 @@ if run_type == 'train':
         learning_rate=1e-4,
         ent_coef=0.2,
         gamma=0.97,
-        device=device, 
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
@@ -134,8 +139,8 @@ if run_type == 'train':
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
     # sys.exit()
 
-    for i in range(10000):
-        model.learn(total_timesteps=1000000, callback=[checkpoint_callback])
+    for i in range(1000000):
+        model.learn(total_timesteps=100_000, callback=[checkpoint_callback])
         model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
 
         # 打包文训练件夹，并上传到alist

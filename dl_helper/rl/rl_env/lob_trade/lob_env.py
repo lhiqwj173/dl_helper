@@ -80,6 +80,9 @@ class data_producer:
         self.use_gaussian_noise_vol = use_gaussian_noise_vol  # 高斯噪声开关
         self.use_spread_add_small_limit_order = use_spread_add_small_limit_order  # 价差中添加小单
 
+        # 随机数
+        self.np_random = np.random.default_rng()
+
         # 快速测试
         self.simple_test = simple_test
 
@@ -177,7 +180,7 @@ class data_producer:
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             self.files.sort()
             if self.data_type == 'train':
-                random.shuffle(self.files)
+                self.np_random.shuffle(self.files)
             if self.debug_date:
                 # 按照 debug_date 的顺序重新排列文件
                 ordered_files = []
@@ -239,7 +242,8 @@ class data_producer:
                 begin = symbol_indices[0]
                 end = symbol_indices[-1]
                 if self.random_begin_in_day and self.data_type == 'train':
-                    begin = random.randint(begin, end-50)# 至少50个数据
+                    # begin = random.randint(begin, end-50)# 至少50个数据
+                    begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
                 self.idxs.append([begin, end, USE_CODES.index(symbol)])
 
             if not self.idxs:
@@ -249,7 +253,8 @@ class data_producer:
             # 训练数据随机选择一个标的
             # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
             if self.data_type == 'train':
-                self.idxs = [random.choice(self.idxs)]
+                # self.idxs = [random.choice(self.idxs)]
+                self.idxs = [self.np_random.choice(self.idxs)]
 
             # 当前的标的
             self.cur_symbol = USE_CODES[self.idxs[0][2]]
@@ -400,7 +405,7 @@ class data_producer:
         # 原始数据增强
         # 1. use_random_his_window 从更长的历史窗口（如15个）随机截取 所需的时间窗口的数据
         if self.use_random_his_window and self.data_type == 'train':
-            raw_0 = random_his_window(raw_0, self.his_len)
+            raw_0 = random_his_window(raw_0, self.his_len, rng = self.np_random)
 
         # 修正历史数据长度
         raw = raw_0[-self.his_len:]
@@ -415,7 +420,7 @@ class data_producer:
                 vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
                 self._gaussian_noise_vol_col_idxs = [self.all_raw_data.columns.get_loc(col) for col in vol_cols]
             # 噪音控制在 -50 到 50 之间
-            raw[:, self._gaussian_noise_vol_col_idxs] += gaussian_noise_vol(raw[:, self._gaussian_noise_vol_col_idxs].shape)
+            raw[:, self._gaussian_noise_vol_col_idxs] += gaussian_noise_vol(raw[:, self._gaussian_noise_vol_col_idxs].shape, rng = self.np_random)
             # 控制最小值为 1    
             raw[:, self._gaussian_noise_vol_col_idxs] = np.clip(raw[:, self._gaussian_noise_vol_col_idxs], 1, None)
 
@@ -426,6 +431,8 @@ class data_producer:
         std_data = self.mean_std[self.idxs[0][0]]
         # 未实现收益率 使用 zscore
         unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
+
+        ###################################
         # 价格量 使用 robust
         ms = pd.DataFrame(std_data['price_vol_each']['robust'])
         x, ms = self.use_data_split(raw, ms)
@@ -435,6 +442,24 @@ class data_producer:
             x /= ms[:, 1]
         else:
             x_std = ms.copy()
+        ###################################
+
+        # ####################################
+        # # (价格 - mid_price) / spread
+        # # 数量 / total_vol/total_bid_vol/total_ask_vol(基于最近tick计算)
+        # mid_price = (self.bid_price[-1] + self.ask_price[-1]) / 2
+        # spread = self.ask_price[-1] - self.bid_price[-1]
+        # if not hasattr(self, 'p_cols_idxs'):
+        #     self.p_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '价' in self.all_raw_data.columns[i]]
+        #     self.v_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '量' in self.all_raw_data.columns[i]]
+        # x = raw
+        # total_vol = x[-1, self.v_cols_idxs].sum()
+        # if self.data_std:
+        #     x[:, self.p_cols_idxs] = (x[:, self.p_cols_idxs] - mid_price) / spread
+        #     x[:, self.v_cols_idxs] = x[:, self.v_cols_idxs] / (total_vol + 1e-6)
+        # else:
+        #     x_std = (mid_price, spread, total_vol)
+        # ####################################
 
         # 标的id
         symbol_id = self.idxs[0][2]
@@ -503,7 +528,10 @@ class data_producer:
 
         return max(0, extra_a), min(len(self.plot_data), extra_b), self.plot_data.iloc[b-1].name
 
-    def reset(self):
+    def reset(self, rng=None):
+        if rng is not None:
+            self.np_random = rng
+
         while True:
             self._pre_files()
             self._load_data()
@@ -656,12 +684,15 @@ class Account:
 
         return res
         
-    def reset(self, bid_price):
+    def reset(self, bid_price, rng=None):
         """
         重置账户状态
         """
         # 随机持仓
-        self.status = random.randint(0, 1)
+        if rng is None:
+            self.status = random.randint(0, 1)
+        else:
+            self.status = rng.integers(0, 2)
         # self.status = 1# FOR DEBUG
         self.pos = 0
         self.cash = 0
@@ -1158,7 +1189,7 @@ class LOB_trade_env(gym.Env):
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
 
             while True:
-                self.data_producer.reset()
+                self.data_producer.reset(rng = self.np_random)
                 if self.data_std:
                     symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data = self._get_data()
                 else:
@@ -1175,7 +1206,7 @@ class LOB_trade_env(gym.Env):
                 self.input_queue.put({'full_plot_data': full_plot_data})
 
             # 账户
-            pos = self.acc.reset(self.data_producer.bid_price[-1])
+            pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random)
             log(f'acc reset: {pos}')
 
             # 添加 静态特征
@@ -1347,6 +1378,9 @@ def test_quick_produce_train_sdpk(date, code):
     快速生成训练数据，用于检查对比
     """
     from feature.features.time_point_data import read_sdpk
+
+    begin_t = '09:30'
+    end_t = '14:59:50'
     def get_sdpk(date, code, level=5):
         file = rf"D:\L2_DATA_T0_ETF\his_data\{date}\{code}\十档盘口.csv"
 
@@ -1374,8 +1408,6 @@ def test_quick_produce_train_sdpk(date, code):
                 )
         sdpk = sdpk.set_index('时间')
         # 截取时间
-        begin_t = '09:30'
-        end_t = '14:57'
         sdpk = sdpk[(sdpk.index.time >= pd.to_datetime(begin_t).time()) & (
             sdpk.index.time < pd.to_datetime(end_t).time())]
         sdpk = sdpk[(sdpk.index.time <= pd.to_datetime('11:30:00').time()) | (
@@ -1394,15 +1426,8 @@ def test_quick_produce_train_sdpk(date, code):
     cur_idx = all_dates.index(date)
     std_dates = all_dates[cur_idx-5:cur_idx]
     std_sdpks = pd.DataFrame()
-    begin_t = '09:30'
-    end_t = '14:57'
     for std_date in std_dates:
-        sdpk = get_sdpk(std_date, code, 10)
-        # 截取时间
-        sdpk = sdpk[(sdpk.index.time >= pd.to_datetime(begin_t).time()) & (
-            sdpk.index.time < pd.to_datetime(end_t).time())]
-        sdpk = sdpk[(sdpk.index.time <= pd.to_datetime('11:30:00').time()) | (
-            sdpk.index.time > pd.to_datetime('13:00:00').time())]
+        sdpk = get_sdpk(std_date, code, 5)
         std_sdpks = pd.concat([std_sdpks, sdpk])
     # 计数标准化数据
     std_sdpks = std_sdpks.iloc[:, :-1]
@@ -1492,7 +1517,7 @@ def test_lob_data(check_data = True, check_reward = True):
 
     },
     data_std=False,
-    debug_date=['20240521'],
+    # debug_date=['20240521'],
     )
 
     if check_reward:
@@ -1505,7 +1530,7 @@ def test_lob_data(check_data = True, check_reward = True):
     # for i in tqdm(range(5000)):
     for i in range(1):
         print(f'iter: {i}, begin')
-        obs, info = env.reset()
+        obs, info = env.reset(seed=5)
         if check_reward:
             checker.reset()
         if check_data:
@@ -1611,5 +1636,5 @@ def play_lob_data(render=True):
 
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    test_lob_data(check_data=False, check_reward=False)
+    test_lob_data(check_data=True, check_reward=False)
     # play_lob_data(render = True)
