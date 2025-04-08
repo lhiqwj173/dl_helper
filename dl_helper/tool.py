@@ -487,6 +487,16 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
                 valley_idx = _valley_idx
             _valley_idx += 1
 
+        # 若当前波谷ask >= 上一个波峰bid, 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
+        # 上一个波峰卖出，当前波谷买入 平添交易费/损失持仓量 
+        if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and bid[t2] >= bid[pre_t2]:
+            # print(f'前一个波峰卖出损失')
+            trades[-1] = (trades[-1][0], t2)
+            pre_t2 = t2
+            peak_idx += 1
+            valley_idx += 1
+            continue
+
         # 计算当前交易的成本和收入
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
@@ -502,8 +512,19 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
             valley_idx += 1
             peak_idx += 1
         else:
-            # 不盈利，尝试下一个波峰
-            peak_idx += 1
+            # 不盈利
+            # 1. 对比前一个交易对的波峰，若当前的波峰更高，则修改上一个交易对的波峰为当前波峰
+            # 2. 若当前的波峰更低，则尝试下一个波峰
+            if pre_t2 > 0 and bid[t2] > bid[pre_t2]:
+                # print(f'当前波峰波谷不盈利，合并到上一个交易对')
+                # 修改上一个交易对的波峰为当前波峰
+                trades[-1] = (trades[-1][0], t2)
+                pre_t2 = t2
+                valley_idx += 1
+                peak_idx += 1
+            else:
+                # 尝试下一个波峰
+                peak_idx += 1
 
     return trades, total_log_return
 
@@ -590,6 +611,50 @@ def plot_trades(mid, trades, valleys, peaks):
     
     # 在浏览器中显示图表
     fig.show(renderer='browser')
+
+
+def plot_trades_plt(mid, trades, valleys, peaks):
+    """
+    使用 Matplotlib 可视化 mid-price 序列和交易机会。
+    
+    参数:
+    mid (np.array): mid-price 序列
+    trades (list): 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
+    valleys (list): 波谷位置列表
+    peaks (list): 波峰位置列表
+    """
+    # 创建时间轴
+    time = list(range(len(mid)))
+    
+    # 创建图表
+    plt.figure(figsize=(12, 6))
+    
+    # 绘制 mid-price 曲线
+    plt.plot(time, mid, label='Mid Price', color='blue')
+    
+    # 添加波谷点
+    plt.scatter(valleys, [mid[v] for v in valleys], color='red', label='Valleys', s=50)
+    
+    # 添加波峰点
+    plt.scatter(peaks, [mid[p] for p in peaks], color='green', label='Peaks', s=50)
+    
+    # 添加交易对的连接线
+    for t1, t2 in trades:
+        plt.plot([t1, t2], [mid[t1], mid[t2]], color='green', linestyle='--', label=f'Trade {t1}-{t2}')
+    
+    # 设置图表标题和标签
+    plt.title('Mid Price with Trading Opportunities')
+    plt.xlabel('Time')
+    plt.ylabel('Price')
+    
+    # 显示图例
+    plt.legend()
+    
+    # 显示网格
+    plt.grid(True)
+    
+    # 显示图表
+    plt.show()
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2

@@ -308,22 +308,23 @@ def play_lob_data_with_expert(render=True):
     env = LOB_trade_env({
         # 'data_type': 'val',# 训练/测试
         'data_type': 'train',# 训练/测试
-        'his_len': 10,# 每个样本的 历史数据长度
+        'his_len': 30,# 每个样本的 历史数据长度
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
         'use_symbols': [code],
+        'render_freq': 1,
 
         'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
         'train_title': 'test',
 
-        'render_mode': 'human',
+        'render_mode': 'human' if render else 'none',
     },
-    debug_date=[date],
+    # debug_date=[date],
     )
 
     expert = LobExpert(env)
 
     print('reset')
-    obs, info = env.reset()
+    obs, info = env.reset(1)
 
     dt= env.data_producer.step_use_data.iloc[-1].name
     if render:
@@ -341,8 +342,8 @@ def play_lob_data_with_expert(render=True):
         if render:
             time.sleep(0.1)
         
+    input('all done, press enter to close')
     env.close()
-    print('all done')
 
 def eval_expert():
     from stable_baselines3.common.evaluation import evaluate_policy
@@ -355,6 +356,8 @@ def eval_expert():
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
         'use_symbols': [code],
 
+        'render_mode': 'human',
+
         'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
         'train_title': 'test',
     },
@@ -365,17 +368,18 @@ def eval_expert():
     reward, _ = evaluate_policy(
         expert,
         env,
+        render=True,
         n_eval_episodes=1,
     )
     print(f"Reward after training: {reward}")
 
 if __name__ == '__main__':
     # test_expert()
-    # play_lob_data_with_expert()
+    play_lob_data_with_expert(True)
     # eval_expert()
 
-    dump_file = r"D:\code\dl_helper\get_action.pkl"
-    data = pickle.load(open(dump_file, 'rb'))
-    obs, lob_data, valleys, peaks = data
-    action = LobExpert._get_action(obs, lob_data, valleys, peaks)
-    print(action)
+    # dump_file = r"D:\code\dl_helper\get_action.pkl"
+    # data = pickle.load(open(dump_file, 'rb'))
+    # obs, lob_data, valleys, peaks = data
+    # action = LobExpert._get_action(obs, lob_data, valleys, peaks)
+    # print(action)

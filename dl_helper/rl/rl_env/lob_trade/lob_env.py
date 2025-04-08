@@ -6,12 +6,17 @@ import pandas as pd
 import gymnasium as gym
 import gymnasium.spaces as spaces
 import pickle
+from collections import deque
 from multiprocessing import Process, Queue
 import queue
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
+
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtGui
+
 from py_ext.tool import log, init_logger,get_exception_msg, get_log_file, share_tensor
 from py_ext.datetime import beijing_time
 from py_ext.wechat import send_wx
@@ -523,7 +528,7 @@ class data_producer:
         a, b = self.x[self.last_data_idx]
         a = max(b - self.his_len, a)
 
-        extra_data_length = 50
+        extra_data_length = 600
         extra_a, extra_b = a - extra_data_length, b + extra_data_length
 
         return max(0, extra_a), min(len(self.plot_data), extra_b), self.plot_data.iloc[b-1].name
@@ -1156,7 +1161,7 @@ class LOB_trade_env(gym.Env):
 
             # 记录最近的reward
             self.recent_reward = reward
-            # log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} reward: {self.recent_reward}')
+            log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} reward: {self.recent_reward}')
 
             return observation, reward, terminated, truncated, info
 
@@ -1243,8 +1248,7 @@ class LOB_trade_env(gym.Env):
 
             std_data = {}
             full_plot_data = None
-            net_raw = []
-            rewards = []
+            data_deque = {}
 
             while True:
                 try:
@@ -1254,13 +1258,13 @@ class LOB_trade_env(gym.Env):
                         # 结束
                         return
                     if 'render' in data:
-                        self._plot_data(fig, ax, ax2, *data['render'], std_data, full_plot_data, net_raw, rewards)
+                        self._plot_data(fig, ax, ax2, *data['render'], std_data, full_plot_data, data_deque)
                     elif 'full_plot_data' in data:
                         full_plot_data = data['full_plot_data']
                         # 全reset
                         std_data = {}
-                        net_raw = []
-                        rewards = []
+                        data_deque = {}
+
                 except queue.Empty:
                     pass  # 队列为空时跳过
                 # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
@@ -1269,13 +1273,33 @@ class LOB_trade_env(gym.Env):
             raise e
 
     @staticmethod
-    def _plot_data(fig, ax, ax2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, net_raw, rewards):
+    def _plot_data(fig, ax, ax2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque):
         """绘制图形的具体实现"""
+        # 截取绘图数据
+        plot_data = full_plot_data.iloc[a:b]
+        # 记录标准化数据
+        if 'mid_price' not in std_data:
+            std_data['mid_price'] = plot_data['mid_price'].iloc[0]
+            # 全部标准化成净值
+            full_plot_data['mid_price'] = full_plot_data['mid_price'] / std_data['mid_price']
+
+        # 确定历史数据和未来数据的分界点
+        hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+
+        # 构建数据容器
+        if data_deque.get('net_raw') is None:
+            data_deque['net_raw'] = deque(maxlen=hist_end)
+            data_deque['rewards'] = deque(maxlen=hist_end)
+
+        # 记录标准化数据
+        if 'net_raw' not in std_data:
+            std_data['net_raw'] = latest_net_raw
+
         # 更新净值
-        net_raw.append(latest_net_raw)
+        data_deque['net_raw'].append(latest_net_raw / std_data['net_raw'])
 
         # 记录reward
-        rewards.append(recent_reward)
+        data_deque['rewards'].append(recent_reward)
 
         if not need_render:
             return
@@ -1284,42 +1308,23 @@ class LOB_trade_env(gym.Env):
         ax.clear()
         ax2.clear()
 
-        # 截取绘图数据
-        plot_data = full_plot_data.iloc[a:b].copy()
-
-        # 确定历史数据和未来数据的分界点
-        hist_end = plot_data.index.get_loc(latest_tick_time) + 1
-
-        # 截取账户净值并标准化
-        net_raw = net_raw[-hist_end:]
-        net_raw = np.array(net_raw)
-
-        # 截取reward
+        # 获取数据
+        net_raw = np.array(data_deque['net_raw'])
+        rewards = np.array(data_deque['rewards'])
         cumsum_rewards = np.cumsum(rewards)
-        cumsum_rewards = cumsum_rewards[-hist_end:]
-        rewards = rewards[-hist_end:]
-        rewards = np.array(rewards)
 
         n = len(plot_data)
-
-        # 记录标准化数据
-        if 'net_raw' not in std_data:
-            std_data['net_raw'] = net_raw[0]
-        # 标准化
-        net_raw = net_raw / std_data['net_raw']
 
         # 对齐长度
         if len(net_raw) < hist_end:
             net_raw = np.concatenate([[net_raw[0]] * (hist_end - len(net_raw)), net_raw])
-            cumsum_rewards = np.concatenate([[0] * (hist_end - len(cumsum_rewards)), cumsum_rewards])
+            nan_miss = [np.nan] * (hist_end - len(rewards))
+            rewards = np.concatenate([nan_miss, rewards])
+            cumsum_rewards = np.concatenate([nan_miss, cumsum_rewards])
 
-        # 记录标准化数据
-        if 'mid_price' not in std_data:
-            std_data['mid_price'] = plot_data['mid_price'].iloc[0]
-        # 标准化成净值
-        plot_data['mid_price'] = plot_data['mid_price'] / std_data['mid_price']
+        # 计算累积奖励
 
-        # 
+        # 绘制数据
         ax.plot(range(hist_end), plot_data['mid_price'].iloc[:hist_end].values, label=f'mid_price({plot_data[f"mid_price"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
         ax.plot(range(hist_end), net_raw, label=f'net({net_raw[hist_end - 1]:.6f})', color='red', alpha=1)
         ax.plot(range(hist_end-1, n),plot_data['mid_price'].iloc[hist_end-1:].values, color='blue', alpha=0.3)
@@ -1355,7 +1360,6 @@ class LOB_trade_env(gym.Env):
         fig.canvas.draw()
         fig.canvas.flush_events()
         
-
     def render(self):
         if self.render_mode != 'human':
             return
