@@ -115,7 +115,7 @@ if len(sys.argv) > 1:
             model_type = 'MlpPolicy'
 
 run_type = 'train'# 'train' or 'test'
-run_type = 'test'# 'train' or 'test'
+# run_type = 'test'# 'train' or 'test'
 train_folder = f'simple_snake13_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 
