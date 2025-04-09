@@ -182,7 +182,7 @@ if run_type == 'train':
     log("模型结构:")
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
-    sys.exit()
+    # sys.exit()
 
     for i in range(1000000):
         model.learn(total_timesteps=100_000, callback=[checkpoint_callback])
