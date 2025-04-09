@@ -14,8 +14,10 @@ from matplotlib.widgets import Slider
 import pytz
 from matplotlib.widgets import Button
 
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
+from dl_helper.tool import in_windows
+if in_windows:
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtWidgets
 
 from py_ext.tool import log, init_logger,get_exception_msg, get_log_file, share_tensor
 from py_ext.datetime import beijing_time
