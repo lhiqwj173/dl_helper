@@ -15,7 +15,7 @@ import pytz
 from matplotlib.widgets import Button
 
 from dl_helper.tool import in_windows
-if in_windows:
+if in_windows():
     import pyqtgraph as pg
     from pyqtgraph.Qt import QtCore, QtWidgets
 
