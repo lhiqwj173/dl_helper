@@ -112,7 +112,7 @@ if len(sys.argv) > 1:
 
 run_type = 'train'# 'train' or 'test'
 # run_type = 'test'# 'train' or 'test'
-train_folder = train_title = f'simple_snake14_{model_type}'
+train_folder = train_title = f'simple_snake13_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
