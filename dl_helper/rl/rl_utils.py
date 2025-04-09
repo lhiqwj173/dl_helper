@@ -76,11 +76,12 @@ class CustomCheckpointCallback(BaseCallback):
             # 基于timestamp去重合并
             merged_df = pd.concat([history_df, current_df]).drop_duplicates(subset=['timestamp'], keep='last')
             # 按timestamp排序
-            merged_df = merged_df.sort_values('timestamp')
+            merged_df = merged_df.sort_values('timestamp').reset_index(drop=True)
             df = merged_df
-            # for debug
-            pickle.dump((history_df, current_df, merged_df), open('plot_df.pkl', 'wb'))
-            raise
+            
+            # # for debug
+            # pickle.dump((history_df, current_df, merged_df), open('plot_df.pkl', 'wb'))
+            # raise
         else:
             df = pd.DataFrame(self.metrics)
         df.to_csv(metrics_file, index=False)
