@@ -26,10 +26,6 @@ from py_ext.alist import alist
 from py_ext.tool import log, init_logger
 from py_ext.datetime import beijing_time
 
-train_folder = train_title = f'snake13'
-log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
-init_logger(log_name, home=train_folder, timestamp=False)
-
 from dl_helper.rl.rl_env.snake3.snake_env import SnakeEnv
 from dl_helper.rl.rl_utils import CustomCheckpointCallback
 from dl_helper.tool import report_memory_usage, in_windows
@@ -116,8 +112,10 @@ if len(sys.argv) > 1:
 
 run_type = 'train'# 'train' or 'test'
 # run_type = 'test'# 'train' or 'test'
-train_folder = f'simple_snake13_{model_type}'
+train_folder = train_title = f'simple_snake13_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
+log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
+init_logger(log_name, home=train_folder, timestamp=False)
 
 # 创建带 Monitor 的环境函数
 def make_env():
