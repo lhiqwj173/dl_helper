@@ -109,24 +109,26 @@ class LobExpert:
         """
         通过 env 准备数据
         """
-        self.lob_data = self.env.data_producer.all_raw_data.copy()
+        full_lob_data = self.env.data_producer.all_raw_data.copy()
 
         # 样本的索引范围
-        begin_idx, end_idx, code_idx = self.env.data_producer.idxs[0]
-        # 准备时，env 已经get一个数据，导致 begin_idx+1, 需要还原
-        begin_idx -= 1
+        begin_idx, end_idx, code_idx = self.env.data_producer.full_idxs[0]
         # 最后一个也可以取到
         end_idx += 1
 
         # 截取范围
-        idx = [i[1]-1 for i in self.env.data_producer.x[begin_idx:end_idx]]
-        self.lob_data = self.lob_data.iloc[idx].reset_index(drop=True)
+        x = self.env.data_producer.x[begin_idx:end_idx]
+        lob_data_begin = x[0][0]
+        lob_data_end = x[-1][1]
+        self.lob_data = full_lob_data.iloc[lob_data_begin: lob_data_end].reset_index(drop=True)
 
         # 只保留 'BASE买1价', 'BASE卖1价'
         self.lob_data = self.lob_data[['BASE买1价', 'BASE卖1价']]
 
         # 距离市场关闭的秒数
-        self.lob_data['before_market_close_sec'] = [i for i in self.env.data_producer.before_market_close_sec[begin_idx:end_idx]]
+        sample_idxs = [i[1]-1 for i in x]
+        self.lob_data['before_market_close_sec'] = np.nan
+        self.lob_data['before_market_close_sec'].iloc[sample_idxs] = [i for i in self.env.data_producer.before_market_close_sec[begin_idx:end_idx]]
         self.lob_data['before_market_close_sec'] /= MAX_SEC_BEFORE_CLOSE
 
         if dtype == np.float32:
@@ -144,6 +146,10 @@ class LobExpert:
         self.valleys = [i+1 for i in self.valleys]
         self.peaks = [i+1 for i in self.peaks]
 
+        # 添加到 lob_data 中
+        self.lob_data.loc[self.valleys, 'valley_peak'] = 0
+        self.lob_data.loc[self.peaks, 'valley_peak'] = 1
+
         # b/s/h
         # 无需提前一个k线，发出信号
         # trades 中的索引0实际是 lob_data 中的索引1
@@ -154,6 +160,13 @@ class LobExpert:
         self.lob_data.loc[sell_idx, 'action'] = ACTION_SELL
         # self.lob_data['action'] = self.lob_data['action'].ffill()
         # self.lob_data['action'] = self.lob_data['action'].fillna(ACTION_SELL)
+
+        # 设置 env 的潜在收益数据，用于可视化
+        # 恢复到 full_lob_data 中 
+        full_lob_data['action'] = np.nan
+        full_lob_data['valley_peak'] = np.nan
+        full_lob_data.iloc[lob_data_begin: lob_data_end, -2:] = self.lob_data.loc[:, ['action', 'valley_peak']].values
+        self.env.add_potential_data(full_lob_data.loc[:, ['action', 'valley_peak']])
 
     @staticmethod
     def _get_action(obs, lob_data, valleys, peaks):
@@ -254,8 +267,8 @@ class LobExpert:
         #     self.cur_symbol = _env_code
         #     self.prepare_train_data_file(dtype=obs.dtype)
 
-        # FOR DEBUG
-        pickle.dump((obs, self.lob_data, self.valleys, self.peaks), open(r'get_action.pkl', 'wb'))
+        # # FOR DEBUG
+        # pickle.dump((obs, self.lob_data, self.valleys, self.peaks), open(r'get_action.pkl', 'wb'))
 
         return self._get_action(obs, self.lob_data, self.valleys, self.peaks)
 
@@ -324,7 +337,7 @@ def play_lob_data_with_expert(render=True):
     expert = LobExpert(env)
 
     print('reset')
-    obs, info = env.reset(1)
+    obs, info = env.reset(4)
 
     dt= env.data_producer.step_use_data.iloc[-1].name
     if render:

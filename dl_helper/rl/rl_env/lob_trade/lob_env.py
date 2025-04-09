@@ -242,12 +242,14 @@ class data_producer:
                 unique_symbols = [i for i in unique_symbols if i in self.use_symbols]
 
             # 获取所有标的的起止索引
+            self.full_idxs = []# begin 没有被截断的索引
             self.idxs = []
             for symbol in unique_symbols:
                 symbol_mask = symbols == symbol
                 symbol_indices = np.where(symbol_mask)[0]
                 begin = symbol_indices[0]
                 end = symbol_indices[-1]
+                self.full_idxs.append([begin, end, USE_CODES.index(symbol)])
                 if self.random_begin_in_day and self.data_type == 'train':
                     # begin = random.randint(begin, end-50)# 至少50个数据
                     begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
@@ -261,7 +263,9 @@ class data_producer:
             # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
             if self.data_type == 'train':
                 # self.idxs = [random.choice(self.idxs)]
-                self.idxs = [self.np_random.choice(self.idxs)]
+                choose_idx = self.np_random.choice(len(self.idxs))
+                self.idxs = [self.idxs[choose_idx]]
+                self.full_idxs = [self.full_idxs[choose_idx]]
 
             # 当前的标的
             self.cur_symbol = USE_CODES[self.idxs[0][2]]
@@ -488,6 +492,7 @@ class data_producer:
             log(f'[{self.data_type}] need_close {self.idxs[0][0]} {self.idxs[0][1]}')
             # 更新剩余的 begin/end 组
             self.idxs = self.idxs[1:]
+            self.full_idxs = self.full_idxs[1:]
             log(f'[{self.data_type}] idxs: {self.idxs}')
             if not self.idxs:
                 # 当天的数据没有下一个可读取的 begin/end 组
@@ -1240,7 +1245,10 @@ class LOB_trade_env(gym.Env):
         if self.render_mode == 'human':
             self.input_queue.put(None)
             self.update_process.join()
-            QtWidgets.QApplication.instance().quit()
+
+    def add_potential_data(self, potential_data):
+        if self.render_mode == 'human':
+            self.input_queue.put({'potential_data': potential_data})
 
     def update_plot(self, input_queue):
         """线程中运行的图形更新函数"""
@@ -1266,19 +1274,27 @@ class LOB_trade_env(gym.Env):
             std_data = {}
             full_plot_data = None
             data_deque = {}
+            # 潜在收益数据
+            potential_data = None
 
             while True:
                 try:
                     data = input_queue.get_nowait()
                     if data is None:
+                        app.quit()
                         return
                     if 'render' in data:
-                        self._plot_data(p1, p2, *data['render'], std_data, full_plot_data, data_deque)
+                        self._plot_data(p1, p2, *data['render'], std_data, full_plot_data, data_deque, potential_data)
                     elif 'full_plot_data' in data:
                         full_plot_data = data['full_plot_data']
                         log(f'Received full_plot_data with {len(full_plot_data)} rows')
                         std_data = {}
                         data_deque = {}
+                        potential_data = None
+                    elif 'potential_data' in data:
+                        log(f'Received potential_data with {len(data["potential_data"])} rows')
+                        potential_data = data['potential_data']
+
                 except queue.Empty:
                     pass
                 app.processEvents()
@@ -1287,7 +1303,7 @@ class LOB_trade_env(gym.Env):
             raise e
 
     @staticmethod
-    def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque):
+    def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque, potential_data):
         """绘制图形的具体实现"""
         if not need_render or full_plot_data is None or full_plot_data.empty:
             log('Skipping _plot_data: invalid full_plot_data')
@@ -1298,6 +1314,11 @@ class LOB_trade_env(gym.Env):
             log('Skipping _plot_data: empty plot_data')
             return
 
+        # 对齐 potential_data 到显示范围
+        if potential_data is not None:
+            potential_data = potential_data.iloc[a:b]
+
+        # 标准化 mid_price
         if 'mid_price' not in std_data:
             std_data['mid_price'] = plot_data['mid_price'].iloc[0] if not plot_data['mid_price'].empty else 1.0
             if std_data['mid_price'] == 0:
@@ -1310,6 +1331,7 @@ class LOB_trade_env(gym.Env):
             log(f'Skipping _plot_data: invalid latest_tick_time={latest_tick_time}')
             return
 
+        # 初始化 data_deque
         if data_deque.get('net_raw') is None:
             data_deque['net_raw'] = deque(maxlen=hist_end)
             data_deque['rewards'] = deque(maxlen=hist_end)
@@ -1317,7 +1339,7 @@ class LOB_trade_env(gym.Env):
         if 'net_raw' not in std_data:
             std_data['net_raw'] = latest_net_raw if latest_net_raw != 0 else 1.0
 
-        # 使用标准化后的净值
+        # 计算标准化净值和奖励
         net_value = latest_net_raw / std_data['net_raw'] if std_data['net_raw'] != 0 else 1.0
         data_deque['net_raw'].append(net_value)
         data_deque['rewards'].append(recent_reward if recent_reward is not None else 0.0)
@@ -1327,13 +1349,14 @@ class LOB_trade_env(gym.Env):
 
         n = len(plot_data)
 
-        # 对齐长度，使用初始值填充，只处理 hist_end 之前的数据
+        # 对齐 net_raw 和 rewards 到 hist_end
+        real_data_begin_pos = 0
         if len(net_raw) < hist_end:
             pad_length = hist_end - len(net_raw)
             net_raw = np.concatenate([np.full(pad_length, net_raw[0] if len(net_raw) > 0 else 1.0), net_raw])
             rewards = np.concatenate([np.zeros(pad_length), rewards])
+            real_data_begin_pos = pad_length
 
-        # 截取至 hist_end，确保只显示当前时间之前的数据
         net_raw = net_raw[-hist_end:]
         rewards = rewards[-hist_end:]
         cumsum_rewards = np.cumsum(rewards)
@@ -1342,11 +1365,11 @@ class LOB_trade_env(gym.Env):
             log(f'Data length mismatch: hist_end={hist_end}, len(net_raw)={len(net_raw)}, len(cumsum_rewards)={len(cumsum_rewards)}')
             return
 
-        # log(f'_plot_data: hist_end={hist_end}, latest_net_raw={latest_net_raw}, net_value={net_value}, net_raw[-5:]={net_raw[-5:]}, cumsum_rewards[-5:]={cumsum_rewards[-5:]}')
-
+        # 清空画布
         p1.clear()
         p2.clear()
 
+        # 绘制 mid_price（历史和未来）
         mid_price_hist = plot_data['mid_price'].iloc[:hist_end].values
         mid_price_future = plot_data['mid_price'].iloc[hist_end-1:].values
         if len(mid_price_hist) > 0:
@@ -1354,23 +1377,18 @@ class LOB_trade_env(gym.Env):
         if len(mid_price_future) > 0:
             p1.plot(range(hist_end-1, n), mid_price_future, pen=pg.mkPen('b', width=2, style=QtCore.Qt.DashLine))
 
+        # 绘制净值和累计奖励
         if len(net_raw) > 0 and not np.all(np.isnan(net_raw)):
             p1.plot(range(hist_end), net_raw, pen=pg.mkPen('r', width=2), name=f'net({net_raw[-1]:.6f})')
-            # 动态调整 Y 轴范围，padding 固定为 5%
-            net_min, net_max = np.min(net_raw), np.max(net_raw)
-            padding = (net_max - net_min) * 0.05  # 5% 缓冲
+            net_min, net_max = min(np.min(net_raw), plot_data['mid_price'].min()), max(np.max(net_raw), plot_data['mid_price'].max())
+            padding = (net_max - net_min) * 0.05
             p1.setYRange(net_min - padding, net_max + padding)
-        else:
-            log('Skipping net_raw plot: invalid data')
 
         if len(cumsum_rewards) > 0 and not np.all(np.isnan(cumsum_rewards)):
             p2.plot(range(hist_end), cumsum_rewards, pen=pg.mkPen('g', width=2), name=f'Cumulative Rewards({cumsum_rewards[-1]:.6f})')
-            # 动态调整 Y 轴范围，padding 固定为 5%
             reward_min, reward_max = np.min(cumsum_rewards), np.max(cumsum_rewards)
-            padding = (reward_max - reward_min) * 0.05  # 5% 缓冲
+            padding = (reward_max - reward_min) * 0.05
             p2.setYRange(reward_min - padding, reward_max + padding)
-        else:
-            log('Skipping cumsum_rewards plot: invalid data')
 
         # 添加时间线
         time_str = plot_data.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
@@ -1378,10 +1396,16 @@ class LOB_trade_env(gym.Env):
         vline2 = pg.InfiniteLine(pos=hist_end-1, angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
         p1.addItem(vline1)
         p2.addItem(vline2)
-        
         text1 = pg.TextItem(time_str, anchor=(0, 1))
         p1.addItem(text1)
         text1.setPos(hist_end-1, p1.getViewBox().viewRange()[1][0])
+
+        # 添加账户起始时间线
+        if real_data_begin_pos > 0:
+            vline1 = pg.InfiniteLine(pos=real_data_begin_pos, angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+            vline2 = pg.InfiniteLine(pos=real_data_begin_pos, angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+            p1.addItem(vline1)
+            p2.addItem(vline2)
 
         for i in range(len(rewards)):
             if rewards[i] != 0 and not np.isnan(cumsum_rewards[i]):
@@ -1391,8 +1415,68 @@ class LOB_trade_env(gym.Env):
                 p2.addItem(text)
                 text.setPos(i, cumsum_rewards[i])
 
+        # 设置标题
         status_str = '持仓' if status == 1 else '空仓'
         p1.setTitle(f'status: {status_str}')
+
+        # 绘制波谷、波峰、买入和卖出信号（整个显示范围）
+        if potential_data is not None:
+            # 波谷和波峰
+            valley_mask = potential_data['valley_peak'] == 0
+            peak_mask = potential_data['valley_peak'] == 1
+            valley_indices = np.where(valley_mask)[0]
+            peak_indices = np.where(peak_mask)[0]
+            mid_price = plot_data['mid_price'].values
+            valley_points = pg.ScatterPlotItem(
+                valley_indices, 
+                mid_price[valley_indices], 
+                symbol='o', 
+                pen=pg.mkPen('r', width=2), 
+                brush=None, 
+                size=10
+            )
+            peak_points = pg.ScatterPlotItem(
+                peak_indices, 
+                mid_price[peak_indices], 
+                symbol='o', 
+                pen=pg.mkPen('g', width=2), 
+                brush=None, 
+                size=10
+            )
+            p1.addItem(valley_points)
+            p1.addItem(peak_points)
+
+            # 买入和卖出信号
+            buy_mask = potential_data['action'] == ACTION_BUY  # ACTION_BUY
+            sell_mask = potential_data['action'] == ACTION_SELL  # ACTION_SELL
+            buy_indices = np.where(buy_mask)[0]
+            sell_indices = np.where(sell_mask)[0]
+            for idx in buy_indices:
+                arrow = pg.ArrowItem(
+                    angle=90,  # 向上箭头
+                    tipAngle=60, 
+                    baseAngle=0, 
+                    headLen=15, 
+                    tailLen=0, 
+                    tailWidth=2, 
+                    pen=None, 
+                    brush='r'
+                )
+                arrow.setPos(idx, mid_price[idx])
+                p1.addItem(arrow)
+            for idx in sell_indices:
+                arrow = pg.ArrowItem(
+                    angle=-90,  # 向下箭头
+                    tipAngle=60, 
+                    baseAngle=0, 
+                    headLen=15, 
+                    tailLen=0, 
+                    tailWidth=2, 
+                    pen=None, 
+                    brush='g'
+                )
+                arrow.setPos(idx, mid_price[idx])
+                p1.addItem(arrow)
 
     def render(self):
         if self.render_mode != 'human':
