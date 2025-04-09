@@ -9,6 +9,8 @@ from py_ext.tool import log
 from py_ext.wechat import send_wx
 from py_ext.lzma import decompress, compress_folder
 
+from dl_helper.tool import print_directory_tree
+
 ALIST_UPLOAD_FOLDER = 'rl_learning_process'
 
 class TrainFolderManager:
@@ -92,8 +94,13 @@ class TrainFolderManager:
             if os.path.exists(folder):
                 send_wx(f'[{self.train_title}] 使用alist缓存文件继续训练')
                 log(f"使用alist缓存文件继续训练")
+
+                print_directory_tree(self.train_folder, log_func=log)
+
                 # 覆盖到训练文件夹
                 shutil.copytree(os.path.join('/kaggle/working/alist', self.train_title), self.train_folder, dirs_exist_ok=True)
+
+                print_directory_tree(self.train_folder, log_func=log)
         else:
             os.makedirs(self.train_folder, exist_ok=True)
 
@@ -142,6 +149,7 @@ class TrainFolderManagerSB3(TrainFolderManager):
         """
         加载检查点
         """
+        print(f'load_checkpoint')
         _model = model.load(os.path.join(self.checkpoint_folder, 'checkpoint.zip'), custom_objects= custom_objects)
         policy_state_dict = _model.policy.state_dict()  
         model.policy.load_state_dict(policy_state_dict)  

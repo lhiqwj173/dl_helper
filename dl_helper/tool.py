@@ -5,6 +5,7 @@ import platform
 import time
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 import asyncio
 from multiprocessing.queues import Queue
@@ -18,6 +19,7 @@ import seaborn as sns
 import io
 import base64
 import imgkit
+import datetime
 
 from py_ext.wechat import wx
 from py_ext.tool import debug, log, get_log_file, init_logger
@@ -49,6 +51,49 @@ def init_logger_by_ip(train_title=''):
                 home=os.path.expanduser("~") if (in_windows()) or (not os.path.exists(r'/kaggle/working')) else r'/kaggle/working',
                 )
     log(f'init_logger: {get_log_file()}')
+
+
+def print_directory_tree(folder_path, prefix="", level=0, log_func=print):
+    """
+    以树形结构打印文件夹中的所有文件和子文件夹。
+    
+    Args:
+        folder_path (str): 要列出的文件夹路径
+        prefix (str): 用于缩进的前缀字符串
+        level (int): 当前递归层级
+    """
+    try:
+        folder = Path(folder_path)
+        if not folder.exists():
+            log_func("错误：文件夹不存在！")
+            return
+        if not folder.is_dir():
+            log_func("错误：这不是一个文件夹！")
+            return
+
+        # 获取所有文件和子文件夹，按名称排序
+        items = sorted(folder.iterdir(), key=lambda x: x.name)
+        for index, item in enumerate(items):
+            is_last = index == len(items) - 1  # 是否是最后一个项目
+            # 构造当前层级的缩进和连接符
+            connector = "└── " if is_last else "├── "
+
+            # 如果是文件，添加最后修改时间；如果是文件夹，仅显示名称
+            if item.is_file():
+                mtime = datetime.datetime.fromtimestamp(item.stat().st_mtime)
+                time_str = mtime.strftime("%Y-%m-%d %H:%M:%S")
+                print(f"{prefix}{connector}{item.name} ({time_str})")
+            else:
+                print(f"{prefix}{connector}{item.name}")
+
+            # 如果是子文件夹，递归调用
+            if item.is_dir():
+                # 下一层级的缩进
+                next_prefix = prefix + ("    " if is_last else "│   ")
+                print_directory_tree(item, next_prefix, level + 1, log_func=log_func)
+
+    except Exception as e:
+        log_func(f"发生错误：{str(e)}")
 
 def upload_log_file(train_title):
     """上传日志文件到alist"""

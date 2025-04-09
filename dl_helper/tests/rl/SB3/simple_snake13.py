@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecCheckNan
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -10,7 +13,7 @@ import pygame
 import time
 import numpy as np
 import random
-import sys, os, shutil
+import sys, shutil
 import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
 plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
@@ -179,7 +182,7 @@ if run_type == 'train':
     log("模型结构:")
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
-    # sys.exit()
+    sys.exit()
 
     for i in range(1000000):
         model.learn(total_timesteps=100_000, callback=[checkpoint_callback])

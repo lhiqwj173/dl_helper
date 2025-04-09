@@ -78,7 +78,7 @@ class CustomCheckpointCallback(BaseCallback):
             # 按timestamp排序
             merged_df = merged_df.sort_values('timestamp').reset_index(drop=True)
             df = merged_df
-            
+
             # # for debug
             # pickle.dump((history_df, current_df, merged_df), open('plot_df.pkl', 'wb'))
             # raise
@@ -92,7 +92,7 @@ class CustomCheckpointCallback(BaseCallback):
         图1 绘制 ep_len_mean / ep_len_mean平滑
         图2 绘制 ep_rew_mean / ep_rew_mean平滑
         图3 绘制 train/loss / train/loss平滑
-        图4 绘制 train/entropy_loss / train/entropy_loss平滑
+        图4 绘制 train/entropy_loss / train/entropy_loss平滑14
         竖向排列，对齐 x 轴
         """
         # 定义平滑函数
