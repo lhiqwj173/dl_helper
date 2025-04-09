@@ -78,6 +78,9 @@ class CustomCheckpointCallback(BaseCallback):
             # 按timestamp排序
             merged_df = merged_df.sort_values('timestamp')
             df = merged_df
+            # for debug
+            pickle.dump((history_df, current_df, merged_df), open('plot_df.pkl', 'wb'))
+            raise
         else:
             df = pd.DataFrame(self.metrics)
         df.to_csv(metrics_file, index=False)

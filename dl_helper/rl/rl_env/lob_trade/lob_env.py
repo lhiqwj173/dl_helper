@@ -15,7 +15,7 @@ import pytz
 from matplotlib.widgets import Button
 
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 from py_ext.tool import log, init_logger,get_exception_msg, get_log_file, share_tensor
 from py_ext.datetime import beijing_time
@@ -1238,13 +1238,28 @@ class LOB_trade_env(gym.Env):
         if self.render_mode == 'human':
             self.input_queue.put(None)
             self.update_process.join()
+            QtWidgets.QApplication.instance().quit()
 
     def update_plot(self, input_queue):
         """线程中运行的图形更新函数"""
         try:
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax2 = ax.twinx()  # 创建共享x轴的第二个y轴
-            plt.show(block=False)  # 添加这行，非阻塞方式显示图形
+            app = QtWidgets.QApplication.instance()
+            if app is None:
+                app = QtWidgets.QApplication([])
+
+            win = pg.GraphicsLayoutWidget(show=True, title="LOB Trade Environment")
+            win.resize(1000, 600)
+            win.setWindowTitle('LOB Trade Environment')
+
+            p1 = win.addPlot(row=0, col=0, title="mid_price and net")
+            p2 = win.addPlot(row=1, col=0, title="Cumulative Rewards")
+
+            # 设置固定高度比例 2:1（总高度 600 像素）
+            p1.getViewBox().parentItem().setFixedHeight(400)  # p1 占 2/3
+            p2.getViewBox().parentItem().setFixedHeight(200)  # p2 占 1/3
+
+            # 共享 X 轴，使 p2 的 X 轴与 p1 对齐
+            p2.setXLink(p1)
 
             std_data = {}
             full_plot_data = None
@@ -1252,114 +1267,131 @@ class LOB_trade_env(gym.Env):
 
             while True:
                 try:
-                    # 从队列中获取数据，非阻塞方式
                     data = input_queue.get_nowait()
-                    if None is data:
-                        # 结束
+                    if data is None:
                         return
                     if 'render' in data:
-                        self._plot_data(fig, ax, ax2, *data['render'], std_data, full_plot_data, data_deque)
+                        self._plot_data(p1, p2, *data['render'], std_data, full_plot_data, data_deque)
                     elif 'full_plot_data' in data:
                         full_plot_data = data['full_plot_data']
-                        # 全reset
+                        log(f'Received full_plot_data with {len(full_plot_data)} rows')
                         std_data = {}
                         data_deque = {}
-
                 except queue.Empty:
-                    pass  # 队列为空时跳过
-                # plt.pause(0.1)  # 短暂暂停以允许其他线程运行并更新图形
+                    pass
+                app.processEvents()
         except Exception as e:
-            log(f'[{id(self)}][{self.data_producer.data_type}] update_plot error: {get_exception_msg()}')
+            log(f'update_plot error: {get_exception_msg()}')
             raise e
 
     @staticmethod
-    def _plot_data(fig, ax, ax2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque):
+    def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque):
         """绘制图形的具体实现"""
-        # 截取绘图数据
+        if not need_render or full_plot_data is None or full_plot_data.empty:
+            log('Skipping _plot_data: invalid full_plot_data')
+            return
+
         plot_data = full_plot_data.iloc[a:b]
-        # 记录标准化数据
+        if plot_data.empty:
+            log('Skipping _plot_data: empty plot_data')
+            return
+
         if 'mid_price' not in std_data:
-            std_data['mid_price'] = plot_data['mid_price'].iloc[0]
-            # 全部标准化成净值
+            std_data['mid_price'] = plot_data['mid_price'].iloc[0] if not plot_data['mid_price'].empty else 1.0
+            if std_data['mid_price'] == 0:
+                std_data['mid_price'] = 1.0
             full_plot_data['mid_price'] = full_plot_data['mid_price'] / std_data['mid_price']
 
-        # 确定历史数据和未来数据的分界点
-        hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+        try:
+            hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+        except KeyError:
+            log(f'Skipping _plot_data: invalid latest_tick_time={latest_tick_time}')
+            return
 
-        # 构建数据容器
         if data_deque.get('net_raw') is None:
             data_deque['net_raw'] = deque(maxlen=hist_end)
             data_deque['rewards'] = deque(maxlen=hist_end)
 
-        # 记录标准化数据
         if 'net_raw' not in std_data:
-            std_data['net_raw'] = latest_net_raw
+            std_data['net_raw'] = latest_net_raw if latest_net_raw != 0 else 1.0
 
-        # 更新净值
-        data_deque['net_raw'].append(latest_net_raw / std_data['net_raw'])
+        # 使用标准化后的净值
+        net_value = latest_net_raw / std_data['net_raw'] if std_data['net_raw'] != 0 else 1.0
+        data_deque['net_raw'].append(net_value)
+        data_deque['rewards'].append(recent_reward if recent_reward is not None else 0.0)
 
-        # 记录reward
-        data_deque['rewards'].append(recent_reward)
-
-        if not need_render:
-            return
-
-        # 清空当前的axes
-        ax.clear()
-        ax2.clear()
-
-        # 获取数据
-        net_raw = np.array(data_deque['net_raw'])
-        rewards = np.array(data_deque['rewards'])
-        cumsum_rewards = np.cumsum(rewards)
+        net_raw = np.array(list(data_deque['net_raw']))
+        rewards = np.array(list(data_deque['rewards']))
 
         n = len(plot_data)
 
-        # 对齐长度
+        # 对齐长度，使用初始值填充，只处理 hist_end 之前的数据
         if len(net_raw) < hist_end:
-            net_raw = np.concatenate([[net_raw[0]] * (hist_end - len(net_raw)), net_raw])
-            nan_miss = [np.nan] * (hist_end - len(rewards))
-            rewards = np.concatenate([nan_miss, rewards])
-            cumsum_rewards = np.concatenate([nan_miss, cumsum_rewards])
+            pad_length = hist_end - len(net_raw)
+            net_raw = np.concatenate([np.full(pad_length, net_raw[0] if len(net_raw) > 0 else 1.0), net_raw])
+            rewards = np.concatenate([np.zeros(pad_length), rewards])
 
-        # 计算累积奖励
+        # 截取至 hist_end，确保只显示当前时间之前的数据
+        net_raw = net_raw[-hist_end:]
+        rewards = rewards[-hist_end:]
+        cumsum_rewards = np.cumsum(rewards)
 
-        # 绘制数据
-        ax.plot(range(hist_end), plot_data['mid_price'].iloc[:hist_end].values, label=f'mid_price({plot_data[f"mid_price"].iloc[hist_end - 1]:.6f})', color='blue', alpha=1)
-        ax.plot(range(hist_end), net_raw, label=f'net({net_raw[hist_end - 1]:.6f})', color='red', alpha=1)
-        ax.plot(range(hist_end-1, n),plot_data['mid_price'].iloc[hist_end-1:].values, color='blue', alpha=0.3)
-        ax.legend(loc='upper left')
-        status_str = f'持仓' if status == 1 else '空仓'
-        ax.set_title(f'status: {status_str}')
+        if len(net_raw) != hist_end or len(cumsum_rewards) != hist_end:
+            log(f'Data length mismatch: hist_end={hist_end}, len(net_raw)={len(net_raw)}, len(cumsum_rewards)={len(cumsum_rewards)}')
+            return
 
-        # 标注最新的历史数据时间
+        # log(f'_plot_data: hist_end={hist_end}, latest_net_raw={latest_net_raw}, net_value={net_value}, net_raw[-5:]={net_raw[-5:]}, cumsum_rewards[-5:]={cumsum_rewards[-5:]}')
+
+        p1.clear()
+        p2.clear()
+
+        mid_price_hist = plot_data['mid_price'].iloc[:hist_end].values
+        mid_price_future = plot_data['mid_price'].iloc[hist_end-1:].values
+        if len(mid_price_hist) > 0:
+            p1.plot(range(hist_end), mid_price_hist, pen=pg.mkPen('b', width=2), name=f'mid_price({mid_price_hist[-1]:.6f})')
+        if len(mid_price_future) > 0:
+            p1.plot(range(hist_end-1, n), mid_price_future, pen=pg.mkPen('b', width=2, style=QtCore.Qt.DashLine))
+
+        if len(net_raw) > 0 and not np.all(np.isnan(net_raw)):
+            p1.plot(range(hist_end), net_raw, pen=pg.mkPen('r', width=2), name=f'net({net_raw[-1]:.6f})')
+            # 动态调整 Y 轴范围，padding 固定为 5%
+            net_min, net_max = np.min(net_raw), np.max(net_raw)
+            padding = (net_max - net_min) * 0.05  # 5% 缓冲
+            p1.setYRange(net_min - padding, net_max + padding)
+        else:
+            log('Skipping net_raw plot: invalid data')
+
+        if len(cumsum_rewards) > 0 and not np.all(np.isnan(cumsum_rewards)):
+            p2.plot(range(hist_end), cumsum_rewards, pen=pg.mkPen('g', width=2), name=f'Cumulative Rewards({cumsum_rewards[-1]:.6f})')
+            # 动态调整 Y 轴范围，padding 固定为 5%
+            reward_min, reward_max = np.min(cumsum_rewards), np.max(cumsum_rewards)
+            padding = (reward_max - reward_min) * 0.05  # 5% 缓冲
+            p2.setYRange(reward_min - padding, reward_max + padding)
+        else:
+            log('Skipping cumsum_rewards plot: invalid data')
+
+        # 添加时间线
         time_str = plot_data.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
-        ax.axvline(x=hist_end-1, color='gray', linestyle='--')
-        ax.text(hist_end-1, ax.get_ylim()[0], time_str, rotation=90, verticalalignment='bottom')
-
-        # 设置x轴标签
-        ax.set_xlabel('Tick Index')
-
-        # 创建右侧y轴并绘制cumsum_rewards
-        ax2.plot(range(hist_end), cumsum_rewards, label=f'Cumulative Rewards({cumsum_rewards[hist_end-1]:.6f})', color='green', alpha=0.5)
-        ax2.legend(loc='upper right')
-
-        # 标注rewards不为0的点
-        for i in range(len(rewards)):
-            if rewards[i] != 0:  # 只标注变化点
-                ax2.annotate(f'{rewards[i]:.6f}', 
-                            xy=(i, cumsum_rewards[i]), 
-                            xytext=(5, 5),  # 文本偏移量
-                            textcoords='offset points',
-                            color='green',
-                            fontsize=8,
-                            arrowprops=dict(arrowstyle='->', color='green'))
-
-        # 调整布局并刷新图形
-        fig.tight_layout()
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        vline1 = pg.InfiniteLine(pos=hist_end-1, angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+        vline2 = pg.InfiniteLine(pos=hist_end-1, angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+        p1.addItem(vline1)
+        p2.addItem(vline2)
         
+        text1 = pg.TextItem(time_str, anchor=(0, 1))
+        p1.addItem(text1)
+        text1.setPos(hist_end-1, p1.getViewBox().viewRange()[1][0])
+
+        for i in range(len(rewards)):
+            if rewards[i] != 0 and not np.isnan(cumsum_rewards[i]):
+                scatter = pg.ScatterPlotItem([i], [cumsum_rewards[i]], symbol='o', pen=pg.mkPen(None), brush=pg.mkBrush('g'), size=10)
+                p2.addItem(scatter)
+                text = pg.TextItem(f'{rewards[i]:.6f}', anchor=(0, 1))
+                p2.addItem(text)
+                text.setPos(i, cumsum_rewards[i])
+
+        status_str = '持仓' if status == 1 else '空仓'
+        p1.setTitle(f'status: {status_str}')
+
     def render(self):
         if self.render_mode != 'human':
             return
