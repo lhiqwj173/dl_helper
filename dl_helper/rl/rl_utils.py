@@ -18,7 +18,6 @@ from collections import OrderedDict
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.utils import safe_mean
 
-from dl_helper.rl.run import run_client_learning, run_client_learning_device_breakout
 from dl_helper.tool import keep_upload_log_file, init_logger_by_ip, in_windows
 from dl_helper.train_param import is_kaggle
 from py_ext.tool import log, get_log_file
@@ -32,6 +31,55 @@ root_folder = os.path.expanduser("~") if (in_windows() or (not os.path.exists(rl
 def stop():
     import signal
     os.kill(os.getpid(), signal.SIGKILL)  # 强制终止当前进程
+
+def date2days(date_str: str) -> int:
+    """
+    将日期字符串（格式为 YYYYMMDD）转换为距离 19900101 的天数。
+    
+    Args:
+        date_str: 日期字符串，如 "20250409"
+    
+    Returns:
+        距离 19900101 的天数（整数）
+    
+    Raises:
+        ValueError: 如果日期字符串格式不正确或日期无效
+    """
+    try:
+        # 解析输入日期字符串
+        date = datetime.strptime(date_str, "%Y%m%d")
+        # 基准日期 19900101
+        base_date = datetime(1990, 1, 1)
+        # 计算天数差
+        delta = date - base_date
+        return delta.days
+    except ValueError as e:
+        raise ValueError(f"Invalid date string: {date_str}. Expected format: YYYYMMDD") from e
+
+def days2date(days: int) -> str:
+    """
+    将距离 19900101 的天数转换为日期字符串（格式为 YYYYMMDD）。
+    
+    Args:
+        days: 距离 19900101 的天数（整数）
+    
+    Returns:
+        日期字符串，如 "20250409"
+    
+    Raises:
+        ValueError: 如果天数为负数或导致日期超出合理范围
+    """
+    try:
+        if days < 0:
+            raise ValueError("Days cannot be negative")
+        # 基准日期 19900101
+        base_date = datetime(1990, 1, 1)
+        # 计算目标日期
+        target_date = base_date + timedelta(days=days)
+        # 转换为 YYYYMMDD 格式的字符串
+        return target_date.strftime("%Y%m%d")
+    except OverflowError as e:
+        raise ValueError(f"Days value {days} leads to an invalid date") from e
 
 class CustomCheckpointCallback(BaseCallback):
 
@@ -775,235 +823,6 @@ def read_train_title_item():
             config = pickle.load(open(os.path.join(root_folder, file), 'rb'))
             res[title] = config
     return res
-
-class LRTrainParams:
-    help_doc = """
-    命令行参数说明:
-    
-    训练参数:
-        train_title=<str>           训练标题
-        run_client_learning_func=<func>  运行客户端学习函数
-        agent_class=<class>         智能体类
-        agent_kwargs=<dict>         智能体初始化参数
-        lr=<float>                  学习率, 默认1e-4
-        num_episodes=<int>          训练回合数, 默认5000
-        hidden_dim=<int>            隐藏层维度, 默认128
-        gamma=<float>               折扣因子, 默认0.98
-        epsilon=<float>             探索率, 默认0.5
-        target_update=<int>         目标网络更新频率, 默认50
-        buffer_size=<int>           经验回放池大小, 默认3000
-        minimal_size=<int>          最小训练样本数, 默认3000
-        batch_size=<int>            批次大小, 默认256
-        sync_interval_learn_step=<int>  同步参数间隔, 默认150
-        learn_interval_step=<int>   学习更新间隔, 默认4
-        n_step=<int>                多步学习步数, 默认1
-        use_noisy=<bool>            是否使用noisy网络, 默认True
-        train_buffer_class=<class>  训练经验回放池类
-
-    模型参数:
-        need_reshape=<tuple>        是否需要reshape, 默认None
-        features_dim=<int>          特征维度
-        action_dim=<int>            动作维度
-        net_arch=<list>             网络结构
-        features_extractor_class=<class>  特征提取器类
-        features_extractor_kwargs=<dict>  特征提取器参数, 默认{}
-
-    运行参数:
-        period_day=<bool>           是否是周期性训练, 默认False
-        simple_test=<bool>          启用简单测试模式, 默认False
-        test_val=<val/test/all>     验证/测试模式
-        local=<bool>                是否是本地训练, 默认False
-        server                      以服务端模式运行
-        client                      以客户端模式运行(默认)
-
-    性能分析参数:
-        profile                     启用性能分析, 默认False
-        profile_stats_n=<int>       显示前N个耗时函数, 默认30
-        profile_output_dir=<str>    性能分析结果保存目录, 默认'profile_results'
-
-    使用示例:
-        python script.py lr=0.001 num_episodes=1000 server
-    """
-
-    def __init__(self, 
-        train_title, 
-        run_client_learning_func,
-        agent_class, 
-        need_reshape, 
-        features_dim, 
-        action_dim, 
-        net_arch, 
-        train_buffer_class, 
-        features_extractor_class, 
-        features_extractor_kwargs,
-        **kwargs
-    ):
-        self.kwargs = kwargs
-
-        # 训练参数
-        self.train_title = train_title
-        self.run_client_learning_func = run_client_learning_func
-        self.agent_class = agent_class
-        self.lr = 1e-4
-        self.num_episodes = 5000
-        self.hidden_dim = 128
-        self.gamma = 0.98
-        self.epsilon = 0.5
-        self.target_update = 50
-        self.buffer_size = 3000
-        self.minimal_size = 3000
-        self.batch_size = 256
-        self.sync_interval_learn_step = 150
-        self.learn_interval_step = 4
-        self.n_step = 1
-        self.use_noisy = True
-        self.train_buffer_class = train_buffer_class
-
-        # 模型参数
-        self.need_reshape = need_reshape
-        self.features_dim = features_dim
-        self.action_dim = action_dim
-        self.net_arch = net_arch
-        self.features_extractor_class = features_extractor_class
-        self.features_extractor_kwargs = features_extractor_kwargs
-
-        # 运行参数
-        self.period_day = False
-        self.simple_test = False
-        self.val_test = ''
-        self.local = False
-        self.is_server = False
-
-        # 性能分析参数
-        self.enable_profiling = False
-        self.profile_stats_n = 30  # 显示前N个耗时函数
-        self.profile_output_dir = 'profile_results'  # 性能分析结果保存目录
-
-    def run(self):
-        """运行训练"""
-        if not self.is_server:
-            # 训练者客户端
-            # 保持上传日志文件
-            upload_thread = threading.Thread(target=keep_upload_log_file, args=(self.train_title,), daemon=True)
-            upload_thread.start()
-
-            # 初始化agent
-            agent = self.agent_class(**self.get_agent_kwargs())
-
-            args = (agent, self.num_episodes, self.minimal_size, self.batch_size, 
-                self.sync_interval_learn_step, self.learn_interval_step, self.local)
-            kwargs = {'simple_test': self.simple_test, 'val_test': self.val_test, 
-                    'enable_profiling': self.enable_profiling}
-            run_client_learning(self.run_client_learning_func, args, kwargs)
-        else:
-            # 服务端
-            add_train_title_item(
-                self.train_title, 
-                self.agent_class, 
-                self.get_agent_kwargs(), 
-                self.simple_test, 
-                period_day=self.period_day
-            )
-
-    def update_from_args(self, args):
-        """从命令行参数更新配置"""
-        # 如果输入help,打印帮助文档并退出
-        if 'help' in args:
-            print(self.help_doc)
-            sys.exit(0)
-
-        for arg in args:
-            if arg.startswith('train_title='):
-                self.train_title = arg.split('=')[1]
-            elif arg.startswith('lr='):
-                self.lr = float(arg.split('=')[1])
-            elif arg.startswith('num_episodes='):
-                self.num_episodes = int(arg.split('=')[1])
-            elif arg.startswith('hidden_dim='):
-                self.hidden_dim = int(arg.split('=')[1])
-            elif arg.startswith('gamma='):
-                self.gamma = float(arg.split('=')[1])
-            elif arg.startswith('epsilon='):
-                self.epsilon = float(arg.split('=')[1])
-            elif arg.startswith('target_update='):
-                self.target_update = int(arg.split('=')[1])
-            elif arg.startswith('buffer_size='):
-                self.buffer_size = int(arg.split('=')[1])
-            elif arg.startswith('minimal_size='):
-                self.minimal_size = int(arg.split('=')[1])
-            elif arg.startswith('batch_size='):
-                self.batch_size = int(arg.split('=')[1])
-            elif arg.startswith('sync_interval_learn_step='):
-                self.sync_interval_learn_step = int(arg.split('=')[1])
-            elif arg.startswith('learn_interval_step='):
-                self.learn_interval_step = int(arg.split('=')[1])
-            elif arg == 'local':
-                self.local = True
-            elif arg == 'simple_test':
-                self.simple_test = True
-            elif arg.startswith('test_val='):
-                self.val_test = arg.split('=')[1]
-            elif arg == 'profile':
-                self.enable_profiling = True
-            elif arg.startswith('profile_stats_n='):
-                self.profile_stats_n = int(arg.split('=')[1])
-            elif arg.startswith('profile_output_dir='):
-                self.profile_output_dir = arg.split('=')[1]
-            elif arg == 'server':
-                self.is_server = True
-
-    def get_agent_kwargs(self):
-        """获取agent初始化参数"""
-        # # 基础参数
-        # learning_rate,
-        # gamma,
-        # epsilon,
-        # target_update,
-        # # 基类参数
-        # buffer_size,
-        # train_buffer_class,
-        # train_title,
-        # action_dim,
-        # features_dim,
-        # features_extractor_class,
-        # features_extractor_kwargs=None,
-        # use_noisy=True,
-        # n_step=1,
-        # net_arch=None,
-        # need_reshape=None,
-        agent_kwarg = {
-            'learning_rate': self.lr,
-            'gamma': self.gamma,
-            'epsilon': self.epsilon,
-            'target_update': self.target_update,
-            'buffer_size': self.buffer_size,
-            'train_buffer_class': self.train_buffer_class,
-            'train_title': self.train_title,
-            'action_dim': self.action_dim,
-            'features_dim': self.features_dim,
-            'features_extractor_class': self.features_extractor_class,
-            'features_extractor_kwargs': self.features_extractor_kwargs,
-            'use_noisy': self.use_noisy,
-            'n_step': self.n_step,
-            'net_arch': self.net_arch,
-            'need_reshape': self.need_reshape,
-        }
-
-        # 特定的参数
-        if self.agent_class.__name__ == 'C51':
-            extra_kwargs = {'n_atoms':51, 'v_min':-10, 'v_max':10}
-        elif self.agent_class.__name__ == 'DQN':
-            extra_kwargs = {'dqn_type':DD_DQN}
-        else:
-            extra_kwargs = {}
-
-        for k, v in extra_kwargs.items():
-            if k in self.kwargs:
-                agent_kwarg[k] = self.kwargs[k]
-            else:
-                log(f"{self.agent_class.__name__}使用默认参数{k}: {v}")
-
-        return agent_kwarg
 
 class Profiler:
     def __init__(self, params):

@@ -26,6 +26,8 @@ from py_ext.wechat import send_wx
 from dl_helper.tool import calc_sharpe_ratio, calc_sortino_ratio, calc_drawdown, calc_return, calc_drawup_ticks, max_profit_reachable
 from dl_helper.train_param import in_kaggle
 
+from dl_helper.rl.rl_utils import date2days, days2date
+
 from dl_helper.rl.rl_env.lob_trade.lob_env_data_augmentation import random_his_window, gaussian_noise_vol
 from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, ForceStopRewardStrategy, RewardCalculator
 
@@ -894,7 +896,7 @@ class LOB_trade_env(gym.Env):
         self.action_space = spaces.Discrete(2)
 
         # 观察空间 
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 3,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.data_producer.data_size() + 4,), dtype=np.float32)
 
         # 样本计数
         self.sample_count = 0
@@ -910,9 +912,12 @@ class LOB_trade_env(gym.Env):
         self.mean_episode_lengths = 0
         self.episode_count = 0
 
+        # 是否终止
+        self.done = False
+
         # 渲染模式
         if self.render_mode == 'human':
-            self.input_queue = Queue(maxsize=30)  # 创建多进程队列用于传递数据
+            self.input_queue = Queue(maxsize=10)  # 创建多进程队列用于传递数据
             self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
             self.update_process.start()  # 启动更新进程
 
@@ -1147,7 +1152,7 @@ class LOB_trade_env(gym.Env):
             # 添加 静态特征
             # observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
             # 20250406 取消收益率
-            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos]])
+            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, np.float32(date2days(self.data_producer.date))]])
 
             # 检查是否结束
             terminated = acc_done or need_close# 游戏终止
@@ -1159,8 +1164,8 @@ class LOB_trade_env(gym.Env):
             # 记录数据
             self.out_test_predict(out_text)
 
-            done = terminated or truncated
-            if done:
+            self.done = terminated or truncated
+            if self.done:
                 # 计算平均步数
                 self.mean_episode_lengths = (self.mean_episode_lengths * self.episode_count + self.steps) / (self.episode_count + 1)
                 self.episode_count += 1
@@ -1182,6 +1187,9 @@ class LOB_trade_env(gym.Env):
 
             # 步数统计
             self.steps = 0
+
+            # 是否终止
+            self.done = False
 
             # 交易对数
             self.trades = 0
@@ -1222,7 +1230,7 @@ class LOB_trade_env(gym.Env):
             log(f'acc reset: {pos}')
 
             # 添加 静态特征
-            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos]])
+            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, np.float32(date2days(self.data_producer.date))]])
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
@@ -1303,7 +1311,7 @@ class LOB_trade_env(gym.Env):
             raise e
 
     @staticmethod
-    def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, std_data, full_plot_data, data_deque, potential_data):
+    def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done, std_data, full_plot_data, data_deque, potential_data):
         """绘制图形的具体实现"""
         if not need_render or full_plot_data is None or full_plot_data.empty:
             log('Skipping _plot_data: invalid full_plot_data')
@@ -1342,7 +1350,7 @@ class LOB_trade_env(gym.Env):
         # 计算标准化净值和奖励
         net_value = latest_net_raw / std_data['net_raw'] if std_data['net_raw'] != 0 else 1.0
         data_deque['net_raw'].append(net_value)
-        data_deque['rewards'].append(recent_reward if recent_reward is not None else 0.0)
+        data_deque['rewards'].append(recent_reward if ((recent_reward is not None) and (not done)) else 0.0)
 
         net_raw = np.array(list(data_deque['net_raw']))
         rewards = np.array(list(data_deque['rewards']))
@@ -1375,7 +1383,8 @@ class LOB_trade_env(gym.Env):
         if len(mid_price_hist) > 0:
             p1.plot(range(hist_end), mid_price_hist, pen=pg.mkPen('b', width=2), name=f'mid_price({mid_price_hist[-1]:.6f})')
         if len(mid_price_future) > 0:
-            p1.plot(range(hist_end-1, n), mid_price_future, pen=pg.mkPen('b', width=2, style=QtCore.Qt.DashLine))
+            # p1.plot(range(hist_end-1, n), mid_price_future, pen=pg.mkPen('b', width=2, style=QtCore.Qt.DashLine))
+            p1.plot(range(hist_end-1, n), mid_price_future, pen=pg.mkPen(color=(0, 0, 255, 128), width=2, style=QtCore.Qt.DashLine))
 
         # 绘制净值和累计奖励
         if len(net_raw) > 0 and not np.all(np.isnan(net_raw)):
@@ -1418,6 +1427,10 @@ class LOB_trade_env(gym.Env):
         # 设置标题
         status_str = '持仓' if status == 1 else '空仓'
         p1.setTitle(f'status: {status_str}')
+        if done:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1] + recent_reward:.6f}')
+        else:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f}')
 
         # 绘制波谷、波峰、买入和卖出信号（整个显示范围）
         if potential_data is not None:
@@ -1431,16 +1444,17 @@ class LOB_trade_env(gym.Env):
                 valley_indices, 
                 mid_price[valley_indices], 
                 symbol='o', 
-                pen=pg.mkPen('r', width=2), 
-                brush=None, 
+                pen=pg.mkPen(color=(255, 0, 0, 128), width=2),  # Red with 0.5 opacity
+                brush=None,
                 size=10
             )
+
             peak_points = pg.ScatterPlotItem(
                 peak_indices, 
                 mid_price[peak_indices], 
                 symbol='o', 
-                pen=pg.mkPen('g', width=2), 
-                brush=None, 
+                pen=pg.mkPen(color=(0, 255, 0, 128), width=2),  # Green with 0.5 opacity
+                brush=None,
                 size=10
             )
             p1.addItem(valley_points)
@@ -1493,7 +1507,7 @@ class LOB_trade_env(gym.Env):
         latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward)})
+        self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done)})
 
 def test_quick_produce_train_sdpk(date, code):
     """
