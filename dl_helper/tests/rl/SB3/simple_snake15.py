@@ -109,12 +109,13 @@ class CNN_1(BaseFeaturesExtractor):
 model_type = 'CnnPolicy'
 
 model_cls = CNN_0
+# model_cls = CNN_1
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == '0':
-            model_cls = CNN_0# 参数量: 33804
+            model_cls = CNN_0# 参数量: 115340
         elif arg == '1':
-            model_cls = CNN_1# 参数量: 142916
+            model_cls = CNN_1# 参数量: 288964
 
 run_type = 'train'# 'train' or 'test'
 # run_type = 'test'# 'train' or 'test'
@@ -136,7 +137,7 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 policy_kwargs = dict(
     features_extractor_class=model_cls,
     # features_extractor_kwargs=dict(features_dim=256),
-    net_arch = []
+    net_arch = [128, 64]
 )
 
 if run_type == 'train':

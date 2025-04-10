@@ -2,7 +2,7 @@ ray[rllib]
 gymnasium[accept-rom-license,atari]==1.0.0
 matplotlib
 imitation
-stable-baselines3
+stable-baselines3[extra]
 shimmy
 dill
 pyqtgraph

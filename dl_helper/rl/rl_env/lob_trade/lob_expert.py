@@ -387,7 +387,7 @@ def play_lob_data_with_expert(expert_cls, render=True):
         # if render:
         #     time.sleep(0.1)
         
-    # input('all done, press enter to close')
+    input('all done, press enter to close')
     env.close()
 
 def eval_expert(expert_cls):
