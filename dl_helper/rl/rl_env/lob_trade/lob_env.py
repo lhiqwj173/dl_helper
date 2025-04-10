@@ -1,3 +1,4 @@
+import cProfile
 import os, time
 import random
 import datetime
@@ -68,9 +69,9 @@ class data_producer:
             random_begin_in_day=True,
 
             # 数据增强
-            use_random_his_window=False,
-            use_gaussian_noise_vol=False,
-            use_spread_add_small_limit_order=False,
+            use_random_his_window=True,
+            use_gaussian_noise_vol=True,
+            use_spread_add_small_limit_order=True,
         ):
         """
         'data_type': 'train',# 训练/测试
@@ -413,15 +414,22 @@ class data_producer:
         # 准备观察值
         a, b = self.x[self.idxs[0][0]]
         self.step_use_data = self.all_raw_data.iloc[max(b - int(self.his_len * 1.5), a): b, :]# 多截取 50% 数据，用于增强
-        raw_0 = self.step_use_data.copy().values# 多截取 50% 数据，用于增强 TODO copy 是否必要
+        raw_0 = self.step_use_data.values# 多截取 50% 数据
 
         # 原始数据增强
         # 1. use_random_his_window 从更长的历史窗口（如15个）随机截取 所需的时间窗口的数据
+        if_modified = False
         if self.use_random_his_window and self.data_type == 'train':
-            raw_0 = random_his_window(raw_0, self.his_len, rng = self.np_random)
+            if_modified, raw_0 = random_his_window(raw_0, self.his_len, rng = self.np_random)
 
         # 修正历史数据长度
-        raw = raw_0[-self.his_len:]
+        if if_modified:
+            # 无需复制，返回的是新对象
+            raw = raw_0[-self.his_len:]
+        else:
+            # 如果未修改，需要复制一份
+            raw = raw_0[-self.his_len:].copy()
+
         # 记录 买卖1档 的价格
         self.store_bid_ask_1st_data(raw)
 
@@ -762,6 +770,445 @@ class RewardTracker:
         self.rewards = []
         self.consecutive_negative = 0
         
+class Render_0():
+    def __init__(self, input_queue):
+        self.input_queue = input_queue
+
+        # 中间数据
+        self.std_data = {}
+        self.full_plot_data = None
+        self.data_deque = {}
+        self.potential_data = None
+
+        # 预先创建绘图对象
+        self.p1_mid_price = pg.PlotCurveItem(pen=pg.mkPen('b', width=2))  # mid_price 曲线
+        self.p1_net_raw = pg.PlotCurveItem(pen=pg.mkPen('r', width=2))    # net_raw 曲线
+        self.p1_mid_price_future = pg.PlotCurveItem(pen=pg.mkPen(color=(0, 0, 255, 128), width=2, style=QtCore.Qt.DashLine))  # 未来价格
+        self.p2_rewards = pg.PlotCurveItem(pen=pg.mkPen('g', width=2))    # 累计奖励曲线
+        self.p1_vline = pg.InfiniteLine(angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))  # 时间线
+        self.p2_vline = pg.InfiniteLine(angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))  # 时间线
+        self.p1_text = pg.TextItem(anchor=(0, 1))  # 时间标签
+        self.p1_valley_points = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(color=(255, 0, 0, 128), width=2), brush=None, size=10)  # 波谷
+        self.p1_peak_points = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(color=(0, 255, 0, 128), width=2), brush=None, size=10)    # 波峰
+        self.p2_scatter = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(None), brush=pg.mkBrush('g'), size=10)  # 奖励点
+        self.p1_arrows = []  # 用于存储箭头对象
+
+    def update_plot(self):
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication([])
+
+        win = pg.GraphicsLayoutWidget(show=True, title="LOB Trade Environment")
+        win.resize(1000, 600)
+        win.setWindowTitle('LOB Trade Environment')
+
+        # 创建绘图区域
+        p1 = win.addPlot(row=0, col=0, title="mid_price and net")
+        p2 = win.addPlot(row=1, col=0, title="Cumulative Rewards")
+        p1.getViewBox().parentItem().setFixedHeight(400)
+        p2.getViewBox().parentItem().setFixedHeight(200)
+        p2.setXLink(p1)
+
+        # 添加预先创建的绘图对象到画布
+        p1.addItem(self.p1_mid_price)
+        p1.addItem(self.p1_net_raw)
+        p1.addItem(self.p1_mid_price_future)
+        p1.addItem(self.p1_vline)
+        p1.addItem(self.p1_text)
+        p1.addItem(self.p1_valley_points)
+        p1.addItem(self.p1_peak_points)
+        p2.addItem(self.p2_rewards)
+        p2.addItem(self.p2_vline)
+        p2.addItem(self.p2_scatter)
+
+        while True:
+            data = self.input_queue.get()
+            if data is None:
+                app.quit()
+                return
+            if 'render' in data:
+                self._plot_data(p1, p2, *data['render'])
+                app.processEvents()
+            elif 'full_plot_data' in data:
+                self.full_plot_data = data['full_plot_data']
+                self.std_data = {}
+                self.data_deque = {}
+                self.potential_data = None
+            elif 'potential_data' in data:
+                self.potential_data = data['potential_data']
+    
+    def _plot_data(self, p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done):
+        if not need_render or self.full_plot_data is None or self.full_plot_data.empty:
+            return
+
+        plot_data = self.full_plot_data.iloc[a:b]
+        if plot_data.empty:
+            return
+
+        # 数据标准化
+        if 'mid_price' not in self.std_data:
+            self.std_data['mid_price'] = plot_data['mid_price'].iloc[0] if not plot_data['mid_price'].empty else 1.0
+            if self.std_data['mid_price'] == 0:
+                self.std_data['mid_price'] = 1.0
+            plot_data['mid_price'] /= self.std_data['mid_price']
+
+        try:
+            hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+        except KeyError:
+            return
+
+        # 初始化 deque
+        if self.data_deque.get('net_raw') is None:
+            self.data_deque['net_raw'] = deque(maxlen=hist_end)
+            self.data_deque['rewards'] = deque(maxlen=hist_end)
+
+        if 'net_raw' not in self.std_data:
+            self.std_data['net_raw'] = latest_net_raw if latest_net_raw != 0 else 1.0
+
+        net_value = latest_net_raw / self.std_data['net_raw'] if self.std_data['net_raw'] != 0 else 1.0
+        data_deque['net_raw'].append(net_value)
+        data_deque['rewards'].append(recent_reward if ((recent_reward is not None) and (not done)) else 0.0)
+
+        net_raw = np.array(list(data_deque['net_raw']))
+        rewards = np.array(list(data_deque['rewards']))
+
+        n = len(plot_data)
+        real_data_begin_pos = 0
+        if len(net_raw) < hist_end:
+            pad_length = hist_end - len(net_raw)
+            net_raw = np.concatenate([np.full(pad_length, net_raw[0] if len(net_raw) > 0 else 1.0), net_raw])
+            rewards = np.concatenate([np.zeros(pad_length), rewards])
+            real_data_begin_pos = pad_length
+
+        net_raw = net_raw[-hist_end:]
+        rewards = rewards[-hist_end:]
+        cumsum_rewards = np.cumsum(rewards)
+
+        # 更新 mid_price 历史和未来曲线
+        mid_price_hist = plot_data['mid_price'].iloc[:hist_end].values
+        mid_price_future = plot_data['mid_price'].iloc[hist_end-1:].values
+        self.p1_mid_price.setData(range(hist_end), mid_price_hist)
+        if len(mid_price_future) > 0:
+            self.p1_mid_price_future.setData(range(hist_end-1, n), mid_price_future)
+        else:
+            self.p1_mid_price_future.setData([], [])
+
+        # 更新 net_raw 曲线
+        self.p1_net_raw.setData(range(hist_end), net_raw)
+
+        # 更新累计奖励曲线
+        self.p2_rewards.setData(range(hist_end), cumsum_rewards)
+
+        # 更新时间线和标签
+        time_str = plot_data.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
+        self.p1_vline.setPos(hist_end-1)
+        self.p2_vline.setPos(hist_end-1)
+        self.p1_text.setText(time_str)
+        self.p1_text.setPos(hist_end-1, p1.getViewBox().viewRange()[1][0])
+
+        # 更新波谷和波峰
+        if potential_data is not None:
+            valley_mask = potential_data['valley_peak'] == 0
+            peak_mask = potential_data['valley_peak'] == 1
+            valley_indices = np.where(valley_mask)[0]
+            peak_indices = np.where(peak_mask)[0]
+            mid_price = plot_data['mid_price'].values
+            self.p1_valley_points.setData(valley_indices, mid_price[valley_indices])
+            self.p1_peak_points.setData(peak_indices, mid_price[peak_indices])
+
+            # 更新买入和卖出箭头
+            buy_mask = potential_data['action'] == ACTION_BUY
+            sell_mask = potential_data['action'] == ACTION_SELL
+            buy_indices = np.where(buy_mask)[0]
+            sell_indices = np.where(sell_mask)[0]
+
+            # 预先创建足够多的箭头对象
+            max_arrows = max(len(buy_indices), len(sell_indices))
+            while len(self.p1_arrows) < max_arrows:
+                arrow = pg.ArrowItem(angle=90, tipAngle=60, baseAngle=0, headLen=15, tailLen=0, tailWidth=2, pen=None, brush='r')
+                p1.addItem(arrow)
+                self.p1_arrows.append(arrow)
+
+            # 更新箭头位置和可见性（这里仅示例买入箭头，卖出类似）
+            for i, idx in enumerate(buy_indices):
+                self.p1_arrows[i].setPos(idx, mid_price[idx])
+                self.p1_arrows[i].setVisible(True)
+            for i in range(len(buy_indices), len(self.p1_arrows)):
+                self.p1_arrows[i].setVisible(False)
+
+        # 更新奖励散点图
+        reward_points = [(i, cumsum_rewards[i]) for i in range(len(rewards)) if rewards[i] != 0 and not np.isnan(cumsum_rewards[i])]
+        if reward_points:
+            x, y = zip(*reward_points)
+            self.p2_scatter.setData(x, y)
+        else:
+            self.p2_scatter.setData([], [])
+
+        # 更新标题
+        status_str = '持仓' if status == 1 else '空仓'
+        p1.setTitle(f'status: {status_str}')
+        if done:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f} + {recent_reward:.6f}')
+        else:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f}')
+
+class Render:
+    def __init__(self, input_queue):
+        self.input_queue = input_queue
+
+        # 中间数据
+        self.std_data = {}
+        self.full_plot_data = None
+        self.data_deque = {}
+        self.potential_data = None
+
+        # 延迟创建绘图对象，直到 update_plot 中初始化 GUI
+        self.p1_mid_price = None
+        self.p1_net_raw = None
+        self.p1_mid_price_future = None
+        self.p2_rewards = None
+        self.p1_vline = None
+        self.p2_vline = None
+        self.p1_text = None
+        self.p1_valley_points = None
+        self.p1_peak_points = None
+        self.p2_scatter = None
+        self.p1_arrows_buy = []
+        self.p1_arrows_sell = []
+
+        log('Render init done')
+
+    def update_plot(self):
+        try:
+            app = QtWidgets.QApplication.instance()
+            if app is None:
+                log('Creating new QApplication')
+                app = QtWidgets.QApplication([])
+            else:
+                log('Using existing QApplication')
+
+            # 初始化绘图对象
+            log('Creating plot items')
+            self.p1_mid_price = pg.PlotCurveItem(pen=pg.mkPen('b', width=2))
+            self.p1_net_raw = pg.PlotCurveItem(pen=pg.mkPen('r', width=2))
+            self.p1_mid_price_future = pg.PlotCurveItem(pen=pg.mkPen(color=(0, 0, 255, 128), width=2, style=QtCore.Qt.DashLine))
+            self.p2_rewards = pg.PlotCurveItem(pen=pg.mkPen('g', width=2))
+            self.p1_vline = pg.InfiniteLine(angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+            self.p2_vline = pg.InfiniteLine(angle=90, pen=pg.mkPen('gray', width=1, style=QtCore.Qt.DashLine))
+            try:
+                t1 = time.time()
+                self.p1_text = pg.TextItem(anchor=(0, 1))  # 时间标签
+                t2 = time.time()
+                log(f'TextItem creation time: {t2 - t1:.6f} seconds')
+            except Exception as e:
+                log(f'Failed to create TextItem: {e}')
+                raise
+            self.p1_valley_points = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(color=(255, 0, 0, 128), width=2), brush=None, size=10)
+            self.p1_peak_points = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(color=(0, 255, 0, 128), width=2), brush=None, size=10)
+            self.p2_scatter = pg.ScatterPlotItem(symbol='o', pen=pg.mkPen(None), brush=pg.mkBrush('g'), size=10)
+            self.p1_arrows_buy = [pg.ArrowItem(angle=90, tipAngle=60, baseAngle=0, headLen=15, tailLen=0, tailWidth=2, pen=None, brush='r') for _ in range(100)]
+            self.p1_arrows_sell = [pg.ArrowItem(angle=-90, tipAngle=60, baseAngle=0, headLen=15, tailLen=0, tailWidth=2, pen=None, brush='g') for _ in range(100)]
+
+            win = pg.GraphicsLayoutWidget(show=True, title="LOB Trade Environment")
+            win.resize(1000, 600)
+            win.setWindowTitle('LOB Trade Environment')
+
+            p1 = win.addPlot(row=0, col=0, title="mid_price and net")
+            p2 = win.addPlot(row=1, col=0, title="Cumulative Rewards")
+            p1.getViewBox().parentItem().setFixedHeight(400)
+            p2.getViewBox().parentItem().setFixedHeight(200)
+            p2.setXLink(p1)
+
+            # 添加绘图对象
+            p1.addItem(self.p1_mid_price)
+            p1.addItem(self.p1_net_raw)
+            p1.addItem(self.p1_mid_price_future)
+            p1.addItem(self.p1_vline)
+            p1.addItem(self.p1_text)
+            p1.addItem(self.p1_valley_points)
+            p1.addItem(self.p1_peak_points)
+            p2.addItem(self.p2_rewards)
+            p2.addItem(self.p2_vline)
+            p2.addItem(self.p2_scatter)
+            for arrow in self.p1_arrows_buy + self.p1_arrows_sell:
+                arrow.setVisible(False)
+                p1.addItem(arrow)
+
+            log('Plot setup complete')
+
+            while True:
+                try:
+                    data = self.input_queue.get_nowait()
+                    if data is None:
+                        log('Received None, quitting')
+                        app.quit()
+                        return
+                    if 'render' in data:
+                        self._plot_data(p1, p2, *data['render'])
+                    elif 'full_plot_data' in data:
+                        self.full_plot_data = data['full_plot_data']
+                        if not self.full_plot_data.empty:
+                            self.std_data['mid_price'] = self.full_plot_data['mid_price'].iloc[0] or 1.0
+                            self.full_plot_data['mid_price_std'] = self.full_plot_data['mid_price'] / self.std_data['mid_price']
+                            max_len = len(self.full_plot_data)
+                            self.data_deque['net_raw'] = deque(maxlen=max_len)
+                            self.data_deque['rewards'] = deque(maxlen=max_len)
+                        self.potential_data = None
+                    elif 'potential_data' in data:
+                        self.potential_data = data['potential_data']
+                    app.processEvents()
+                except queue.Empty:
+                    app.processEvents()
+                    time.sleep(0.01)  # 避免 CPU 过载
+
+        except Exception as e:
+            log(f'update_plot error: {e}')
+            raise
+
+    def _plot_data(self, p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done):
+        if not need_render or self.full_plot_data is None or self.full_plot_data.empty:
+            log("Skipping _plot_data: invalid full_plot_data")
+            return
+
+        plot_data = self.full_plot_data.iloc[a:b]
+        if plot_data.empty:
+            log("Skipping _plot_data: empty plot_data")
+            return
+
+        if not isinstance(plot_data.index, pd.DatetimeIndex):
+            log("plot_data.index must be a DatetimeIndex")
+            return
+
+        try:
+            hist_end = plot_data.index.get_loc(latest_tick_time) + 1
+        except KeyError:
+            log(f"Invalid latest_tick_time: {latest_tick_time}")
+            return
+
+        if 'net_raw' not in self.std_data:
+            self.std_data['net_raw'] = latest_net_raw if latest_net_raw != 0 else 1.0
+
+        net_value = latest_net_raw / self.std_data['net_raw'] if self.std_data['net_raw'] != 0 else 1.0
+        self.data_deque['net_raw'].append(net_value)
+        self.data_deque['rewards'].append(recent_reward if (recent_reward is not None and not done) else 0.0)
+
+        net_raw = np.array(list(self.data_deque['net_raw']))
+        rewards = np.array(list(self.data_deque['rewards']))
+
+        n = len(plot_data)
+        if len(net_raw) < hist_end:
+            pad_length = hist_end - len(net_raw)
+            net_raw = np.concatenate([np.full(pad_length, net_raw[0] if len(net_raw) > 0 else 1.0), net_raw])
+            rewards = np.concatenate([np.zeros(pad_length), rewards])
+
+        net_raw = net_raw[-hist_end:]
+        rewards = rewards[-hist_end:]
+        cumsum_rewards = np.cumsum(rewards)
+
+        # 获取 mid_price 数据
+        mid_price_hist = plot_data['mid_price_std'].iloc[:hist_end].values
+        mid_price_future = plot_data['mid_price_std'].iloc[hist_end-1:].values
+
+        # 转换为 1D NumPy 数组，确保 float64 类型
+        mid_price_hist = np.asarray(mid_price_hist, dtype=np.float64).flatten()
+        mid_price_future = np.asarray(mid_price_future, dtype=np.float64).flatten()
+
+        # 创建 X 数据，确保是 NumPy 数组
+        x_hist = np.arange(hist_end, dtype=np.float64)
+
+        # 调试信息
+        log(f"hist_end: {hist_end}")
+        log(f"x_hist type: {type(x_hist)}, shape: {x_hist.shape}, dtype: {x_hist.dtype}, content: {x_hist[:5] if len(x_hist) > 0 else 'empty'}")
+        log(f"mid_price_hist type: {type(mid_price_hist)}, shape: {mid_price_hist.shape}, dtype: {mid_price_hist.dtype}, content: {mid_price_hist[:5] if len(mid_price_hist) > 0 else 'empty'}")
+        log(f"mid_price_future type: {type(mid_price_future)}, shape: {mid_price_future.shape}, dtype: {mid_price_future.dtype}, content: {mid_price_future[:5] if len(mid_price_future) > 0 else 'empty'}")
+
+        # 检查数据有效性
+        if len(mid_price_hist) == 0:
+            log("mid_price_hist is empty, setting empty data")
+            self.p1_mid_price.setData([], [])
+            self.p1_mid_price_future.setData([], [])
+            return
+
+        # 确保长度匹配
+        if len(mid_price_hist) != hist_end:
+            log(f"Length mismatch: len(mid_price_hist)={len(mid_price_hist)}, hist_end={hist_end}")
+            mid_price_hist = mid_price_hist[:hist_end]  # 截断或填充
+            if len(mid_price_hist) < hist_end:
+                mid_price_hist = np.pad(mid_price_hist, (0, hist_end - len(mid_price_hist)), mode='constant', constant_values=0.0)
+
+        # 清理 NaN 或 inf
+        mid_price_hist = np.nan_to_num(mid_price_hist, nan=0.0, posinf=0.0, neginf=0.0)
+        mid_price_future = np.nan_to_num(mid_price_future, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # 更新 mid_price 历史曲线
+        try:
+            self.p1_mid_price.setData(x_hist, mid_price_hist)
+        except Exception as e:
+            log(f"Failed to set mid_price_hist: {e}")
+            raise
+
+        # 更新 mid_price 未来曲线
+        if len(mid_price_future) > 0:
+            x_future = np.arange(hist_end-1, n, dtype=np.float64)
+            if len(x_future) != len(mid_price_future):
+                log(f"Future length mismatch: len(x_future)={len(x_future)}, len(mid_price_future)={len(mid_price_future)}")
+                mid_price_future = mid_price_future[:len(x_future)]
+            self.p1_mid_price_future.setData(x_future, mid_price_future)
+        else:
+            self.p1_mid_price_future.setData([], [])
+
+        # 更新其他曲线
+        self.p1_net_raw.setData(x_hist, net_raw)
+        self.p2_rewards.setData(x_hist, cumsum_rewards)
+
+        time_str = plot_data.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
+        self.p1_vline.setPos(hist_end-1)
+        self.p2_vline.setPos(hist_end-1)
+        self.p1_text.setText(time_str)
+        self.p1_text.setPos(hist_end-1, p1.getViewBox().viewRange()[1][0])
+
+        if self.potential_data is not None:
+            valley_mask = self.potential_data['valley_peak'] == 0
+            peak_mask = self.potential_data['valley_peak'] == 1
+            valley_indices = np.where(valley_mask)[0]
+            peak_indices = np.where(peak_mask)[0]
+            mid_price = np.asarray(plot_data['mid_price_std'].values, dtype=np.float64).flatten()
+            self.p1_valley_points.setData(valley_indices, mid_price[valley_indices])
+            self.p1_peak_points.setData(peak_indices, mid_price[peak_indices])# TODO: 这里有问题
+
+            buy_mask = self.potential_data['action'] == ACTION_BUY
+            sell_mask = self.potential_data['action'] == ACTION_SELL
+            buy_indices = np.where(buy_mask)[0]
+            sell_indices = np.where(sell_mask)[0]
+
+            for i, idx in enumerate(buy_indices):
+                if i < len(self.p1_arrows_buy):
+                    self.p1_arrows_buy[i].setPos(idx, mid_price[idx])
+                    self.p1_arrows_buy[i].setVisible(True)
+            for i in range(len(buy_indices), len(self.p1_arrows_buy)):
+                self.p1_arrows_buy[i].setVisible(False)
+
+            for i, idx in enumerate(sell_indices):
+                if i < len(self.p1_arrows_sell):
+                    self.p1_arrows_sell[i].setPos(idx, mid_price[idx])
+                    self.p1_arrows_sell[i].setVisible(True)
+            for i in range(len(sell_indices), len(self.p1_arrows_sell)):
+                self.p1_arrows_sell[i].setVisible(False)
+
+        reward_points = [(i, cumsum_rewards[i]) for i in range(len(rewards)) if rewards[i] != 0 and not np.isnan(cumsum_rewards[i])]
+        if reward_points:
+            x, y = zip(*reward_points)
+            self.p2_scatter.setData(x, y)
+        else:
+            self.p2_scatter.setData([], [])
+
+        status_str = '持仓' if status == 1 else '空仓'
+        p1.setTitle(f'status: {status_str}')
+        if done:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f} + {recent_reward:.6f}')
+        else:
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f}')
+
 class LOB_trade_env(gym.Env):
     """
     用于 LOB 的强化学习环境
@@ -817,9 +1264,9 @@ class LOB_trade_env(gym.Env):
         self.use_symbols = config.get('use_symbols', [])
         self.random_begin_in_day = config.get('random_begin_in_day', True)
         self.close_trade_need_reset = config.get('close_trade_need_reset', True)
-        self.use_random_his_window = config.get('use_random_his_window', False)
-        self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', False)
-        self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', False)
+        self.use_random_his_window = config.get('use_random_his_window', True)
+        self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', True)
+        self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', True)
 
         self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.01))
 
@@ -918,7 +1365,7 @@ class LOB_trade_env(gym.Env):
         # 渲染模式
         if self.render_mode == 'human':
             self.input_queue = Queue(maxsize=10)  # 创建多进程队列用于传递数据
-            self.update_process = Process(target=self.update_plot, args=(self.input_queue,), daemon=True)
+            self.update_process = Process(target=LOB_trade_env.update_plot, args=(self.input_queue,), daemon=True)
             self.update_process.start()  # 启动更新进程
 
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
@@ -1258,9 +1705,13 @@ class LOB_trade_env(gym.Env):
         if self.render_mode == 'human':
             self.input_queue.put({'potential_data': potential_data})
 
-    def update_plot(self, input_queue):
+    def update_plot_0(self, input_queue):
         """线程中运行的图形更新函数"""
+
         try:
+            # p = cProfile.Profile()
+            # p.enable()
+
             app = QtWidgets.QApplication.instance()
             if app is None:
                 app = QtWidgets.QApplication([])
@@ -1286,26 +1737,28 @@ class LOB_trade_env(gym.Env):
             potential_data = None
 
             while True:
-                try:
-                    data = input_queue.get_nowait()
-                    if data is None:
-                        app.quit()
-                        return
-                    if 'render' in data:
-                        self._plot_data(p1, p2, *data['render'], std_data, full_plot_data, data_deque, potential_data)
-                    elif 'full_plot_data' in data:
-                        full_plot_data = data['full_plot_data']
-                        log(f'Received full_plot_data with {len(full_plot_data)} rows')
-                        std_data = {}
-                        data_deque = {}
-                        potential_data = None
-                    elif 'potential_data' in data:
-                        log(f'Received potential_data with {len(data["potential_data"])} rows')
-                        potential_data = data['potential_data']
+                data = input_queue.get()
+                if data is None:
+                    app.quit()
+                    # p.disable()
+                    # p.dump_stats(r"C:\Users\lh\Desktop\temp\profile.prof")
+                    return
+                
+                if 'render' in data:
+                    self._plot_data(p1, p2, *data['render'], std_data, full_plot_data, data_deque, potential_data)
+                    app.processEvents()
 
-                except queue.Empty:
-                    pass
-                app.processEvents()
+                elif 'full_plot_data' in data:
+                    full_plot_data = data['full_plot_data']
+                    log(f'Received full_plot_data with {len(full_plot_data)} rows')
+                    std_data = {}
+                    data_deque = {}
+                    potential_data = None
+                elif 'potential_data' in data:
+                    log(f'Received potential_data with {len(data["potential_data"])} rows')
+                    potential_data = data['potential_data']
+
+
         except Exception as e:
             log(f'update_plot error: {get_exception_msg()}')
             raise e
@@ -1313,6 +1766,7 @@ class LOB_trade_env(gym.Env):
     @staticmethod
     def _plot_data(p1, p2, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done, std_data, full_plot_data, data_deque, potential_data):
         """绘制图形的具体实现"""
+        # return
         if not need_render or full_plot_data is None or full_plot_data.empty:
             log('Skipping _plot_data: invalid full_plot_data')
             return
@@ -1328,10 +1782,11 @@ class LOB_trade_env(gym.Env):
 
         # 标准化 mid_price
         if 'mid_price' not in std_data:
+            log(f'init mid_price std data')
             std_data['mid_price'] = plot_data['mid_price'].iloc[0] if not plot_data['mid_price'].empty else 1.0
             if std_data['mid_price'] == 0:
                 std_data['mid_price'] = 1.0
-            full_plot_data['mid_price'] = full_plot_data['mid_price'] / std_data['mid_price']
+            full_plot_data['mid_price'] /= std_data['mid_price']
 
         try:
             hist_end = plot_data.index.get_loc(latest_tick_time) + 1
@@ -1341,6 +1796,7 @@ class LOB_trade_env(gym.Env):
 
         # 初始化 data_deque
         if data_deque.get('net_raw') is None:
+            log(f'init net_raw std data')
             data_deque['net_raw'] = deque(maxlen=hist_end)
             data_deque['rewards'] = deque(maxlen=hist_end)
 
@@ -1428,7 +1884,7 @@ class LOB_trade_env(gym.Env):
         status_str = '持仓' if status == 1 else '空仓'
         p1.setTitle(f'status: {status_str}')
         if done:
-            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1] + recent_reward:.6f}')
+            p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f} + {recent_reward:.6f}')
         else:
             p2.setTitle(f'Cumulative Rewards: {cumsum_rewards[-1]:.6f}')
 
@@ -1491,6 +1947,12 @@ class LOB_trade_env(gym.Env):
                 )
                 arrow.setPos(idx, mid_price[idx])
                 p1.addItem(arrow)
+
+    @staticmethod
+    def update_plot(input_queue):
+        """线程中运行的图形更新函数"""
+        render = Render(input_queue)
+        render.update_plot()
 
     def render(self):
         if self.render_mode != 'human':

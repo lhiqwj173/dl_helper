@@ -7,6 +7,7 @@
 
 import os, pickle
 import datetime
+import random
 import pytz
 import pandas as pd
 import numpy as np
@@ -25,10 +26,12 @@ class LobExpert_env:
     """
     专家策略
     """
-    def __init__(self, lob_env: LOB_trade_env=None):
+    def __init__(self, lob_env: LOB_trade_env=None, rng=None):
+        raise Exception('弃用，改用 LobExpert_file 替代')
         self.env = lob_env
         self.cur_data_file = None
         self.cur_symbol = None
+        self.rng = rng
 
         # # 共享内存，用于读取 env 的 日期/code/begin/end
         # self.shared_data = share_tensor('lob_env_data_producer', (4,), np.int64)
@@ -69,7 +72,8 @@ class LobExpert_env:
             # 去掉第一个, 第一个数据无法成交
             self.lob_data['BASE买1价'].iloc[1:], 
             self.lob_data['BASE卖1价'].iloc[1:], 
-            rep_select='random'
+            rep_select='random',
+            rng=self.rng,
         )# 增加随机泛化
         # plot_trades((self.lob_data['BASE买1价']+self.lob_data['BASE卖1价'])/2, trades, valleys, peaks)
         # 需要 +1
@@ -224,7 +228,8 @@ class LobExpert_file(LobExpert_env):
     专家策略
     通过 文件 准备数据
     """
-    def __init__(self):
+    def __init__(self, rng=None):
+        self.rng = rng
         self.cur_date = None
         self.cur_symbol = None
 
@@ -321,14 +326,14 @@ def test_expert(expert_cls):
     debug_date=[date],
     )
 
+    obs, info = env.reset()
+
     if expert_cls == LobExpert_env:
         expert = LobExpert_env(env)
     elif expert_cls == LobExpert_file:
         expert = LobExpert_file()
     else:
         raise ValueError(f'expert_cls: {expert_cls}')
-
-    obs, info = env.reset()
     action = expert.get_action(obs)
     print(action)
 
@@ -353,17 +358,18 @@ def play_lob_data_with_expert(expert_cls, render=True):
     # debug_date=[date],
     )
 
+    print('reset')
+    # seed = random.randint(0, 1000000)
+    # log(f'seed: {seed}')
+    obs, info = env.reset(626248)
+
     if expert_cls == LobExpert_env:
-        expert = LobExpert_env(env)
+        expert = LobExpert_env(env, rng=env.np_random)
     elif expert_cls == LobExpert_file:
-        expert = LobExpert_file()
+        expert = LobExpert_file(rng=env.np_random)
     else:
         raise ValueError(f'expert_cls: {expert_cls}')
 
-    print('reset')
-    obs, info = env.reset(4)
-
-    dt= env.data_producer.step_use_data.iloc[-1].name
     if render:
         env.render()
 
@@ -375,14 +381,13 @@ def play_lob_data_with_expert(expert_cls, render=True):
             expert.add_potential_data_to_env(env)
 
         obs, reward, terminated, truncated, info = env.step(act)
-        dt= env.data_producer.step_use_data.iloc[-1].name
         if render:
             env.render()
         need_close = terminated or truncated
-        if render:
-            time.sleep(0.1)
+        # if render:
+        #     time.sleep(0.1)
         
-    input('all done, press enter to close')
+    # input('all done, press enter to close')
     env.close()
 
 def eval_expert(expert_cls):
@@ -421,7 +426,10 @@ if __name__ == '__main__':
     # test_expert(LobExpert_env)
     # test_expert(LobExpert_file)
     # play_lob_data_with_expert(LobExpert_env, True)
+    import time
+    t = time.time()
     play_lob_data_with_expert(LobExpert_file, True)
+    print(time.time() - t)
     # eval_expert(LobExpert_env)
     # eval_expert(LobExpert_file)
 

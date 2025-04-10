@@ -16,11 +16,12 @@ def random_his_window(raw_data: np.ndarray, his_len: int, max_random_num: int = 
         random_prob: float, 随机删除行数的概率, 默认为 0.1
 
     Returns:
-        np.ndarray: 修改后的数据数组，行数 >= his_len
+        (bool: 是否修改了数据, np.ndarray: 修改后的数据数组，行数 >= his_len)
         
     Raises:
         ValueError: 如果 raw_data 的行数 < his_len
     """
+
     # 获取 raw_data 的行数
     N = raw_data.shape[0]
     
@@ -47,8 +48,12 @@ def random_his_window(raw_data: np.ndarray, his_len: int, max_random_num: int = 
     # 限制 m 不超过 max_random_num
     m = min(m, max_random_num)
     
+    # 是否修改了数据
+    if_modified = False
     # 如果 m > 0，则进行删除
     if m > 0:
+        if_modified = True
+
         # 随机选择 m 个不同的行索引
         if rng is None:
             to_delete = np.random.choice(his_len - excluding_last_num, m, replace=False)
@@ -58,7 +63,7 @@ def random_his_window(raw_data: np.ndarray, his_len: int, max_random_num: int = 
         # 从数据中删除这些行
         data = np.delete(data, to_delete, axis=0)
     
-    return data
+    return if_modified, data
 
 def gaussian_noise_vol(shape, limit=50, random_prob=0.3, rng=None):
     """

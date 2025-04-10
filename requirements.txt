@@ -1,4 +1,13 @@
+ray[rllib]
+gymnasium[accept-rom-license,atari]==1.0.0
 matplotlib
+imitation
+stable-baselines3
+shimmy
+dill
+pyqtgraph
+pyqt5
+ale_py
 beautifulsoup4
 tqdm
 gymnasium
@@ -9,6 +18,9 @@ torchstat
 torchinfo
 scikit-learn
 accelerate
+pygame
+py-spy
+snakeviz
 requests_toolbelt
 torchmetrics
 df2img==0.2.11

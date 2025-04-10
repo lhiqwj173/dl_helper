@@ -46,15 +46,17 @@ def linear_schedule(initial_value, final_value=0.0):
 
 # 自定义 CNN 特征提取器
 class CNN_0(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim: int = 64):
+    def __init__(self, observation_space, features_dim: int = 256):
         super().__init__(observation_space, features_dim)
         # 获取输入通道数，例如 (3, 10, 10) 的 RGB 图像，n_input_channels = 3
         n_input_channels = observation_space.shape[0]
         # 定义 CNN 架构
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 48, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(n_input_channels, 12, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(48, 48, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(12, 24, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(24, 24, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),  # 展平特征图
         )
@@ -74,15 +76,17 @@ class CNN_0(BaseFeaturesExtractor):
         return self.linear(self.cnn(observations))
 
 class CNN_1(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim: int = 64):
+    def __init__(self, observation_space, features_dim: int = 512):
         super().__init__(observation_space, features_dim)
         # 获取输入通道数，例如 (3, 10, 10) 的 RGB 图像，n_input_channels = 3
         n_input_channels = observation_space.shape[0]
         # 定义 CNN 架构
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 48, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(n_input_channels, 48, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(48, 96, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(48, 48, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(48, 48, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),  # 展平特征图
         )
@@ -108,9 +112,9 @@ model_cls = CNN_0
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == '0':
-            model_cls = CNN_0
+            model_cls = CNN_0# 参数量: 33804
         elif arg == '1':
-            model_cls = CNN_1
+            model_cls = CNN_1# 参数量: 142916
 
 run_type = 'train'# 'train' or 'test'
 # run_type = 'test'# 'train' or 'test'
@@ -131,7 +135,7 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 # 配置 policy_kwargs
 policy_kwargs = dict(
     features_extractor_class=model_cls,
-    features_extractor_kwargs=dict(features_dim=16),
+    # features_extractor_kwargs=dict(features_dim=256),
     net_arch = []
 )
 

@@ -75,6 +75,7 @@ class CustomCNN_0(BaseFeaturesExtractor):
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
 class CustomCNN(BaseFeaturesExtractor):
+    # 参数量: 167172
     def __init__(self, observation_space, features_dim: int = 256):
         super(CustomCNN, self).__init__(observation_space, features_dim)
         self.cnn = nn.Sequential(
@@ -101,7 +102,7 @@ class CustomCNN(BaseFeaturesExtractor):
         return self.linear(self.cnn(observations))
 
 model_type = 'MlpPolicy'
-# model_type = 'CnnPolicy'
+# model_type = 'CnnPolicy'#参数量: 167172
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
