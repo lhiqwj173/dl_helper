@@ -1083,7 +1083,7 @@ class Render:
                 self.open_idx = hist_end - 1
         else:
             if self.pre_n is not None:
-                if n == self.pre_n:
+                if n <= self.pre_n:
                     self.open_idx -= 1
                     self.open_idx = max(self.open_idx, 0)
 

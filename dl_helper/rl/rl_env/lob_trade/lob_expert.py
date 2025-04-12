@@ -334,7 +334,7 @@ def play_lob_data_with_expert(render=True):
     for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        # seed = 439573
+        # seed = 646508
         obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
 

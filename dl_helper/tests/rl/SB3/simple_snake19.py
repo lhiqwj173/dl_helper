@@ -39,7 +39,7 @@ from dl_helper.train_folder_manager import TrainFolderManagerSB3
 # 加大学习率    5e-3      >    1E-2
 # 
 # 20250412 测试3
-# ent_coef=linear_schedule(0.3, 0.01)
+# 增大ent_coef    0.01      >    0.1
 ###########################################
 
 # Linear scheduler
@@ -132,7 +132,7 @@ if run_type == 'train':
         batch_size=512,
         gamma=0.995,
         clip_range_vf=0.2,
-        ent_coef=clip_range_schedule,
+        ent_coef=0.1,
         verbose=1, 
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
