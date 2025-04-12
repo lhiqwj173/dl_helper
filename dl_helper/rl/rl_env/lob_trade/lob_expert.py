@@ -329,12 +329,13 @@ def play_lob_data_with_expert(render=True):
 
     expert = LobExpert_file(pre_cache=False if render else True)
 
-    # while True:
-    for i in range(1):
+    rounds = 5
+    rounds = 1
+    for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        log(f'seed: {seed}')
-        obs, info = env.reset(914464)
+        # seed = 439573
+        obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
 
         if render:
@@ -354,11 +355,13 @@ def play_lob_data_with_expert(render=True):
             # if render:
             #     time.sleep(0.1)
             
-        keep_play = input('keep play? (y)')
-        if keep_play == 'y':
-            continue
-        else:
-            break
+        log(f'seed: {seed}')
+        if rounds > 1:
+            keep_play = input('keep play? (y)')
+            if keep_play == 'y':
+                continue
+            else:
+                break
 
     input('all done, press enter to close')
     env.close()

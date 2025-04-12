@@ -594,6 +594,7 @@ class Account:
     def __init__(self):
         # 持仓状态 
         self.status = 0
+        self.init_status = 0
         # 持仓量
         self.pos = 0
         self.cash = 0
@@ -732,6 +733,8 @@ class Account:
             self.status = random.randint(0, 1)
         else:
             self.status = rng.integers(0, 2)
+        self.init_status = self.status
+
         # self.status = 1# FOR DEBUG
         self.pos = 0
         self.cash = 0
@@ -798,6 +801,7 @@ class Render:
         self.data_deque = {}
         self.potential_data = None
         self.open_idx = None
+        self.pre_n = None
 
         # 绘图对象（延迟初始化）
         self.p1 = None
@@ -973,6 +977,7 @@ class Render:
             self.full_plot_data = data['full_plot_data']
             if not self.full_plot_data.empty:
                 self.open_idx = None
+                self.pre_n = None
                 self.std_data = {}
                 self.std_data['mid_price'] = self.full_plot_data['mid_price'].iloc[0] or 1.0
                 self.full_plot_data['mid_price_std'] = self.full_plot_data['mid_price'] / self.std_data['mid_price']
@@ -983,7 +988,7 @@ class Render:
         elif 'potential_data' in data:
             self.potential_data = data['potential_data']
 
-    def _plot_data(self, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done):
+    def _plot_data(self, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done, init_status):
         """更新绘图数据并调整 Y 轴范围"""
         if not self.win or not self.win.isVisible():
             log('窗口已关闭，跳过绘图')
@@ -1077,8 +1082,12 @@ class Render:
             if status == 1:
                 self.open_idx = hist_end - 1
         else:
-            self.open_idx -= 1
-            self.open_idx = max(self.open_idx, 0)
+            if self.pre_n is not None:
+                if n == self.pre_n:
+                    self.open_idx -= 1
+                    self.open_idx = max(self.open_idx, 0)
+
+        self.pre_n = n
 
         # 更新持仓背景数据
         # 检查 self.open_idx 是否有效
@@ -1154,7 +1163,8 @@ class Render:
 
         # 更新标题
         status_str = '持仓' if status == 1 else '空仓'
-        self.p1.setTitle(f'status: {status_str}')
+        init_status_str = '持仓' if init_status == 1 else '空仓'
+        self.p1.setTitle(f'status: {status_str} init_status: {init_status_str}')
         if done:
             self.p2.setTitle(f'累计奖励: {cumsum_rewards[-1]:.6f} + {recent_reward:.6f}')
         else:
@@ -1632,7 +1642,7 @@ class LOB_trade_env(gym.Env):
 
             # 记录最近的reward
             self.recent_reward = reward
-            log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} reward: {self.recent_reward}')
+            log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} status: {self.acc.status} reward: {self.recent_reward}')
 
             return observation, reward, terminated, truncated, info
 
@@ -1731,7 +1741,7 @@ class LOB_trade_env(gym.Env):
         latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        self._render.handle_data({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done)})
+        self._render.handle_data({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done, self.acc.init_status)})
 
 def test_quick_produce_train_sdpk(date, code):
     """

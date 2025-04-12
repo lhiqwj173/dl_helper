@@ -542,7 +542,7 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
 
         # 若当前波谷ask >= 上一个波峰bid, 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
         # 上一个波峰卖出，当前波谷买入 平添交易费/损失持仓量 
-        if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and bid[t2] >= bid[pre_t2]:
+        if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and bid[t2] > bid[pre_t2]:
             # print(f'前一个波峰卖出损失')
             trades[-1] = (trades[-1][0], t2)
             pre_t2 = t2
