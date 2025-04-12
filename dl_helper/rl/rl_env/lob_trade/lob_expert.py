@@ -54,6 +54,7 @@ class LobExpert_file():
             self.data_folder = LOCAL_DATA_FOLDER
 
         if self.pre_cache:
+            log('cache all expert data')
             self.cache_all()
 
     def set_rng(self, rng):
@@ -222,17 +223,11 @@ class LobExpert_file():
     def _get_action(obs, lob_data, valleys, peaks):
         """
         获取专家动作
+        obs 单个样本
         """
         # 距离市场关闭的秒数 / pos
-        if len(obs.shape) == 1:
-            before_market_close_sec = obs[-4]
-            pos = obs[-2]
-        elif len(obs.shape) == 2:
-            assert obs.shape[0] == 1
-            before_market_close_sec = obs[0][-4]
-            pos = obs[0][-2]
-        else:
-            raise ValueError(f'obs.shape: {obs.shape}')
+        before_market_close_sec = obs[-4]
+        pos = obs[-2]
         
         # 查找 action
         data = lob_data[lob_data['before_market_close_sec'] == before_market_close_sec]
@@ -252,17 +247,33 @@ class LobExpert_file():
                 # 维持买入动作
                 res = ACTION_BUY
 
-        if len(obs.shape) == 2:
-            res = np.array([res])
-
+        # if len(obs.shape) == 2:
+        #     res = np.array([res])
         return res
     
     def get_action(self, obs):
         """
         获取专家动作
+        obs 允许多个样本
         """
-        date_key, symbol_key = self.check_need_prepare_data(obs)
-        return self._get_action(obs, self.cache_data[date_key][symbol_key], self.valleys, self.peaks)
+        if not self.pre_cache:
+            # 若不缓存数据
+            # 只允许一次处理一个样本
+            if len(obs.shape) == 2:
+                assert obs.shape[0] == 1
+
+        # 获取动作
+        if len(obs.shape) == 1:
+            date_key, symbol_key = self.check_need_prepare_data(obs)
+            return self._get_action(obs, self.cache_data[date_key][symbol_key], self.valleys, self.peaks)
+        elif len(obs.shape) == 2:
+            rets = []
+            for i in obs:
+                date_key, symbol_key = self.check_need_prepare_data(i)
+                rets.append(self._get_action(i, self.cache_data[date_key][symbol_key], self.valleys, self.peaks))
+            return np.array(rets)
+        else:
+            raise ValueError(f'obs.shape: {obs.shape}')
 
     def __call__(self, obs, state, dones):
         return self.get_action(obs), None
@@ -300,9 +311,11 @@ def test_expert():
     )
 
     obs, info = env.reset()
+    obs2, reward, terminated, truncated, info = env.step(1)
+    batch = np.stack([obs, obs2], axis=0) 
 
-    expert = LobExpert_file()
-    action = expert.get_action(obs)
+    expert = LobExpert_file(pre_cache=True)
+    action = expert.get_action(batch)
     print(action)
 
 def play_lob_data_with_expert(render=True):
@@ -394,14 +407,13 @@ def eval_expert():
     print(f"Reward after training: {reward}")
 
 if __name__ == '__main__':
-    # test_expert()
-    # test_expert()
+    test_expert()
+
+    # import time
+    # t = time.time()
     # play_lob_data_with_expert(True)
-    import time
-    t = time.time()
-    play_lob_data_with_expert(True)
-    print(time.time() - t)
-    # eval_expert()
+    # print(time.time() - t)
+
     # eval_expert()
 
     # dump_file = r"D:\code\dl_helper\get_action.pkl"

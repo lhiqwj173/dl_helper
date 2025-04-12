@@ -42,7 +42,7 @@ from dl_helper.rl.rl_utils import plot_bc_train_progress
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
-train_folder = train_title = f'20250406_lob_trade_bc'
+train_folder = train_title = f'20250412_lob_trade_bc'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -385,13 +385,19 @@ policy_kwargs = dict(
     net_arch = [32,32]
 )
 
+def make_env():
+    return LOB_trade_env(env_config)
+
 if run_type == 'train':
 
-    # 创建环境
-    env = LOB_trade_env(env_config)
+    # 创建并行环境（4 个环境）
+    n_envs = 4
+    env = DummyVecEnv([make_env for _ in range(n_envs)])
+    env = VecCheckNan(env, raise_exception=True)  # 添加nan检查
+    env = VecMonitor(env)  # 添加监控器
 
     # 专家
-    expert = LobExpert_file()
+    expert = LobExpert_file(pre_cache=True)
 
     # 指定设备为 GPU (cuda)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -402,7 +408,7 @@ if run_type == 'train':
         model_type, 
         env, 
         verbose=1, 
-        learning_rate=1e-4,
+        learning_rate=1e-3,
         ent_coef=0.2,
         gamma=0.97,
         device=device, 
@@ -420,7 +426,7 @@ if run_type == 'train':
     # test_x = test_x.float().to(device)
     # out = model.policy.features_extractor(test_x)
     # print(out.shape)
-    sys.exit()
+    # sys.exit()
 
     # 训练文件夹管理
     if not in_windows():
@@ -430,9 +436,7 @@ if run_type == 'train':
             train_folder_manager.load_checkpoint(model.policy)
 
     # 生成专家数据
-    # 包装为 DummyVecEnv
-    vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
-    vec_env = VecCheckNan(vec_env, raise_exception=True)
+    vec_env = env
     rng = np.random.default_rng()
     t = time.time()
     memory_usage = psutil.virtual_memory()
@@ -440,7 +444,7 @@ if run_type == 'train':
         expert,
         vec_env,
         # rollout.make_sample_until(min_timesteps=4000),
-        rollout.make_sample_until(min_timesteps=1.35e6),
+        rollout.make_sample_until(min_timesteps=1.3e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -466,7 +470,8 @@ if run_type == 'train':
         custom_logger=custom_logger,
     )
 
-    env.test()
+    test_env = make_env()
+    test_env.test()
 
     total_epochs = 500000
     checkpoint_interval = 1
@@ -486,7 +491,7 @@ if run_type == 'train':
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         # 验证模型
         _t = time.time()
-        reward_after_training, _ = evaluate_policy(bc_trainer.policy, env)
+        reward_after_training, _ = evaluate_policy(bc_trainer.policy, test_env)
         log(f"训练后的平均reward: {reward_after_training}, 验证耗时: {time.time() - _t:.2f} 秒")
         if os.path.exists(progress_file_all):
             df_progress = pd.read_csv(progress_file_all)
