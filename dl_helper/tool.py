@@ -500,9 +500,14 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
     total_log_return (float): 所有可盈利交易的对数收益率总和
     """
     trades = []
-    total_log_return = 0.0
+    total_log_return = 0
     valley_idx = 0
     peak_idx = 0
+
+    def cal_profit(t1, t2):
+        buy_cost = ask[t1] * (1 + fee)
+        sell_income = bid[t2] * (1 - fee)
+        return np.log(sell_income / buy_cost)
 
     pre_t2 = 0# 上一个波峰t
     while valley_idx < len(valleys) and peak_idx < len(peaks):
@@ -545,17 +550,11 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
             valley_idx += 1
             continue
 
-        # 计算当前交易的成本和收入
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
-
         if sell_income > buy_cost:
-            # 当前交易盈利，计算收益率
-            current_return = np.log(sell_income / buy_cost)
-
             # 确认当前交易
             trades.append((t1, t2))
-            total_log_return += current_return
             pre_t2 = t2
             valley_idx += 1
             peak_idx += 1
@@ -573,6 +572,10 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
             else:
                 # 尝试下一个波峰
                 peak_idx += 1
+
+    # 计算总对数收益率
+    for t1, t2 in trades:
+        total_log_return += cal_profit(t1, t2)
 
     return trades, total_log_return
 
@@ -660,7 +663,6 @@ def plot_trades(mid, trades, valleys, peaks):
     # 在浏览器中显示图表
     fig.show(renderer='browser')
 
-
 def plot_trades_plt(mid, trades, valleys, peaks):
     """
     使用 Matplotlib 可视化 mid-price 序列和交易机会。
@@ -675,16 +677,20 @@ def plot_trades_plt(mid, trades, valleys, peaks):
     time = list(range(len(mid)))
     
     # 创建图表
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(10, 4))
     
     # 绘制 mid-price 曲线
     plt.plot(time, mid, label='Mid Price', color='blue')
     
-    # 添加波谷点
-    plt.scatter(valleys, [mid[v] for v in valleys], color='red', label='Valleys', s=50)
-    
-    # 添加波峰点
-    plt.scatter(peaks, [mid[p] for p in peaks], color='green', label='Peaks', s=50)
+    # 添加波谷点并标注索引号
+    for i, valley in enumerate(valleys):
+        plt.scatter(valley, mid[valley], color='red', label='Valleys' if i == 0 else None, s=50)
+        plt.text(valley, mid[valley]-0.0001, f'{valley}', fontsize=10, ha='center', va='top', color='red')
+
+    # 添加波峰点并标注索引号
+    for i, peak in enumerate(peaks):
+        plt.scatter(peak, mid[peak], color='green', label='Peaks' if i == 0 else None, s=50)
+        plt.text(peak, mid[peak]+0.0001, f'{peak}', fontsize=10, ha='center', va='bottom', color='green')
     
     # 添加交易对的连接线
     for t1, t2 in trades:

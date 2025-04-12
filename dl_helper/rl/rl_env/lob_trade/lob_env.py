@@ -38,6 +38,20 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER
 
+debug_bid_ask_accnet_code = r"""from dl_helper.tool import max_profit_reachable, plot_trades_plt
+import pandas as pd
+import numpy as np
+import pickle 
+
+bid, ask, accnet = pickle.load(open(r"C:\Users\lh\Desktop\temp\bid_ask_accnet.pkl", 'rb'))
+mid_price = (pd.Series(ask)+ pd.Series(bid)) / 2
+
+# 计算潜在收益
+trades, total_log_return, valleys, peaks = max_profit_reachable(bid, ask)
+print(f'total_log_return:', total_log_return)
+print(f'acc_log_ret:', np.log(accnet[-1]) - np.log(accnet[0]))
+plot_trades_plt(mid_price, trades, valleys, peaks)"""
+
 class data_producer:
     """
     遍历日期文件，每天随机选择一个标的
@@ -216,6 +230,9 @@ class data_producer:
 
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
             self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
+            # 转换数据类型为float32
+            for col in self.all_raw_data.iloc[:, :-3].columns:
+                self.all_raw_data[col] = self.all_raw_data[col].astype('float32')
             self.all_raw_data = self.all_raw_data.set_index('时间')
 
             # 列过滤
@@ -455,7 +472,7 @@ class data_producer:
 
         ###################################
         # 价格量 使用 robust
-        ms = pd.DataFrame(std_data['price_vol_each']['robust'])
+        ms = pd.DataFrame(std_data['price_vol_each']['robust'], dtype=np.float32)
         x, ms = self.use_data_split(raw, ms)
 
         if self.data_std:
@@ -771,13 +788,7 @@ class RewardTracker:
         self.consecutive_negative = 0
         
 class Render:
-    def __init__(self, input_queue=None):
-        self.input_queue = input_queue
-        if self.input_queue is None:
-            self.is_running = True
-        else:
-            self.is_running = False
-
+    def __init__(self):
         self.app = None  # QApplication 实例
         self.win = None  # GraphicsLayoutWidget 实例
 
@@ -808,10 +819,10 @@ class Render:
         # 是否需要fix net_raw / rewards
         self.net_data_fixed = False
 
-        self.init_plot()
+        self._init_plot()
         log('Render 初始化完成')
 
-    def init_plot(self):
+    def _init_plot(self):
         """初始化绘图环境"""
         # 创建或重用 QApplication
         if not QtWidgets.QApplication.instance():
@@ -914,38 +925,13 @@ class Render:
 
     def _on_close(self, event):
         """处理窗口关闭事件"""
-        self.is_running = False
         if self.app:
             self.app.quit()
         event.accept()
         log('窗口已关闭')
 
-    def update_plot(self):
-        """初始化 GUI 并持续更新绘图"""
-        self.is_running = True
-        try:
-            # 主循环
-            while self.is_running:
-                try:
-                    data = self.input_queue.get(timeout=0.1)
-                    if data is None:
-                        log('收到 None，退出')
-                        break
-                    self.handle_data(data)
-                except Exception as e:
-                    if not self.is_running:
-                        log('渲染已停止')
-                        break
-                    log(f'处理数据时出错: {e}')
-                    continue
-        except Exception as e:
-            log(f'update_plot 出错: {e}')
-        finally:
-            self.cleanup()
-
-    def cleanup(self):
+    def close(self):
         """清理资源"""
-        self.is_running = False
         if self.win:
             self.win.close()
             self.win = None
@@ -956,11 +942,7 @@ class Render:
 
     def handle_data(self, data):
         """处理输入数据"""
-        if data is None:
-            log('收到 None，退出')
-            self.is_running = False
-
-        if not self.is_running or not self.win or not self.win.isVisible():
+        if not self.win or not self.win.isVisible():
             log('窗口已关闭，跳过数据处理')
             return
 
@@ -971,6 +953,7 @@ class Render:
         elif 'full_plot_data' in data:
             self.full_plot_data = data['full_plot_data']
             if not self.full_plot_data.empty:
+                self.std_data = {}
                 self.std_data['mid_price'] = self.full_plot_data['mid_price'].iloc[0] or 1.0
                 self.full_plot_data['mid_price_std'] = self.full_plot_data['mid_price'] / self.std_data['mid_price']
                 max_len = len(self.full_plot_data)
@@ -982,7 +965,7 @@ class Render:
 
     def _plot_data(self, a, b, latest_tick_time, latest_net_raw, status, need_render, recent_reward, done):
         """更新绘图数据并调整 Y 轴范围"""
-        if not self.is_running or not self.win or not self.win.isVisible():
+        if not self.win or not self.win.isVisible():
             log('窗口已关闭，跳过绘图')
             return
 
@@ -1012,7 +995,7 @@ class Render:
         # 若 latest_tick_time 大于 12:00:00
         # 且 self.net_data_fixed == False
         # 需要fix net_raw / rewards
-        if latest_tick_time.time() > pd.Timestamp('12:00:00').time() and not self.net_data_fixed:
+        if latest_tick_time.time() > pd.Timestamp('12:00:00').time() and self.pre_latest_tick_time is not None and self.pre_latest_tick_time.time() < pd.Timestamp('12:00:00').time() and not self.net_data_fixed:
             # 计算 plot_data 中当前时间点 至 前一个绘图点的时间 数据的数量
             need_fix_num = plot_data.index.get_loc(latest_tick_time) - plot_data.index.get_loc(self.pre_latest_tick_time) - 1
             for i in range(need_fix_num):
@@ -1145,7 +1128,7 @@ class Render:
 
     def update_p1_y_range(self, p1):
         """动态调整 p1 的 Y 轴范围"""
-        if not self.is_running or not p1:
+        if not p1:
             return
         try:
             xr = p1.vb.viewRange()[0]
@@ -1169,7 +1152,7 @@ class Render:
 
     def update_p2_y_range(self, p2):
         """动态调整 p2 的 Y 轴范围"""
-        if not self.is_running or not p2:
+        if not p2:
             return
         try:
             xr = p2.vb.viewRange()[0]
@@ -1201,7 +1184,7 @@ class LOB_trade_env(gym.Env):
     REG_NAME = 'lob'
     ITERATION_DONE_FILE = os.path.join(os.path.expanduser('~'), '_lob_env_iteration_done')
     
-    def __init__(self, config: dict, data_std=True, debug_date=''):
+    def __init__(self, config: dict, data_std=True, debug_date='', dump_bid_ask_accnet=False):
         """
         :param config: 配置
             {
@@ -1261,6 +1244,8 @@ class LOB_trade_env(gym.Env):
         hold_position_reward_strategy = config.get('hold_position', HoldPositionRewardStrategy)
         no_position_reward_strategy = config.get('no_position', NoPositionRewardStrategy)
         force_stop_reward_strategy = config.get('force_stop', ForceStopRewardStrategy)
+
+        self.dump_bid_ask_accnet = dump_bid_ask_accnet
 
         # 保存文件夹
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
@@ -1346,10 +1331,6 @@ class LOB_trade_env(gym.Env):
 
         # 渲染模式
         if self.render_mode == 'human':
-            # self.input_queue = Queue(maxsize=10)  # 创建多进程队列用于传递数据
-            # self.update_process = Process(target=LOB_trade_env.update_plot, args=(self.input_queue,), daemon=True)
-            # self.update_process.start()  # 启动更新进程
-            
             self._render = Render()
 
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
@@ -1457,6 +1438,12 @@ class LOB_trade_env(gym.Env):
 
                 if not need_close:
                     # 潜在收益率（针对最近的交易序列） 需要剔除掉第一个数据，因为第一个数据无法成交
+                    if self.dump_bid_ask_accnet:
+                        dump_file = r'C:\Users\lh\Desktop\temp\bid_ask_accnet.pkl'
+                        log(f'dump (bid, ask, accnet) > {dump_file}')
+                        log(f'debug code:')
+                        log('\n\n'+ debug_bid_ask_accnet_code + '\n')
+                        pickle.dump((self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:], self.acc.net_raw[self.last_close_idx:]), open(dump_file, 'wb'))
                     _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:])
                     latest_trade_net = self.acc.net_raw[self.last_close_idx:]# 最近一次交易净值序列, 重上一次平仓的净值开始计算 > 上一次平仓后的净值序列
                     acc_return = np.log(latest_trade_net[-1]) - np.log(latest_trade_net[0])
@@ -1583,7 +1570,7 @@ class LOB_trade_env(gym.Env):
             # 添加 静态特征
             # observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
             # 20250406 取消收益率
-            observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, np.float32(date2days(self.data_producer.date))]])
+            observation = np.concatenate([observation, [np.float32(before_market_close_sec), np.float32(symbol_id), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
 
             # 检查是否结束
             terminated = acc_done or need_close# 游戏终止
@@ -1654,7 +1641,6 @@ class LOB_trade_env(gym.Env):
             
             if self.render_mode == 'human':
                 full_plot_data = self.data_producer.plot_data
-                # self.input_queue.put({'full_plot_data': full_plot_data})
                 self._render.handle_data({'full_plot_data': full_plot_data})
 
             # 账户
@@ -1662,7 +1648,7 @@ class LOB_trade_env(gym.Env):
             log(f'acc reset: {pos}')
 
             # 添加 静态特征
-            x = np.concatenate([x, [before_market_close_sec, symbol_id, pos, np.float32(date2days(self.data_producer.date))]])
+            x = np.concatenate([x, [np.float32(before_market_close_sec), np.float32(symbol_id), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
@@ -1683,20 +1669,11 @@ class LOB_trade_env(gym.Env):
 
     def close(self):
         if self.render_mode == 'human':
-            # self.input_queue.put(None)
-            self._render.handle_data(None)
-            # self.update_process.join()
+            self._render.close()
 
     def add_potential_data(self, potential_data):
         if self.render_mode == 'human':
-            # self.input_queue.put({'potential_data': potential_data})
             self._render.handle_data({'potential_data': potential_data})
-
-    @staticmethod
-    def update_plot(input_queue):
-        """线程中运行的图形更新函数"""
-        render = Render(input_queue)
-        render.update_plot()
 
     def render(self):
         if self.render_mode != 'human':
@@ -1713,7 +1690,6 @@ class LOB_trade_env(gym.Env):
         latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        # self.input_queue.put({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done)})
         self._render.handle_data({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done)})
 
 def test_quick_produce_train_sdpk(date, code):
