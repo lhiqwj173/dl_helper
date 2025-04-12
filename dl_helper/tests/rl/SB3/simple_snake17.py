@@ -144,7 +144,7 @@ if run_type == 'train':
     # sys.exit()
 
     for i in range(5):
-        model.learn(total_timesteps=100_000, callback=[checkpoint_callback])
+        model.learn(total_timesteps=1_000_000, callback=[checkpoint_callback])
         model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
 
         # 打包文训练件夹，并上传到alist
