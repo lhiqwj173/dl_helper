@@ -797,6 +797,7 @@ class Render:
         self.full_plot_data = None
         self.data_deque = {}
         self.potential_data = None
+        self.open_idx = None
 
         # 绘图对象（延迟初始化）
         self.p1 = None
@@ -888,6 +889,16 @@ class Render:
         self.p1_arrows_buy = [pg.ArrowItem(angle=90, tipAngle=60, baseAngle=0, headLen=15, tailLen=0, tailWidth=2, pen=None, brush='r') for _ in range(100)]
         self.p1_arrows_sell = [pg.ArrowItem(angle=-90, tipAngle=60, baseAngle=0, headLen=15, tailLen=0, tailWidth=2, pen=None, brush='g') for _ in range(100)]
 
+        # 持仓背景
+        self.p1_region = pg.LinearRegionItem(
+            brush=pg.mkBrush(color=(173, 216, 230, 50)),  # 淡蓝色，透明度 50
+            movable=False  # 禁止拖动
+        )
+        self.p2_region = pg.LinearRegionItem(
+            brush=pg.mkBrush(color=(173, 216, 230, 50)),
+            movable=False
+        )
+
         # 设置绘图窗口
         self.p1 = self.win.addPlot(row=0, col=0, title="mid_price and net")
         self.p2 = self.win.addPlot(row=1, col=0, title="Cumulative Rewards")
@@ -921,6 +932,14 @@ class Render:
             arrow.setVisible(False)
             self.p1.addItem(arrow)
 
+        # 将 LinearRegionItem 添加到 p1 和 p2
+        self.p1.addItem(self.p1_region, ignoreBounds=True)
+        self.p2.addItem(self.p2_region, ignoreBounds=True)
+        
+        # 设置 z-order，确保区域在曲线下方
+        self.p1_region.setZValue(-10)
+        self.p2_region.setZValue(-10)
+
         log('绘图设置完成')
 
     def _on_close(self, event):
@@ -953,6 +972,7 @@ class Render:
         elif 'full_plot_data' in data:
             self.full_plot_data = data['full_plot_data']
             if not self.full_plot_data.empty:
+                self.open_idx = None
                 self.std_data = {}
                 self.std_data['mid_price'] = self.full_plot_data['mid_price'].iloc[0] or 1.0
                 self.full_plot_data['mid_price_std'] = self.full_plot_data['mid_price'] / self.std_data['mid_price']
@@ -1051,6 +1071,27 @@ class Render:
         except Exception as e:
             log(f'更新曲线数据失败: {e}')
             return
+        
+        # 记录第一个持仓的索引
+        if self.open_idx is None:
+            if status == 1:
+                self.open_idx = hist_end - 1
+        else:
+            self.open_idx -= 1
+            self.open_idx = max(self.open_idx, 0)
+
+        # 更新持仓背景数据
+        # 检查 self.open_idx 是否有效
+        if self.open_idx is not None and self.open_idx < hist_end - 1:
+            # 设置区域范围为 [self.open_idx, hist_end - 1]
+            self.p1_region.setRegion([self.open_idx, hist_end - 1])
+            self.p2_region.setRegion([self.open_idx, hist_end - 1])
+            self.p1_region.show()
+            self.p2_region.show()
+        else:
+            # 隐藏区域
+            self.p1_region.hide()
+            self.p2_region.hide()
 
         # 更新垂直线和时间标签
         time_str = plot_data.index[hist_end-1].strftime('%Y-%m-%d %H:%M:%S')
@@ -1068,7 +1109,7 @@ class Render:
             if vb_range and len(vb_range[1]) > 0:
                 self.p1_text.setPos(hist_end-1, vb_range[1][0])
         if self.p1_text_acc_begin:
-            self.p1_text_acc_begin.setText(f'acc_begin')
+            self.p1_text_acc_begin.setText(f'ACC_BEGIN')
             vb_range = self.p1.getViewBox().viewRange()
             if vb_range and len(vb_range[1]) > 0:
                 self.p1_text_acc_begin.setPos(acc_begin_pos, vb_range[1][0])

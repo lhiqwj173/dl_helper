@@ -20,6 +20,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
+from dl_helper.tool import calculate_profit, calculate_sell_save
 
 from py_ext.tool import log, share_tensor
 
@@ -128,8 +129,14 @@ class LobExpert_file():
         lob_data['action'] = lob_data['action'].ffill()
         lob_data['action'] = lob_data['action'].fillna(ACTION_SELL)
 
-        # 最终数据 action, before_market_close_sec
-        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec']]
+        # 计算 action==0 时点买入的收益
+        lob_data = calculate_profit(lob_data)
+
+        # 计算 action==1 时点卖出节省的收益
+        lob_data = calculate_sell_save(lob_data)
+
+        # 最终数据 action, before_market_close_sec, profit, sell_save
+        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save']]
         return lob_data
 
     def prepare_train_data_file(self, date_key, symbol_key=[], dtype=np.float32, _data_file_path=''):
@@ -231,15 +238,19 @@ class LobExpert_file():
         data = lob_data[lob_data['before_market_close_sec'] == before_market_close_sec]
         assert len(data) == 1, f'len(data): {len(data)}'
 
-        cur_idx = data.index[0]
-        try:
-            next_valley_idx = [i for i in valleys if i > cur_idx][0]
-            next_peak_idx = [i for i in peaks if i > cur_idx][0]
-        except:
-            next_valley_idx = None
-            next_peak_idx = None
+        data = data.iloc[0]
+        res = data['action']
+        if res == ACTION_BUY:
+            if pos == 0 and data['profit'] <= 0:
+                # 若当前位置无持仓且买入收益为负
+                # 维持卖出动作
+                res = ACTION_SELL
 
-        res = data['action'].iloc[0]
+        elif res == ACTION_SELL:
+            if pos == 1 and data['sell_save'] < 0:
+                # 若当前位置有持仓且卖出收益为负
+                # 维持买入动作
+                res = ACTION_BUY
 
         if len(obs.shape) == 2:
             res = np.array([res])

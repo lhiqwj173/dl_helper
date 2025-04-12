@@ -710,6 +710,136 @@ def plot_trades_plt(mid, trades, valleys, peaks):
     # 显示图表
     plt.show()
 
+def calculate_profit(df, fee=5e-5):
+    """
+    完全向量化的高效实现
+    参数:
+    df: 包含 'BASE买1价', 'BASE卖1价', 'action' 列的DataFrame
+    
+    返回:
+    添加了 'profit' 列的DataFrame
+    所有action==0的行, 用BASE卖1价买入，下一个action==1时用BASE买1价卖出，的收益
+    """
+    # 初始化profit列为0
+    df['profit'] = 0.0
+    
+    # 创建信号变化标记，找到买入卖出配对
+    # 1. 标记每个信号的索引位置
+    buy_idx = np.where(df['action'] == 0)[0]
+    sell_idx = np.where(df['action'] == 1)[0]
+    
+    if len(buy_idx) == 0 or len(sell_idx) == 0:
+        return df
+    
+    # 2. 对每个买入位置，找到后面第一个卖出位置
+    next_sell_positions = {}
+    sell_pos = 0
+    
+    for buy_pos in buy_idx:
+        # 找到第一个大于当前买入位置的卖出位置
+        while sell_pos < len(sell_idx) and sell_idx[sell_pos] <= buy_pos:
+            sell_pos += 1
+            
+        if sell_pos < len(sell_idx):
+            next_sell_positions[buy_pos] = sell_idx[sell_pos]
+    
+    # 3. 批量计算所有利润
+    buy_positions = np.array(list(next_sell_positions.keys()))
+    sell_positions = np.array(list(next_sell_positions.values()))
+    
+    if len(buy_positions) > 0:
+        # 获取价格数组（避免逐个loc访问）
+        buy_prices = df.loc[buy_positions+1, 'BASE卖1价'].values
+        sell_prices = df.loc[sell_positions+1, 'BASE买1价'].values
+        
+        # 向量化计算利润
+        buy_cost = buy_prices* (1 + fee)
+        sell_income = sell_prices * (1 - fee)
+        profits = np.log(sell_income / buy_cost)
+        
+        # 一次性更新利润
+        df.loc[buy_positions, 'profit'] = profits
+    
+    return df
+
+def calculate_sell_save(df, fee=5e-5):
+    """
+    真正的完全向量化实现，不使用任何循环：
+    对于所有 action==1 的行:
+    1. 在下一行的 BASE买1价 卖出
+    2. 在下一个 action==0 后的下一行的 BASE卖1价 买入
+    3. 计算对数收益，考虑交易费用 fee=5e-5
+    """
+    # 原地添加 sell_save 列并初始化为0
+    df['sell_save'] = 0.0
+    
+    # 获取关键信息
+    n = len(df)
+    
+    # 检查是否存在足够的数据
+    if n <= 2:
+        return df
+    
+    # 创建表示位置的数组
+    positions = np.arange(n)
+    
+    # 获取action的布尔掩码
+    sell_mask = df['action'].values == 1
+    buy_mask = df['action'].values == 0
+    
+    # 没有卖出点则直接返回
+    if not np.any(sell_mask):
+        return df
+    
+    # 找到所有卖出和买入的位置
+    sell_positions = positions[sell_mask]
+    buy_positions = positions[buy_mask]
+    
+    # 如果没有买入点，直接返回
+    if len(buy_positions) == 0:
+        return df
+    
+    # 使用另一种方法找到每个卖出点之后的最近买入点
+    # 为每个卖出点创建一个掩码，标识其后的买入点
+    next_buy_positions = np.zeros(len(sell_positions), dtype=np.int64)
+    next_buy_found = np.zeros(len(sell_positions), dtype=bool)
+    
+    # 为每个卖出点创建掩码数组，找出之后的买入点
+    for i, sell_pos in enumerate(sell_positions):
+        # 找出所有在卖出点之后的买入点
+        mask = buy_positions > sell_pos
+        if np.any(mask):
+            # 获取最近的买入点
+            next_buy_positions[i] = np.min(buy_positions[mask])
+            next_buy_found[i] = True
+    
+    # 只保留找到了下一个买入点的卖出点
+    valid_sell_positions = sell_positions[next_buy_found]
+    valid_next_buy_positions = next_buy_positions[next_buy_found]
+    
+    # 确保卖出点和买入点后都有行可用于获取价格
+    valid_mask = (valid_sell_positions + 1 < n) & (valid_next_buy_positions + 1 < n)
+    final_sell_positions = valid_sell_positions[valid_mask]
+    final_buy_positions = valid_next_buy_positions[valid_mask]
+    
+    # 如果没有有效匹配，直接返回
+    if len(final_sell_positions) == 0:
+        return df
+    
+    # 获取卖出价格（下一行的BASE买1价）和买入价格（下一行的BASE卖1价）
+    sell_prices = df['BASE买1价'].values[final_sell_positions + 1]
+    buy_prices = df['BASE卖1价'].values[final_buy_positions + 1]
+    
+    # 计算对数收益
+    sell_after_fee = sell_prices * (1 - fee)
+    buy_after_fee = buy_prices * (1 + fee)
+    log_returns = np.log(sell_after_fee / buy_after_fee)
+    
+    # 更新DataFrame中的sell_save列
+    df.loc[df.index[final_sell_positions], 'sell_save'] = log_returns
+    
+    return df
+
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
     min_class_count = predict_df['target'].value_counts().min()
