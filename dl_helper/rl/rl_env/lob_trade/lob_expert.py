@@ -407,12 +407,12 @@ def eval_expert():
     print(f"Reward after training: {reward}")
 
 if __name__ == '__main__':
-    test_expert()
+    # test_expert()
 
-    # import time
-    # t = time.time()
-    # play_lob_data_with_expert(True)
-    # print(time.time() - t)
+    import time
+    t = time.time()
+    play_lob_data_with_expert(True)
+    print(time.time() - t)
 
     # eval_expert()
 

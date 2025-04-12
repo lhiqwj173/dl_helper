@@ -1642,7 +1642,7 @@ class LOB_trade_env(gym.Env):
 
             # 记录最近的reward
             self.recent_reward = reward
-            log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} status: {self.acc.status} reward: {self.recent_reward}')
+            # log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} status: {self.acc.status} reward: {self.recent_reward}')
 
             return observation, reward, terminated, truncated, info
 
