@@ -386,7 +386,7 @@ policy_kwargs = dict(
 )
 
 def make_env():
-    return LOB_trade_env(env_config)
+    return RolloutInfoWrapper(LOB_trade_env(env_config))
 
 if run_type == 'train':
 
@@ -395,6 +395,10 @@ if run_type == 'train':
     env = DummyVecEnv([make_env for _ in range(n_envs)])
     env = VecCheckNan(env, raise_exception=True)  # 添加nan检查
     env = VecMonitor(env)  # 添加监控器
+
+    # # 创建单个环境
+    # env = LOB_trade_env(env_config)
+    # vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
 
     # 专家
     expert = LobExpert_file(pre_cache=True)
@@ -443,8 +447,8 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        # rollout.make_sample_until(min_timesteps=4000),
-        rollout.make_sample_until(min_timesteps=1.3e6),
+        rollout.make_sample_until(min_timesteps=10000),
+        # rollout.make_sample_until(min_timesteps=1.3e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
