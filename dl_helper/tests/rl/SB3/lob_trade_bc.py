@@ -383,7 +383,7 @@ if run_type != 'test':
         demonstrations=transitions,
         policy=model.policy,
         rng=rng,
-        batch_size=batch_size,
+        batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
         custom_logger=custom_logger,
         lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR,
