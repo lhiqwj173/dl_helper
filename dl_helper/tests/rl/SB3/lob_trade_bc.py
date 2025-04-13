@@ -351,7 +351,7 @@ if run_type != 'test':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=50000 if run_type=='find_lr' else 2e6),
+        rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -371,7 +371,7 @@ if run_type != 'test':
     total_epochs = 10
     batch_size = 32
     max_lr = 0.1
-    batch_n = 2**5
+    batch_n = 2**5 if run_type=='train' else 1
     total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
@@ -436,8 +436,9 @@ if run_type != 'test':
         if not in_windows():
             train_folder_manager.push()
 
-        # find_le 限制在 150 条
-        if run_type == 'find_le' and len(df_progress)==150:
+        if run_type == 'find_lr':
+            # 限制在 150 条 
+            # 4800 / 32 = 150
             break
 else:
     # test
