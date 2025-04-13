@@ -17,7 +17,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch as th
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import OneCycleLR, MultiplicativeLR
 th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
@@ -259,7 +259,9 @@ def linear_schedule(initial_value, final_value=0.0):
     return scheduler
 
 model_type = 'CnnPolicy'
-run_type = 'train'# 'train' or 'test'
+# 'train' or 'test' or 'find_lr'
+# find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
+run_type = 'train'
 
 model_config={
     # 自定义编码器参数  
@@ -287,7 +289,7 @@ policy_kwargs = dict(
 def make_env():
     return RolloutInfoWrapper(LOB_trade_env(env_config))
 
-if run_type == 'train':
+if run_type != 'test':
 
     # 创建并行环境（4 个环境）
     n_envs = 4
@@ -368,6 +370,7 @@ if run_type == 'train':
     batch_size = 32
     max_lr = 0.1
     batch_n = 2**5
+    total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -375,9 +378,10 @@ if run_type == 'train':
         policy=model.policy,
         rng=rng,
         batch_size=batch_size,
+        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
         custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR,
-        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_epochs * len(transitions) // (batch_size * batch_n)},
+        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR,
+        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
     )
 
     test_env = LOB_trade_env(env_config)
@@ -392,7 +396,10 @@ if run_type == 'train':
     for i in range(begin, total_epochs // checkpoint_interval):
         _t = time.time()
         bc_trainer.policy.train()
-        bc_trainer.train(n_epochs=checkpoint_interval)
+        bc_trainer.train(
+            n_epochs=checkpoint_interval,
+            log_interval = 1 if run_type=='find_lr' else 500,
+        )
         log(f'训练耗时: {time.time() - _t:.2f} 秒')
         progress_file = os.path.join(train_folder, f"progress.csv")
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
@@ -426,5 +433,10 @@ if run_type == 'train':
         # 上传
         if not in_windows():
             train_folder_manager.push()
+
+        # find_le 限制在 150 条
+        if run_type == 'find_le' and len(df_progress)==150:
+            break
 else:
+    # test
     pass
