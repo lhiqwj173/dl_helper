@@ -354,8 +354,8 @@ if run_type != 'test':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=50000),
-        # rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
+        # rollout.make_sample_until(min_timesteps=50000),
+        rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
