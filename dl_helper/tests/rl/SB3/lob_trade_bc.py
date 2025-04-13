@@ -474,7 +474,7 @@ if run_type == 'train':
         custom_logger=custom_logger,
     )
 
-    test_env = make_env()
+    test_env = LOB_trade_env(env_config)
     test_env.test()
 
     total_epochs = 500000
