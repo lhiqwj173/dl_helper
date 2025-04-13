@@ -38,7 +38,7 @@ from py_ext.datetime import beijing_time
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
-from dl_helper.rl.rl_utils import plot_bc_train_progress
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
@@ -82,7 +82,7 @@ class ImprovedSelfAttention(nn.Module):
     def forward(self, x):
         # x: (batch, seq_len, input_dim)
         attn_output, _ = self.multihead_attn(x, x, x)  # 使用多头注意力
-        attn_output = self.dropout(attn_output)
+        # attn_output = self.dropout(attn_output)
         out = self.norm(x + attn_output)  # 残差连接 + LayerNorm
         return out
 
@@ -104,60 +104,71 @@ class DeepLob(BaseFeaturesExtractor):
         # 卷积块
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=(1, 2), stride=(1, 2)),
             nn.Tanh(),
-            nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
             nn.Tanh(),
-            nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
             nn.Tanh(),
-            nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(64),
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=(1, 5)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(2, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(64),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(64),
         )
 
         # Inception 模块
         self.inp1 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=(1, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(128),
             nn.Conv2d(128, 128, kernel_size=(3, 1), padding=(1, 0)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(128),
         )
         self.inp2 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=(1, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(128),
             nn.Conv2d(128, 128, kernel_size=(5, 1), padding=(2, 0)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(128),
         )
         self.inp3 = nn.Sequential(
             nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
             nn.Conv2d(64, 128, kernel_size=(1, 1)),
-            nn.LeakyReLU(negative_slope=0.01),
-            nn.BatchNorm2d(128),
+            # nn.LeakyReLU(negative_slope=0.01),
+            nn.ReLU(),
+            # nn.BatchNorm2d(128),
         )
 
         # LSTM 层 
@@ -171,19 +182,22 @@ class DeepLob(BaseFeaturesExtractor):
         self.static_net = nn.Sequential(
             nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
             nn.LayerNorm(self.extra_input_dims * 4),
-            nn.LeakyReLU(),
-            nn.Dropout(0.1),
+            # nn.LeakyReLU(),
+            nn.ReLU(),
+            # nn.Dropout(0.1),
         )
 
         # 融合层
         self.fusion = nn.Sequential(
             nn.Linear(128 + self.extra_input_dims * 4, 128),
             nn.LayerNorm(128),
-            nn.LeakyReLU(),
-            nn.Dropout(0.2),
+            # nn.LeakyReLU(),
+            nn.ReLU(),
+            # nn.Dropout(0.2),
             nn.Linear(128, 64),
-            nn.LeakyReLU(),
-            nn.Dropout(0.2),
+            # nn.LeakyReLU(),
+            nn.ReLU(),
+            # nn.Dropout(0.2),
             nn.Linear(64, features_dim),
         )
 
@@ -228,123 +242,6 @@ class DeepLob(BaseFeaturesExtractor):
             raise ValueError("fused_out is nan or inf")
 
         return fused_out
-
-class CustomCheckpointCallback(BaseCallback):
-
-    def __init__(self, train_folder: str):
-        super().__init__()
-
-        self.train_folder = train_folder
-
-        self.metrics = []
-
-        self.checkpoint_path = os.path.join(self.train_folder, 'checkpoint')
-        os.makedirs(self.checkpoint_path, exist_ok=True)
-
-    def _on_rollout_end(self) -> None:
-        # This method is called after each rollout
-        # Collect metrics from logger
-        metrics_dict = {}
-        
-        # Rollout metrics
-        metrics_dict['rollout/ep_len_mean'] = safe_mean([ep_info["l"] for ep_info in self.model.ep_info_buffer])
-        metrics_dict['rollout/ep_rew_mean'] = safe_mean([ep_info["r"] for ep_info in self.model.ep_info_buffer])
-        
-        # Training metrics from the last update
-        if hasattr(self.model, 'logger') and self.model.logger is not None:
-            for key in ['train/approx_kl', 'train/clip_fraction', 'train/clip_range', 
-                        'train/entropy_loss', 'train/explained_variance', 'train/learning_rate',
-                        'train/loss', 'train/n_updates', 'train/policy_gradient_loss', 'train/value_loss']:
-                if key in self.model.logger.name_to_value:
-                    metrics_dict[key] = self.model.logger.name_to_value[key]
-
-        # 增加时间戳
-        metrics_dict['timestamp'] = int(time.time())
-        self.metrics.append(metrics_dict)
-
-        # 如果存在历史指标文件,读取并合并去重
-        metrics_file = os.path.join(self.train_folder, "training_metrics.csv")
-        if os.path.exists(metrics_file):
-            # 读取历史数据
-            history_df = pd.read_csv(metrics_file)
-            # 将当前指标转为DataFrame
-            current_df = pd.DataFrame(self.metrics)
-            # 基于timestamp去重合并
-            merged_df = pd.concat([history_df, current_df]).drop_duplicates(subset=['timestamp'], keep='last')
-            # 按timestamp排序
-            merged_df = merged_df.sort_values('timestamp')
-            df = merged_df
-        else:
-            df = pd.DataFrame(self.metrics)
-        df.to_csv(metrics_file, index=False)
-        self._plot(df)
-
-    def _plot(self, df):
-        """
-        图1 绘制 ep_len_mean / ep_len_mean平滑
-        图2 绘制 ep_rew_mean / ep_rew_mean平滑
-        图3 绘制 train/loss / train/loss平滑
-        图4 绘制 train/entropy_loss / train/entropy_loss平滑
-        竖向排列，对齐 x 轴
-        """
-        # 定义平滑函数
-        def smooth_data(data, window_size=10):
-            return data.rolling(window=window_size, min_periods=1).mean()
-
-        # 创建绘图，4 个子图竖向排列，共享 x 轴
-        fig, axs = plt.subplots(nrows=4, ncols=1, figsize=(10, 12), sharex=True)  # 宽度 10，高度 12
-
-        # 数据长度，用于对齐 x 轴
-        data_len = len(df)
-
-        # 图 1: ep_len_mean
-        if 'rollout/ep_len_mean' in df.columns:
-            axs[0].plot(df['rollout/ep_len_mean'], label=f'ep_len_mean({df.iloc[-1]["rollout/ep_len_mean"]:.2f})', alpha=0.5)
-            axs[0].plot(smooth_data(df['rollout/ep_len_mean']), label='smoothed', linewidth=2)
-            axs[0].set_title('Episode Length Mean')
-            axs[0].set_ylabel('Length')
-            axs[0].legend()
-            axs[0].grid(True)
-
-        # 图 2: ep_rew_mean
-        if 'rollout/ep_rew_mean' in df.columns:
-            axs[1].plot(df['rollout/ep_rew_mean'], label=f'ep_rew_mean({df.iloc[-1]["rollout/ep_rew_mean"]:.2f})', alpha=0.5)
-            axs[1].plot(smooth_data(df['rollout/ep_rew_mean']), label='smoothed', linewidth=2)
-            axs[1].set_title('Episode Reward Mean')
-            axs[1].set_ylabel('Reward')
-            axs[1].legend()
-            axs[1].grid(True)
-
-        # 图 3: train/loss
-        if 'train/loss' in df.columns:
-            axs[2].plot(df['train/loss'], label=f'loss({df.iloc[-1]["train/loss"]:.2f})', alpha=0.5)
-            axs[2].plot(smooth_data(df['train/loss']), label='smoothed', linewidth=2)
-            axs[2].set_title('Training Loss')
-            axs[2].set_ylabel('Loss')
-            axs[2].legend()
-            axs[2].grid(True)
-
-        # 图 4: train/entropy_loss
-        if 'train/entropy_loss' in df.columns:
-            axs[3].plot(df['train/entropy_loss'], label=f'entropy_loss({df.iloc[-1]["train/entropy_loss"]:.2f})', alpha=0.5)
-            axs[3].plot(smooth_data(df['train/entropy_loss']), label='smoothed', linewidth=2)
-            axs[3].set_title('Entropy Loss')
-            axs[3].set_xlabel('Rollout')  # 只有最下方子图显示 x 轴标签
-            axs[3].set_ylabel('Entropy Loss')
-            axs[3].legend()
-            axs[3].grid(True)
-
-        # 设置统一的 x 轴范围（可选，手动设置）
-        for ax in axs:
-            ax.set_xlim(0, data_len - 1)
-
-        # 调整布局并保存
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.train_folder, 'training_plots.png'), dpi=300)
-        plt.close()
-
-    def _on_step(self):
-        return True
 
 # Linear scheduler
 def linear_schedule(initial_value, final_value=0.0):
@@ -447,8 +344,8 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        # rollout.make_sample_until(min_timesteps=10000),
-        rollout.make_sample_until(min_timesteps=1.3e6),
+        rollout.make_sample_until(min_timesteps=1000),
+        # rollout.make_sample_until(min_timesteps=2e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -465,6 +362,7 @@ if run_type == 'train':
     msg += mem_expert_msg + '\n'
     send_wx(msg)
 
+    lr = 5e-3
     bc_trainer = bc.BC(
         observation_space=env.observation_space,
         action_space=env.action_space,
@@ -472,6 +370,7 @@ if run_type == 'train':
         policy=model.policy,
         rng=rng,
         custom_logger=custom_logger,
+        optimizer_kwargs={"lr": lr},
     )
 
     test_env = LOB_trade_env(env_config)
@@ -489,8 +388,6 @@ if run_type == 'train':
         bc_trainer.policy.train()
         bc_trainer.train(n_epochs=checkpoint_interval)
         log(f'训练耗时: {time.time() - _t:.2f} 秒')
-        # 保存模型
-        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))
         progress_file = os.path.join(train_folder, f"progress.csv")
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         # 验证模型
@@ -505,6 +402,7 @@ if run_type == 'train':
         df_new['bc/epoch'] += i * checkpoint_interval
         df_new['val/mean_reward'] = np.nan
         df_new['val/mean_reward'].iloc[-1] = reward_after_training
+        df_new['lr'] = lr
         df_progress = pd.concat([df_progress, df_new])
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
@@ -517,6 +415,27 @@ if run_type == 'train':
             raise e
         # 记录当前训练进度
         open(loop_i_file, 'w').write(str(i))
+        # 更新学习率
+        if len(df_progress) >= 10:
+            # 获取最近30个loss值
+            recent_losses = df_progress['bc/loss'].tail(30).values
+            # 检查是否没有新低
+            min_loss = recent_losses[0]
+            no_new_low = True
+            for loss in recent_losses[1:]:
+                if loss < min_loss:
+                    no_new_low = False
+                    break
+                min_loss = min(min_loss, loss)
+            if no_new_low:
+                lr /= 10
+                # 更新学习率为原来的1/10
+                for param_group in bc_trainer.optimizer.param_groups:
+                    param_group['lr'] = lr
+                log(f"学习率更新为: {lr}")
+        
+        # 保存模型
+        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))
         # 上传
         if not in_windows():
             train_folder_manager.push()
