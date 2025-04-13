@@ -40,9 +40,9 @@ from ray.rllib.examples.rl_modules.classes.intrinsic_curiosity_model_rlm import 
 )
 
 from dl_helper.tool import remove_old_env_output_files
-from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
-from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
+from dl_helper.rl.custom_rllib_module.ppoconfig import ClientPPOConfig
+from dl_helper.rl.custom_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.custom_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
@@ -52,7 +52,7 @@ from py_ext.datetime import beijing_time
 from dl_helper.train_folder_manager import TrainFolderManager
 
 from dl_helper.rl.rl_env.match_trade.match_env_reward import EndPositionRewardStrategy, ClosePositionRewardStrategy, HoldPositionRewardStrategy, BalanceRewardStrategy, RewardStrategy
-from dl_helper.rl.costum_rllib_module.match_model import MatchCallbacks, MatchPlotter
+from dl_helper.rl.custom_rllib_module.match_model import MatchCallbacks, MatchPlotter
 from dl_helper.rl.rl_env.match_trade.match_env import MATCH_trade_env
 
 use_intrinsic_curiosity = False

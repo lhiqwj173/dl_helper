@@ -35,8 +35,8 @@
 """
 from py_ext.tool import init_logger
 from py_ext.datetime import beijing_time
-from dl_helper.rl.costum_rllib_module.lob.run import run
-from dl_helper.rl.costum_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog, CausalConvLSTMIntrinsicCuriosityModel
+from dl_helper.rl.custom_rllib_module.lob.run import run
+from dl_helper.rl.custom_rllib_module.lob.causalconvlstm import CausalConvLSTMPPOCatalog, CausalConvLSTMIntrinsicCuriosityModel
 from dl_helper.rl.rl_env.lob_env_reward import RewardStrategy
 from dl_helper.rl.rl_env.lob_trade.lob_env import STD_REWARD
 

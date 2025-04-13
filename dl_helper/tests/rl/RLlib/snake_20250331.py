@@ -19,9 +19,9 @@ from ray.rllib.examples.rl_modules.classes.intrinsic_curiosity_model_rlm import 
     IntrinsicCuriosityModel,
 )
 
-from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig, PPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
-from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
+from dl_helper.rl.custom_rllib_module.ppoconfig import ClientPPOConfig, PPOConfig
+from dl_helper.rl.custom_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.custom_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes, get_gpu_info
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop
@@ -31,8 +31,8 @@ from py_ext.datetime import beijing_time
 from py_ext.lzma import decompress, compress_folder
 from dl_helper.train_folder_manager import TrainFolderManager
 
-from dl_helper.rl.costum_rllib_module.snake.mlp import MLPPPOCatalog
-from dl_helper.rl.costum_rllib_module.snake.cnn import CNNPPOCatalog
+from dl_helper.rl.custom_rllib_module.snake.mlp import MLPPPOCatalog
+from dl_helper.rl.custom_rllib_module.snake.cnn import CNNPPOCatalog
 from dl_helper.rl.rl_env.snake.snake_env_simple import SnakeEnv
 from dl_helper.rl.rl_env.tool import human_control, ai_control
 

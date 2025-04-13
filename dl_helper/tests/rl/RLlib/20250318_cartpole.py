@@ -2,9 +2,9 @@ import sys, os, time, shutil, pickle
 # os.environ["RAY_DEDUP_LOGS"] = "0"
 import matplotlib.pyplot as plt
 from ray.tune.registry import get_trainable_cls, register_env
-from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
-from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
+from dl_helper.rl.custom_rllib_module.ppoconfig import ClientPPOConfig
+from dl_helper.rl.custom_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.custom_rllib_module.client_learner import ClientLearnerGroup
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics, stop

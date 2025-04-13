@@ -10,10 +10,10 @@ from ray.rllib.core.rl_module.multi_rl_module import MultiRLModuleSpec
 from ray.rllib.examples.learners.classes.intrinsic_curiosity_learners import ICM_MODULE_ID
 from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 from ray.rllib.algorithms.ppo import PPOConfig
-from dl_helper.rl.costum_rllib_module.ppoconfig import ClientPPOConfig
-from dl_helper.rl.costum_rllib_module.client_learner import ClientPPOTorchLearner
-from dl_helper.rl.costum_rllib_module.client_learner import ClientLearnerGroup
-from dl_helper.rl.costum_rllib_module.lob.lob_model import LobCallbacks, LobPlotter
+from dl_helper.rl.custom_rllib_module.ppoconfig import ClientPPOConfig
+from dl_helper.rl.custom_rllib_module.client_learner import ClientPPOTorchLearner
+from dl_helper.rl.custom_rllib_module.client_learner import ClientLearnerGroup
+from dl_helper.rl.custom_rllib_module.lob.lob_model import LobCallbacks, LobPlotter
 from dl_helper.rl.easy_helper import *
 from dl_helper.train_param import match_num_processes
 from dl_helper.rl.rl_utils import add_train_title_item, plot_training_curve, simplify_rllib_metrics

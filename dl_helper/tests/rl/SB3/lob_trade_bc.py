@@ -9,7 +9,6 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.evaluation import evaluate_policy
 
-from imitation.algorithms import bc
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.util import logger as imit_logger
@@ -18,6 +17,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch as th
+from torch.optim.lr_scheduler import OneCycleLR
 th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
@@ -41,6 +41,8 @@ from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
+
+from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
 
 train_folder = train_title = f'20250412_lob_trade_bc'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
@@ -344,7 +346,7 @@ if run_type == 'train':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=1000),
+        rollout.make_sample_until(min_timesteps=50000),
         # rollout.make_sample_until(min_timesteps=2e6),
         rng=rng,
     )
@@ -362,21 +364,25 @@ if run_type == 'train':
     msg += mem_expert_msg + '\n'
     send_wx(msg)
 
-    lr = 5e-3
-    bc_trainer = bc.BC(
+    total_epochs = 10
+    batch_size = 32
+    max_lr = 0.1
+    batch_n = 2**5
+    bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
         action_space=env.action_space,
         demonstrations=transitions,
         policy=model.policy,
         rng=rng,
+        batch_size=batch_size,
         custom_logger=custom_logger,
-        optimizer_kwargs={"lr": lr},
+        lr_scheduler_cls = OneCycleLR,
+        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_epochs * len(transitions) // (batch_size * batch_n)},
     )
 
     test_env = LOB_trade_env(env_config)
     test_env.test()
 
-    total_epochs = 500000
     checkpoint_interval = 1
     begin = 0
     # 读取之前的i
@@ -402,7 +408,6 @@ if run_type == 'train':
         df_new['bc/epoch'] += i * checkpoint_interval
         df_new['val/mean_reward'] = np.nan
         df_new['val/mean_reward'].iloc[-1] = reward_after_training
-        df_new['lr'] = lr
         df_progress = pd.concat([df_progress, df_new])
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
@@ -415,24 +420,6 @@ if run_type == 'train':
             raise e
         # 记录当前训练进度
         open(loop_i_file, 'w').write(str(i))
-        # 更新学习率
-        if len(df_progress) >= 10:
-            # 获取最近30个loss值
-            recent_losses = df_progress['bc/loss'].tail(30).values
-            # 检查是否没有新低
-            min_loss = recent_losses[0]
-            no_new_low = True
-            for loss in recent_losses[1:]:
-                if loss < min_loss:
-                    no_new_low = False
-                    break
-                min_loss = min(min_loss, loss)
-            if no_new_low:
-                lr /= 10
-                # 更新学习率为原来的1/10
-                for param_group in bc_trainer.optimizer.param_groups:
-                    param_group['lr'] = lr
-                log(f"学习率更新为: {lr}")
         
         # 保存模型
         bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))

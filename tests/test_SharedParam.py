@@ -3,7 +3,7 @@ from multiprocessing import Process, shared_memory
 import time
 import unittest
 
-from dl_helper.rl.costum_rllib_module.client_learner import SharedParam
+from dl_helper.rl.custom_rllib_module.client_learner import SharedParam
 
 def worker_process(params_dict, add_value):
     """
