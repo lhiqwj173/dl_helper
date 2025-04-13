@@ -261,6 +261,9 @@ def linear_schedule(initial_value, final_value=0.0):
 model_type = 'CnnPolicy'
 # 'train' or 'test' or 'find_lr'
 # find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
+# 查找最大学习率
+# df_progress = pd.read_csv('progress_all.csv')
+# find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
 
 if len(sys.argv) > 1:
@@ -351,7 +354,8 @@ if run_type != 'test':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
+        rollout.make_sample_until(min_timesteps=50000),
+        # rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -370,7 +374,7 @@ if run_type != 'test':
 
     total_epochs = 10
     batch_size = 32
-    max_lr = 0.1
+    max_lr = 0.0024# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
     total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import threading
 import matplotlib.pyplot as plt
 from collections import OrderedDict
+from scipy.signal import savgol_filter  # 用于平滑曲线
 
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.utils import safe_mean
@@ -318,6 +319,73 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file=''):
     plt.tight_layout()
     plt.savefig(os.path.join(train_folder, 'training_plots.png'), dpi=300)
     plt.close()
+
+def find_best_lr(lrs, losses, smooth_window=5, slope_factor=0.1, plot=True):
+    """
+    从 LR Finder 的 lrs 和 losses 序列中计算最佳 max_lr（用于 OneCycleLR）。
+    
+    Args:
+        lrs: 学习率序列（list 或 np.ndarray），通常呈指数增长。
+        losses: 对应的损失序列（list 或 np.ndarray）。
+        smooth_window: 平滑窗口大小（奇数），用于 Savitzky-Golay 滤波。
+        slope_factor: 选择斜率相对于最大负斜率的因子（例如 0.1 表示 1/10）。
+        plot: 是否绘制学习率-损失曲线并标注最佳点。
+    
+    Returns:
+        float: 推荐的 max_lr。
+    """
+    # 转换为 numpy 数组
+    lrs = np.array(lrs)
+    losses = np.array(losses)
+    
+    # 移除无效值（NaN 或 inf）
+    valid_mask = np.isfinite(losses)
+    lrs = lrs[valid_mask]
+    losses = losses[valid_mask]
+    
+    if len(lrs) < 10:
+        raise ValueError("数据点不足，无法分析曲线")
+    
+    # 平滑损失曲线（使用 Savitzky-Golay 滤波）
+    try:
+        smoothed_losses = savgol_filter(losses, smooth_window, 3)  # 窗口大小，3阶多项式
+    except ValueError:
+        smoothed_losses = losses  # 如果窗口无效，直接使用原始数据
+    
+    # 计算负斜率（数值微分）
+    slopes = -np.gradient(smoothed_losses, np.log10(lrs))  # 对 log(lrs) 求导，考虑对数尺度
+    
+    # 找到最大负斜率点
+    max_slope_idx = np.argmax(slopes)
+    max_slope_lr = lrs[max_slope_idx]
+    
+    # 选择最大负斜率点之前的点（斜率约为最大值的 slope_factor）
+    target_slope = slopes[max_slope_idx] * slope_factor
+    candidate_idx = np.where(slopes[:max_slope_idx] > target_slope)[0]
+    if len(candidate_idx) > 0:
+        best_idx = candidate_idx[-1]  # 选择最接近最大斜率的点
+    else:
+        best_idx = max(0, max_slope_idx - 10)  # 回退若干步
+    
+    best_lr = lrs[best_idx]
+    
+    # 绘制曲线（可选）
+    if plot:
+        plt.figure(figsize=(10, 6))
+        plt.plot(lrs, smoothed_losses, label='Smoothed Loss')
+        plt.plot(lrs, losses, alpha=0.3, label='Raw Loss')
+        plt.axvline(max_slope_lr, color='orange', linestyle='--', label='Max Slope LR: {:.2e}'.format(max_slope_lr))
+        plt.axvline(best_lr, color='green', linestyle='-', label=f'Best LR: {best_lr:.2e}')
+        plt.xscale('log')
+        plt.xlabel('Learning Rate')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.title('Learning Rate Finder')
+        plt.grid(True)
+        plt.show()
+    
+    return best_lr
+
 
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """
