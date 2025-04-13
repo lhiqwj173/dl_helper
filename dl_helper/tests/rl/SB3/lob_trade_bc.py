@@ -263,6 +263,9 @@ model_type = 'CnnPolicy'
 # find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
 run_type = 'train'
 
+if len(sys.argv) > 1:
+    run_type = sys.argv[1]
+
 model_config={
     # 自定义编码器参数  
     'input_dims' : (30, 20),
@@ -348,8 +351,7 @@ if run_type != 'test':
     rollouts = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=50000),
-        # rollout.make_sample_until(min_timesteps=2e6),
+        rollout.make_sample_until(min_timesteps=50000 if run_type=='find_lr' else 2e6),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
