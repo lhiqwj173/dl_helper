@@ -45,8 +45,9 @@ from dl_helper.train_folder_manager import TrainFolderManagerBC
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
 
 model_type = 'CnnPolicy'
-# 'train' or 'test' or 'find_lr'
+# 'train' or 'test' or 'find_lr' or 'test_model'
 # find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
+# test_model: 使用相同的batch数据，测试模型拟合是否正常
 # 查找最大学习率
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
@@ -76,6 +77,8 @@ if len(sys.argv) > 1:
             run_type = 'find_lr'
         elif arg == 'test':
             run_type = 'test'
+        elif arg == 'test_model':
+            run_type = 'test_model'
         elif arg == 'sgd':
             opt_method = 'sgd'
         elif arg == 'adam':
@@ -409,7 +412,7 @@ if run_type != 'test':
         expert,
         vec_env,
         # rollout.make_sample_until(min_timesteps=50000),
-        rollout.make_sample_until(min_timesteps=4800 if run_type=='find_lr' else 2e6),
+        rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
@@ -426,7 +429,7 @@ if run_type != 'test':
     msg += mem_expert_msg + '\n'
     send_wx(msg)
 
-    total_epochs = 40
+    total_epochs = 40 if run_type!='test_model' else 10000000000000000
     batch_size = 32
     max_lr = 0.022# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
@@ -440,16 +443,16 @@ if run_type != 'test':
         rng=rng,
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         optimizer_cls = opt_dict[opt_method]['cls'],
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else opt_dict[opt_method]['kwargs'],
+        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else opt_dict[opt_method]['kwargs'] if run_type=='train' else {'lr': 3e-4},
         custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR,
+        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR if run_type=='find_lr' else None,
         lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
     )
 
     test_env = LOB_trade_env(env_config)
     test_env.test()
 
-    checkpoint_interval = 1
+    checkpoint_interval = 1 if run_type!='test_model' else 500
     begin = 0
     # 读取之前的i
     loop_i_file = os.path.join(train_folder, 'checkpoint', 'loop_i')
