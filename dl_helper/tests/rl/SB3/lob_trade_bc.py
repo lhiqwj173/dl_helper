@@ -44,7 +44,46 @@ from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
 
-train_folder = train_title = f'20250412_lob_trade_bc'
+model_type = 'CnnPolicy'
+# 'train' or 'test' or 'find_lr'
+# find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
+# 查找最大学习率
+# df_progress = pd.read_csv('progress_all.csv')
+# find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
+run_type = 'train'
+
+opt_dict = {
+    'sgd': {
+        'cls': th.optim.SGD,
+        'kwargs': {'momentum': 0.9},
+    },
+    'adam': {
+        'cls': th.optim.Adam,
+        'kwargs': {},
+    },
+    'adamw': {
+        'cls': th.optim.AdamW,
+        'kwargs': {},
+    },
+}
+opt_method = 'sgd'
+
+if len(sys.argv) > 1:
+    for arg in sys.argv[1:]:
+        if arg == 'train':
+            run_type = 'train'
+        elif arg == 'find_lr':
+            run_type = 'find_lr'
+        elif arg == 'test':
+            run_type = 'test'
+        elif arg == 'sgd':
+            opt_method = 'sgd'
+        elif arg == 'adam':
+            opt_method = 'adam'
+        elif arg == 'adamw':
+            opt_method = 'adamw'
+
+train_folder = train_title = f'20250412_lob_trade_bc_{opt_method}'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -258,16 +297,6 @@ def linear_schedule(initial_value, final_value=0.0):
 
     return scheduler
 
-model_type = 'CnnPolicy'
-# 'train' or 'test' or 'find_lr'
-# find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
-# 查找最大学习率
-# df_progress = pd.read_csv('progress_all.csv')
-# find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
-run_type = 'train'
-
-if len(sys.argv) > 1:
-    run_type = sys.argv[1]
 
 model_config={
     # 自定义编码器参数  
@@ -372,7 +401,7 @@ if run_type != 'test':
     msg += mem_expert_msg + '\n'
     send_wx(msg)
 
-    total_epochs = 10
+    total_epochs = 40
     batch_size = 32
     max_lr = 0.0024# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
@@ -385,8 +414,8 @@ if run_type != 'test':
         policy=model.policy,
         rng=rng,
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_cls = th.optim.SGD,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else {'momentum': 0.9},
+        optimizer_cls = opt_dict[opt_method]['cls'],
+        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else opt_dict[opt_method]['kwargs'],
         custom_logger=custom_logger,
         lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR,
         lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
@@ -428,7 +457,7 @@ if run_type != 'test':
         df_progress.to_csv(progress_file_all, index=False)
         # 训练进度可视化
         try:
-            plot_bc_train_progress(train_folder, df_progress=df_progress)
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
         except Exception as e:
             pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
             log(f"训练进度可视化失败")

@@ -223,7 +223,7 @@ class CustomCheckpointCallback(BaseCallback):
     def _on_step(self):
         return True
 
-def plot_bc_train_progress(train_folder, df_progress=None, train_file=''):
+def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=''):
     """
     图1 绘制 bc/loss / bc/loss平滑 lr(若有)
     图2 绘制 bc/entropy / bc/entropy平滑
@@ -255,7 +255,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file=''):
     axs_left = axs
     if 'val/mean_reward' in df.columns:
         axs[0].plot(df['val/mean_reward'], label=f'mean_reward({df.iloc[-1]["val/mean_reward"]:.2f})')
-        axs[0].set_title('Val Mean Reward')
+        axs[0].set_title(f'{title} Val Mean Reward')
         axs[0].set_ylabel('Mean Reward')
         axs[0].legend()
         axs_left = axs[1:]
