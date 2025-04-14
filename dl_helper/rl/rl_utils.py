@@ -386,6 +386,36 @@ def find_best_lr(lrs, losses, smooth_window=5, slope_factor=0.1, plot=True):
     
     return best_lr
 
+def check_gradients(model, gradient_threshold_min=1e-5, gradient_threshold_max=100):
+    """
+    检查模型每一层的梯度范数，抛出异常如果发现问题。
+    """
+    for name, param in model.policy.named_parameters():
+        if param.grad is None:
+            continue
+
+        grad = param.grad
+        # 检查 NaN 或 inf
+        if torch.isnan(grad).any():
+            raise RuntimeError(f"NaN detected in gradient of {name}")
+        if torch.isinf(grad).any():
+            raise RuntimeError(f"Inf detected in gradient of {name}")
+
+        # 计算梯度范数
+        grad_norm = torch.norm(grad).item()
+
+        # 检查梯度消失
+        if grad_norm < gradient_threshold_min:
+            raise RuntimeError(
+                f"Gradient vanishing detected in {name}: "
+                f"norm = {grad_norm:.6e} < {gradient_threshold_min:.6e}"
+            )
+        # 检查梯度爆炸
+        if grad_norm > gradient_threshold_max:
+            raise RuntimeError(
+                f"Gradient explosion detected in {name}: "
+                f"norm = {grad_norm:.6e} > {gradient_threshold_max:.6e}"
+            )
 
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """

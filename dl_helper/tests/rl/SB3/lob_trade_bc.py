@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch as th
 from torch.optim.lr_scheduler import OneCycleLR, MultiplicativeLR
-th.autograd.set_detect_anomaly(True)
+# th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
 import random, psutil
@@ -38,7 +38,7 @@ from py_ext.datetime import beijing_time
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
-from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
@@ -242,6 +242,32 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(128, features_dim),
         )
 
+        # 初始化权重
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        # 对 CNN 和全连接层应用 He 初始化
+        for module in self.modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
+        # 对 LSTM 应用特定初始化
+        for name, param in self.lstm.named_parameters():
+            if 'weight_ih' in name:
+                # 输入到隐藏权重使用 He 初始化
+                nn.init.kaiming_normal_(param, mode='fan_in', nonlinearity='relu')
+            elif 'weight_hh' in name:
+                # 隐藏到隐藏权重使用正交初始化
+                nn.init.orthogonal_(param)
+            elif 'bias' in name:
+                # 偏置初始化为零（可选：遗忘门偏置设为 1）
+                nn.init.zeros_(param)
+                # 如果需要鼓励遗忘门记住更多信息，可以设置：
+                # bias_size = param.size(0)
+                # param.data[bias_size//4:bias_size//2].fill_(1.0)  # 遗忘门偏置设为 1
+
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         # 分离时间序列和静态特征
         use_obs = observations[:, :-1]# 最后一维是 日期信息， 不参与模型计算，用于专家透视未来数据
@@ -436,6 +462,8 @@ if run_type != 'test':
             n_epochs=checkpoint_interval,
             log_interval = 1 if run_type=='find_lr' else 500,
         )
+        # 检查梯度
+        check_gradients(bc_trainer)
         log(f'训练耗时: {time.time() - _t:.2f} 秒')
         progress_file = os.path.join(train_folder, f"progress.csv")
         progress_file_all = os.path.join(train_folder, f"progress_all.csv")
