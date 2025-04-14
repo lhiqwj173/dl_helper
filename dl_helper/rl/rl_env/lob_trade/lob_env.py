@@ -1260,7 +1260,7 @@ class LOB_trade_env(gym.Env):
                 'render_mode': 'none',
 
                 # 渲染频率, 每N步渲染一次
-                'render_freq': 5,
+                'render_freq': 1,
 
                 # 奖励策略
                 'end_position': ClosePositionRewardStrategy,
@@ -1287,7 +1287,7 @@ class LOB_trade_env(gym.Env):
         self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.01))
 
         self.render_mode = config.get('render_mode', 'none')
-        self.render_freq = config.get('render_freq', 5)
+        self.render_freq = config.get('render_freq', 1)
 
         end_position_reward_strategy = config.get('end_position', ClosePositionRewardStrategy)
         close_position_reward_strategy = config.get('close_position', ClosePositionRewardStrategy)
@@ -2006,5 +2006,5 @@ def play_lob_data(render=True):
 
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
-    test_lob_data(check_data=True, check_reward=False)
+    # test_lob_data(check_data=True, check_reward=False)
     # play_lob_data(render = True)

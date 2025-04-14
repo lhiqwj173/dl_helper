@@ -342,9 +342,6 @@ if run_type != 'test':
     # 专家
     expert = LobExpert_file(pre_cache=True)
 
-    # 指定设备为 GPU (cuda)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
     # lr_schedule = linear_schedule(1e-3, 5e-4)
     # clip_range_schedule = linear_schedule(0.15, 0.3)
     model = PPO(
@@ -354,7 +351,6 @@ if run_type != 'test':
         learning_rate=1e-3,
         ent_coef=0.2,
         gamma=0.97,
-        device=device, 
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
@@ -365,10 +361,10 @@ if run_type != 'test':
 
     # test_x = env.observation_space.sample()
     # test_x = torch.from_numpy(test_x).unsqueeze(0)
-    # print(test_x.shape)
+    # log(test_x.shape)
     # test_x = test_x.float().to(device)
     # out = model.policy.features_extractor(test_x)
-    # print(out.shape)
+    # log(out.shape)
     # sys.exit()
 
     # 训练文件夹管理
@@ -406,9 +402,9 @@ if run_type != 'test':
 
     total_epochs = 40
     batch_size = 32
-    max_lr = 0.0024# find_best_lr
+    max_lr = 0.022# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
-    # batch_n = 1
+    batch_n = 1
     total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
@@ -480,4 +476,56 @@ if run_type != 'test':
             break
 else:
     # test
-    pass
+    model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
+
+    # 初始化模型
+    env_config['data_type'] = 'test'
+    env_config['render_mode'] = 'human'
+    test_env = LOB_trade_env(env_config)
+    test_env.test()
+    model = PPO(
+        model_type, 
+        test_env, 
+        verbose=1, 
+        learning_rate=1e-3,
+        ent_coef=0.2,
+        gamma=0.97,
+        policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+    )
+
+    # 加载参数
+    model.policy.load(os.path.join(model_folder, 'bc_policy'))
+
+    # 专家, 用于参考
+    expert = LobExpert_file(pre_cache=False)
+    
+    # 测试
+    rounds = 5
+    rounds = 1
+    for i in range(rounds):
+        log('reset')
+        seed = random.randint(0, 1000000)
+        # seed = 646508
+        obs, info = test_env.reset(seed)
+        test_env.render()
+
+        act = 1
+        need_close = False
+        while not need_close:
+            action, _state = model.predict(obs, deterministic=True)
+            expert.add_potential_data_to_env(test_env)
+
+            obs, reward, terminated, truncated, info = test_env.step(action)
+            test_env.render()
+            need_close = terminated or truncated
+            
+        log(f'seed: {seed}')
+        if rounds > 1:
+            keep_play = input('keep play? (y)')
+            if keep_play == 'y':
+                continue
+            else:
+                break
+
+    input('all done, press enter to close')
+    test_env.close()
