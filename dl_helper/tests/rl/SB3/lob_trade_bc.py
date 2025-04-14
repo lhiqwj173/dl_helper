@@ -83,7 +83,7 @@ if len(sys.argv) > 1:
         elif arg == 'adamw':
             opt_method = 'adamw'
 
-train_folder = train_title = f'20250412_lob_trade_bc_{opt_method}'
+train_folder = train_title = f'20250412_lob_trade_bc_{opt_method}' if run_type == 'train' else f'20250412_lob_trade_bc'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -128,7 +128,7 @@ class ImprovedSelfAttention(nn.Module):
         return out
 
 # 自定义特征提取器
-# 参数量: 735979
+# 参数量: 250795
 class DeepLob(BaseFeaturesExtractor):
     def __init__(
             self,
@@ -144,80 +144,80 @@ class DeepLob(BaseFeaturesExtractor):
 
         # 卷积块
         self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=(1, 2), stride=(1, 2)),
+            nn.Conv2d(1, 32, kernel_size=(1, 2), stride=(1, 2)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(32),
         )
         self.conv2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=(1, 2), stride=(1, 2)),
+            nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
             nn.Tanh(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.Tanh(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.Tanh(),
-            # nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(32),
         )
         self.conv3 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=(1, 5)),
+            nn.Conv2d(32, 32, kernel_size=(1, 5)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
-            nn.Conv2d(64, 64, kernel_size=(2, 1)),
+            # nn.BatchNorm2d(32),
+            nn.Conv2d(32, 32, kernel_size=(2, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(32),
         )
 
         # Inception 模块
         self.inp1 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=(1, 1)),
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(128),
-            nn.Conv2d(128, 128, kernel_size=(3, 1), padding=(1, 0)),
+            # nn.BatchNorm2d(64),
+            nn.Conv2d(64, 64, kernel_size=(3, 1), padding=(1, 0)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(128),
+            # nn.BatchNorm2d(64),
         )
         self.inp2 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=(1, 1)),
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(128),
-            nn.Conv2d(128, 128, kernel_size=(5, 1), padding=(2, 0)),
+            # nn.BatchNorm2d(64),
+            nn.Conv2d(64, 64, kernel_size=(5, 1), padding=(2, 0)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(128),
+            # nn.BatchNorm2d(64),
         )
         self.inp3 = nn.Sequential(
             nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
-            nn.Conv2d(64, 128, kernel_size=(1, 1)),
+            nn.Conv2d(32, 64, kernel_size=(1, 1)),
             # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(128),
+            # nn.BatchNorm2d(64),
         )
 
         # LSTM 层 
-        self.lstm = nn.LSTM(input_size=128*3, hidden_size=128, num_layers=2, batch_first=True)
+        self.lstm = nn.LSTM(input_size=64*3, hidden_size=64, num_layers=1, batch_first=True)
 
         # 自注意力层
         # self.attention = SelfAttention(128)
-        self.improved_attention = ImprovedSelfAttention(128)
+        # self.improved_attention = ImprovedSelfAttention(64)
 
         # 静态特征处理
         self.static_net = nn.Sequential(
@@ -230,16 +230,16 @@ class DeepLob(BaseFeaturesExtractor):
 
         # 融合层
         self.fusion = nn.Sequential(
-            nn.Linear(128 + self.extra_input_dims * 4, 128),
+            nn.Linear(64 + self.extra_input_dims * 4, 128),
             nn.LayerNorm(128),
             # nn.LeakyReLU(),
             nn.ReLU(),
             # nn.Dropout(0.2),
-            nn.Linear(128, 64),
+            # nn.Linear(64, 64),
             # nn.LeakyReLU(),
-            nn.ReLU(),
+            # nn.ReLU(),
             # nn.Dropout(0.2),
-            nn.Linear(64, features_dim),
+            nn.Linear(128, features_dim),
         )
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
@@ -265,11 +265,14 @@ class DeepLob(BaseFeaturesExtractor):
         # LSTM 处理 取最后一个时间步
         lstm_out, _ = self.lstm(x)  # (B, 24, 64)
 
-        # # 自注意力
-        # attn_out = self.attention(lstm_out)  # (B, ?, 128)
-        # temporal_feat = attn_out[:, -1, :]  # 取最后一个时间步 (B, 128)
-        attn_out = self.improved_attention(lstm_out)
-        temporal_feat = attn_out.mean(dim=1)  # 平均池化
+        # # # 自注意力
+        # # attn_out = self.attention(lstm_out)  # (B, ?, 128)
+        # # temporal_feat = attn_out[:, -1, :]  # 取最后一个时间步 (B, 128)
+        # attn_out = self.improved_attention(lstm_out)
+        # temporal_feat = attn_out.mean(dim=1)  # 平均池化
+
+        # 取最后一个时间步
+        temporal_feat = lstm_out[:, -1, :]  # (B, 64)
 
         # 静态特征处理
         static_out = self.static_net(extra_x)  # (B, self.extra_input_dims * 4)
@@ -302,7 +305,7 @@ model_config={
     # 自定义编码器参数  
     'input_dims' : (30, 20),
     'extra_input_dims' : 3,
-    'features_dim' : 64,
+    'features_dim' : 256,
 }
 env_config ={
     'data_type': 'train',# 训练/测试
@@ -318,7 +321,7 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 policy_kwargs = dict(
     features_extractor_class=DeepLob,
     features_extractor_kwargs=model_config,
-    net_arch = [32,32]
+    net_arch = [128,64]
 )
 
 def make_env():
