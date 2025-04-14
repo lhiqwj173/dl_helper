@@ -372,8 +372,8 @@ def find_best_lr(lrs, losses, smooth_window=5, slope_factor=0.1, plot=True):
     # 绘制曲线（可选）
     if plot:
         plt.figure(figsize=(10, 6))
-        plt.plot(lrs, smoothed_losses, label='Smoothed Loss')
-        plt.plot(lrs, losses, alpha=0.3, label='Raw Loss')
+        plt.plot(lrs, smoothed_losses, label=f'Smoothed Loss: {smoothed_losses[best_idx]:.2e}')
+        plt.plot(lrs, losses, alpha=0.3, label=f'Raw Loss: {losses[best_idx]:.2e}')
         plt.axvline(max_slope_lr, color='orange', linestyle='--', label='Max Slope LR: {:.2e}'.format(max_slope_lr))
         plt.axvline(best_lr, color='green', linestyle='-', label=f'Best LR: {best_lr:.2e}')
         plt.xscale('log')
