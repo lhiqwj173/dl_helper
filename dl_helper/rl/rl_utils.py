@@ -254,7 +254,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     # 图 0: val/mean_reward
     axs_left = axs
     if 'val/mean_reward' in df.columns:
-        axs[0].plot(df['val/mean_reward'], label=f'mean_reward({df.iloc[-1]["val/mean_reward"]:.2f})')
+        axs[0].plot(df['val/mean_reward'], label=f'mean_reward({df.iloc[-1]["val/mean_reward"]:.2e})')
         axs[0].set_title(f'{title} Val Mean Reward')
         axs[0].set_ylabel('Mean Reward')
         axs[0].legend()
@@ -262,7 +262,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
 
     # 图 1: bc/loss
     if 'bc/loss' in df.columns:
-        axs_left[0].plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2f})', alpha=0.5)
+        axs_left[0].plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.5)
         axs_left[0].plot(smooth_data(df['bc/loss']), label='smoothed', linewidth=2)
         axs_left[0].set_title('BC Loss')
         axs_left[0].set_ylabel('Loss')
@@ -285,7 +285,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
 
     # 图 2: bc/entropy
     if 'bc/entropy' in df.columns:
-        axs_left[1].plot(df['bc/entropy'], label=f'entropy({df.iloc[-1]["bc/entropy"]:.2f})', alpha=0.5)
+        axs_left[1].plot(df['bc/entropy'], label=f'entropy({df.iloc[-1]["bc/entropy"]:.2e})', alpha=0.5)
         axs_left[1].plot(smooth_data(df['bc/entropy']), label='smoothed', linewidth=2)
         axs_left[1].set_title('BC Entropy')
         axs_left[1].set_ylabel('Entropy')
@@ -294,7 +294,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
 
     # 图 3: bc/neglogp
     if 'bc/neglogp' in df.columns:
-        axs_left[2].plot(df['bc/neglogp'], label=f'neglogp({df.iloc[-1]["bc/neglogp"]:.2f})', alpha=0.5)
+        axs_left[2].plot(df['bc/neglogp'], label=f'neglogp({df.iloc[-1]["bc/neglogp"]:.2e})', alpha=0.5)
         axs_left[2].plot(smooth_data(df['bc/neglogp']), label='smoothed', linewidth=2)
         axs_left[2].set_title('BC Negative Log Probability')
         axs_left[2].set_ylabel('Neglogp')
@@ -303,7 +303,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
 
     # 图 4: bc/l2_norm
     if 'bc/l2_norm' in df.columns:
-        axs_left[3].plot(df['bc/l2_norm'], label=f'l2_norm({df.iloc[-1]["bc/l2_norm"]:.2f})', alpha=0.5)
+        axs_left[3].plot(df['bc/l2_norm'], label=f'l2_norm({df.iloc[-1]["bc/l2_norm"]:.2e})', alpha=0.5)
         axs_left[3].plot(smooth_data(df['bc/l2_norm']), label='smoothed', linewidth=2)
         axs_left[3].set_title('BC L2 Norm')
         axs_left[3].set_xlabel('Batch')  # x 轴表示批次
