@@ -245,8 +245,8 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(128, features_dim),
         )
 
-        # 初始化权重
-        self._initialize_weights()
+        # # 初始化权重
+        # self._initialize_weights()
 
     def _initialize_weights(self):
         # 对 CNN 和全连接层应用 He 初始化
