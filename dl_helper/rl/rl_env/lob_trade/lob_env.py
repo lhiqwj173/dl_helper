@@ -470,34 +470,34 @@ class data_producer:
         # 未实现收益率 使用 zscore
         unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
 
-        ###################################
-        # 价格量 使用 robust
-        ms = pd.DataFrame(std_data['price_vol_each']['robust'], dtype=np.float32)
-        x, ms = self.use_data_split(raw, ms)
+        # ###################################
+        # # 价格量 使用 robust
+        # ms = pd.DataFrame(std_data['price_vol_each']['robust'], dtype=np.float32)
+        # x, ms = self.use_data_split(raw, ms)
 
-        if self.data_std:
-            x -= ms[:, 0]
-            x /= ms[:, 1]
-        else:
-            x_std = ms.copy()
-        ###################################
-
-        # ####################################
-        # # (价格 - mid_price) / spread
-        # # 数量 / total_vol/total_bid_vol/total_ask_vol(基于最近tick计算)
-        # mid_price = (self.bid_price[-1] + self.ask_price[-1]) / 2
-        # spread = self.ask_price[-1] - self.bid_price[-1]
-        # if not hasattr(self, 'p_cols_idxs'):
-        #     self.p_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '价' in self.all_raw_data.columns[i]]
-        #     self.v_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '量' in self.all_raw_data.columns[i]]
-        # x = raw
-        # total_vol = x[-1, self.v_cols_idxs].sum()
         # if self.data_std:
-        #     x[:, self.p_cols_idxs] = (x[:, self.p_cols_idxs] - mid_price) / spread
-        #     x[:, self.v_cols_idxs] = x[:, self.v_cols_idxs] / (total_vol + 1e-6)
+        #     x -= ms[:, 0]
+        #     x /= ms[:, 1]
         # else:
-        #     x_std = (mid_price, spread, total_vol)
-        # ####################################
+        #     x_std = ms.copy()
+        # ###################################
+
+        ####################################
+        # (价格 - mid_price) / spread
+        # 数量 / total_vol/total_bid_vol/total_ask_vol(基于最近tick计算)
+        mid_price = (self.bid_price[-1] + self.ask_price[-1]) / 2
+        spread = self.ask_price[-1] - self.bid_price[-1]
+        if not hasattr(self, 'p_cols_idxs'):
+            self.p_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '价' in self.all_raw_data.columns[i]]
+            self.v_cols_idxs = [i for i in range(len(self.all_raw_data.columns)) if '量' in self.all_raw_data.columns[i]]
+        x = raw
+        total_vol = x[-1, self.v_cols_idxs].sum()
+        if self.data_std:
+            x[:, self.p_cols_idxs] = (x[:, self.p_cols_idxs] - mid_price) / spread
+            x[:, self.v_cols_idxs] = x[:, self.v_cols_idxs] / (total_vol + 1e-6)
+        else:
+            x_std = (mid_price, spread, total_vol)
+        ####################################
 
         # 标的id
         symbol_id = self.idxs[0][2]
