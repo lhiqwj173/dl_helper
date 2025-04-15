@@ -52,7 +52,7 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
-# run_type = 'test_model'
+run_type = 'test_model'
 
 opt_dict = {
     'sgd': {
@@ -354,8 +354,11 @@ policy_kwargs = dict(
     net_arch = [128,64]
 )
 
+env_objs = []
 def make_env():
-    return RolloutInfoWrapper(LOB_trade_env(env_config))
+    env = LOB_trade_env(env_config)
+    env_objs.append(env)
+    return RolloutInfoWrapper(env)
 
 if run_type != 'test':
 
@@ -409,14 +412,26 @@ if run_type != 'test':
     rng = np.random.default_rng()
     t = time.time()
     memory_usage = psutil.virtual_memory()
+    # 训练数据
+    train_timesteps = 2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500
     rollouts = rollout.rollout(
         expert,
         vec_env,
         # rollout.make_sample_until(min_timesteps=50000),
-        rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
+        rollout.make_sample_until(min_timesteps=train_timesteps),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
+    # 验证数据
+    for env in env_objs:
+        env.val()
+    rollouts_val = rollout.rollout(
+        expert,
+        vec_env,
+        rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
+        rng=rng,
+    )
+    transitions_val = rollout.flatten_trajectories(rollouts_val)
     memory_usage2 = psutil.virtual_memory()
     msg = ''
     cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
@@ -440,6 +455,7 @@ if run_type != 'test':
         observation_space=env.observation_space,
         action_space=env.action_space,
         demonstrations=transitions,
+        demonstrations_val=transitions_val,
         policy=model.policy,
         rng=rng,
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,

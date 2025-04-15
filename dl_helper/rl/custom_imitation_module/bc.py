@@ -44,6 +44,7 @@ class BCWithLRScheduler(BC):
         rng: np.random.Generator,
         policy: Optional[policies.ActorCriticPolicy] = None,
         demonstrations: Optional[algo_base.AnyTransitions] = None,
+        demonstrations_val: Optional[algo_base.AnyTransitions] = None,  # 新增：验证数据集
         batch_size: int = 32,
         minibatch_size: Optional[int] = None,
         optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
@@ -55,17 +56,16 @@ class BCWithLRScheduler(BC):
         lr_scheduler_cls: Optional[Type[lr_scheduler._LRScheduler]] = None,     # 新增：调度器类
         lr_scheduler_kwargs: Optional[Mapping[str, Any]] = None,                # 新增：调度器参数
         lr_scheduler_step_frequency: str = 'batch',                             # 新增参数：学习率调度器更新频率
-        multi_class: bool = True,                                               # 新增参数：是否为多分类问题
         average: str = 'macro',                                                 # 新增参数：多分类指标的平均方式
     ):
         """初始化 BCWithLRScheduler。
 
         Args:
             ...（原有参数保持不变，此处省略详细描述）
+            demonstrations_val: 用于验证的观察-动作对，可选。如果提供，将用于模型验证。
             lr_scheduler_cls: 使用的学习率调度器类（如 lr_scheduler.StepLR），可选。
             lr_scheduler_kwargs: 调度器的参数字典（如 {'step_size': 10, 'gamma': 0.1}），可选。
             lr_scheduler_step_frequency: 学习率调度器的更新频率，可选值为'epoch'或'batch'
-            multi_class: 是否为多分类问题(True)或二分类问题(False)，用于计算precision, recall和f1
             average: 多分类指标的平均方式，可选值为'micro', 'macro', 'weighted'等
         """
         # 调用父类的初始化方法，保持原有功能
@@ -94,7 +94,6 @@ class BCWithLRScheduler(BC):
         self.lr_scheduler_step_frequency = lr_scheduler_step_frequency
         
         # 新增：指标计算的相关参数
-        self.multi_class = multi_class
         self.average = average
         
         # 检查是否为离散动作空间
@@ -105,8 +104,44 @@ class BCWithLRScheduler(BC):
         # 获取动作空间大小，用于判断是否为二分类
         if self.is_discrete:
             self.n_classes = action_space.n
-            if self.n_classes == 2 and not self.multi_class:
+            if self.n_classes == 2:
                 print(f"检测到二分类问题(n_classes={self.n_classes})，将使用二分类指标计算方式")
+                
+        # 新增：初始化验证集数据加载器
+        self._val_data_loader = None
+        if demonstrations_val is not None:
+            self._val_data_loader = th.utils.data.DataLoader(
+                demonstrations_val,
+                batch_size=batch_size,
+                shuffle=False,
+            )
+
+    def _get_predicted_actions(self, policy, obs_tensor):
+        """获取模型预测的动作
+        
+        Args:
+            policy: 策略模型
+            obs_tensor: 观察张量
+            
+        Returns:
+            torch.Tensor: 预测的动作索引
+        """
+        # 获取模型预测分布
+        dist = policy.get_distribution(obs_tensor)
+        
+        # 根据分布类型获取预测动作
+        # CategoricalDistribution可能使用probs或logits存储参数
+        if hasattr(dist, 'logits'):
+            # 如果有logits属性
+            pred_acts = th.argmax(dist.logits, dim=1)
+        elif hasattr(dist, 'probs'):
+            # 如果有probs属性
+            pred_acts = th.argmax(dist.probs, dim=1)
+        else:
+            # 如果都没有，尝试使用分布的mode方法
+            pred_acts = dist.mode()
+            
+        return pred_acts
 
     def _compute_metrics(self, policy, obs_tensor, acts):
         """计算性能指标：accuracy, precision, recall, f1_score
@@ -128,9 +163,7 @@ class BCWithLRScheduler(BC):
         
         with th.no_grad():
             # 获取模型预测
-            dist = policy.get_distribution(obs_tensor)
-            # 获取最可能的动作
-            pred_acts = th.argmax(dist.logits, dim=1)
+            pred_acts = self._get_predicted_actions(policy, obs_tensor)
             
             # 转为numpy计算指标
             pred_np = pred_acts.cpu().numpy()
@@ -140,7 +173,7 @@ class BCWithLRScheduler(BC):
             accuracy = accuracy_score(true_np, pred_np)
             
             # 根据是否为多分类问题选择适当的参数
-            if self.multi_class or self.n_classes > 2:
+            if self.n_classes > 2:
                 # 多分类情况下使用average参数
                 precision = precision_score(true_np, pred_np, average=self.average, zero_division=0)
                 recall = recall_score(true_np, pred_np, average=self.average, zero_division=0)
@@ -162,6 +195,85 @@ class BCWithLRScheduler(BC):
         policy.set_training_mode(True)
             
         return metrics
+        
+    def validate(self) -> Dict[str, float]:
+        """在验证集上评估模型性能
+        
+        Args:
+            batch_size: 验证时使用的批次大小，若为None则使用训练批次大小
+            
+        Returns:
+            Dict[str, float]: 包含各项指标的字典，至少包含'loss'，若为离散动作空间
+                              还包含'accuracy', 'precision', 'recall', 'f1'
+        """
+        if self._val_data_loader is None:
+            raise ValueError("未提供验证集数据，请在初始化时通过demonstrations_val参数提供验证数据")
+        
+        # 收集所有预测、真实标签和损失
+        all_preds = []
+        all_true = []
+        total_loss = 0
+        num_samples = 0
+        
+        # 将策略设置为评估模式
+        self.policy.set_training_mode(False)
+        
+        with th.no_grad():
+            for batch in self._val_data_loader:
+                obs = types.map_maybe_dict(
+                    lambda x: util.safe_to_tensor(x, device=self.policy.device),
+                    types.maybe_unwrap_dictobs(batch["obs"]),
+                )
+                acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
+                
+                # 计算损失
+                metrics = self.loss_calculator(self.policy, obs, acts)
+                total_loss += metrics.loss.item() * len(acts)
+                num_samples += len(acts)
+                
+                # 对于离散动作空间，收集预测和真实标签用于计算指标
+                if self.is_discrete:
+                    pred_acts = self._get_predicted_actions(self.policy, obs)
+                    all_preds.append(pred_acts.cpu().numpy())
+                    all_true.append(acts.cpu().numpy())
+        
+        # 恢复策略为训练模式
+        self.policy.set_training_mode(True)
+        
+        # 计算平均损失
+        avg_loss = total_loss / num_samples if num_samples > 0 else float('inf')
+        
+        # 初始化结果字典
+        result = {'loss': avg_loss}
+        
+        # 对于离散动作空间，计算其他指标
+        if self.is_discrete and all_preds:
+            # 合并所有批次的结果
+            all_preds = np.concatenate(all_preds)
+            all_true = np.concatenate(all_true)
+            
+            # 计算准确率
+            accuracy = accuracy_score(all_true, all_preds)
+            
+            # 根据类别数量决定计算方式
+            if self.n_classes > 2:
+                precision = precision_score(all_true, all_preds, average=self.average, zero_division=0)
+                recall = recall_score(all_true, all_preds, average=self.average, zero_division=0)
+                f1 = f1_score(all_true, all_preds, average=self.average, zero_division=0)
+            else:
+                precision = precision_score(all_true, all_preds, zero_division=0)
+                recall = recall_score(all_true, all_preds, zero_division=0)
+                f1 = f1_score(all_true, all_preds, zero_division=0)
+            
+            # 添加到结果字典
+            result.update({
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1': f1
+            })
+        
+        return result
 
     def train(
         self,
@@ -175,18 +287,14 @@ class BCWithLRScheduler(BC):
         log_rollouts_n_episodes: int = 5,
         progress_bar: bool = True,
         reset_tensorboard: bool = False,
-        eval_batch_size: Optional[int] = None,  # 新增：用于评估的批次大小
+        validate_each_epoch: bool = True,       # 新增：每个epoch结束后是否验证
     ):
         """训练模型，支持学习率调度和性能指标评估。
 
         Args:
             ...（原有参数保持不变，此处省略详细描述）
-            eval_batch_size: 用于评估的批次大小，若为None则使用训练批次大小
+            validate_each_epoch: 是否在每个epoch结束时在验证集上验证，默认为True
         """
-        # 如果未指定评估批次大小，则使用训练批次大小
-        if eval_batch_size is None:
-            eval_batch_size = self.batch_size
-            
         if reset_tensorboard:
             self._bc_logger.reset_tensorboard_steps()
         self._bc_logger.log_epoch(0)
@@ -205,7 +313,19 @@ class BCWithLRScheduler(BC):
                 # 记录当前学习率
                 lr = self.optimizer.param_groups[0]['lr']
                 self._bc_logger._logger.record("bc/lr", lr)
+                      
+            # 在每个epoch结束时在验证集上验证
+            if validate_each_epoch and self._val_data_loader is not None:
+                val_metrics = self.validate()
                 
+                # 记录验证集指标
+                self._bc_logger._logger.record("bc/val_loss", val_metrics['loss'])
+                if self.is_discrete:
+                    self._bc_logger._logger.record("bc/val_accuracy", val_metrics.get('accuracy', 0))
+                    self._bc_logger._logger.record("bc/val_precision", val_metrics.get('precision', 0))
+                    self._bc_logger._logger.record("bc/val_recall", val_metrics.get('recall', 0))
+                    self._bc_logger._logger.record("bc/val_f1", val_metrics.get('f1', 0))
+
             if on_epoch_end is not None:
                 on_epoch_end()
 
@@ -238,12 +358,12 @@ class BCWithLRScheduler(BC):
                 self._bc_logger._logger.record("bc/lr", lr)
 
                 # 记录性能指标 accuracy, precision, recall, f1_score
-                if self.is_discrete and 'last_batch' in locals():
+                if self.is_discrete:
                     batch_metrics = self._compute_metrics(self.policy, 
                                                         last_obs_tensor, 
                                                         last_acts)
                     for metric_name, value in batch_metrics.items():
-                        self._bc_logger._logger.record(f"bc/batch_{metric_name}", value)
+                        self._bc_logger._logger.record(f"bc/{metric_name}", value)
 
                 rollout_stats = compute_rollout_stats(self.policy, self.rng)
                 self._bc_logger.log_batch(

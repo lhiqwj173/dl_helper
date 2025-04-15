@@ -194,6 +194,34 @@ class data_producer:
         # 高效计算中间价格
         self.plot_data['mid_price'] = self.plot_data.mean(axis=1)
 
+    def _get_data_type_files(self):
+        """
+        获取数据类型对应的文件列表(路径)
+        """
+        if self.data_type == 'test':
+            return [os.path.join(self.data_folder, self.data_type, i) for i in os.listdir(os.path.join(self.data_folder, self.data_type))]
+        else:
+            if not hasattr(self, 'train_files'):
+                # train/val 数据
+                files = []
+                for _type in ['train', 'val']:
+                    files.extend([os.path.join(self.data_folder, _type, i) for i in os.listdir(os.path.join(self.data_folder, _type))])
+
+                # 只使用最近 latest_dates 个数据
+                if self.latest_dates != -1:
+                    files = files[-self.latest_dates:]
+            
+                # 随机抽取 30 个文件作为val
+                # 使用固定的随机种子， 确保一致
+                rng = np.random.default_rng(0)
+                self.val_files = rng.choice(files, 30, replace=False)
+                self.train_files = [i for i in files if i not in self.val_files]
+
+            if self.data_type == 'train':
+                return [i for i in self.train_files]
+            else:
+                return [i for i in self.val_files]
+
     def _pre_files(self):
         """
         准备文件列表
@@ -204,11 +232,8 @@ class data_producer:
         # 或 数据类型发生变化，需要重新准备数据
         if (not self.files) or (self.cur_data_type != self.data_type):
             # 若 文件列表为空，重新准备
-            self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
-            self.files.sort()
-            # 只使用最近 latest_dates 个数据
-            if self.latest_dates != -1:
-                self.files = self.files[-self.latest_dates:]
+            self.files = self._get_data_type_files()
+
             if self.data_type == 'train':
                 self.np_random.shuffle(self.files)
             if self.debug_date:
@@ -232,10 +257,13 @@ class data_producer:
             # 更新在用数据类型
             self.cur_data_type = self.data_type
 
-            self.cur_data_file = self.files.pop(0)
+            _cur_data_file = self.files.pop(0)
+
+            # 路径中只取文件名
+            self.cur_data_file = os.path.basename(_cur_data_file)
 
             log(f'[{self.data_type}] load date file: {self.cur_data_file}')
-            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(os.path.join(self.data_folder, self.data_type, self.cur_data_file), 'rb'))
+            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(_cur_data_file, 'rb'))
             # 转换数据类型为float32
             for col in self.all_raw_data.iloc[:, :-3].columns:
                 self.all_raw_data[col] = self.all_raw_data[col].astype('float32')
