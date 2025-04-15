@@ -89,21 +89,23 @@ class SnakeEnv(gym.Env):
                     self.reward = 1000000  # 填满网格的奖励
                     terminated = True
             else:
-                # 原每步奖励
-                self.snake = np.delete(self.snake, -1, axis=0)
-                self.reward = -self.time  # 每步的负奖励
+                # # 原每步奖励
+                # self.snake = np.delete(self.snake, -1, axis=0)
+                # self.reward = -self.time  # 每步的负奖励
 
+                ########################
                 # 20250415 测试4
                 # 调整原每步奖励, 改成距离苹果的远近的变化
                 # 行走不被鼓励，距离始终应为负 > 尽可能的少行走
                 _distance = self._cal_distance()
                 if _distance < self.distance:
                     # 距离变小
-                    self.reward = -1
+                    self.reward = 0
                 else:
                     # 距离变大
-                    self.reward = -2
+                    self.reward = -1
                 self.distance = _distance
+                ########################
 
                 terminated = False
         else:
