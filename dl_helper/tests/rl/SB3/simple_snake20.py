@@ -40,6 +40,9 @@ from dl_helper.train_folder_manager import TrainFolderManagerSB3
 # 
 # 20250412 测试3
 # 增大ent_coef    0.01      >    0.1
+# 
+# 20250415 测试4
+# 调整奖励函数
 ###########################################
 
 # Linear scheduler
@@ -95,7 +98,7 @@ if len(sys.argv) > 1:
 
 run_type = 'train'# 'train' or 'test'
 run_type = 'test'# 'train' or 'test'
-train_folder = train_title = f'snake_base_3_{model_type}'
+train_folder = train_title = f'snake_base_4_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -124,7 +127,6 @@ if run_type == 'train':
     env = VecCheckNan(env)  # 添加nan检查
     env = VecMonitor(env)  # 添加监控器
 
-    clip_range_schedule = linear_schedule(0.3, 0.01)
     model = PPO(
         model_type, 
         env, 

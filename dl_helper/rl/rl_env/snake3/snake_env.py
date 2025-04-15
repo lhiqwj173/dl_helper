@@ -42,6 +42,9 @@ class SnakeEnv(gym.Env):
             self.font = pygame.font.SysFont("Arial", 18)  # 用于显示文本
             self.metadata = {'render_fps': 10}  # 渲染帧率
 
+    def _cal_distance(self):
+        return abs(self.snake[0][0] - self.apple[0]) + abs(self.snake[0][1] - self.apple[1])
+
     def reset(self):
         self.snake = np.array([[self.s // 2, self.s // 2]])  # 蛇初始位置在网格中心
         self.orientation = 0
@@ -55,6 +58,9 @@ class SnakeEnv(gym.Env):
             observation = self.state()
         elif self.obs_type == 'image':
             observation = self.image()
+
+        # 初始记录距离苹果的距离
+        self.distance = self._cal_distance()
             
         return observation
 
@@ -83,8 +89,22 @@ class SnakeEnv(gym.Env):
                     self.reward = 1000000  # 填满网格的奖励
                     terminated = True
             else:
+                # 原每步奖励
                 self.snake = np.delete(self.snake, -1, axis=0)
                 self.reward = -self.time  # 每步的负奖励
+
+                # 20250415 测试4
+                # 调整原每步奖励, 改成距离苹果的远近的变化
+                # 行走不被鼓励，距离始终应为负 > 尽可能的少行走
+                _distance = self._cal_distance()
+                if _distance < self.distance:
+                    # 距离变小
+                    self.reward = -1
+                else:
+                    # 距离变大
+                    self.reward = -2
+                self.distance = _distance
+
                 terminated = False
         else:
             self.reward = -1000  # 撞墙或撞尾的惩罚
