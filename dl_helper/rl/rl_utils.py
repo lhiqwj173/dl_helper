@@ -225,102 +225,180 @@ class CustomCheckpointCallback(BaseCallback):
 
 def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=''):
     """
-    图1 绘制 bc/loss / bc/loss平滑 lr(若有)
-    图2 绘制 bc/entropy / bc/entropy平滑
-    图3 绘制 bc/neglogp / bc/neglogp平滑
-    图4 绘制 bc/l2_norm / bc/l2_norm平滑
-    竖向排列，对齐 x 轴
-
-    df_progress: 训练进度df
-    train_file: 训练文件
+    绘制训练进度图表，包含以下指标：
+    1. val/mean_reward (若有)
+    2. 合并的 bc/loss 和 bc/val_loss (含学习率，若有)
+    3. bc/precision 和 bc/val_precision (若有)
+    4. bc/recall 和 bc/val_recall (若有)
+    5. bc/f1 和 bc/val_f1 (若有)
+    6. bc/entropy
+    7. bc/neglogp
+    8. bc/l2_norm
+    
+    参数:
+    train_folder: 保存图表的文件夹路径
+    df_progress: 训练进度数据框 (可选)
+    train_file: 训练进度文件路径
+    title: 图表标题
     """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import os
+    
+    # 读取数据
     if df_progress is None:
-        # 读取训练进度文件
         df = pd.read_csv(train_file)
     else:
-        # 直接使用
         df = df_progress
-
-    # 定义平滑函数
-    def smooth_data(data, window_size=100):
-        return data.rolling(window=window_size, min_periods=1).mean()
-
-    # 创建绘图，4/5 个子图竖向排列，共享 x 轴
-    fig, axs = plt.subplots(nrows=4 if 'val/mean_reward' not in df.columns else 5, ncols=1, figsize=(10, 12), sharex=True)  # 宽度 10，高度 12
-
-    # 数据长度，用于对齐 x 轴
+        
+    # 检查指标是否存在
+    has_reward = 'val/mean_reward' in df.columns
+    has_val_loss = 'bc/val_loss' in df.columns
+    has_precision = 'bc/precision' in df.columns or 'bc/val_precision' in df.columns
+    has_recall = 'bc/recall' in df.columns or 'bc/val_recall' in df.columns
+    has_f1 = 'bc/f1' in df.columns or 'bc/val_f1' in df.columns
+    has_entropy = 'bc/entropy' in df.columns
+    has_neglogp = 'bc/neglogp' in df.columns
+    has_l2_norm = 'bc/l2_norm' in df.columns
+    
+    # 计算子图数量
+    total_plots = sum([
+        has_reward,  # mean_reward
+        1,           # loss (必有)
+        has_precision,
+        has_recall,
+        has_f1,
+        has_entropy,
+        has_neglogp,
+        has_l2_norm
+    ])
+    
+    # 创建子图，垂直排列，共享 x 轴
+    fig, axs = plt.subplots(nrows=total_plots, ncols=1, figsize=(12, 3*total_plots), sharex=True)
+    if total_plots == 1:
+        axs = [axs]
+    
     data_len = len(df)
-
-    # 图 0: val/mean_reward
-    axs_left = axs
-    if 'val/mean_reward' in df.columns:
-        axs[0].plot(df['val/mean_reward'], label=f'mean_reward({df.iloc[-1]["val/mean_reward"]:.2e})')
-        axs[0].set_title(f'{title} Val Mean Reward')
-        axs[0].set_ylabel('Mean Reward')
-        axs[0].legend()
-        axs_left = axs[1:]
-
-    # 图 1: bc/loss
+    plot_idx = 0
+    
+    # 图 1: val/mean_reward
+    if has_reward:
+        axs[plot_idx].plot(df['val/mean_reward'], label=f'Mean Reward ({df.iloc[-1]["val/mean_reward"]:.2f})', color='blue')
+        axs[plot_idx].set_title('Validation Mean Reward')
+        axs[plot_idx].set_ylabel('Mean Reward')
+        axs[plot_idx].legend()
+        axs[plot_idx].grid(True)
+        plot_idx += 1
+    
+    # 图 2: bc/loss 和 bc/val_loss
+    ax_loss = axs[plot_idx]
     if 'bc/loss' in df.columns:
-        # 绘制损失曲线
-        ax_loss = axs_left[0]
-        ax_loss.plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.5)
-        ax_loss.plot(smooth_data(df['bc/loss']), label='smoothed', linewidth=2)
-        ax_loss.set_title('BC Loss')
-        ax_loss.set_ylabel('Loss')
-        ax_loss.grid(True)
-
-        # 如果存在学习率列,添加到右侧y轴
-        lr_cols = [col for col in df.columns if 'lr' in col.lower() or 'learning_rate' in col.lower()]
-        if lr_cols:
-            ax_lr = ax_loss.twinx()
-            lr_col = lr_cols[0]
-            ax_lr.plot(df[lr_col], label=f'{lr_col}({df.iloc[-1][lr_col]:.2e})', color='blue', alpha=0.3)
-            ax_lr.set_ylabel('Learning Rate', color='blue')
-            ax_lr.tick_params(axis='y', labelcolor='blue')
-            
-            # 合并两个轴的图例
-            lines = ax_loss.get_lines() + ax_lr.get_lines()
-            labels = [line.get_label() for line in lines]
-            ax_loss.legend(lines, labels)
-        else:
-            ax_loss.legend()
-
-    # 图 2: bc/entropy
-    if 'bc/entropy' in df.columns:
-        axs_left[1].plot(df['bc/entropy'], label=f'entropy({df.iloc[-1]["bc/entropy"]:.2e})', alpha=0.5)
-        axs_left[1].plot(smooth_data(df['bc/entropy']), label='smoothed', linewidth=2)
-        axs_left[1].set_title('BC Entropy')
-        axs_left[1].set_ylabel('Entropy')
-        axs_left[1].legend()
-        axs_left[1].grid(True)
-
-    # 图 3: bc/neglogp
-    if 'bc/neglogp' in df.columns:
-        axs_left[2].plot(df['bc/neglogp'], label=f'neglogp({df.iloc[-1]["bc/neglogp"]:.2e})', alpha=0.5)
-        axs_left[2].plot(smooth_data(df['bc/neglogp']), label='smoothed', linewidth=2)
-        axs_left[2].set_title('BC Negative Log Probability')
-        axs_left[2].set_ylabel('Neglogp')
-        axs_left[2].legend()
-        axs_left[2].grid(True)
-
-    # 图 4: bc/l2_norm
-    if 'bc/l2_norm' in df.columns:
-        axs_left[3].plot(df['bc/l2_norm'], label=f'l2_norm({df.iloc[-1]["bc/l2_norm"]:.2e})', alpha=0.5)
-        axs_left[3].plot(smooth_data(df['bc/l2_norm']), label='smoothed', linewidth=2)
-        axs_left[3].set_title('BC L2 Norm')
-        axs_left[3].set_xlabel('Batch')  # x 轴表示批次
-        axs_left[3].set_ylabel('L2 Norm')
-        axs_left[3].legend()
-        axs_left[3].grid(True)
-
-    # 设置统一的 x 轴范围
+        ax_loss.plot(df['bc/loss'], label=f'Training Loss ({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.3, color='blue', linewidth=2)
+    if has_val_loss:
+        ax_loss.plot(df['bc/val_loss'], label=f'Validation Loss ({df.iloc[-1]["bc/val_loss"]:.2e})', alpha=1.0, color='blue')
+    ax_loss.set_title('Training and Validation Loss')
+    ax_loss.set_ylabel('Loss')
+    ax_loss.grid(True)
+    
+    # 添加学习率
+    lr_cols = [col for col in df.columns if 'lr' in col.lower() or 'learning_rate' in col.lower()]
+    if lr_cols:
+        ax_lr = ax_loss.twinx()
+        lr_col = lr_cols[0]
+        ax_lr.plot(df[lr_col], label=f'Learning Rate ({df.iloc[-1][lr_col]:.2e})', color='green', alpha=0.3)
+        ax_lr.set_ylabel('Learning Rate', color='green')
+        ax_lr.tick_params(axis='y', labelcolor='green')
+        lines = ax_loss.get_lines() + ax_lr.get_lines()
+        labels = [line.get_label() for line in lines]
+        ax_loss.legend(lines, labels)
+    else:
+        ax_loss.legend()
+    plot_idx += 1
+    
+    # 图 3: precision
+    if has_precision:
+        ax = axs[plot_idx]
+        if 'bc/precision' in df.columns:
+            ax.plot(df['bc/precision'], label=f'Training Precision ({df.iloc[-1]["bc/precision"]:.2f})', alpha=0.3, color='green', linewidth=2)
+        if 'bc/val_precision' in df.columns:
+            ax.plot(df['bc/val_precision'], label=f'Validation Precision ({df.iloc[-1]["bc/val_precision"]:.2f})', alpha=1.0, color='green')
+        ax.set_title('Precision')
+        ax.set_ylabel('Precision')
+        ax.set_ylim(0, 1.05)
+        ax.legend()
+        ax.grid(True)
+        plot_idx += 1
+    
+    # 图 4: recall
+    if has_recall:
+        ax = axs[plot_idx]
+        if 'bc/recall' in df.columns:
+            ax.plot(df['bc/recall'], label=f'Training Recall ({df.iloc[-1]["bc/recall"]:.2f})', alpha=0.3, color='red', linewidth=2)
+        if 'bc/val_recall' in df.columns:
+            ax.plot(df['bc/val_recall'], label=f'Validation Recall ({df.iloc[-1]["bc/val_recall"]:.2f})', alpha=1.0, color='red')
+        ax.set_title('Recall')
+        ax.set_ylabel('Recall')
+        ax.set_ylim(0, 1.05)
+        ax.legend()
+        ax.grid(True)
+        plot_idx += 1
+    
+    # 图 5: f1
+    if has_f1:
+        ax = axs[plot_idx]
+        if 'bc/f1' in df.columns:
+            ax.plot(df['bc/f1'], label=f'Training F1 Score ({df.iloc[-1]["bc/f1"]:.2f})', alpha=0.3, color='purple', linewidth=2)
+        if 'bc/val_f1' in df.columns:
+            ax.plot(df['bc/val_f1'], label=f'Validation F1 Score ({df.iloc[-1]["bc/val_f1"]:.2f})', alpha=1.0, color='purple')
+        ax.set_title('F1 Score')
+        ax.set_ylabel('F1 Score')
+        ax.set_ylim(0, 1.05)
+        ax.legend()
+        ax.grid(True)
+        plot_idx += 1
+    
+    # 图 6: bc/entropy
+    if has_entropy:
+        axs[plot_idx].plot(df['bc/entropy'], label=f'Entropy ({df.iloc[-1]["bc/entropy"]:.2e})', color='orange')
+        axs[plot_idx].set_title('BC Entropy')
+        axs[plot_idx].set_ylabel('Entropy')
+        axs[plot_idx].legend()
+        axs[plot_idx].grid(True)
+        plot_idx += 1
+    
+    # 图 7: bc/neglogp
+    if has_neglogp:
+        axs[plot_idx].plot(df['bc/neglogp'], label=f'Negative Log Probability ({df.iloc[-1]["bc/neglogp"]:.2e})', color='brown')
+        axs[plot_idx].set_title('BC Negative Log Probability')
+        axs[plot_idx].set_ylabel('Neglogp')
+        axs[plot_idx].legend()
+        axs[plot_idx].grid(True)
+        plot_idx += 1
+    
+    # 图 8: bc/l2_norm
+    if has_l2_norm:
+        axs[plot_idx].plot(df['bc/l2_norm'], label=f'L2 Norm ({df.iloc[-1]["bc/l2_norm"]:.2e})', color='pink')
+        axs[plot_idx].set_title('BC L2 Norm')
+        axs[plot_idx].set_ylabel('L2 Norm')
+        axs[plot_idx].legend()
+        axs[plot_idx].grid(True)
+    
+    # 设置 x 轴和标签
     for ax in axs:
         ax.set_xlim(0, data_len - 1)
-
-    # 调整布局并保存
+    axs[-1].set_xlabel('Batch')
+    
+    # 添加总标题并调整布局
+    if title:
+        plt.suptitle(title, fontsize=16, y=0.995)
     plt.tight_layout()
-    plt.savefig(os.path.join(train_folder, 'training_plots.png'), dpi=300)
+    if title:
+        plt.subplots_adjust(top=0.97)
+    
+    # 保存图表
+    output_path = os.path.join(train_folder, 'training_plots.png')
+    plt.savefig(output_path)
+    print(f"图表已保存至: {output_path}")
     plt.close()
 
 def find_best_lr(lrs, losses, smooth_window=5, slope_factor=0.1, plot=True):
