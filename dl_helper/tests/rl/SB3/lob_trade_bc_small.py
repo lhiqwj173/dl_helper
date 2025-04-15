@@ -423,6 +423,7 @@ if run_type != 'test':
     total_epochs = 40 if run_type!='test_model' else 10000000000000000
     batch_size = 32
     max_lr = 0.022# find_best_lr
+    max_lr = 0.015# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
     batch_n = 1
     total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
