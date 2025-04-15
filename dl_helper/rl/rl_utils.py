@@ -242,7 +242,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
         df = df_progress
 
     # 定义平滑函数
-    def smooth_data(data, window_size=10):
+    def smooth_data(data, window_size=100):
         return data.rolling(window=window_size, min_periods=1).mean()
 
     # 创建绘图，4/5 个子图竖向排列，共享 x 轴
@@ -262,26 +262,29 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
 
     # 图 1: bc/loss
     if 'bc/loss' in df.columns:
-        axs_left[0].plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.5)
-        axs_left[0].plot(smooth_data(df['bc/loss']), label='smoothed', linewidth=2)
-        axs_left[0].set_title('BC Loss')
-        axs_left[0].set_ylabel('Loss')
-        axs_left[0].legend()
-        axs_left[0].grid(True)
-        
-        # 添加学习率曲线(若存在)
+        # 绘制损失曲线
+        ax_loss = axs_left[0]
+        ax_loss.plot(df['bc/loss'], label=f'loss({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.5)
+        ax_loss.plot(smooth_data(df['bc/loss']), label='smoothed', linewidth=2)
+        ax_loss.set_title('BC Loss')
+        ax_loss.set_ylabel('Loss')
+        ax_loss.grid(True)
+
+        # 如果存在学习率列,添加到右侧y轴
         lr_cols = [col for col in df.columns if 'lr' in col.lower() or 'learning_rate' in col.lower()]
         if lr_cols:
+            ax_lr = ax_loss.twinx()
             lr_col = lr_cols[0]
-            ax2 = axs_left[0].twinx()  # 创建共享x轴的第二个y轴
-            ax2.plot(df[lr_col], label=f'{lr_col}({df.iloc[-1][lr_col]:.2e})', 
-                    color='blue', alpha=0.3)
-            ax2.set_ylabel('Learning Rate', color='blue')
-            ax2.tick_params(axis='y', labelcolor='blue')
-            # 合并两个图例
-            lines1, labels1 = axs_left[0].get_legend_handles_labels()
-            lines2, labels2 = ax2.get_legend_handles_labels()
-            ax2.legend(lines1 + lines2, labels1 + labels2)
+            ax_lr.plot(df[lr_col], label=f'{lr_col}({df.iloc[-1][lr_col]:.2e})', color='blue', alpha=0.3)
+            ax_lr.set_ylabel('Learning Rate', color='blue')
+            ax_lr.tick_params(axis='y', labelcolor='blue')
+            
+            # 合并两个轴的图例
+            lines = ax_loss.get_lines() + ax_lr.get_lines()
+            labels = [line.get_label() for line in lines]
+            ax_loss.legend(lines, labels)
+        else:
+            ax_loss.legend()
 
     # 图 2: bc/entropy
     if 'bc/entropy' in df.columns:
