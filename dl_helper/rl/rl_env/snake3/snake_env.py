@@ -89,8 +89,9 @@ class SnakeEnv(gym.Env):
                     self.reward = 1000000  # 填满网格的奖励
                     terminated = True
             else:
+                self.snake = np.delete(self.snake, -1, axis=0)
+
                 # # 原每步奖励
-                # self.snake = np.delete(self.snake, -1, axis=0)
                 # self.reward = -self.time  # 每步的负奖励
 
                 ########################
