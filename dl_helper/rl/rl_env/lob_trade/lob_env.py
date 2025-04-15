@@ -81,6 +81,7 @@ class data_producer:
             save_folder="", 
             debug_date=[],
             random_begin_in_day=True,
+            latest_dates=-1,
 
             # 数据增强
             use_random_his_window=True,
@@ -94,6 +95,7 @@ class data_producer:
         'need_cols': [],# 需要的特征列名
         'use_symbols': []# 只使用指定的标的
         'random_begin_in_day': True,# 是否在日内随机开始
+        'latest_dates': -1,# 使用最近日期的数据，-1 表示使用所有数据
 
         'use_random_his_window': True,# 随机窗口开关
         'use_gaussian_noise_vol': True,# 高斯噪声开关
@@ -119,6 +121,7 @@ class data_producer:
 
         self.use_symbols = use_symbols
         self.random_begin_in_day = random_begin_in_day
+        self.latest_dates = latest_dates
 
         # 需要的特征列名
         self.need_cols = need_cols
@@ -203,6 +206,9 @@ class data_producer:
             # 若 文件列表为空，重新准备
             self.files = os.listdir(os.path.join(self.data_folder, self.data_type))
             self.files.sort()
+            # 只使用最近 latest_dates 个数据
+            if self.latest_dates != -1:
+                self.files = self.files[-self.latest_dates:]
             if self.data_type == 'train':
                 self.np_random.shuffle(self.files)
             if self.debug_date:
@@ -1247,6 +1253,7 @@ class LOB_trade_env(gym.Env):
                 'use_symbols': [],# 只使用某些标的
                 'random_begin_in_day': True,# 是否在日内随机开始
                 'close_trade_need_reset': True,# 平仓后需要重置
+                'latest_dates': -1,# 使用最近日期的数据，-1 表示使用所有数据
 
                 # 数据增强
                 'use_random_his_window': False,# 是否使用随机历史窗口
@@ -1280,6 +1287,7 @@ class LOB_trade_env(gym.Env):
         self.use_symbols = config.get('use_symbols', [])
         self.random_begin_in_day = config.get('random_begin_in_day', True)
         self.close_trade_need_reset = config.get('close_trade_need_reset', True)
+        self.latest_dates = config.get('latest_dates', -1)
         self.use_random_his_window = config.get('use_random_his_window', True)
         self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', True)
         self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', True)
@@ -1340,6 +1348,7 @@ class LOB_trade_env(gym.Env):
             save_folder=self.save_folder, 
             debug_date=self.debug_date,
             random_begin_in_day=self.random_begin_in_day,
+            latest_dates=self.latest_dates,
             use_random_his_window=self.use_random_his_window,
             use_gaussian_noise_vol=self.use_gaussian_noise_vol,
             use_spread_add_small_limit_order=self.use_spread_add_small_limit_order,
