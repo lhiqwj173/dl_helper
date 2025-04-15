@@ -52,6 +52,8 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
+_train_timesteps_list = [5e4, 5e5]
+_train_timesteps = _train_timesteps_list[0]
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -64,7 +66,12 @@ if len(sys.argv) > 1:
         elif arg == 'test_model':
             run_type = 'test_model'
 
-train_folder = train_title = f'20250415_lob_trade_bc_small_data'
+        elif arg == '0':
+            _train_timesteps = _train_timesteps_list[0]
+        elif arg == '1':
+            _train_timesteps = _train_timesteps_list[1]
+
+train_folder = train_title = f'20250415_lob_trade_bc_small_data_{_train_timesteps_list.index(_train_timesteps)}'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -294,20 +301,6 @@ class DeepLob(BaseFeaturesExtractor):
 
         return fused_out
 
-# Linear scheduler
-def linear_schedule(initial_value, final_value=0.0):
-
-    if isinstance(initial_value, str):
-        initial_value = float(initial_value)
-        final_value = float(final_value)
-        assert (initial_value > 0.0)
-
-    def scheduler(progress):
-        return final_value + progress * (initial_value - final_value)
-
-    return scheduler
-
-
 model_config={
     # 自定义编码器参数  
     'input_dims' : (30, 20),
@@ -337,8 +330,11 @@ policy_kwargs = dict(
     net_arch = [128,64]
 )
 
+env_objs = []
 def make_env():
-    return RolloutInfoWrapper(LOB_trade_env(env_config))
+    env = LOB_trade_env(env_config)
+    env_objs.append(env)
+    return RolloutInfoWrapper(env)
 
 if run_type != 'test':
 
@@ -355,8 +351,6 @@ if run_type != 'test':
     # 专家
     expert = LobExpert_file(pre_cache=True)
 
-    # lr_schedule = linear_schedule(1e-3, 5e-4)
-    # clip_range_schedule = linear_schedule(0.15, 0.3)
     model = PPO(
         model_type, 
         env, 
@@ -392,15 +386,27 @@ if run_type != 'test':
     rng = np.random.default_rng()
     t = time.time()
     memory_usage = psutil.virtual_memory()
+    # 训练数据
+    train_timesteps = _train_timesteps if run_type=='train' else 4800 if run_type=='find_lr' else 500
     rollouts = rollout.rollout(
         expert,
         vec_env,
         # rollout.make_sample_until(min_timesteps=50000),
         # rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
-        rollout.make_sample_until(min_timesteps=1e5 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
+        rollout.make_sample_until(min_timesteps=train_timesteps),
         rng=rng,
     )
     transitions = rollout.flatten_trajectories(rollouts)
+    # 验证数据
+    for env in env_objs:
+        env.val()
+    rollouts_val = rollout.rollout(
+        expert,
+        vec_env,
+        rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
+        rng=rng,
+    )
+    transitions_val = rollout.flatten_trajectories(rollouts_val)
     memory_usage2 = psutil.virtual_memory()
     msg = ''
     cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
@@ -424,6 +430,7 @@ if run_type != 'test':
         observation_space=env.observation_space,
         action_space=env.action_space,
         demonstrations=transitions,
+        demonstrations_val=transitions_val,
         policy=model.policy,
         rng=rng,
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
@@ -433,8 +440,7 @@ if run_type != 'test':
         lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
     )
 
-    test_env = LOB_trade_env(env_config)
-    test_env.test()
+    env = env_objs[0]
 
     checkpoint_interval = 1 if run_type!='test_model' else 500
     begin = 0
@@ -449,26 +455,36 @@ if run_type != 'test':
             n_epochs=checkpoint_interval,
             log_interval = 1 if run_type=='find_lr' else 500,
         )
+        log(f'训练耗时: {time.time() - _t:.2f} 秒')
+
         # 检查梯度
         check_gradients(bc_trainer)
-        log(f'训练耗时: {time.time() - _t:.2f} 秒')
-        progress_file = os.path.join(train_folder, f"progress.csv")
-        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+
         # 验证模型
         _t = time.time()
-        reward_after_training, _ = evaluate_policy(bc_trainer.policy, test_env)
-        log(f"训练后的平均reward: {reward_after_training}, 验证耗时: {time.time() - _t:.2f} 秒")
+        env.val()
+        val_reward, _ = evaluate_policy(bc_trainer.policy, env)
+        env.train()
+        train_reward, _ = evaluate_policy(bc_trainer.policy, env)
+        log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
+
+        # 合并到 progress_all.csv
+        progress_file = os.path.join(train_folder, f"progress.csv")
+        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         if os.path.exists(progress_file_all):
             df_progress = pd.read_csv(progress_file_all)
         else:
             df_progress = pd.DataFrame()
         df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
         df_new['bc/epoch'] += i * checkpoint_interval
-        df_new['val/mean_reward'] = np.nan
-        df_new['val/mean_reward'].iloc[-1] = reward_after_training
+        df_new['bc/mean_reward'] = np.nan
+        df_new['bc/val_mean_reward'] = np.nan
+        df_new['bc/mean_reward'].iloc[-1] = train_reward
+        df_new['bc/val_mean_reward'].iloc[-1] = val_reward
         df_progress = pd.concat([df_progress, df_new])
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
+
         # 训练进度可视化
         try:
             plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
@@ -476,6 +492,7 @@ if run_type != 'test':
             pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
             log(f"训练进度可视化失败")
             raise e
+        
         # 记录当前训练进度
         open(loop_i_file, 'w').write(str(i))
         

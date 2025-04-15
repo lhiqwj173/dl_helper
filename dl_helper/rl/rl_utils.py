@@ -226,8 +226,8 @@ class CustomCheckpointCallback(BaseCallback):
 def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=''):
     """
     绘制训练进度图表，包含以下指标：
-    1. val/mean_reward (若有)
-    2. 合并的 bc/loss 和 bc/val_loss (含学习率，若有)
+    1. bc/mean_reward 和 bc/val_mean_reward (若有)
+    2. bc/loss 和 bc/val_loss (含学习率，若有)
     3. bc/precision 和 bc/val_precision (若有)
     4. bc/recall 和 bc/val_recall (若有)
     5. bc/f1 和 bc/val_f1 (若有)
@@ -252,7 +252,7 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
         df = df_progress
         
     # 检查指标是否存在
-    has_reward = 'val/mean_reward' in df.columns
+    has_reward = 'bc/mean_reward' in df.columns or 'bc/val_mean_reward' in df.columns
     has_val_loss = 'bc/val_loss' in df.columns
     has_precision = 'bc/precision' in df.columns or 'bc/val_precision' in df.columns
     has_recall = 'bc/recall' in df.columns or 'bc/val_recall' in df.columns
@@ -281,10 +281,13 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     data_len = len(df)
     plot_idx = 0
     
-    # 图 1: val/mean_reward
+    # 图 1: bc/mean_reward
     if has_reward:
-        axs[plot_idx].plot(df['val/mean_reward'], label=f'Mean Reward ({df.iloc[-1]["val/mean_reward"]:.2f})', color='blue')
-        axs[plot_idx].set_title('Validation Mean Reward')
+        if 'bc/mean_reward' in df.columns:
+            axs[plot_idx].plot(df['bc/mean_reward'], label=f'Mean Reward ({df.iloc[-1]["bc/mean_reward"]:.2e})', color='blue', alpha=0.3)
+        if 'bc/val_mean_reward' in df.columns:
+            axs[plot_idx].plot(df['bc/val_mean_reward'], label=f'Validation Mean Reward ({df.iloc[-1]["bc/val_mean_reward"]:.2e})', color='blue', linewidth=2)
+        axs[plot_idx].set_title('Training and Validation Mean Reward')
         axs[plot_idx].set_ylabel('Mean Reward')
         axs[plot_idx].legend()
         axs[plot_idx].grid(True)
@@ -293,9 +296,9 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     # 图 2: bc/loss 和 bc/val_loss
     ax_loss = axs[plot_idx]
     if 'bc/loss' in df.columns:
-        ax_loss.plot(df['bc/loss'], label=f'Training Loss ({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.3, color='blue', linewidth=2)
+        ax_loss.plot(df['bc/loss'], label=f'Training Loss ({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.3, color='blue')
     if has_val_loss:
-        ax_loss.plot(df['bc/val_loss'], label=f'Validation Loss ({df.iloc[-1]["bc/val_loss"]:.2e})', alpha=1.0, color='blue')
+        ax_loss.plot(df['bc/val_loss'], label=f'Validation Loss ({df.iloc[-1]["bc/val_loss"]:.2e})', alpha=1.0, color='blue', linewidth=2)
     ax_loss.set_title('Training and Validation Loss')
     ax_loss.set_ylabel('Loss')
     ax_loss.grid(True)
@@ -319,9 +322,9 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     if has_precision:
         ax = axs[plot_idx]
         if 'bc/precision' in df.columns:
-            ax.plot(df['bc/precision'], label=f'Training Precision ({df.iloc[-1]["bc/precision"]:.2f})', alpha=0.3, color='green', linewidth=2)
+            ax.plot(df['bc/precision'], label=f'Training Precision ({df.iloc[-1]["bc/precision"]:.2f})', alpha=0.3, color='green')
         if 'bc/val_precision' in df.columns:
-            ax.plot(df['bc/val_precision'], label=f'Validation Precision ({df.iloc[-1]["bc/val_precision"]:.2f})', alpha=1.0, color='green')
+            ax.plot(df['bc/val_precision'], label=f'Validation Precision ({df.iloc[-1]["bc/val_precision"]:.2f})', alpha=1.0, color='green', linewidth=2)
         ax.set_title('Precision')
         ax.set_ylabel('Precision')
         ax.set_ylim(0, 1.05)
@@ -333,9 +336,9 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     if has_recall:
         ax = axs[plot_idx]
         if 'bc/recall' in df.columns:
-            ax.plot(df['bc/recall'], label=f'Training Recall ({df.iloc[-1]["bc/recall"]:.2f})', alpha=0.3, color='red', linewidth=2)
+            ax.plot(df['bc/recall'], label=f'Training Recall ({df.iloc[-1]["bc/recall"]:.2f})', alpha=0.3, color='red')
         if 'bc/val_recall' in df.columns:
-            ax.plot(df['bc/val_recall'], label=f'Validation Recall ({df.iloc[-1]["bc/val_recall"]:.2f})', alpha=1.0, color='red')
+            ax.plot(df['bc/val_recall'], label=f'Validation Recall ({df.iloc[-1]["bc/val_recall"]:.2f})', alpha=1.0, color='red', linewidth=2)
         ax.set_title('Recall')
         ax.set_ylabel('Recall')
         ax.set_ylim(0, 1.05)
@@ -347,9 +350,9 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
     if has_f1:
         ax = axs[plot_idx]
         if 'bc/f1' in df.columns:
-            ax.plot(df['bc/f1'], label=f'Training F1 Score ({df.iloc[-1]["bc/f1"]:.2f})', alpha=0.3, color='purple', linewidth=2)
+            ax.plot(df['bc/f1'], label=f'Training F1 Score ({df.iloc[-1]["bc/f1"]:.2f})', alpha=0.3, color='purple')
         if 'bc/val_f1' in df.columns:
-            ax.plot(df['bc/val_f1'], label=f'Validation F1 Score ({df.iloc[-1]["bc/val_f1"]:.2f})', alpha=1.0, color='purple')
+            ax.plot(df['bc/val_f1'], label=f'Validation F1 Score ({df.iloc[-1]["bc/val_f1"]:.2f})', alpha=1.0, color='purple', linewidth=2)
         ax.set_title('F1 Score')
         ax.set_ylabel('F1 Score')
         ax.set_ylim(0, 1.05)
