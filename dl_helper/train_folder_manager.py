@@ -127,13 +127,13 @@ class TrainFolderManagerBC(TrainFolderManager):
         """
         检查是否存在训练记录
         """
-        return os.path.exists(os.path.join(self.checkpoint_folder, 'bc_policy'))
+        return os.path.exists(os.path.join(self.checkpoint_folder, f"{self.train_folder}"))
 
     def load_checkpoint(self, policy):
         """
         加载检查点
         """
-        policy.load(os.path.join(self.checkpoint_folder, 'bc_policy'))
+        policy.load(os.path.join(self.checkpoint_folder, f"{self.train_folder}"))
 
 class TrainFolderManagerSB3(TrainFolderManager):
 

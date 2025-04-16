@@ -91,20 +91,42 @@ class SnakeEnv(gym.Env):
             else:
                 self.snake = np.delete(self.snake, -1, axis=0)
 
+                ########################
                 # # 原每步奖励
                 # self.reward = -self.time  # 每步的负奖励
+                ########################
+
+                # ########################
+                # # 20250415 测试4
+                # # 调整原每步奖励, 改成距离苹果的远近的变化
+                # # 行走不被鼓励，距离始终应为负 > 尽可能的少行走
+                # _distance = self._cal_distance()
+                # if _distance < self.distance:
+                #     # 距离变小
+                #     self.reward = 0
+                # else:
+                #     # 距离变大
+                #     self.reward = -1
+                # self.distance = _distance
+                # # 总结：
+                # # 最大限制 100 步
+                # # 若ai一直转圈，奖励为 100 / 4 * -2 = -50
+                # # 若ai失败，奖励为 -1000，远大于转圈
+                # ########################
 
                 ########################
-                # 20250415 测试4
-                # 调整原每步奖励, 改成距离苹果的远近的变化
-                # 行走不被鼓励，距离始终应为负 > 尽可能的少行走
+                # 20250416 测试5
+                # 提高每步惩罚
+                # 100 / 4 * p == -1000
+                # p == -40
+                # 转圈与失败一样的惩罚
                 _distance = self._cal_distance()
                 if _distance < self.distance:
                     # 距离变小
                     self.reward = 0
                 else:
                     # 距离变大
-                    self.reward = -1
+                    self.reward = -20
                 self.distance = _distance
                 ########################
 

@@ -223,6 +223,22 @@ class CustomCheckpointCallback(BaseCallback):
     def _on_step(self):
         return True
 
+def cal_action_balance(transitions):
+    """
+    计算 action 的均衡度
+    返回每个动作的比例
+    """
+    # 提取 transitions 中的动作
+    actions = transitions.acts
+
+    # 计算每个独特动作的出现次数
+    unique_actions, counts = np.unique(actions, return_counts=True)
+
+    # 计算每个动作的比例
+    proportions = counts / len(actions)
+
+    return proportions
+
 def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=''):
     """
     绘制训练进度图表，包含以下指标：

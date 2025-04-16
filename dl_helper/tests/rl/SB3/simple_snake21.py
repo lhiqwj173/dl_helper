@@ -100,8 +100,8 @@ if len(sys.argv) > 1:
             model_type = 'MlpPolicy'
 
 run_type = 'train'# 'train' or 'test'
-run_type = 'test'# 'train' or 'test'
-train_folder = train_title = f'snake_base_4_{model_type}'
+# run_type = 'test'# 'train' or 'test'
+train_folder = train_title = f'snake_base_5_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)

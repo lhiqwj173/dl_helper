@@ -305,8 +305,17 @@ class data_producer:
                 end = symbol_indices[-1]
                 self.full_idxs.append([begin, end, USE_CODES.index(symbol)])
                 if self.random_begin_in_day and self.data_type == 'train':
-                    # begin = random.randint(begin, end-50)# 至少50个数据
-                    begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
+                    if hasattr(self, 'begin_before_market_close_sec'):
+                        _idx = begin
+                        while _idx <= end:
+                            if self.before_market_close_sec[_idx] == self.begin_before_market_close_sec:
+                                break
+                            _idx += 1
+                        assert _idx != end + 1, f'{self.begin_before_market_close_sec} not found'
+                        begin = _idx
+                    else:
+                        # begin = random.randint(begin, end-50)# 至少50个数据
+                        begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
                 self.idxs.append([begin, end, USE_CODES.index(symbol)])
 
             if not self.idxs:
@@ -758,15 +767,20 @@ class Account:
 
         return res
         
-    def reset(self, bid_price, rng=None):
+    def reset(self, bid_price, status=None, rng=None):
         """
         重置账户状态
         """
-        # 随机持仓
-        if rng is None:
-            self.status = random.randint(0, 1)
+        if status is None:
+            # 随机持仓
+            if rng is None:
+                self.status = random.randint(0, 1)
+            else:
+                self.status = rng.integers(0, 2)
         else:
-            self.status = rng.integers(0, 2)
+            # 指定持仓
+            self.status = status
+
         self.init_status = self.status
 
         # self.status = 1# FOR DEBUG
@@ -1762,6 +1776,61 @@ class LOB_trade_env(gym.Env):
     def add_potential_data(self, potential_data):
         if self.render_mode == 'human':
             self._render.handle_data({'potential_data': potential_data})
+
+    def set_state(self, t):
+        """
+        使用轨迹设置 env
+        返回是否终止
+        """
+        # 获取样本数据
+        obs = t['obs']
+        obs_date = obs[-1]
+        obs_symbol = obs[-3]
+        before_market_close_sec = obs[-4]
+        pos = obs[-2]
+
+        # 获取动作
+        action = t['acts']
+
+        if not hasattr(self, 'obs_date') or self.obs_date != obs_date or self.obs_symbol != obs_symbol:
+            # 重新设置
+            self.obs_date = obs_date
+            self.obs_symbol = obs_symbol
+
+            # 设置 data_producer
+            date = days2date(int(obs_date))
+            symbol = USE_CODES[int(obs_symbol*MAX_CODE_ID)]
+            # 设置 data_producer files
+            _date_file = f'{date}.pkl'
+            if os.path.exists(os.path.join(self.data_producer.data_folder, 'train', _date_file)):
+                _data_file_path = os.path.join(self.data_producer.data_folder, 'train', _date_file)
+            elif os.path.exists(os.path.join(self.data_producer.data_folder, 'val', _date_file)):
+                _data_file_path = os.path.join(self.data_producer.data_folder, 'val', _date_file)
+            elif os.path.exists(os.path.join(self.data_producer.data_folder, 'test', _date_file)):
+                _data_file_path = os.path.join(self.data_producer.data_folder, 'test', _date_file)
+            else:
+                raise ValueError(f'{_date_file} not in {self.data_producer.data_folder}')
+            self.data_producer.files = [_data_file_path]
+            # 设置 data_producer use_symbols
+            self.data_producer.use_symbols = [symbol]
+            # 设置 data_producer begin_before_market_close_sec
+            self.data_producer.begin_before_market_close_sec = before_market_close_sec * MAX_SEC_BEFORE_CLOSE
+            self.data_producer._load_data()
+
+            # 获取一个数据，对比是否一致
+            _symbol_id, _before_market_close_sec, _x, _need_close, __id, _unrealized_log_return_std_data = self._get_data()
+            assert np.array_equal(_x, obs[:-4]), f'订单簿数据不一致，请检查!!!'
+            assert np.isclose(before_market_close_sec , _before_market_close_sec), f'before_market_close_sec 不一致，请检查!!!'
+            assert int(obs_symbol*MAX_CODE_ID) == _symbol_id, f'symbol_id 不一致，请检查!!!'
+
+            # 设置 acc
+            self.acc.reset(self.data_producer.bid_price[-1], status=pos)
+            return False
+        else:
+            # 走一步
+            _obs, _reward, _terminated, _truncated, _info = self.step(action)
+            assert np.array_equal(obs, _obs), f'obs数据不一致，请检查!!!'
+            return _terminated or _truncated
 
     def render(self):
         if self.render_mode != 'human':

@@ -38,22 +38,24 @@ from py_ext.datetime import beijing_time
 
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
-from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
 
 model_type = 'CnnPolicy'
-# 'train' or 'test' or 'find_lr' or 'test_model'
+# 'train' or 'test' or 'find_lr' or 'test_model' or 'test_transitions
 # find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
 # test_model: 使用相同的batch数据，测试模型拟合是否正常
+# test_transitions: 测试可视化transitions
 # 查找最大学习率
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
-_train_timesteps_list = [5e4, 5e5]
-_train_timesteps = _train_timesteps_list[0]
+# run_type = 'test_transitions'
+_train_timesteps_list = [5e4, 1e6, 2.3e6]
+_train_timesteps = _train_timesteps_list[1]
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -420,6 +422,27 @@ if run_type != 'test':
     msg += mem_expert_msg + '\n'
     send_wx(msg)
 
+    # FOR DEBUG
+    # 检查 transitions 样本均衡度
+    log(f'训练样本均衡度: {cal_action_balance(transitions)}')
+    log(f'验证样本均衡度: {cal_action_balance(transitions_val)}')
+    sys.exit()
+
+    if run_type == 'test_transitions':
+        # 测试可视化transitions
+        # 初始化模型
+        env_config['data_type'] = 'train'
+        env_config['render_mode'] = 'human'
+        env = LOB_trade_env(env_config)
+        # 专家, 用于参考
+        expert = LobExpert_file(pre_cache=False)
+        for t in transitions:
+            stop = env.set_state(t)
+            env.render()
+            if stop:
+                input('press any key to continue')
+        sys.exit()
+
     total_epochs = 40 if run_type!='test_model' else 10000000000000000
     batch_size = 32
     max_lr = 0.022# find_best_lr
@@ -497,7 +520,8 @@ if run_type != 'test':
         open(loop_i_file, 'w').write(str(i))
         
         # 保存模型
-        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', f"bc_policy"))
+        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', train_folder))
+
         # 上传
         if not in_windows():
             train_folder_manager.push()
@@ -526,7 +550,7 @@ else:
     )
 
     # 加载参数
-    model.policy.load(os.path.join(model_folder, 'bc_policy'))
+    model.policy.load(model_folder)
 
     # 专家, 用于参考
     expert = LobExpert_file(pre_cache=False)
@@ -545,6 +569,7 @@ else:
         need_close = False
         while not need_close:
             action, _state = model.predict(obs, deterministic=True)
+            expert.get_action(obs)
             expert.add_potential_data_to_env(test_env)
 
             obs, reward, terminated, truncated, info = test_env.step(action)
