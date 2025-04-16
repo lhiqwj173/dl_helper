@@ -53,7 +53,7 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
-run_type = 'test_transitions'
+# run_type = 'test_transitions'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
 

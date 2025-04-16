@@ -12,6 +12,9 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.util import logger as imit_logger
+from imitation.algorithms.adversarial.gail import GAIL
+
+import gymnasium as gym
 
 import pandas as pd
 import torch
@@ -137,71 +140,46 @@ class DeepLob(BaseFeaturesExtractor):
         # 卷积块
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(1, 2), stride=(1, 2)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
             nn.Tanh(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.Tanh(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.Tanh(),
-            # nn.BatchNorm2d(32),
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 5)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
         )
 
         # Inception 模块
         self.inp1 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(3, 1), padding=(1, 0)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
         self.inp2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(5, 1), padding=(2, 0)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
         self.inp3 = nn.Sequential(
             nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
 
         # LSTM 层 
@@ -215,22 +193,14 @@ class DeepLob(BaseFeaturesExtractor):
         self.static_net = nn.Sequential(
             nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
             nn.LayerNorm(self.extra_input_dims * 4),
-            # nn.LeakyReLU(),
             nn.ReLU(),
-            # nn.Dropout(0.1),
         )
 
         # 融合层
         self.fusion = nn.Sequential(
             nn.Linear(64 + self.extra_input_dims * 4, 128),
             nn.LayerNorm(128),
-            # nn.LeakyReLU(),
             nn.ReLU(),
-            # nn.Dropout(0.2),
-            # nn.Linear(64, 64),
-            # nn.LeakyReLU(),
-            # nn.ReLU(),
-            # nn.Dropout(0.2),
             nn.Linear(128, features_dim),
         )
 
@@ -305,6 +275,43 @@ class DeepLob(BaseFeaturesExtractor):
 
         return fused_out
 
+class RewardNetwork(nn.Module):
+    def __init__(self, observation_space, action_space, features_extractor, features_extractor_kwargs):
+        super().__init__()
+        self.features_extractor = features_extractor(observation_space, **features_extractor_kwargs)
+        self.features_dim = self.features_extractor.features_dim
+
+        self.observation_space = observation_space
+        self.action_space = action_space
+
+        # 动作空间维度
+        if isinstance(action_space, gym.spaces.Discrete):
+            action_dim = action_space.n
+        else:
+            action_dim = action_space.shape[0]
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.features_dim + action_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1),
+        )
+        
+
+    def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+        # 提取状态特征
+        state_features = self.features_extractor(observations)
+
+        # 处理动作：将离散动作转为 one-hot 编码
+        if actions.dtype == torch.long:
+            actions = torch.nn.functional.one_hot(actions, num_classes=self.fc[0].in_features - state_features.shape[1]).float()
+        
+        # 拼接状态特征和动作
+        features = torch.cat([state_features, actions], dim=1)
+
+        # 输出奖励（logits）
+        return self.fc(features)
+
+
 model_config={
     # 自定义编码器参数  
     'input_dims' : (30, 20),
@@ -353,28 +360,32 @@ if run_type != 'test':
     # vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
 
     # 专家
-    expert = LobExpert_file(pre_cache=True)
+    expert = LobExpert_file(env=env_objs[0], pre_cache=True)
 
-    model = PPO(
+    learner = PPO(
         model_type, 
         env, 
         verbose=1, 
-        learning_rate=1e-3,
-        ent_coef=0.2,
-        gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+    )
+
+    reward_net = RewardNetwork(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        features_extractor=DeepLob,
+        features_extractor_kwargs=model_config,
     )
 
     # 打印模型结构
     log("模型结构:")
-    log(model.policy)
-    log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
+    log(learner.policy)
+    log(f'参数量: {sum(p.numel() for p in learner.policy.parameters())}')
 
     # test_x = env.observation_space.sample()
     # test_x = torch.from_numpy(test_x).unsqueeze(0)
     # log(test_x.shape)
     # test_x = test_x.float().to(device)
-    # out = model.policy.features_extractor(test_x)
+    # out = learner.policy.features_extractor(test_x)
     # log(out.shape)
     # sys.exit()
 
@@ -383,7 +394,7 @@ if run_type != 'test':
         train_folder_manager = TrainFolderManagerBC(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(model.policy)
+            train_folder_manager.load_checkpoint(learner.policy)
 
     # 生成专家数据
     vec_env = env
@@ -400,7 +411,6 @@ if run_type != 'test':
         rollout.make_sample_until(min_timesteps=train_timesteps),
         rng=rng,
     )
-    transitions = rollout.flatten_trajectories(rollouts)
     # 验证数据
     for env in env_objs:
         env.val()
@@ -410,7 +420,6 @@ if run_type != 'test':
         rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
         rng=rng,
     )
-    transitions_val = rollout.flatten_trajectories(rollouts_val)
     memory_usage2 = psutil.virtual_memory()
     msg = ''
     cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
@@ -423,118 +432,49 @@ if run_type != 'test':
     log(mem_expert_msg)
     msg += mem_expert_msg + '\n'
 
-    # 检查 transitions 样本均衡度
-    label_balance = f'训练样本均衡度: {cal_action_balance(transitions)}'
-    log(label_balance)
-    msg += label_balance + '\n'
-    label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
-    log(label_balance)
-    msg += label_balance + '\n'
-    send_wx(msg)
+    # # 检查 transitions 样本均衡度
+    # label_balance = f'训练样本均衡度: {cal_action_balance(transitions)}'
+    # log(label_balance)
+    # msg += label_balance + '\n'
+    # label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
+    # log(label_balance)
+    # msg += label_balance + '\n'
+    # send_wx(msg)
     # sys.exit()
-
-    if run_type == 'test_transitions':
-        # 测试可视化transitions
-        # 初始化模型
-        env_config['data_type'] = 'train'
-        env_config['render_mode'] = 'human'
-        env = LOB_trade_env(env_config)
-        # 专家, 用于参考
-        expert = LobExpert_file(pre_cache=False)
-        for t in transitions:
-            stop = env.set_state(t, expert)
-            env.render()
-            if stop:
-                input('press any key to continue')
-        sys.exit()
 
     total_epochs = 40 if run_type!='test_model' else 10000000000000000
     batch_size = 32
     max_lr = 0.022# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
     batch_n = 1
-    total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
-    bc_trainer = BCWithLRScheduler(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        demonstrations=transitions,
-        demonstrations_val=transitions_val,
-        policy=model.policy,
-        rng=rng,
-        batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
-        custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR if run_type=='find_lr' else None,
-        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
+    # total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
+
+    gail_trainer = GAIL(
+        demonstrations=rollouts,
+        demo_batch_size=1024,
+        gen_replay_buffer_capacity=512,
+        n_disc_updates_per_round=8,
+        venv=env,
+        gen_algo=learner,
+        reward_net=reward_net,
     )
 
     env = env_objs[0]
 
-    checkpoint_interval = 1 if run_type!='test_model' else 500
-    begin = 0
-    # 读取之前的i
-    loop_i_file = os.path.join(train_folder, 'checkpoint', 'loop_i')
-    if os.path.exists(loop_i_file):
-        begin = int(open(loop_i_file, 'r').read()) + 1
-    for i in range(begin, total_epochs // checkpoint_interval):
-        _t = time.time()
-        bc_trainer.policy.train()
-        bc_trainer.train(
-            n_epochs=checkpoint_interval,
-            log_interval = 1 if run_type=='find_lr' else 500,
-        )
-        log(f'训练耗时: {time.time() - _t:.2f} 秒')
+    gail_trainer.train(
+        # total_timesteps=1e6,
+        total_timesteps=10000,
+    )
 
-        # 检查梯度
-        check_gradients(bc_trainer)
+    # 验证模型
+    _t = time.time()
+    env = env_objs[0]
+    env.val()
+    val_reward, _ = evaluate_policy(gail_trainer.policy, env)
+    env.train()
+    train_reward, _ = evaluate_policy(gail_trainer.policy, env)
+    log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
-        # 验证模型
-        _t = time.time()
-        env.val()
-        val_reward, _ = evaluate_policy(bc_trainer.policy, env)
-        env.train()
-        train_reward, _ = evaluate_policy(bc_trainer.policy, env)
-        log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
-
-        # 合并到 progress_all.csv
-        progress_file = os.path.join(train_folder, f"progress.csv")
-        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
-        if os.path.exists(progress_file_all):
-            df_progress = pd.read_csv(progress_file_all)
-        else:
-            df_progress = pd.DataFrame()
-        df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
-        df_new['bc/epoch'] += i * checkpoint_interval
-        df_new['bc/mean_reward'] = np.nan
-        df_new['bc/val_mean_reward'] = np.nan
-        df_new['bc/mean_reward'].iloc[-1] = train_reward
-        df_new['bc/val_mean_reward'].iloc[-1] = val_reward
-        df_progress = pd.concat([df_progress, df_new])
-        df_progress.ffill(inplace=True)
-        df_progress.to_csv(progress_file_all, index=False)
-
-        # 训练进度可视化
-        try:
-            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
-        except Exception as e:
-            pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
-            log(f"训练进度可视化失败")
-            raise e
-        
-        # 记录当前训练进度
-        open(loop_i_file, 'w').write(str(i))
-        
-        # 保存模型
-        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', train_folder))
-
-        # 上传
-        if not in_windows():
-            train_folder_manager.push()
-
-        if run_type == 'find_lr':
-            # 限制在 150 条 
-            # 4800 / 32 = 150
-            break
 else:
     # test
     model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
