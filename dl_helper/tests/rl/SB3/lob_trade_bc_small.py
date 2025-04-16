@@ -53,6 +53,7 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
+run_type = 'test'
 # run_type = 'test_transitions'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
@@ -540,22 +541,18 @@ else:
     model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
 
     # 初始化模型
-    env_config['data_type'] = 'test'
+    # env_config['data_type'] = 'test'
     env_config['render_mode'] = 'human'
     test_env = LOB_trade_env(env_config)
-    test_env.test()
+    test_env.train()
     model = PPO(
         model_type, 
         test_env, 
-        verbose=1, 
-        learning_rate=1e-3,
-        ent_coef=0.2,
-        gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
     # 加载参数
-    model.policy.load(model_folder)
+    model.policy = model.policy.load(model_folder)
 
     # 专家, 用于参考
     expert = LobExpert_file(pre_cache=False)
@@ -566,7 +563,8 @@ else:
     for i in range(rounds):
         log('reset')
         seed = random.randint(0, 1000000)
-        # seed = 646508
+        seed = 477977
+        seed = 195789
         obs, info = test_env.reset(seed)
         test_env.render()
 

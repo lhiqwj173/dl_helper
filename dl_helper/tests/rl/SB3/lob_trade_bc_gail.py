@@ -461,7 +461,7 @@ if run_type != 'test':
     env = env_objs[0]
 
     gail_trainer.train(
-        total_timesteps=1e6,
+        total_timesteps=1_000_000,
         # total_timesteps=10000,
     )
 
