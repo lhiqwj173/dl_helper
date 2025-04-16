@@ -54,19 +54,6 @@ from dl_helper.train_folder_manager import TrainFolderManagerSB3
 # 只保留 ent_coef=0.01, 其他参数恢复默认
 ###########################################
 
-# Linear scheduler
-def linear_schedule(initial_value, final_value=0.0):
-
-    if isinstance(initial_value, str):
-        initial_value = float(initial_value)
-        final_value = float(final_value)
-        assert (initial_value > 0.0)
-
-    def scheduler(progress):
-        return final_value + progress * (initial_value - final_value)
-
-    return scheduler
-
 # 自定义 CNN 特征提取器
 class CustomCNN(BaseFeaturesExtractor):
     # 参数量: 167172

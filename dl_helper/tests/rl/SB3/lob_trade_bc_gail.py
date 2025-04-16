@@ -453,7 +453,7 @@ if run_type != 'test':
         demo_batch_size=1024,
         gen_replay_buffer_capacity=512,
         n_disc_updates_per_round=8,
-        venv=env,
+        venv=vec_env,
         gen_algo=learner,
         reward_net=reward_net,
     )
