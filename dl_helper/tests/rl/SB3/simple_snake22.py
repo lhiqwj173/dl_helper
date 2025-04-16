@@ -46,6 +46,10 @@ from dl_helper.train_folder_manager import TrainFolderManagerSB3
 # 
 # 20250416 测试5
 # 调整奖励函数
+# 
+# 20250416 测试6
+# 降低 ent_coef    0.1      >    0.01
+
 ###########################################
 
 # Linear scheduler
@@ -100,7 +104,7 @@ if len(sys.argv) > 1:
             model_type = 'MlpPolicy'
 
 run_type = 'train'# 'train' or 'test'
-run_type = 'test'# 'train' or 'test'
+# run_type = 'test'# 'train' or 'test'
 train_folder = train_title = f'snake_base_5_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
@@ -137,7 +141,7 @@ if run_type == 'train':
         batch_size=512,
         gamma=0.995,
         clip_range_vf=0.2,
-        ent_coef=0.1,
+        ent_coef=0.01,
         verbose=1, 
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
