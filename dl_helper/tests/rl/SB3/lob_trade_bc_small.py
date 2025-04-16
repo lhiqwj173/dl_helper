@@ -426,8 +426,10 @@ if run_type != 'test':
 
     # FOR DEBUG
     # 检查 transitions 样本均衡度
-    log(f'训练样本均衡度: {cal_action_balance(transitions)}')
-    log(f'验证样本均衡度: {cal_action_balance(transitions_val)}')
+    msg = f'训练样本均衡度: {cal_action_balance(transitions)}\n'
+    msg += f'验证样本均衡度: {cal_action_balance(transitions_val)}\n'
+    log(msg)
+    send_wx(msg)
     sys.exit()
 
     if run_type == 'test_transitions':
