@@ -56,7 +56,6 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
-run_type = 'test_transitions'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
 
@@ -78,7 +77,7 @@ if len(sys.argv) > 1:
         elif arg == '2':
             _train_timesteps = _train_timesteps_list[2]
 
-train_folder = train_title = f'20250415_lob_trade_bc_small_data_{_train_timesteps_list.index(_train_timesteps)}'
+train_folder = train_title = f'20250416_lob_trade_bc_gail'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -283,6 +282,7 @@ class RewardNetwork(nn.Module):
 
         self.observation_space = observation_space
         self.action_space = action_space
+        self.normalize_images = False
 
         # 动作空间维度
         if isinstance(action_space, gym.spaces.Discrete):
@@ -310,7 +310,6 @@ class RewardNetwork(nn.Module):
 
         # 输出奖励（logits）
         return self.fc(features)
-
 
 model_config={
     # 自定义编码器参数  
@@ -462,8 +461,8 @@ if run_type != 'test':
     env = env_objs[0]
 
     gail_trainer.train(
-        # total_timesteps=1e6,
-        total_timesteps=10000,
+        total_timesteps=1e6,
+        # total_timesteps=10000,
     )
 
     # 验证模型
