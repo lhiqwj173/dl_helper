@@ -244,7 +244,7 @@ class data_producer:
                         if file.split('.')[0] == debug_date:
                             ordered_files.append(file)
                 self.files = ordered_files
-            log(f'[{self.data_type}] prepare files: {self.files}')
+            log(f'[{self.data_type}] prepare files: {[os.path.basename(i) for i in self.files]}')
         
         assert self.files, f'[{self.data_type}] no datas'
             
@@ -308,10 +308,10 @@ class data_producer:
                     if hasattr(self, 'begin_before_market_close_sec'):
                         _idx = begin
                         while _idx <= end:
-                            if self.before_market_close_sec[_idx] == self.begin_before_market_close_sec:
+                            if self.before_market_close_sec[_idx] == int(self.begin_before_market_close_sec):
                                 break
                             _idx += 1
-                        assert _idx != end + 1, f'{self.begin_before_market_close_sec} not found'
+                        assert _idx != end + 1, f'{int(self.begin_before_market_close_sec)} not found'
                         begin = _idx
                     else:
                         # begin = random.randint(begin, end-50)# 至少50个数据
@@ -1032,6 +1032,7 @@ class Render:
                 max_len = len(self.full_plot_data)
                 self.data_deque['net_raw'] = deque(maxlen=max_len)
                 self.data_deque['rewards'] = deque(maxlen=max_len)
+                self.pre_latest_tick_time = None
             self.potential_data = None
         elif 'potential_data' in data:
             self.potential_data = data['potential_data']
@@ -1701,7 +1702,7 @@ class LOB_trade_env(gym.Env):
             log(f'[{id(self)}][{self.data_producer.data_type}] step error: {get_exception_msg()}')
             raise e
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None, acc_status=None):
         try:
             super().reset(seed=seed, options=options)
 
@@ -1746,7 +1747,7 @@ class LOB_trade_env(gym.Env):
                 self._render.handle_data({'full_plot_data': full_plot_data})
 
             # 账户
-            pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random)
+            pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random, status=acc_status)
             log(f'acc reset: {pos}')
 
             # 添加 静态特征
@@ -1777,8 +1778,9 @@ class LOB_trade_env(gym.Env):
         if self.render_mode == 'human':
             self._render.handle_data({'potential_data': potential_data})
 
-    def set_state(self, t):
+    def set_state(self, t, expert=None):
         """
+        expert: 用于可视化指导
         使用轨迹设置 env
         返回是否终止
         """
@@ -1796,6 +1798,10 @@ class LOB_trade_env(gym.Env):
             # 重新设置
             self.obs_date = obs_date
             self.obs_symbol = obs_symbol
+
+            # 步数统计
+            self.steps = 0
+            self.recent_reward = 0
 
             # 设置 data_producer
             date = days2date(int(obs_date))
@@ -1815,22 +1821,19 @@ class LOB_trade_env(gym.Env):
             self.data_producer.use_symbols = [symbol]
             # 设置 data_producer begin_before_market_close_sec
             self.data_producer.begin_before_market_close_sec = before_market_close_sec * MAX_SEC_BEFORE_CLOSE
-            self.data_producer._load_data()
 
-            # 获取一个数据，对比是否一致
-            _symbol_id, _before_market_close_sec, _x, _need_close, __id, _unrealized_log_return_std_data = self._get_data()
-            assert np.array_equal(_x, obs[:-4]), f'订单簿数据不一致，请检查!!!'
-            assert np.isclose(before_market_close_sec , _before_market_close_sec), f'before_market_close_sec 不一致，请检查!!!'
-            assert int(obs_symbol*MAX_CODE_ID) == _symbol_id, f'symbol_id 不一致，请检查!!!'
-
-            # 设置 acc
-            self.acc.reset(self.data_producer.bid_price[-1], status=pos)
-            return False
-        else:
-            # 走一步
-            _obs, _reward, _terminated, _truncated, _info = self.step(action)
+            _obs, _info = self.reset(acc_status=pos)
             assert np.array_equal(obs, _obs), f'obs数据不一致，请检查!!!'
-            return _terminated or _truncated
+
+            if expert is not None:
+                _act = expert.get_action(_obs)
+                expert.add_potential_data_to_env(self)
+
+        # 走一步
+        _obs, _reward, _terminated, _truncated, _info = self.step(action)
+
+        assert np.array_equal(t['next_obs'], _obs), f'obs数据不一致，请检查!!!'
+        return _terminated or _truncated
 
     def render(self):
         if self.render_mode != 'human':

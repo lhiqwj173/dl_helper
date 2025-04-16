@@ -163,7 +163,8 @@ class BCWithLRScheduler(BC):
         
         with th.no_grad():
             # 获取模型预测
-            pred_acts = self._get_predicted_actions(policy, obs_tensor)
+            # pred_acts = self._get_predicted_actions(policy, obs_tensor)
+            pred_acts = policy._predict(obs_tensor)
             
             # 转为numpy计算指标
             pred_np = pred_acts.cpu().numpy()

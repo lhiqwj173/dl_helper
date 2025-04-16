@@ -49,7 +49,9 @@ from dl_helper.train_folder_manager import TrainFolderManagerSB3
 # 
 # 20250416 测试6
 # 降低 ent_coef    0.1      >    0.01
-
+# 
+# 20250416 测试7
+# 只保留 ent_coef=0.01, 其他参数恢复默认
 ###########################################
 
 # Linear scheduler
@@ -105,7 +107,7 @@ if len(sys.argv) > 1:
 
 run_type = 'train'# 'train' or 'test'
 run_type = 'test'# 'train' or 'test'
-train_folder = train_title = f'snake_base_6_{model_type}'
+train_folder = train_title = f'snake_base_7_{model_type}'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -137,10 +139,10 @@ if run_type == 'train':
     model = PPO(
         model_type, 
         env, 
-        learning_rate=1e-2,
-        batch_size=512,
-        gamma=0.995,
-        clip_range_vf=0.2,
+        # learning_rate=1e-2,
+        # batch_size=512,
+        # gamma=0.995,
+        # clip_range_vf=0.2,
         ent_coef=0.01,
         verbose=1, 
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
