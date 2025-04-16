@@ -72,6 +72,8 @@ if len(sys.argv) > 1:
             _train_timesteps = _train_timesteps_list[0]
         elif arg == '1':
             _train_timesteps = _train_timesteps_list[1]
+        elif arg == '2':
+            _train_timesteps = _train_timesteps_list[2]
 
 train_folder = train_title = f'20250415_lob_trade_bc_small_data_{_train_timesteps_list.index(_train_timesteps)}'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
