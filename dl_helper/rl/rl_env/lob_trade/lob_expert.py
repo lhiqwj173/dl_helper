@@ -29,11 +29,12 @@ class LobExpert_file():
     专家策略
     通过 文件 准备数据
     """
-    def __init__(self, rng=None, pre_cache=False):
+    def __init__(self, env=None, rng=None, pre_cache=False):
         """
         pre_cache: 是否缓存数据 
 
         """
+        self._env = env
         self.rng = rng
 
         # 是否缓存数据 TODO
@@ -56,6 +57,14 @@ class LobExpert_file():
         if self.pre_cache:
             log('cache all expert data')
             self.cache_all()
+
+    @property
+    def observation_space(self):
+        return self._env.observation_space
+
+    @property   
+    def action_space(self):
+        return self._env.action_space
 
     def set_rng(self, rng):
         self.rng = rng
