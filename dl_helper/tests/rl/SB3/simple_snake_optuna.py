@@ -83,12 +83,12 @@ policy_kwargs = {
 def objective(trial):
     # 建议超参数
     learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
-    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
-    n_steps = trial.suggest_categorical('n_steps', [512, 1024, 2048])
-    ent_coef = trial.suggest_uniform('ent_coef', 0.0, 0.1)
     gamma = trial.suggest_uniform('gamma', 0.9, 0.999)
-    gae_lambda = trial.suggest_uniform('gae_lambda', 0.9, 1.0)
-    clip_range = trial.suggest_uniform('clip_range', 0.1, 0.3)
+    # batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
+    # ent_coef = trial.suggest_uniform('ent_coef', 0.0, 0.1)
+    # n_steps = trial.suggest_categorical('n_steps', [512, 1024, 2048])
+    # gae_lambda = trial.suggest_uniform('gae_lambda', 0.9, 1.0)
+    # clip_range = trial.suggest_uniform('clip_range', 0.1, 0.3)
 
     # 创建并行环境
     n_envs = 4
@@ -101,18 +101,18 @@ def objective(trial):
         model_type,
         env,
         learning_rate=learning_rate,
-        batch_size=batch_size,
-        n_steps=n_steps,
-        ent_coef=ent_coef,
+        # batch_size=batch_size,
+        # n_steps=n_steps,
+        # ent_coef=ent_coef,
         gamma=gamma,
-        gae_lambda=gae_lambda,
-        clip_range=clip_range,
+        # gae_lambda=gae_lambda,
+        # clip_range=clip_range,
         verbose=0,
         policy_kwargs=policy_kwargs
     )
 
     # 训练模型
-    model.learn(total_timesteps=100_000)  # 每个试验训练 100,000 步
+    model.learn(total_timesteps=300_000)
 
     # 评估模型
     eval_env = SnakeEnv({'obs_type': 'image'})
@@ -129,10 +129,16 @@ def objective(trial):
 if run_type == 'train_optuna':
     # 创建 Optuna study 并运行优化
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=50)  # 运行 50 个试验
+    study.optimize(objective, n_trials=20)
 
     # 记录最佳超参数
-    log(f"Best trial: {study.best_trial.params}")
+    log(f"Best trial: {study.best_trial.params}, reward: {study.best_trial.value}")
+
+    # 获取所有 trial 的数据
+    df = study.trials_dataframe()
+    df.to_csv(os.path.join(train_folder, 'trials_dataframe.csv'), index=False)
+
+    sys.exit()
 
     # 使用最佳超参数进行最终训练（可选）
     best_params = study.best_trial.params
