@@ -53,10 +53,10 @@ model_type = 'CnnPolicy'
 # df_progress = pd.read_csv('progress_all.csv')
 # find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 run_type = 'train'
-run_type = 'test'
+# run_type = 'test'
 # run_type = 'test_transitions'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
-_train_timesteps = _train_timesteps_list[1]
+_train_timesteps = _train_timesteps_list[2]
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -361,7 +361,7 @@ if run_type != 'test':
         env, 
         verbose=1, 
         learning_rate=1e-3,
-        ent_coef=0.2,
+        ent_coef=0.01,
         gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
