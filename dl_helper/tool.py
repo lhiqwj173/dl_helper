@@ -534,6 +534,12 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         sell_income = bid[t2] * (1 - fee)
         return np.log(sell_income / buy_cost)
 
+    # 控制边界范围
+    if valleys:
+        valleys[-1] = min(valleys[-1], len(bid) - 1)
+    if peaks:
+        peaks[-1] = min(peaks[-1], len(ask) - 1)
+
     pre_t2 = 0# 上一个波峰t
     while valley_idx < len(valleys) and peak_idx < len(peaks):
         t1 = valleys[valley_idx]
