@@ -55,16 +55,21 @@ class ClosePositionRewardStrategy(RewardStrategy):
     奖励逻辑
         1. 策略收益>0, 奖励恒为正 = 策略收益率 / 潜在收益率 * 标准奖励 (若潜在收益率为0, 则奖励为标准奖励)     >> 策略获得收益占潜在收益的比例
         2. 策略收益<=0, 奖励恒为负(惩罚) = max((策略收益率 - 潜在收益率) / 最大回撤阈值, -1) * 标准奖励        >> 策略亏损占最大回撤阈值的比例
-
-        
     """
     def calculate_reward(
             self, 
             STD_REWARD = 100, 
             res = {}, 
             max_drawdown_threshold = 0.005,
+            acc = None,
             **kwargs
         ):
+        # 若acc净值只有 2 个值，且平仓
+        # 说明初始化持仓，再第一个step就平仓了
+        # 奖励为0
+        if len(acc.net_raw) == 2:
+            return 0, False
+
         potential_return = res['potential_return']
         acc_return = res['acc_return']
 

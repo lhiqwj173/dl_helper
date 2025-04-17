@@ -10,7 +10,7 @@ import torch as th
 import pygame
 import time
 import numpy as np
-import random
+import random, pickle
 import sys, shutil
 import matplotlib.pyplot as plt
 import optuna
@@ -28,7 +28,23 @@ from py_ext.datetime import beijing_time
 from dl_helper.rl.rl_env.snake3.snake_env import SnakeEnv
 from dl_helper.rl.rl_utils import CustomCheckpointCallback
 from dl_helper.tool import report_memory_usage, in_windows
-from dl_helper.train_folder_manager import TrainFolderManagerSB3
+from dl_helper.train_folder_manager import TrainFolderManagerOptuna
+
+import logging
+def set_optuna_log_file(file):
+    # 获取 Optuna 的 logger
+    logger = logging.getLogger('optuna')
+    logger.setLevel(logging.INFO)  # 设置日志级别为 INFO
+
+    # 清空默认处理器（防止重复输出）
+    logger.handlers.clear()
+
+    # 设置日志输出位置：保存到文件
+    file_handler = logging.FileHandler(file)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 # 自定义 CNN 特征提取器
 class CustomCNN(BaseFeaturesExtractor):
@@ -58,18 +74,16 @@ class CustomCNN(BaseFeaturesExtractor):
 
 # 定义全局变量
 model_type = 'CnnPolicy'
-run_type = 'train_optuna'  # 修改为 'train_optuna' 以运行 Optuna 优化
 train_folder = train_title = f'simple_snake_optuna_test'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
+set_optuna_log_file(os.path.join(train_folder, "logs", 'optuna_log.txt'))
 
 # 创建带 Monitor 的环境函数
 def make_env():
     env = SnakeEnv({'obs_type': 'image'})
     return env
-
-checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 
 # 配置 policy_kwargs
 policy_kwargs = {
@@ -112,98 +126,39 @@ def objective(trial):
     )
 
     # 训练模型
-    model.learn(total_timesteps=300_000)
+    model.learn(total_timesteps=500_000)
 
     # 评估模型
     eval_env = SnakeEnv({'obs_type': 'image'})
     mean_reward, _ = evaluate_policy(model, eval_env, n_eval_episodes=10)
 
-    # 保存试验模型（可选）
-    trial_folder = os.path.join(train_folder, f'trial_{trial.number}')
-    os.makedirs(trial_folder, exist_ok=True)
-    model.save(os.path.join(trial_folder, 'model.zip'))
-
     return mean_reward
 
 # 主逻辑
-if run_type == 'train_optuna':
-    # 创建 Optuna study 并运行优化
+study = None
+if not in_windows():
+    # 训练文件夹管理
+    train_folder_manager = TrainFolderManagerOptuna(train_folder)
+    if train_folder_manager.exists():
+        log(f"restore from {train_folder_manager.checkpoint_folder}")
+        study = train_folder_manager.load_checkpoint()
+if study is None:
+    # 创建新的 study
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=20)
 
-    # 记录最佳超参数
-    log(f"Best trial: {study.best_trial.params}, reward: {study.best_trial.value}")
+# 定义回调函数
+def on_trial_end(study, trial):
+    # 保存当前 study 状态到文件
+    with open(os.path.join(train_folder_manager.checkpoint_folder, train_folder_manager.checkpoint_name), 'wb') as f:
+        pickle.dump(study, f)
 
-    # 获取所有 trial 的数据
-    df = study.trials_dataframe()
-    df.to_csv(os.path.join(train_folder, 'trials_dataframe.csv'), index=False)
-
-    sys.exit()
-
-    # 使用最佳超参数进行最终训练（可选）
-    best_params = study.best_trial.params
-    env = DummyVecEnv([make_env for _ in range(4)])
-    env = VecCheckNan(env)
-    env = VecMonitor(env)
-
-    model = PPO(
-        model_type,
-        env,
-        learning_rate=best_params['learning_rate'],
-        batch_size=best_params['batch_size'],
-        n_steps=best_params['n_steps'],
-        ent_coef=best_params['ent_coef'],
-        gamma=best_params['gamma'],
-        gae_lambda=best_params['gae_lambda'],
-        clip_range=best_params['clip_range'],
-        verbose=1,
-        policy_kwargs=policy_kwargs
-    )
-    model.learn(total_timesteps=1_000_000, callback=[checkpoint_callback])
-    model.save(os.path.join(train_folder, 'final_model.zip'))
-
-elif run_type == 'train':
-    n_envs = 4
-    env = DummyVecEnv([make_env for _ in range(n_envs)])
-    env = VecCheckNan(env)
-    env = VecMonitor(env)
-
-    model = PPO(
-        model_type,
-        env,
-        ent_coef=0.01,
-        verbose=1,
-        policy_kwargs=policy_kwargs
-    )
-
+    # 推送上传到 alist
     if not in_windows():
-        train_folder_manager = TrainFolderManagerSB3(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(model, custom_objects={"policy_kwargs": policy_kwargs})
+        train_folder_manager.push()
 
-    log("模型结构:")
-    log(model.policy)
-    log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
+# 运行优化
+study.optimize(objective, n_trials=30, callbacks=[on_trial_end])
 
-    for i in range(10000000000000):
-        model.learn(total_timesteps=10_000, callback=[checkpoint_callback])
-        model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
-
-        if not in_windows():
-            train_folder_manager.push()
-
-else:  # run_type == 'test'
-    env = SnakeEnv({'obs_type': 'image', 'render_mode': 'human'})
-    model = PPO.load(
-        rf"D:\code\dl_helper\dl_helper\tests\ RL\SB3\{train_folder}",
-        custom_objects={"policy_kwargs": policy_kwargs}
-    )
-
-    obs = env.reset()
-    for i in range(2000):
-        action, _state = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
-        env.render()
-        if done:
-            obs = env.reset()
+# 获取所有 trial 的数据
+df = study.trials_dataframe()
+df.to_csv(os.path.join(train_folder, 'trials_dataframe.csv'), index=False)

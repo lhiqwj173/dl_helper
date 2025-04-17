@@ -553,8 +553,8 @@ else:
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
-    # 加载参数
-    model.policy.load_state_dict(pretrained_policy.state_dict())
+    # # 加载参数
+    # model.policy.load_state_dict(pretrained_policy.state_dict())
 
     # 专家, 用于参考
     expert = LobExpert_file(pre_cache=False)

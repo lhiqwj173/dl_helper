@@ -150,3 +150,22 @@ class TrainFolderManagerSB3(TrainFolderManager):
         _model = model.load(os.path.join(self.checkpoint_folder, f"{self.train_folder}.zip"), custom_objects= custom_objects)
         policy_state_dict = _model.policy.state_dict()  
         model.policy.load_state_dict(policy_state_dict)  
+
+
+class TrainFolderManagerOptuna(TrainFolderManager):
+    checkpoint_name = 'optuna_study.pkl'
+
+    def exists(self):
+        """
+        检查是否存在训练记录
+        """
+        return os.path.exists(os.path.join(self.checkpoint_folder, f"{self.checkpoint_name}"))
+
+    def load_checkpoint(self):
+        """
+        加载检查点
+        """
+        # 加载现有的 study
+        with open(os.path.join(self.checkpoint_folder, f"{self.checkpoint_name}"), 'rb') as f:
+            study = pickle.load(f)
+        return study

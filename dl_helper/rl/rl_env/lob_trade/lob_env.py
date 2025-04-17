@@ -891,11 +891,17 @@ class Render:
             self.app = QtWidgets.QApplication.instance()
             log('重用现有的 QApplication')
 
+        # 创建主窗口 QWidget
+        self.main_widget = QtWidgets.QWidget()
+        self.main_widget.setWindowTitle('LOB Trade Environment')
+        self.main_widget.resize(1000, 660)
+
+        # 创建主布局
+        main_layout = QtWidgets.QVBoxLayout(self.main_widget)
+
         # 创建 GraphicsLayoutWidget
-        self.win = pg.GraphicsLayoutWidget(show=True, title="LOB Trade Environment")
-        self.win.resize(1000, 600)
-        self.win.setWindowTitle('LOB Trade Environment')
-        self.win.closeEvent = self._on_close  # 绑定关闭事件
+        self.win = pg.GraphicsLayoutWidget()
+        main_layout.addWidget(self.win)
 
         # 初始化绘图对象
         log('创建绘图对象')
@@ -949,8 +955,8 @@ class Render:
 
         # 持仓背景
         self.p1_region = pg.LinearRegionItem(
-            brush=pg.mkBrush(color=(173, 216, 230, 50)),  # 淡蓝色，透明度 50
-            movable=False  # 禁止拖动
+            brush=pg.mkBrush(color=(173, 216, 230, 50)),
+            movable=False
         )
         self.p2_region = pg.LinearRegionItem(
             brush=pg.mkBrush(color=(173, 216, 230, 50)),
@@ -990,33 +996,37 @@ class Render:
             arrow.setVisible(False)
             self.p1.addItem(arrow)
 
-        # 将 LinearRegionItem 添加到 p1 和 p2
         self.p1.addItem(self.p1_region, ignoreBounds=True)
         self.p2.addItem(self.p2_region, ignoreBounds=True)
-        
-        # 设置 z-order，确保区域在曲线下方
+
         self.p1_region.setZValue(-10)
         self.p2_region.setZValue(-10)
 
         # 创建按钮
         self.button1 = QtWidgets.QPushButton("BUY")
         self.button2 = QtWidgets.QPushButton("SELL")
-        self.button1.clicked.connect(lambda: self.button_clicked(1))
-        self.button2.clicked.connect(lambda: self.button_clicked(2))
+        self.button3 = QtWidgets.QPushButton("KEEP_RUN")
+        self.button1.clicked.connect(lambda: self.button_clicked(0))
+        self.button2.clicked.connect(lambda: self.button_clicked(1))
 
-        # 创建一个布局来放置按钮
+        # 创建按钮布局
         button_layout = QtWidgets.QHBoxLayout()
         button_layout.addWidget(self.button1)
         button_layout.addWidget(self.button2)
+        button_layout.addWidget(self.button3)
 
-        # 创建一个 widget 来包含按钮布局
-        button_widget = QtWidgets.QWidget()
-        button_widget.setLayout(button_layout)
+        # 创建按钮容器 widget
+        self.button_widget = QtWidgets.QWidget()
+        self.button_widget.setLayout(button_layout)
 
-        # 将按钮 widget 添加到 GraphicsLayoutWidget 的第 2 行
-        self.win.addItem(button_widget, row=2, col=0)
+        # 将按钮 widget 添加到主布局
+        main_layout.addWidget(self.button_widget)
 
-        log('绘图设置完成')
+        # 显示主窗口
+        self.main_widget.show()
+        self.main_widget.closeEvent = self._on_close  # 绑定关闭事件
+
+        log('绘图和按钮设置完成')
 
     def button_clicked(self, index):
         """处理按钮点击事件"""
@@ -1052,10 +1062,10 @@ class Render:
                 self.app.processEvents()
 
             if self.human_play:
-                # 等待按钮点击
+                # # 等待按钮点击
                 self.clicked_button = None
                 while self.clicked_button is None:
-                    if not self.win or not self.win.isVisible():
+                    if not self.main_widget or not self.main_widget.isVisible():
                         log('窗口已关闭，退出等待')
                         return None
                     self.app.processEvents()
@@ -1077,6 +1087,7 @@ class Render:
                 self.data_deque['rewards'] = deque(maxlen=max_len)
                 self.pre_latest_tick_time = None
             self.potential_data = None
+
         elif 'potential_data' in data:
             self.potential_data = data['potential_data']
 
@@ -1109,6 +1120,20 @@ class Render:
         if 'net_raw' not in self.std_data:
             self.std_data['net_raw'] = latest_net_raw if latest_net_raw != 0 else 1.0
 
+        n = len(plot_data)
+        
+        # 记录第一个持仓的索引
+        if self.open_idx is None:
+            if status == 1:
+                self.open_idx = hist_end - 1
+        else:
+            if self.pre_n is not None:
+                if n <= self.pre_n:
+                    self.open_idx -= 1
+                    self.open_idx = max(self.open_idx, 0)
+
+        self.pre_n = n
+
         # 若 latest_tick_time 大于 12:00:00
         # 且 self.net_data_fixed == False
         # 需要fix net_raw / rewards
@@ -1118,6 +1143,8 @@ class Render:
             for i in range(need_fix_num):
                 self.data_deque['net_raw'].append(self.data_deque['net_raw'][-1])
                 self.data_deque['rewards'].append(self.data_deque['rewards'][-1])
+                if self.open_idx is not None:
+                    self.open_idx -= 1
             self.net_data_fixed = True
             log(f'fix noon data net_raw / rewards: {need_fix_num} 条')
 
@@ -1128,7 +1155,6 @@ class Render:
         net_raw = np.array(list(self.data_deque['net_raw']))
         rewards = np.array(list(self.data_deque['rewards']))
 
-        n = len(plot_data)
         acc_begin_pos = 0
         if len(net_raw) < hist_end:
             pad_length = hist_end - len(net_raw)
@@ -1169,17 +1195,6 @@ class Render:
             log(f'更新曲线数据失败: {e}')
             return
         
-        # 记录第一个持仓的索引
-        if self.open_idx is None:
-            if status == 1:
-                self.open_idx = hist_end - 1
-        else:
-            if self.pre_n is not None:
-                if n <= self.pre_n:
-                    self.open_idx -= 1
-                    self.open_idx = max(self.open_idx, 0)
-
-        self.pre_n = n
 
         # 更新持仓背景数据
         # 检查 self.open_idx 是否有效
@@ -1268,6 +1283,10 @@ class Render:
 
         # 更新 前一个绘图点的时间
         self.pre_latest_tick_time = latest_tick_time
+
+        # 平仓清理标记
+        if status == 0:
+            self.open_idx = None
 
     def update_p1_y_range(self, p1):
         """动态调整 p1 的 Y 轴范围"""
@@ -1508,6 +1527,7 @@ class LOB_trade_env(gym.Env):
             self.need_reset = True
             self.sample_count = 0
             self.update_need_upload_file()
+            self.data_type = data_type
 
     def val(self):
         self._set_data_type('val')
@@ -1586,22 +1606,27 @@ class LOB_trade_env(gym.Env):
                     # 交易对数
                     self.trades += 1
 
-                if not need_close:
-                    # 潜在收益率（针对最近的交易序列） 需要剔除掉第一个数据，因为第一个数据无法成交
-                    if self.dump_bid_ask_accnet:
-                        dump_file = r'C:\Users\lh\Desktop\temp\bid_ask_accnet.pkl'
-                        log(f'dump (bid, ask, accnet) > {dump_file}')
-                        log(f'debug code:')
-                        log('\n\n'+ debug_bid_ask_accnet_code + '\n')
-                        pickle.dump((self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:], self.acc.net_raw[self.last_close_idx:]), open(dump_file, 'wb'))
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:])
-                    latest_trade_net = self.acc.net_raw[self.last_close_idx:]# 最近一次交易净值序列, 重上一次平仓的净值开始计算 > 上一次平仓后的净值序列
-                    acc_return = np.log(latest_trade_net[-1]) - np.log(latest_trade_net[0])
-                else:
-                    # 游戏完成，使用所有数据完整计算
-                    _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:])
-                    # 日内完整的策略收益率
-                    acc_return = res['trade_return']
+                # if not need_close:
+                #     # 潜在收益率（针对最近的交易序列） 需要剔除掉第一个数据，因为第一个数据无法成交
+                #     if self.dump_bid_ask_accnet:
+                #         dump_file = r'C:\Users\lh\Desktop\temp\bid_ask_accnet.pkl'
+                #         log(f'dump (bid, ask, accnet) > {dump_file}')
+                #         log(f'debug code:')
+                #         log('\n\n'+ debug_bid_ask_accnet_code + '\n')
+                #         pickle.dump((self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:], self.acc.net_raw[self.last_close_idx:]), open(dump_file, 'wb'))
+                #     _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[self.last_close_idx+1:], self.data_producer.ask_price[self.last_close_idx+1:])
+                #     latest_trade_net = self.acc.net_raw[self.last_close_idx:]# 最近一次交易净值序列, 重上一次平仓的净值开始计算 > 上一次平仓后的净值序列
+                #     acc_return = np.log(latest_trade_net[-1]) - np.log(latest_trade_net[0])
+                # else:
+                #     # 游戏完成，使用所有数据完整计算
+                #     _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:])
+                #     # 日内完整的策略收益率
+                #     acc_return = res['trade_return']
+
+                # train/test/val 都会在平仓时结束游戏，所以使用所有数据完整计算
+                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:])
+                # 日内完整的策略收益率
+                acc_return = res['trade_return']
 
                 res['potential_return'] = max_profit_reachable_bm
                 res['acc_return'] = acc_return
@@ -1701,9 +1726,12 @@ class LOB_trade_env(gym.Env):
             if act_result==RESULT_CLOSE:
                 self.last_close_idx = self.steps
 
-                if self.close_trade_need_reset and self.data_type == 'train':
+                if self.close_trade_need_reset and not self.run_twice:
                     # 平仓后游戏结束
                     acc_done = True
+
+                if self.run_twice:
+                    log(f'初始化持仓，第一步平仓，需要二次平仓')
 
             # 准备输出数据
             # net,net_bm,
@@ -1742,6 +1770,10 @@ class LOB_trade_env(gym.Env):
             # 记录最近的reward
             self.recent_reward = reward
             # log(f'[{id(self)}][{self.data_producer.data_type}] step {self.steps} status: {self.acc.status} reward: {self.recent_reward}')
+
+            # 一步之后不需要再运行
+            if self.run_twice:
+                self.run_twice = False
 
             return observation, reward, terminated, truncated, info
 
@@ -1796,6 +1828,9 @@ class LOB_trade_env(gym.Env):
             # 账户
             pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random, status=acc_status)
             log(f'acc reset: {pos}')
+
+            # 初始化持仓需要记录
+            self.run_twice = pos == 1
 
             # 添加 静态特征
             x = np.concatenate([x, [np.float32(before_market_close_sec), np.float32(symbol_id), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
@@ -2162,43 +2197,9 @@ def play_lob_data(render=True):
     env.close()
     print('all done')
 
-def play_lob_data_by_button():
-    code = '513050'
-    env = LOB_trade_env({
-        # 'data_type': 'val',# 训练/测试
-        'data_type': 'train',# 训练/测试
-        'his_len': 10,# 每个样本的 历史数据长度
-        'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
-        'use_symbols': [code],
-
-        'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
-        'train_title': 'test',
-
-        'render_mode': 'human',
-        'human_play': True,
-    },
-    # data_std=False,
-    debug_date=['20240521'],
-    )
-
-    print('reset')
-    seed = random.randint(0, 1000000)
-    obs, info = env.reset(seed=seed)
-
-    act = env.render()
-
-    need_close = False
-    while not need_close:
-        obs, reward, terminated, truncated, info = env.step(act)
-        act = env.render()
-        need_close = terminated or truncated
-        
-    env.close()
-    input(f'all done, seed: {seed}')
-
 
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
     # test_lob_data(check_data=True, check_reward=False)
     # play_lob_data(render = True)
-    play_lob_data_by_button()
+    pass

@@ -449,10 +449,16 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
     """
     peaks = []
     valleys = []
+
+    # 记录每个平台期的点数
+    peaks_num_points = []
+    valleys_num_points = []
+
     n = len(plateaus)
     
     for i in range(n):
         start, end, value = plateaus[i]
+        num_points = end - start + 1
 
         if rep_select == 'mid':
             rep = (start + end) // 2  # 选择中间点作为代表
@@ -465,26 +471,42 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
                 else:
                     rep = rng.integers(start, end)
 
+        # 如果平台期的点数 > 1
+        # 则 rep 应该为 start + 1 之后的点
+        if num_points > 1:
+            rep = max(start + 1, rep)
+
+        # 如果平台期的点数 == 1
+        # 则 rep 应该为 start + 1
+        if num_points == 1:
+            rep = start + 1
+
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:
                 valleys.append(rep)
+                valleys_num_points.append(num_points)
             elif n > 1 and value > plateaus[1][2]:
                 peaks.append(rep)
+                peaks_num_points.append(num_points)
         elif i == n - 1:  # 最后一个平台期
             if value < plateaus[i - 1][2]:
                 valleys.append(rep)
+                valleys_num_points.append(num_points)
             elif value > plateaus[i - 1][2]:
                 peaks.append(rep)
+                peaks_num_points.append(num_points)
         else:  # 中间平台期
             prev_value = plateaus[i - 1][2]
             next_value = plateaus[i + 1][2]
             if value > prev_value and value > next_value:
                 peaks.append(rep)
+                peaks_num_points.append(num_points)
             elif value < prev_value and value < next_value:
                 valleys.append(rep)
-    return peaks, valleys 
+                valleys_num_points.append(num_points)
+    return peaks, valleys, peaks_num_points, valleys_num_points
 
-def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
+def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points, valleys_num_points, fee=5e-5, profit_threshold=0.001):
     """
     寻找所有可盈利的交易对，最大化对数收益率总和，考虑更低波谷的潜在更大利润。
 
@@ -493,7 +515,10 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
     ask (np.array): ask 价格序列
     valleys (list): 波谷位置列表
     peaks (list): 波峰位置列表
+    valleys_num_points (list): 波谷点数列表
+    peaks_num_points (list): 波峰点数列表
     fee (float): 交易费率，默认为 5e-5
+    profit_threshold (float): 最小利润，默认为 0.001
 
     返回:
     trades (list): 所有可盈利的交易对列表，每个元素为 (valley, peak)
@@ -542,7 +567,13 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
 
         # 若当前波谷ask >= 上一个波峰bid, 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
         # 上一个波峰卖出，当前波谷买入 平添交易费/损失持仓量 
-        if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and bid[t2] > bid[pre_t2]:
+        if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and \
+            (
+                # 当前波峰更高
+                (bid[t2] > bid[pre_t2]) or \
+                # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
+                ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
+            ):
             # print(f'前一个波峰卖出损失')
             trades[-1] = (trades[-1][0], t2)
             pre_t2 = t2
@@ -552,7 +583,7 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
 
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
-        if sell_income > buy_cost:
+        if sell_income > buy_cost + profit_threshold:
             # 确认当前交易
             trades.append((t1, t2))
             pre_t2 = t2
@@ -562,7 +593,13 @@ def _find_max_profitable_trades(bid, ask, mid, valleys, peaks, fee=5e-5):
             # 不盈利
             # 1. 对比前一个交易对的波峰，若当前的波峰更高，则修改上一个交易对的波峰为当前波峰
             # 2. 若当前的波峰更低，则尝试下一个波峰
-            if pre_t2 > 0 and bid[t2] > bid[pre_t2]:
+            if pre_t2 > 0 and \
+                (
+                    # 当前波峰更高
+                    (bid[t2] > bid[pre_t2]) or \
+                    # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
+                    ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
+                 ):
                 # print(f'当前波峰波谷不盈利，合并到上一个交易对')
                 # 修改上一个交易对的波峰为当前波峰
                 trades[-1] = (trades[-1][0], t2)
@@ -603,11 +640,11 @@ def max_profit_reachable(bid, ask, rep_select='mid', rng=None):
     plateaus = _find_plateaus(mid)
 
     # 识别波峰和波谷
-    peaks, valleys = _identify_peaks_valleys(plateaus, rep_select, rng)
+    peaks, valleys, peaks_num_points, valleys_num_points = _identify_peaks_valleys(plateaus, rep_select, rng)
 
     # 匹配交易对
     # 计算可盈利交易的对数收益率总和
-    trades,total_log_return = _find_max_profitable_trades(bid, ask, mid, valleys, peaks)
+    trades,total_log_return = _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points, valleys_num_points)
     return trades,total_log_return, valleys, peaks
 
 def plot_trades(mid, trades, valleys, peaks):

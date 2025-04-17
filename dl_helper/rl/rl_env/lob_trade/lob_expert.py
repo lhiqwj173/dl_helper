@@ -356,7 +356,7 @@ def play_lob_data_with_expert(render=True):
     for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        # seed = 646508
+        # seed = 755812
         obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
 
@@ -415,6 +415,48 @@ def eval_expert():
     )
     print(f"Reward after training: {reward}")
 
+def play_lob_data_by_button():
+    env = LOB_trade_env({
+        'data_type': 'train',# 训练/测试
+        'his_len': 30,# 每个样本的 历史数据长度
+        'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+        'train_folder': r'C:\Users\lh\Desktop\temp\play_lob_data_by_button',
+        'train_title': r'C:\Users\lh\Desktop\temp\play_lob_data_by_button',
+
+        # 不使用数据增强
+        'use_random_his_window': False,# 是否使用随机历史窗口
+        'use_gaussian_noise_vol': False,# 是否使用高斯噪声
+        'use_spread_add_small_limit_order': False,# 是否使用价差添加小单
+
+        'render_mode': 'human',
+        'human_play': True,
+    },
+    # data_std=False,
+    # debug_date=['20240521'],
+    )
+
+    expert = LobExpert_file()
+
+    print('reset')
+    seed = random.randint(0, 1000000)
+    seed = 603045
+    obs, info = env.reset(seed=seed)
+
+    act = env.render()
+
+    need_close = False
+    while not need_close:
+        # 只是为了参考
+        expert.get_action(obs)
+        expert.add_potential_data_to_env(env)
+
+        obs, reward, terminated, truncated, info = env.step(act)
+        act = env.render()
+        need_close = terminated or truncated
+        
+    env.close()
+    input(f'all done, seed: {seed}')
+
 if __name__ == '__main__':
     # test_expert()
 
@@ -424,6 +466,8 @@ if __name__ == '__main__':
     print(time.time() - t)
 
     # eval_expert()
+
+    # play_lob_data_by_button()
 
     # dump_file = r"D:\code\dl_helper\get_action.pkl"
     # data = pickle.load(open(dump_file, 'rb'))
