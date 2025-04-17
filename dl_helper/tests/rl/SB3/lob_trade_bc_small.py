@@ -8,11 +8,11 @@ from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.policies import ActorCriticPolicy
 
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.util import logger as imit_logger
-
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -539,6 +539,8 @@ if run_type != 'test':
 else:
     # test
     model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
+    # 加载 BC 训练的策略
+    pretrained_policy = ActorCriticPolicy.load(model_folder)
 
     # 初始化模型
     # env_config['data_type'] = 'test'
@@ -552,7 +554,7 @@ else:
     )
 
     # 加载参数
-    model.policy = model.policy.load(model_folder)
+    model.policy.load_state_dict(pretrained_policy.state_dict())
 
     # 专家, 用于参考
     expert = LobExpert_file(pre_cache=False)

@@ -58,6 +58,7 @@ model_type = 'CnnPolicy'
 run_type = 'train'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
+_train_timesteps = 500
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -297,19 +298,20 @@ class RewardNetwork(nn.Module):
         )
         
 
-    def forward(self, observations: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+    def forward(self,
+        state: th.Tensor, # (batch_size, *obs_shape)
+        action: th.Tensor, # (batch_size, *action_shape)
+        next_state: th.Tensor, # (batch_size, *obs_shape)
+        done: th.Tensor, # (batch_size,)
+    ) -> th.Tensor:
         # 提取状态特征
-        state_features = self.features_extractor(observations)
+        state_features = self.features_extractor(state)
 
-        # 处理动作：将离散动作转为 one-hot 编码
-        if actions.dtype == torch.long:
-            actions = torch.nn.functional.one_hot(actions, num_classes=self.fc[0].in_features - state_features.shape[1]).float()
-        
         # 拼接状态特征和动作
-        features = torch.cat([state_features, actions], dim=1)
+        features = torch.cat([state_features, action], dim=1)
 
         # 输出奖励（logits）
-        return self.fc(features)
+        return self.fc(features).squeeze(1)
 
 model_config={
     # 自定义编码器参数  

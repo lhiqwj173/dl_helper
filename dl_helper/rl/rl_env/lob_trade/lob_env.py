@@ -839,7 +839,8 @@ class RewardTracker:
         self.consecutive_negative = 0
         
 class Render:
-    def __init__(self):
+    def __init__(self, human_play=False):
+        self.human_play = human_play
         self.app = None  # QApplication 实例
         self.win = None  # GraphicsLayoutWidget 实例
 
@@ -871,6 +872,11 @@ class Render:
         self.pre_latest_tick_time = None
         # 是否需要fix net_raw / rewards
         self.net_data_fixed = False
+
+        # 按钮相关变量
+        self.button1 = None
+        self.button2 = None
+        self.clicked_button = None
 
         self._init_plot()
         log('Render 初始化完成')
@@ -992,7 +998,30 @@ class Render:
         self.p1_region.setZValue(-10)
         self.p2_region.setZValue(-10)
 
+        # 创建按钮
+        self.button1 = QtWidgets.QPushButton("BUY")
+        self.button2 = QtWidgets.QPushButton("SELL")
+        self.button1.clicked.connect(lambda: self.button_clicked(1))
+        self.button2.clicked.connect(lambda: self.button_clicked(2))
+
+        # 创建一个布局来放置按钮
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addWidget(self.button1)
+        button_layout.addWidget(self.button2)
+
+        # 创建一个 widget 来包含按钮布局
+        button_widget = QtWidgets.QWidget()
+        button_widget.setLayout(button_layout)
+
+        # 将按钮 widget 添加到 GraphicsLayoutWidget 的第 2 行
+        self.win.addItem(button_widget, row=2, col=0)
+
         log('绘图设置完成')
+
+    def button_clicked(self, index):
+        """处理按钮点击事件"""
+        self.clicked_button = index
+        log(f'按钮 {index} 被点击')
 
     def _on_close(self, event):
         """处理窗口关闭事件"""
@@ -1021,6 +1050,20 @@ class Render:
             self._plot_data(*data['render'])
             if self.win.isVisible():
                 self.app.processEvents()
+
+            if self.human_play:
+                # 等待按钮点击
+                self.clicked_button = None
+                while self.clicked_button is None:
+                    if not self.win or not self.win.isVisible():
+                        log('窗口已关闭，退出等待')
+                        return None
+                    self.app.processEvents()
+                    QtCore.QThread.msleep(10)  # 短暂休眠以减少 CPU 使用率
+
+                # 返回点击的按钮索引
+                return self.clicked_button
+
         elif 'full_plot_data' in data:
             self.full_plot_data = data['full_plot_data']
             if not self.full_plot_data.empty:
@@ -1312,6 +1355,9 @@ class LOB_trade_env(gym.Env):
                 # 渲染频率, 每N步渲染一次
                 'render_freq': 1,
 
+                # 是否需要人工操作
+                'human_play': False,
+
                 # 奖励策略
                 'end_position': ClosePositionRewardStrategy,
                 'close_position': ClosePositionRewardStrategy,
@@ -1339,6 +1385,7 @@ class LOB_trade_env(gym.Env):
 
         self.render_mode = config.get('render_mode', 'none')
         self.render_freq = config.get('render_freq', 1)
+        self.human_play = config.get('human_play', False)
 
         end_position_reward_strategy = config.get('end_position', ClosePositionRewardStrategy)
         close_position_reward_strategy = config.get('close_position', ClosePositionRewardStrategy)
@@ -1434,7 +1481,7 @@ class LOB_trade_env(gym.Env):
 
         # 渲染模式
         if self.render_mode == 'human':
-            self._render = Render()
+            self._render = Render(self.human_play)
 
         log(f'[{id(self)}][{self.data_producer.data_type}] init env done')
 
@@ -1850,7 +1897,9 @@ class LOB_trade_env(gym.Env):
         latest_net_raw, status = self.acc.get_plot_data()
 
         # 将数据放入队列，交给更新线程处理
-        self._render.handle_data({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done, self.acc.init_status)})
+        action = self._render.handle_data({"render": (a, b, latest_tick_time, latest_net_raw, status, need_render, self.recent_reward, self.done, self.acc.init_status)})
+        if self.human_play:
+            return action
 
 def test_quick_produce_train_sdpk(date, code):
     """
@@ -2113,8 +2162,43 @@ def play_lob_data(render=True):
     env.close()
     print('all done')
 
+def play_lob_data_by_button():
+    code = '513050'
+    env = LOB_trade_env({
+        # 'data_type': 'val',# 训练/测试
+        'data_type': 'train',# 训练/测试
+        'his_len': 10,# 每个样本的 历史数据长度
+        'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+        'use_symbols': [code],
+
+        'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
+        'train_title': 'test',
+
+        'render_mode': 'human',
+        'human_play': True,
+    },
+    # data_std=False,
+    debug_date=['20240521'],
+    )
+
+    print('reset')
+    seed = random.randint(0, 1000000)
+    obs, info = env.reset(seed=seed)
+
+    act = env.render()
+
+    need_close = False
+    while not need_close:
+        obs, reward, terminated, truncated, info = env.step(act)
+        act = env.render()
+        need_close = terminated or truncated
+        
+    env.close()
+    input(f'all done, seed: {seed}')
+
+
 if __name__ == '__main__':
     # test_quick_produce_train_sdpk('20250303', '513050')
     # test_lob_data(check_data=True, check_reward=False)
     # play_lob_data(render = True)
-    pass
+    play_lob_data_by_button()
