@@ -58,7 +58,7 @@ model_type = 'CnnPolicy'
 run_type = 'train'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
-_train_timesteps = 500
+# _train_timesteps = 500
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -458,6 +458,7 @@ if run_type != 'test':
         venv=vec_env,
         gen_algo=learner,
         reward_net=reward_net,
+        allow_variable_horizon=True,
     )
 
     env = env_objs[0]
