@@ -878,6 +878,9 @@ class Render:
         self.button2 = None
         self.clicked_button = None
 
+        # 是否需要继续运行
+        self.keep_play = None
+
         self._init_plot()
         log('Render 初始化完成')
 
@@ -1008,6 +1011,7 @@ class Render:
         self.button3 = QtWidgets.QPushButton("KEEP_RUN")
         self.button1.clicked.connect(lambda: self.button_clicked(0))
         self.button2.clicked.connect(lambda: self.button_clicked(1))
+        self.button3.clicked.connect(lambda: (setattr(self, 'keep_play', True), print('keep_play set to True')))
 
         # 创建按钮布局
         button_layout = QtWidgets.QHBoxLayout()
@@ -1049,6 +1053,24 @@ class Render:
             self.app.quit()
             self.app = None
         log('渲染资源已清理')
+
+    # def wait_keep_play(self, wait_time=5):
+    #     self._wait_counter = 0
+    #     self._max_wait = wait_time
+    #     self._check_keep_play_timer = QtCore.QTimer()
+    #     self._check_keep_play_timer.timeout.connect(self._check_keep_play_status)
+    #     self._check_keep_play_timer.start(1000)  # 每秒检查一次
+
+    # def _check_keep_play_status(self):
+    #     print(f'wait_keep_play: {self._wait_counter}')
+    #     self._wait_counter += 1
+
+    #     if self.keep_play is not None:
+    #         self._check_keep_play_timer.stop()
+
+    #     if self._wait_counter >= self._max_wait:
+    #         print("Timeout: keep_play still None")
+    #         self._check_keep_play_timer.stop()
 
     def handle_data(self, data):
         """处理输入数据"""

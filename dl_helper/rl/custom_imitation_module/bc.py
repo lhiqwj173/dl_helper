@@ -1,5 +1,6 @@
 import dataclasses
 import itertools
+import pickle
 from typing import (
     Any,
     Callable,
@@ -56,7 +57,7 @@ class BCWithLRScheduler(BC):
         lr_scheduler_cls: Optional[Type[lr_scheduler._LRScheduler]] = None,     # 新增：调度器类
         lr_scheduler_kwargs: Optional[Mapping[str, Any]] = None,                # 新增：调度器参数
         lr_scheduler_step_frequency: str = 'batch',                             # 新增参数：学习率调度器更新频率
-        average: str = 'macro',                                                 # 新增参数：多分类指标的平均方式
+        average: str = 'weighted',                                              # 新增参数：多分类指标的平均方式
     ):
         """初始化 BCWithLRScheduler。
 
@@ -143,6 +144,33 @@ class BCWithLRScheduler(BC):
             
         return pred_acts
 
+    def __compute_metrics(self, pred_np, true_np):
+        """计算性能指标：accuracy, precision, recall, f1_score
+        """
+        # 计算准确率
+        accuracy = accuracy_score(true_np, pred_np)
+        
+        # 根据是否为多分类问题选择适当的参数
+        if self.n_classes > 2:
+            # 多分类情况下使用average参数
+            precision = precision_score(true_np, pred_np, average=self.average, zero_division=0)
+            recall = recall_score(true_np, pred_np, average=self.average, zero_division=0)
+            f1 = f1_score(true_np, pred_np, average=self.average, zero_division=0)
+        else:
+            # 二分类情况下，不使用average参数
+            precision = precision_score(true_np, pred_np, zero_division=0)
+            recall = recall_score(true_np, pred_np, zero_division=0)
+            f1 = f1_score(true_np, pred_np, zero_division=0)
+
+        metrics = {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1
+        }
+
+        return metrics
+
     def _compute_metrics(self, policy, obs_tensor, acts):
         """计算性能指标：accuracy, precision, recall, f1_score
         
@@ -170,27 +198,7 @@ class BCWithLRScheduler(BC):
             pred_np = pred_acts.cpu().numpy()
             true_np = acts.cpu().numpy()
             
-            # 计算准确率
-            accuracy = accuracy_score(true_np, pred_np)
-            
-            # 根据是否为多分类问题选择适当的参数
-            if self.n_classes > 2:
-                # 多分类情况下使用average参数
-                precision = precision_score(true_np, pred_np, average=self.average, zero_division=0)
-                recall = recall_score(true_np, pred_np, average=self.average, zero_division=0)
-                f1 = f1_score(true_np, pred_np, average=self.average, zero_division=0)
-            else:
-                # 二分类情况下，不使用average参数
-                precision = precision_score(true_np, pred_np, zero_division=0)
-                recall = recall_score(true_np, pred_np, zero_division=0)
-                f1 = f1_score(true_np, pred_np, zero_division=0)
-            
-            metrics = {
-                'accuracy': accuracy,
-                'precision': precision,
-                'recall': recall,
-                'f1': f1
-            }
+            metrics = self.__compute_metrics(pred_np, true_np)
         
         # 恢复策略为训练模式
         policy.set_training_mode(True)
@@ -234,12 +242,16 @@ class BCWithLRScheduler(BC):
                 
                 # 对于离散动作空间，收集预测和真实标签用于计算指标
                 if self.is_discrete:
-                    pred_acts = self._get_predicted_actions(self.policy, obs)
+                    pred_acts = self.policy._predict(obs)
+                    # pred_acts = self._get_predicted_actions(self.policy, obs)
                     all_preds.append(pred_acts.cpu().numpy())
                     all_true.append(acts.cpu().numpy())
         
         # 恢复策略为训练模式
         self.policy.set_training_mode(True)
+
+        # FOR DEBUG
+        pickle.dump((all_preds, all_true, total_loss, num_samples), open('val_data.pkl', 'wb'))
         
         # 计算平均损失
         avg_loss = total_loss / num_samples if num_samples > 0 else float('inf')
@@ -253,26 +265,10 @@ class BCWithLRScheduler(BC):
             all_preds = np.concatenate(all_preds)
             all_true = np.concatenate(all_true)
             
-            # 计算准确率
-            accuracy = accuracy_score(all_true, all_preds)
-            
-            # 根据类别数量决定计算方式
-            if self.n_classes > 2:
-                precision = precision_score(all_true, all_preds, average=self.average, zero_division=0)
-                recall = recall_score(all_true, all_preds, average=self.average, zero_division=0)
-                f1 = f1_score(all_true, all_preds, average=self.average, zero_division=0)
-            else:
-                precision = precision_score(all_true, all_preds, zero_division=0)
-                recall = recall_score(all_true, all_preds, zero_division=0)
-                f1 = f1_score(all_true, all_preds, zero_division=0)
+            metrics = self.__compute_metrics(all_preds, all_true)
             
             # 添加到结果字典
-            result.update({
-                'accuracy': accuracy,
-                'precision': precision,
-                'recall': recall,
-                'f1': f1
-            })
+            result.update(metrics)
         
         return result
 
@@ -315,6 +311,16 @@ class BCWithLRScheduler(BC):
                 lr = self.optimizer.param_groups[0]['lr']
                 self._bc_logger._logger.record("bc/lr", lr)
                       
+            # 统计训练集上的指标
+            pred_np = np.concatenate(self.all_preds)
+            true_np = np.concatenate(self.all_true)
+            metrics = self.__compute_metrics(pred_np, true_np)
+            for metric_name, value in metrics.items():
+                self._bc_logger._logger.record(f"bc/{metric_name}", value)
+
+            # 记录训练集损失
+            self._bc_logger._logger.record("bc/train_loss", self.all_loss / (pred_np.shape[0]))
+
             # 在每个epoch结束时在验证集上验证
             if validate_each_epoch and self._val_data_loader is not None:
                 val_metrics = self.validate()
@@ -358,14 +364,6 @@ class BCWithLRScheduler(BC):
                 lr = self.optimizer.param_groups[0]['lr']
                 self._bc_logger._logger.record("bc/lr", lr)
 
-                # 记录性能指标 accuracy, precision, recall, f1_score
-                if self.is_discrete:
-                    batch_metrics = self._compute_metrics(self.policy, 
-                                                        last_obs_tensor, 
-                                                        last_acts)
-                    for metric_name, value in batch_metrics.items():
-                        self._bc_logger._logger.record(f"bc/{metric_name}", value)
-
                 rollout_stats = compute_rollout_stats(self.policy, self.rng)
                 self._bc_logger.log_batch(
                     batch_num, minibatch_size, num_samples_so_far, training_metrics, rollout_stats
@@ -375,8 +373,9 @@ class BCWithLRScheduler(BC):
                 on_batch_end()
 
         self.optimizer.zero_grad()
-        last_obs_tensor = None
-        last_acts = None
+        self.all_preds = []
+        self.all_true = []
+        self.all_loss = 0.0
         
         for (batch_num, minibatch_size, num_samples_so_far), batch in batches_with_stats:
             # 确保策略处于训练模式
@@ -389,12 +388,18 @@ class BCWithLRScheduler(BC):
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
             training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
 
+            # 获取模型预测
+            self.policy.set_training_mode(False)
+            with th.no_grad():
+                pred_acts = self.policy._predict(obs_tensor)
+            self.policy.set_training_mode(True)
             # 保存当前批次数据，用于计算指标
-            last_obs_tensor = obs_tensor
-            last_acts = acts
+            self.all_preds.append(pred_acts.cpu().numpy())
+            self.all_true.append(acts.cpu().numpy())
 
             loss = training_metrics.loss * minibatch_size / self.batch_size
             loss.backward()
+            self.all_loss += (training_metrics.loss * minibatch_size).item()
 
             batch_num = batch_num * self.minibatch_size // self.batch_size
             if num_samples_so_far % self.batch_size == 0:

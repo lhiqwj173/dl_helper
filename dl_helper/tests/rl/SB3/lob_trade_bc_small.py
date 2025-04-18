@@ -56,7 +56,7 @@ run_type = 'train'
 # run_type = 'test'
 # run_type = 'test_transitions'
 _train_timesteps_list = [5e4, 1e6, 2.3e6]
-_train_timesteps = _train_timesteps_list[2]
+_train_timesteps = _train_timesteps_list[1]
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -561,7 +561,7 @@ else:
     
     # 测试
     rounds = 5
-    rounds = 1
+    # rounds = 1
     for i in range(rounds):
         log('reset')
         seed = random.randint(0, 1000000)

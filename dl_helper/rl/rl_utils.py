@@ -309,10 +309,10 @@ def plot_bc_train_progress(train_folder, df_progress=None, train_file='', title=
         axs[plot_idx].grid(True)
         plot_idx += 1
     
-    # 图 2: bc/loss 和 bc/val_loss
+    # 图 2: bc/train_loss 和 bc/val_loss
     ax_loss = axs[plot_idx]
-    if 'bc/loss' in df.columns:
-        ax_loss.plot(df['bc/loss'], label=f'Training Loss ({df.iloc[-1]["bc/loss"]:.2e})', alpha=0.3, color='blue')
+    if 'bc/train_loss' in df.columns:
+        ax_loss.plot(df['bc/train_loss'], label=f'Training Loss ({df.iloc[-1]["bc/train_loss"]:.2e})', alpha=0.3, color='blue')
     if has_val_loss:
         ax_loss.plot(df['bc/val_loss'], label=f'Validation Loss ({df.iloc[-1]["bc/val_loss"]:.2e})', alpha=1.0, color='blue', linewidth=2)
     ax_loss.set_title('Training and Validation Loss')
