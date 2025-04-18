@@ -113,7 +113,7 @@ class BCWithLRScheduler(BC):
         if demonstrations_val is not None:
             self._val_data_loader = th.utils.data.DataLoader(
                 demonstrations_val,
-                batch_size=batch_size,
+                batch_size=1024,# 验证集batch_size，加快验证速度
                 shuffle=False,
             )
 

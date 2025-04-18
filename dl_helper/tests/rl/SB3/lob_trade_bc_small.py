@@ -55,7 +55,7 @@ model_type = 'CnnPolicy'
 run_type = 'train'
 # run_type = 'test'
 # run_type = 'test_transitions'
-_train_timesteps_list = [5e4, 1e6, 2.3e6]
+_train_timesteps_list = [5e5, 1e6, 2.3e6]
 _train_timesteps = _train_timesteps_list[1]
 
 if len(sys.argv) > 1:
