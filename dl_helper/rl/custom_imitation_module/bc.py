@@ -111,11 +111,33 @@ class BCWithLRScheduler(BC):
         # 新增：初始化验证集数据加载器
         self._val_data_loader = None
         if demonstrations_val is not None:
-            self._val_data_loader = th.utils.data.DataLoader(
-                demonstrations_val,
-                batch_size=1024,# 验证集batch_size，加快验证速度
-                shuffle=False,
-            )
+            self._make_val_data_loader(demonstrations_val)
+
+    def _make_val_data_loader(self, demonstrations: algo_base.AnyTransitions) -> None:
+        if self._val_data_loader is not None:
+            # 清理已有的数据加载器
+            del self._val_data_loader
+            self._val_data_loader = None
+
+        self._val_data_loader = th.utils.data.DataLoader(
+            demonstrations,
+            batch_size=1024,# 验证集batch_size，加快验证速度
+            shuffle=False,
+        )
+
+    def set_demonstrations_val(self, demonstrations: algo_base.AnyTransitions) -> None:
+        self._make_val_data_loader(demonstrations)
+
+    def set_demonstrations(self, demonstrations: algo_base.AnyTransitions) -> None:
+        if self._demo_data_loader is not None:
+            # 清理已有的数据加载器
+            del self._demo_data_loader
+            self._demo_data_loader = None
+
+        self._demo_data_loader = algo_base.make_data_loader(
+            demonstrations,
+            self.minibatch_size,
+        )
 
     def _get_predicted_actions(self, policy, obs_tensor):
         """获取模型预测的动作
