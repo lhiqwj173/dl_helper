@@ -48,7 +48,7 @@ def balance_rollout(r):
 
     # 合并所有的索引
     wait_concat_list = [i for i in [pos_sell_indices, pos_buy_indices, blank_buy_indices, blank_sell_indices] if len(i)]
-    all_indices = np.concat(wait_concat_list) if wait_concat_list else np.array([], dtype=int)
+    all_indices = np.concatenate(wait_concat_list) if wait_concat_list else np.array([], dtype=int)
     all_indices = np.sort(all_indices)
     # print(f'取用索引: {all_indices}')
 
