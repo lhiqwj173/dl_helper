@@ -364,7 +364,7 @@ if run_type != 'test':
 
     for i in range(1000):
         train_timesteps = 5e5 if run_type=='train' else 4800 if run_type=='find_lr' else 500
-        train_timesteps = 5e5
+        train_timesteps = 1e6
 
         while len(f) < train_timesteps:
             # 生成专家数据
