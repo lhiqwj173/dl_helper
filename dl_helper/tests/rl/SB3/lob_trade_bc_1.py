@@ -43,7 +43,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
-from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter, combing_trajectories
+from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter, combing_trajectories, load_trajectories
 
 model_type = 'CnnPolicy'
 # 'train' or 'test' or 'find_lr' or 'test_model' or 'test_transitions
@@ -391,13 +391,7 @@ if run_type != 'test':
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data'
-    transitions_list = []
-    for file in os.listdir(data_folder):
-        log(f'读取训练数据: {file}')
-        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
-        transitions_list.append(_transitions)
-    # 合并
-    transitions = combing_trajectories(transitions_list)
+    transitions = load_trajectories(data_folder)
 
     # 生成验证数据
     t = time.time()

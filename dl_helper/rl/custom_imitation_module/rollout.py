@@ -1,3 +1,5 @@
+import os
+import pickle
 from typing import (
     Any,
     Callable,
@@ -16,6 +18,9 @@ from imitation.data import types
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 
 from py_ext.wechat import wx
+
+KEYS = ["obs", "next_obs", "acts", "dones", "infos"]
+
 
 def balance_rollout(r):
 
@@ -97,8 +102,7 @@ class rollouts_filter:
     def __init__(self) -> None:
         # mypy struggles without Any annotation here.
         # The necessary constraints are enforced above.
-        keys = ["obs", "next_obs", "acts", "dones", "infos"]
-        self.parts: Mapping[str, List[Any]] = {key: [] for key in keys}
+        self.parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
         self._length = 0
 
     def add_rollouts(self, trajectories: Iterable[types.Trajectory]):
@@ -167,8 +171,7 @@ def combing_trajectories(trajectories: Iterable[types.Transitions]):
     """
     合并 trajectories 中的数据
     """
-    keys = ["obs", "next_obs", "acts", "dones", "infos"]
-    parts: Mapping[str, List[Any]] = {key: [] for key in keys}
+    parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
 
     for traj in trajectories:
         parts["obs"].append(traj.obs)
@@ -179,3 +182,55 @@ def combing_trajectories(trajectories: Iterable[types.Transitions]):
 
     return flatten_trajectories(parts)
 
+
+def load_trajectories(data_folder: str):
+    """
+    提前创建内存加载 trajectories
+    """
+    # 读取每个数据的大小
+    shape_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
+    type_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
+    for file in os.listdir(data_folder):
+        if not file.endswith('.pkl'):
+            continue
+        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
+        for key in KEYS:
+            _data = getattr(_transitions, key)
+            if shape_dict[key] is None:
+                shape_dict[key] = list(_data.shape)
+                type_dict[key] = _data.dtype
+            else:
+                # 累加 cols
+                shape_dict[key][0] += _data.shape[0]
+
+        del _transitions
+
+    # 创建数据
+    all_data_dict = {}
+    for key in KEYS:
+        all_data_dict[key] = np.zeros(shape_dict[key], dtype=type_dict[key])
+
+    # 拷贝数据
+    start_dict = {key: 0 for key in KEYS}
+    for file in os.listdir(data_folder):
+        if not file.endswith('.pkl'):
+            continue
+        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
+        for key in KEYS:
+            _data = getattr(_transitions, key)
+            end = start_dict[key] + _data.shape[0]
+            all_data_dict[key][start_dict[key]:end] = _data
+            start_dict[key] = end
+
+        del _transitions
+
+    # 创建 Transitions
+    transitions = types.Transitions(**all_data_dict)
+
+    return transitions
+
+
+if __name__ == '__main__':
+    folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+
+    trajectories = load_trajectories(folder)
