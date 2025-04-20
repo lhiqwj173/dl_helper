@@ -393,6 +393,7 @@ if run_type != 'test':
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data'
     transitions_list = []
     for file in os.listdir(data_folder):
+        log(f'读取训练数据: {file}')
         _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
         transitions_list.append(_transitions)
     # 合并
