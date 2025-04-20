@@ -50,5 +50,11 @@ ACTION_BUY, ACTION_SELL = range(2)
 # 动作结果
 RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD = range(3)
 
+# 本地训练数据文件夹
+TRAIN_DATA_LOCAL_FOLDER_NAME = 'RL_10level_20250404'
+
 # 本地 win 数据文件夹
-LOCAL_DATA_FOLDER = r'D:\L2_DATA_T0_ETF\train_data\RAW\RL_10level_20250404'
+LOCAL_DATA_FOLDER = rf'D:\L2_DATA_T0_ETF\train_data\RAW\{TRAIN_DATA_LOCAL_FOLDER_NAME}'
+
+# kaggle 数据文件夹 r'/kaggle/input'
+KAGGLE_DATA_FOLDER = rf"/kaggle/input/{TRAIN_DATA_LOCAL_FOLDER_NAME.replace('_', '-').lower()}"

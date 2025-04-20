@@ -43,7 +43,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
-from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter
+from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter, combing_trajectories
 
 model_type = 'CnnPolicy'
 # 'train' or 'test' or 'find_lr' or 'test_model' or 'test_transitions
@@ -343,8 +343,8 @@ if run_type != 'test':
             train_folder_manager.load_checkpoint(model.policy)
 
     vec_env = env
-    # 每组数据训练 3 个epoch
-    total_epochs = 3 if run_type!='test_model' else 10000000000000000
+    total_epochs = 40 if run_type!='test_model' else 10000000000000000
+    checkpoint_interval = 1 if run_type!='test_model' else 500
     batch_size = 32
     max_lr = 0.022# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
@@ -362,131 +362,135 @@ if run_type != 'test':
 
     f = rollouts_filter()
 
-    for i in range(1000):
-        train_timesteps = 5e5 if run_type=='train' else 4800 if run_type=='find_lr' else 500
-        train_timesteps = 5e5
+    train_timesteps = 5e5 if run_type=='train' else 4800 if run_type=='find_lr' else 500
 
-        while len(f) < train_timesteps:
-            # 生成专家数据
-            rng = np.random.default_rng()
-            t = time.time()
-            memory_usage = psutil.virtual_memory()
-            # 训练数据
-            rollouts = rollout.rollout(
-                expert,
-                vec_env,
-                # rollout.make_sample_until(min_timesteps=50000),
-                # rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
-                rollout.make_sample_until(min_timesteps=train_timesteps),
-                rng=rng,
-            )
-            f.add_rollouts(rollouts)
-            transitions = f.flatten_trajectories()
-            # send_wx(f'transitions: {len(transitions)}')
-            pickle.dump(transitions, open('transitions.pkl', 'wb'))
+    memory_usage = psutil.virtual_memory()
 
-        sys.exit()
+    # 生成训练数据用
+    # while len(f) < train_timesteps:
+    #     # 生成专家数据
+    #     rng = np.random.default_rng()
+    #     
+    #     
+    #     # 训练数据
+    #     rollouts = rollout.rollout(
+    #         expert,
+    #         vec_env,
+    #         # rollout.make_sample_until(min_timesteps=50000),
+    #         # rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
+    #         rollout.make_sample_until(min_timesteps=train_timesteps),
+    #         rng=rng,
+    #     )
+    #     f.add_rollouts(rollouts)
+    #     transitions = f.flatten_trajectories()
+    #     # send_wx(f'transitions: {len(transitions)}')
+    #     pickle.dump(transitions, open('transitions.pkl', 'wb'))
+    # sys.exit()
 
-        # 验证数据
-        for env in env_objs:
-            env.val()
-        rollouts_val = rollout.rollout(
-            expert,
-            vec_env,
-            rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
-            rng=rng,
+    # 遍历读取训练数据 /kaggle/input/lob-bc-train-data-filted
+    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/'
+    transitions_list = []
+    for file in os.listdir(data_folder):
+        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
+        transitions_list.append(_transitions)
+    # 合并
+    transitions = combing_trajectories(transitions_list)
+
+    # 生成验证数据
+    t = time.time()
+    rng = np.random.default_rng()
+    for env in env_objs:
+        env.val()
+    rollouts_val = rollout.rollout(
+        expert,
+        vec_env,
+        rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
+        rng=rng,
+    )
+    transitions_val = rollout.flatten_trajectories(rollouts_val)
+    memory_usage2 = psutil.virtual_memory()
+    msg = ''
+    cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
+    log(cost_msg)
+    msg += cost_msg + '\n'
+    mem_pct_msg = f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
+    log(mem_pct_msg)
+    msg += mem_pct_msg + '\n'
+    mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
+    log(mem_expert_msg)
+    msg += mem_expert_msg + '\n'
+
+    # 检查 transitions 样本均衡度
+    label_balance = f'训练样本均衡度: {cal_action_balance(transitions)}'
+    log(label_balance)
+    msg += label_balance + '\n'
+    label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
+    log(label_balance)
+    msg += label_balance + '\n'
+    send_wx(msg)
+    # sys.exit()
+
+    # 添加数据到 bc_trainer
+    bc_trainer.set_demonstrations(transitions)
+    bc_trainer.set_demonstrations_val(transitions_val)
+
+    env = env_objs[0]
+    for i in range(total_epochs // checkpoint_interval):
+        _t = time.time()
+        bc_trainer.policy.train()
+        bc_trainer.train(
+            n_epochs=checkpoint_interval,
+            log_interval = 1 if run_type=='find_lr' else 500,
         )
-        transitions_val = rollout.flatten_trajectories(rollouts_val)
-        memory_usage2 = psutil.virtual_memory()
-        msg = ''
-        cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
-        log(cost_msg)
-        msg += cost_msg + '\n'
-        mem_pct_msg = f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
-        log(mem_pct_msg)
-        msg += mem_pct_msg + '\n'
-        mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
-        log(mem_expert_msg)
-        msg += mem_expert_msg + '\n'
+        log(f'训练耗时: {time.time() - _t:.2f} 秒')
 
-        # 检查 transitions 样本均衡度
-        label_balance = f'训练样本均衡度: {cal_action_balance(transitions)}'
-        log(label_balance)
-        msg += label_balance + '\n'
-        label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
-        log(label_balance)
-        msg += label_balance + '\n'
-        send_wx(msg)
-        # sys.exit()
+        # 检查梯度
+        check_gradients(bc_trainer)
 
-        # 添加数据到 bc_trainer
-        bc_trainer.set_demonstrations(transitions)
-        bc_trainer.set_demonstrations_val(transitions_val)
+        # 验证模型
+        _t = time.time()
+        env.val()
+        val_reward, _ = evaluate_policy(bc_trainer.policy, env)
+        env.train()
+        train_reward, _ = evaluate_policy(bc_trainer.policy, env)
+        log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
-        env = env_objs[0]
-        checkpoint_interval = 1 if run_type!='test_model' else 500
-        for i in range(total_epochs // checkpoint_interval):
-            _t = time.time()
-            bc_trainer.policy.train()
-            bc_trainer.train(
-                n_epochs=checkpoint_interval,
-                log_interval = 1 if run_type=='find_lr' else 500,
-            )
-            log(f'训练耗时: {time.time() - _t:.2f} 秒')
+        # 合并到 progress_all.csv
+        progress_file = os.path.join(train_folder, f"progress.csv")
+        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+        if os.path.exists(progress_file_all):
+            df_progress = pd.read_csv(progress_file_all)
+        else:
+            df_progress = pd.DataFrame()
+        df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
+        df_new['bc/epoch'] += i * checkpoint_interval
+        df_new['bc/mean_reward'] = np.nan
+        df_new['bc/val_mean_reward'] = np.nan
+        df_new['bc/mean_reward'].iloc[-1] = train_reward
+        df_new['bc/val_mean_reward'].iloc[-1] = val_reward
+        df_progress = pd.concat([df_progress, df_new])
+        df_progress.ffill(inplace=True)
+        df_progress.to_csv(progress_file_all, index=False)
 
-            # 检查梯度
-            check_gradients(bc_trainer)
-
-            # 验证模型
-            _t = time.time()
-            env.val()
-            val_reward, _ = evaluate_policy(bc_trainer.policy, env)
-            env.train()
-            train_reward, _ = evaluate_policy(bc_trainer.policy, env)
-            log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
-
-            # 合并到 progress_all.csv
-            progress_file = os.path.join(train_folder, f"progress.csv")
-            progress_file_all = os.path.join(train_folder, f"progress_all.csv")
-            if os.path.exists(progress_file_all):
-                df_progress = pd.read_csv(progress_file_all)
-            else:
-                df_progress = pd.DataFrame()
-            df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
-            df_new['bc/epoch'] += i * checkpoint_interval
-            df_new['bc/mean_reward'] = np.nan
-            df_new['bc/val_mean_reward'] = np.nan
-            df_new['bc/mean_reward'].iloc[-1] = train_reward
-            df_new['bc/val_mean_reward'].iloc[-1] = val_reward
-            df_progress = pd.concat([df_progress, df_new])
-            df_progress.ffill(inplace=True)
-            df_progress.to_csv(progress_file_all, index=False)
-
-            # 训练进度可视化
-            try:
-                plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
-            except Exception as e:
-                pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
-                log(f"训练进度可视化失败")
-                raise e
-            
-            # 保存模型
-            bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', train_folder))
-
-            # 上传
-            if not in_windows():
-                train_folder_manager.push()
-
-            if run_type == 'find_lr':
-                # 限制在 150 条 
-                # 4800 / 32 = 150
-                break
+        # 训练进度可视化
+        try:
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+        except Exception as e:
+            pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
+            log(f"训练进度可视化失败")
+            raise e
         
-        # 清理训练数据
-        del transitions
-        del transitions_val
-        del rollouts
-        del rollouts_val
+        # 保存模型
+        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', train_folder))
+
+        # 上传
+        if not in_windows():
+            train_folder_manager.push()
+
+        if run_type == 'find_lr':
+            # 限制在 150 条 
+            # 4800 / 32 = 150
+            break
 
 else:
     # test

@@ -67,6 +67,28 @@ def balance_rollout(r):
 
     return _obs, _next_obs, _acts, _infos, _rews
 
+def flatten_trajectories(
+    cat_parts,
+) -> types.Transitions:
+    """
+    合并 cat_parts 中的数据
+    cat_parts
+        {
+            "obs": [[obs1, obs2, ...], [obs1, obs2, ...], ...],
+            "next_obs": [[next_obs1, next_obs2, ...], [next_obs1, next_obs2, ...], ...],
+            "acts": [[act1, act2, ...], [act1, act2, ...], ...],
+            "dones": [[done1, done2, ...], [done1, done2, ...], ...],
+            "infos": [[info1, info2, ...], [info1, info2, ...], ...],
+        }
+    """
+    cat_parts = {
+        key: types.concatenate_maybe_dictobs(part_list)
+        for key, part_list in cat_parts.items()
+    }
+
+    lengths = set(map(len, cat_parts.values()))
+    assert len(lengths) == 1, f"expected one length, got {lengths}"
+    return types.Transitions(**cat_parts)
 
 class rollouts_filter:
 
@@ -110,23 +132,41 @@ class rollouts_filter:
 
     def __len__(self):
         return self._length
-
+    
     def flatten_trajectories(
         self,
+        cat_parts=None,
     ) -> types.Transitions:
-        """Flatten a series of trajectory dictionaries into arrays.
-
-        Args:
-            trajectories: list of trajectories.
-
-        Returns:
-            The trajectories flattened into a single batch of Transitions.
         """
+        合并 cat_parts 中的数据
+        cat_parts
+            {
+                "obs": [[obs1, obs2, ...], [obs1, obs2, ...], ...],
+                "next_obs": [[next_obs1, next_obs2, ...], [next_obs1, next_obs2, ...], ...],
+                "acts": [[act1, act2, ...], [act1, act2, ...], ...],
+                "dones": [[done1, done2, ...], [done1, done2, ...], ...],
+                "infos": [[info1, info2, ...], [info1, info2, ...], ...],
+            }
+        """
+        if cat_parts is None:
+            cat_parts = self.parts
 
-        cat_parts = {
-            key: types.concatenate_maybe_dictobs(part_list)
-            for key, part_list in self.parts.items()
-        }
-        lengths = set(map(len, cat_parts.values()))
-        assert len(lengths) == 1, f"expected one length, got {lengths}"
-        return types.Transitions(**cat_parts)
+        return flatten_trajectories(cat_parts)
+
+
+def combing_trajectories(trajectories: Iterable[types.Transitions]):
+    """
+    合并 trajectories 中的数据
+    """
+    keys = ["obs", "next_obs", "acts", "dones", "infos"]
+    parts: Mapping[str, List[Any]] = {key: [] for key in keys}
+
+    for traj in trajectories:
+        parts["obs"].append(traj.obs)
+        parts["next_obs"].append(traj.next_obs)
+        parts["acts"].append(traj.acts)
+        parts["dones"].append(traj.dones)
+        parts["infos"].append(traj.infos)
+
+    return flatten_trajectories(parts)
+
