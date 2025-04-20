@@ -389,8 +389,8 @@ if run_type != 'test':
             log(f"restore from {train_folder_manager.checkpoint_folder}")
             train_folder_manager.load_checkpoint(bc_trainer.policy)
 
-    # 遍历读取训练数据 /kaggle/input/lob-bc-train-data-filted
-    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/'
+    # 遍历读取训练数据
+    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data'
     transitions_list = []
     for file in os.listdir(data_folder):
         _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))

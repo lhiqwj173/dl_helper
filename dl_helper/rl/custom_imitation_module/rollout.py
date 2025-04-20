@@ -15,6 +15,8 @@ import numpy as np
 from imitation.data import types
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 
+from py_ext.wechat import wx
+
 def balance_rollout(r):
 
     obs = r.obs
@@ -110,7 +112,14 @@ class rollouts_filter:
 
         for i, traj in enumerate(trajectories):
             # print(i)
-            _obs, _next_obs, _acts, _infos, _rews = balance_rollout(traj)
+            try:
+                _obs, _next_obs, _acts, _infos, _rews = balance_rollout(traj)
+            except Exception as e:
+                import pickle
+                pickle.dump(traj, open(f'balance_rollout_error.pkl', 'wb'))
+                wx.send_file(f'balance_rollout_error.pkl')
+                continue
+
             if len(_obs) == 0:
                 continue
             else:
