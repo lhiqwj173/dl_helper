@@ -56,6 +56,7 @@ model_type = 'CnnPolicy'
 run_type = 'train'
 # run_type = 'test'
 # run_type = 'test_transitions'
+# run_type = 'bc_data'
 
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -67,6 +68,8 @@ if len(sys.argv) > 1:
             run_type = 'test'
         elif arg == 'test_model':
             run_type = 'test_model'
+        elif arg == 'bc_data':
+            run_type = 'bc_data'
 
 train_folder = train_title = f'20250419_lob_trade_bc_1'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
@@ -335,13 +338,6 @@ if run_type != 'test':
     # log(out.shape)
     # sys.exit()
 
-    # 训练文件夹管理
-    if not in_windows():
-        train_folder_manager = TrainFolderManagerBC(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(model.policy)
-
     vec_env = env
     total_epochs = 40 if run_type!='test_model' else 10000000000000000
     checkpoint_interval = 1 if run_type!='test_model' else 500
@@ -366,26 +362,32 @@ if run_type != 'test':
 
     memory_usage = psutil.virtual_memory()
 
-    # 生成训练数据用
-    # while len(f) < train_timesteps:
-    #     # 生成专家数据
-    #     rng = np.random.default_rng()
-    #     
-    #     
-    #     # 训练数据
-    #     rollouts = rollout.rollout(
-    #         expert,
-    #         vec_env,
-    #         # rollout.make_sample_until(min_timesteps=50000),
-    #         # rollout.make_sample_until(min_timesteps=2e6 if run_type=='train' else 4800 if run_type=='find_lr' else 500),
-    #         rollout.make_sample_until(min_timesteps=train_timesteps),
-    #         rng=rng,
-    #     )
-    #     f.add_rollouts(rollouts)
-    #     transitions = f.flatten_trajectories()
-    #     # send_wx(f'transitions: {len(transitions)}')
-    #     pickle.dump(transitions, open('transitions.pkl', 'wb'))
-    # sys.exit()
+    if run_type == 'bc_data':
+        # 生成训练数据用
+        # while len(f) < train_timesteps:
+        while True:
+            # 生成专家数据
+            rng = np.random.default_rng()
+            
+            # 训练数据
+            rollouts = rollout.rollout(
+                expert,
+                vec_env,
+                rollout.make_sample_until(min_timesteps=5e5),
+                rng=rng,
+            )
+            f.add_rollouts(rollouts)
+            transitions = f.flatten_trajectories()
+            # send_wx(f'transitions: {len(transitions)}')
+            pickle.dump(transitions, open('transitions.pkl', 'wb'))
+        sys.exit()
+
+    # 训练文件夹管理
+    if not in_windows():
+        train_folder_manager = TrainFolderManagerBC(train_folder)
+        if train_folder_manager.exists():
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            train_folder_manager.load_checkpoint(bc_trainer.policy)
 
     # 遍历读取训练数据 /kaggle/input/lob-bc-train-data-filted
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/'
@@ -481,7 +483,7 @@ if run_type != 'test':
             raise e
         
         # 保存模型
-        bc_trainer.policy.save(os.path.join(train_folder, 'checkpoint', train_folder))
+        bc_trainer.policy.save(train_folder_manager.check_point_file())
 
         # 上传
         if not in_windows():

@@ -32,6 +32,10 @@ class TrainFolderManager:
         if not self.exists():
             self.pull()
 
+    def check_point_file(self):
+        """ 检查点文件 """
+        self.checkpoint_folder
+
     def exists(self):
         """
         检查是否存在训练记录
@@ -123,49 +127,59 @@ class TrainFolderManager:
 
 class TrainFolderManagerBC(TrainFolderManager):
 
+    def check_point_file(self):
+        """ 检查点文件 """
+        return os.path.join(self.checkpoint_folder, f"{self.train_folder}")
+
     def exists(self):
         """
         检查是否存在训练记录
         """
-        return os.path.exists(os.path.join(self.checkpoint_folder, f"{self.train_folder}"))
+        return os.path.exists(self.check_point_file())
 
     def load_checkpoint(self, policy):
         """
         加载检查点
         """
-        policy.load(os.path.join(self.checkpoint_folder, f"{self.train_folder}"))
+        policy.load(self.check_point_file())
 
 class TrainFolderManagerSB3(TrainFolderManager):
+
+    def check_point_file(self):
+        """ 检查点文件 """
+        return os.path.join(self.checkpoint_folder, f"{self.train_folder}.zip")
 
     def exists(self):
         """
         检查是否存在训练记录
         """
-        return os.path.exists(os.path.join(self.checkpoint_folder, f"{self.train_folder}.zip"))
+        return os.path.exists(self.check_point_file())
 
     def load_checkpoint(self, model, custom_objects=None):
         """
         加载检查点
         """
-        _model = model.load(os.path.join(self.checkpoint_folder, f"{self.train_folder}.zip"), custom_objects= custom_objects)
+        _model = model.load(self.check_point_file(), custom_objects= custom_objects)
         policy_state_dict = _model.policy.state_dict()  
         model.policy.load_state_dict(policy_state_dict)  
 
 
 class TrainFolderManagerOptuna(TrainFolderManager):
-    checkpoint_name = 'optuna_study.pkl'
+    def check_point_file(self):
+        """ 检查点文件 """
+        return os.path.join(self.checkpoint_folder, 'optuna_study.pkl')
 
     def exists(self):
         """
         检查是否存在训练记录
         """
-        return os.path.exists(os.path.join(self.checkpoint_folder, f"{self.checkpoint_name}"))
+        return os.path.exists(self.check_point_file())
 
     def load_checkpoint(self):
         """
         加载检查点
         """
         # 加载现有的 study
-        with open(os.path.join(self.checkpoint_folder, f"{self.checkpoint_name}"), 'rb') as f:
+        with open(self.check_point_file(), 'rb') as f:
             study = pickle.load(f)
         return study
