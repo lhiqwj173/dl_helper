@@ -183,16 +183,19 @@ def combing_trajectories(trajectories: Iterable[types.Transitions]):
     return flatten_trajectories(parts)
 
 
-def load_trajectories(data_folder: str):
+def load_trajectories(data_folder: str, load_file_num=None):
     """
     提前创建内存加载 trajectories
     """
+    files = [i for i in sorted(os.listdir(data_folder)) if i.endswith('.pkl')]
+    if load_file_num is None:
+        load_file_num = len(files)
+    files = files[:load_file_num]
+
     # 读取每个数据的大小
     shape_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
     type_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
-    for file in os.listdir(data_folder):
-        if not file.endswith('.pkl'):
-            continue
+    for file in files:
         _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
         for key in KEYS:
             _data = getattr(_transitions, key)
@@ -212,9 +215,7 @@ def load_trajectories(data_folder: str):
 
     # 拷贝数据
     start_dict = {key: 0 for key in KEYS}
-    for file in os.listdir(data_folder):
-        if not file.endswith('.pkl'):
-            continue
+    for file in files:
         _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
         for key in KEYS:
             _data = getattr(_transitions, key)

@@ -51,14 +51,17 @@ model_type = 'CnnPolicy'
 # test_model: 使用相同的batch数据，测试模型拟合是否正常
 # test_transitions: 测试可视化transitions
 # 查找最大学习率
-# df_progress = pd.read_csv('progress_all.csv')
-# find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
+"""
+from dl_helper.rl.rl_utils import find_best_lr
+df_progress = pd.read_csv('progress_all.csv')
+find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
+"""
 run_type = 'train'
+run_type = 'find_lr'
 # run_type = 'test'
 # run_type = 'test_transitions'
 # run_type = 'bc_data'
 
-lr = None
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == 'train':
@@ -71,10 +74,8 @@ if len(sys.argv) > 1:
             run_type = 'test_model'
         elif arg == 'bc_data':
             run_type = 'bc_data'
-        elif arg.startswith('lr='):
-            lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_1' + '' if lr is None else f'_lr{lr:2e}'
+train_folder = train_title = f'20250419_lob_trade_bc_2'
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -342,26 +343,16 @@ if run_type != 'test':
     # sys.exit()
 
     vec_env = env
-    total_epochs = 40 if run_type!='test_model' else 10000000000000000
+    total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 10000000000000000
     checkpoint_interval = 1 if run_type!='test_model' else 500
     batch_size = 32
     max_lr = 0.022# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
     batch_n = 1
 
-    bc_trainer = BCWithLRScheduler(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        policy=model.policy,
-        rng=np.random.default_rng(),
-        batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else {'lr': lr} if lr else None,
-        custom_logger=custom_logger,
-    )
-
     f = rollouts_filter()
 
-    train_timesteps = 5e5 if run_type=='train' else 4800 if run_type=='find_lr' else 500
+    train_timesteps = 5e5 if run_type=='train' else 500
 
     memory_usage = psutil.virtual_memory()
 
@@ -385,16 +376,9 @@ if run_type != 'test':
             pickle.dump(transitions, open('transitions.pkl', 'wb'))
         sys.exit()
 
-    # 训练文件夹管理
-    if not in_windows():
-        train_folder_manager = TrainFolderManagerBC(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(bc_trainer.policy)
-
     # 遍历读取训练数据
-    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data'
-    transitions = load_trajectories(data_folder)
+    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+    transitions = load_trajectories(data_folder, load_file_num = 1 if run_type=='find_lr' else None)
 
     # 生成验证数据
     t = time.time()
@@ -404,7 +388,7 @@ if run_type != 'test':
     rollouts_val = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=int(train_timesteps*0.2)),
+        rollout.make_sample_until(min_timesteps=int(len(transitions)*0.2)),
         rng=rng,
     )
     transitions_val = rollout.flatten_trajectories(rollouts_val)
@@ -429,6 +413,27 @@ if run_type != 'test':
     msg += label_balance + '\n'
     send_wx(msg)
     # sys.exit()
+
+    total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
+    bc_trainer = BCWithLRScheduler(
+        observation_space=env.observation_space,
+        action_space=env.action_space,
+        policy=model.policy,
+        rng=np.random.default_rng(),
+        batch_size=batch_size * batch_n if run_type=='train' else batch_size,
+        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
+        custom_logger=custom_logger,
+        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR if run_type=='find_lr' else None,
+        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.05},
+    )
+
+    
+    # 训练文件夹管理
+    if not in_windows():
+        train_folder_manager = TrainFolderManagerBC(train_folder)
+        if train_folder_manager.exists():
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            train_folder_manager.load_checkpoint(bc_trainer.policy)
 
     # 添加数据到 bc_trainer
     bc_trainer.set_demonstrations(transitions)
@@ -488,8 +493,7 @@ if run_type != 'test':
             train_folder_manager.push()
 
         if run_type == 'find_lr':
-            # 限制在 150 条 
-            # 4800 / 32 = 150
+            # 只运行一个 epoch
             break
 
 else:
