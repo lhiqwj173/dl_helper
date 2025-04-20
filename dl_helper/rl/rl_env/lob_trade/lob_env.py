@@ -1541,6 +1541,13 @@ class LOB_trade_env(gym.Env):
 
     def update_need_upload_file(self):
         os.makedirs(os.path.join(self.save_folder, self.data_producer.data_type), exist_ok=True)
+
+        # 只保留文件夹中最近的3个文件
+        files = [f for f in os.listdir(os.path.join(self.save_folder, self.data_producer.data_type)) if f.endswith('.csv')]
+        files.sort(key=lambda x: os.path.getmtime(os.path.join(self.save_folder, self.data_producer.data_type, x)), reverse=True)
+        for f in files[3:]:
+            os.remove(os.path.join(self.save_folder, self.data_producer.data_type, f))
+
         self.need_upload_file = os.path.join(self.save_folder, self.data_producer.data_type, f'{id(self)}_{self.iteration}.csv')
         
     def _set_data_type(self, data_type):

@@ -269,6 +269,9 @@ if run_type == 'train':
         # model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
         model.save(train_folder_manager.check_point_file())
 
+        # 标记迭代完成
+        LOB_trade_env.iteration_done()
+
         # 打包文训练件夹，并上传到alist
         if not in_windows():
             train_folder_manager.push()
