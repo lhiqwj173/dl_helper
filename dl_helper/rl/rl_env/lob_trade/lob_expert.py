@@ -17,7 +17,7 @@ from dl_helper.tool import max_profit_reachable, plot_trades
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID, STD_REWARD
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
-from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER
+from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
 from dl_helper.tool import calculate_profit, calculate_sell_save
@@ -44,13 +44,14 @@ class LobExpert_file():
 
         # 数据文件夹
         if in_kaggle:
-            input_folder = r'/kaggle/input'
-            try:
-                # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-                data_folder_name = os.listdir(input_folder)[0]
-                self.data_folder = os.path.join(input_folder, data_folder_name)
-            except:
-                self.data_folder = r''
+            self.data_folder = KAGGLE_DATA_FOLDER
+            # input_folder = r'/kaggle/input'
+            # try:
+            #     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+            #     data_folder_name = os.listdir(input_folder)[0]
+            #     self.data_folder = os.path.join(input_folder, data_folder_name)
+            # except:
+            #     self.data_folder = r''
         else:
             self.data_folder = LOCAL_DATA_FOLDER
 
