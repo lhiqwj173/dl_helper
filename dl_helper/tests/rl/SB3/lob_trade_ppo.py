@@ -266,7 +266,8 @@ if run_type == 'train':
 
     for i in range(10000000000000):
         model.learn(total_timesteps=50_000, callback=[checkpoint_callback])
-        model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
+        # model.save(os.path.join(train_folder, 'checkpoint', f"{train_folder}.zip"))
+        model.save(train_folder_manager.check_point_file())
 
         # 打包文训练件夹，并上传到alist
         if not in_windows():
