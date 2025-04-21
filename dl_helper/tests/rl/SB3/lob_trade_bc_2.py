@@ -94,7 +94,7 @@ total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 1
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 1.75e-4# find_best_lr
-batch_n = 2**10 if run_type=='train' else 1
+batch_n = 2**9 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
 
