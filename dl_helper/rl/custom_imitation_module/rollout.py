@@ -280,15 +280,16 @@ def initialize_cache(input_folder: str):
 
     # 获取 input_folder 下的所有数据文件夹路径
     data_folder_list = [os.path.join(input_folder, i) for i in os.listdir(input_folder)]
-    print(f"数据文件夹数: {data_folder_list}")
     data_folder_list = [i for i in data_folder_list if os.path.isdir(i)]
-    print(f"数据文件夹数: {data_folder_list}")
+    print(f"数据文件夹: {data_folder_list}")
 
     # 收集所有文件夹中的 .pkl 文件
     files = []
     for data_folder in data_folder_list:
-        folder_files = [os.path.join(data_folder, i) for i in os.listdir(data_folder) if i.endswith('.pkl')]
-        files.extend(folder_files)
+        for root, dirs, filenames in os.walk(data_folder):
+            for fname in filenames:
+                if fname.endswith('.pkl'):
+                    files.append(os.path.join(root, fname))
     print(f"数据文件:")
     for file in files:
         print(f"    {file}")
