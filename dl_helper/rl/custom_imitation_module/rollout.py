@@ -346,7 +346,7 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
             break
         total_memory += est_memory
         selected_files.append(file)
-        print(f"加载文件: {file}, 估算内存: {total_memory / (1024**3):.2f} GB")
+        print(f"选择文件: {file}, 估算内存: {total_memory / (1024**3):.2f} GB")
 
     print(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
     # 初始化形状和类型字典
@@ -373,6 +373,7 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     # 加载并拷贝数据到大数组
     start = 0
     for file in selected_files:
+        print(f"加载文件: {file}")
         _transitions = pickle.load(open(file, 'rb'))
         end = start + file_metadata_cache[file][KEYS[0]]['shape'][0]
         for key in KEYS:
