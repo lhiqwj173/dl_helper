@@ -489,7 +489,7 @@ if run_type != 'test':
         df_new['bc/val_mean_reward'] = np.nan
         df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
         df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
-        df_progress = pd.concat([df_progress, df_new])
+        df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
 
