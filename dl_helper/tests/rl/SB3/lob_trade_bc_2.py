@@ -505,9 +505,12 @@ if run_type != 'test':
 
         # 当前点是否是最优的 checkpoint
         # 使用 recall 判断
-        bset_recall = df_progress['bc/recall'].max()
-        best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
-        is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+        if 'bc/recall' in list(df_progress):
+            bset_recall = df_progress['bc/recall'].max()
+            best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+            is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+        else:
+            is_best = False
 
         # 训练进度可视化
         try:
