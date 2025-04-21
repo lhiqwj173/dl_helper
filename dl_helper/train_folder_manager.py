@@ -178,7 +178,9 @@ class TrainFolderManagerBC(TrainFolderManager):
                 log(f"使用alist缓存文件继续训练")
 
                 # BC 需要删除 progress.csv
-                os.remove(os.path.join('/kaggle/working/alist', self.train_title, f"progress.csv"))
+                progress_file = os.path.join('/kaggle/working/alist', self.train_title, f"progress.csv") 
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
 
                 # print_directory_tree(self.train_folder, log_func=log)
                 # 覆盖到训练文件夹
