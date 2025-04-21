@@ -129,19 +129,28 @@ class TrainFolderManagerBC(TrainFolderManager):
 
     def check_point_file(self):
         """ 检查点文件 """
-        return os.path.join(self.checkpoint_folder, f"{self.train_folder}")
+        return os.path.join(self.checkpoint_folder, "policy")
 
     def exists(self):
         """
         检查是否存在训练记录
         """
         return os.path.exists(self.check_point_file())
+    
+    def checkpoint(self, bc_trainer):
+        """
+        保存检查点
+        """
+        # 保存检查点
+        bc_trainer.save(self.checkpoint_folder)
+        # 上传alist
+        self.push()
 
-    def load_checkpoint(self, policy):
+    def load_checkpoint(self, bc_trainer):
         """
         加载检查点
         """
-        policy.load(self.check_point_file())
+        bc_trainer.load(self.checkpoint_folder)
 
 class TrainFolderManagerSB3(TrainFolderManager):
 

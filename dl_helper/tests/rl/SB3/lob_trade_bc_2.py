@@ -62,8 +62,11 @@ run_type = 'train'
 # run_type = 'test_transitions'
 # run_type = 'bc_data'
 
-lr = None
+#################################
+# 命令行参数
+arg_lr = None
 arg_batch_n = None
+#################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == 'train':
@@ -77,17 +80,23 @@ if len(sys.argv) > 1:
         elif arg == 'bc_data':
             run_type = 'bc_data'
         elif arg.startswith('lr='):
-            lr = float(arg.split('=')[1])
+            arg_lr = float(arg.split('=')[1])
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_2' + ('' if lr is None else f'_lr{lr:2e}')
+train_folder = train_title = f'20250419_lob_trade_bc_2' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
-# FOR DEBUG
-# df_progress = pd.read_csv(r"C:\Users\lh\Downloads\progress_all (1).csv")
-# plot_bc_train_progress(train_folder, df_progress=df_progress)
+#################################
+# 训练参数
+total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 10000000000000000
+checkpoint_interval = 1 if run_type!='test_model' else 500
+batch_size = 32
+max_lr = 1.75e-4# find_best_lr
+batch_n = 2**10 if run_type=='train' else 1
+batch_n = batch_n if arg_batch_n is None else arg_batch_n
+#################################
 
 custom_logger = imit_logger.configure(
     folder=train_folder,
@@ -349,12 +358,6 @@ if run_type != 'test':
     # sys.exit()
 
     vec_env = env
-    total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 10000000000000000
-    checkpoint_interval = 1 if run_type!='test_model' else 500
-    batch_size = 32
-    max_lr = 1.75e-4# find_best_lr
-    batch_n = 2**5 if run_type=='train' else 1
-    batch_n = batch_n if arg_batch_n is None else arg_batch_n
 
     memory_usage = psutil.virtual_memory()
     if run_type == 'bc_data':
@@ -422,12 +425,12 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': lr} if lr else None,
+        optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
         custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR if (run_type=='train' and not lr) \
+        lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
             else MultiplicativeLR if run_type=='find_lr' \
                 else None,
-        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not lr) \
+        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not arg_lr) \
             else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
                 else None,
     )
@@ -437,16 +440,16 @@ if run_type != 'test':
         train_folder_manager = TrainFolderManagerBC(train_folder)
         if train_folder_manager.exists():
             log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(bc_trainer.policy)
+            train_folder_manager.load_checkpoint(bc_trainer)
 
     # 添加数据到 bc_trainer
     bc_trainer.set_demonstrations(transitions)
     bc_trainer.set_demonstrations_val(transitions_val)
 
     env = env_objs[0]
-    for i in range(total_epochs // checkpoint_interval):
+    begin = bc_trainer.train_loop_idx
+    for i in range(begin, total_epochs // checkpoint_interval):
         _t = time.time()
-        bc_trainer.policy.train()
         bc_trainer.train(
             n_epochs=checkpoint_interval,
             log_interval = 1 if run_type=='find_lr' else 500,
@@ -490,11 +493,7 @@ if run_type != 'test':
             raise e
         
         # 保存模型
-        bc_trainer.policy.save(train_folder_manager.check_point_file())
-
-        # 上传
-        if not in_windows():
-            train_folder_manager.push()
+        train_folder_manager.checkpoint(bc_trainer)
 
         if run_type == 'find_lr':
             # 只运行一个 epoch

@@ -14,6 +14,7 @@ from typing import (
     Union,
 )
 
+import os
 import gymnasium as gym
 import numpy as np
 import torch as th
@@ -112,6 +113,34 @@ class BCWithLRScheduler(BC):
         self._val_data_loader = None
         if demonstrations_val is not None:
             self._make_val_data_loader(demonstrations_val)
+
+        # 训练的进度
+        self.train_loop_idx = 0
+
+    def save(self, save_folder):
+        """保存当前模型的状态，包括策略参数和优化器状态。"""
+        # 保存参数
+        self.policy.save(os.path.join(save_folder, "policy"))
+
+        # 保存其他状态
+        other_state_dict = {
+            'optimizer': self.optimizer.state_dict(),
+            'lr_scheduler': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
+            'train_loop_idx': self.train_loop_idx,
+        }
+        th.save(other_state_dict, os.path.join(save_folder, "other_state.pth"))
+
+    def load(self, load_folder):
+        """加载模型的状态，包括策略参数和优化器状态。"""
+        # 加载参数
+        self.policy = self.policy.load(os.path.join(load_folder, "policy"))
+
+        # 加载其他状态
+        other_state_dict = th.load(os.path.join(load_folder, "other_state.pth"))
+        self.optimizer.load_state_dict(other_state_dict['optimizer'])
+        if self.lr_scheduler and other_state_dict['lr_scheduler'] is not None:
+            self.lr_scheduler.load_state_dict(other_state_dict['lr_scheduler'])
+        self.train_loop_idx = other_state_dict['train_loop_idx']
 
     def _make_val_data_loader(self, demonstrations: algo_base.AnyTransitions) -> None:
         if self._val_data_loader is not None:
@@ -314,6 +343,9 @@ class BCWithLRScheduler(BC):
             ...（原有参数保持不变，此处省略详细描述）
             validate_each_epoch: 是否在每个epoch结束时在验证集上验证，默认为True
         """
+        # 转为训练模式
+        self.policy.train()
+
         if reset_tensorboard:
             self._bc_logger.reset_tensorboard_steps()
         self._bc_logger.log_epoch(0)
@@ -433,3 +465,6 @@ class BCWithLRScheduler(BC):
         if num_samples_so_far % self.batch_size != 0:
             batch_num += 1
             process_batch()
+
+        # 记录loop结束
+        self.train_loop_idx += 1
