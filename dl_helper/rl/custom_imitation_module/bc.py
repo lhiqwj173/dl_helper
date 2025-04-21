@@ -24,6 +24,7 @@ from torch.optim import lr_scheduler
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from stable_baselines3.common import policies, torch_layers, utils, vec_env
+from stable_baselines3.common.utils import get_device
 
 from imitation.algorithms import base as algo_base
 from imitation.data import rollout, types
@@ -132,8 +133,12 @@ class BCWithLRScheduler(BC):
 
     def load(self, load_folder):
         """加载模型的状态，包括策略参数和优化器状态。"""
-        # 加载参数
-        self.policy = self.policy.load(os.path.join(load_folder, "policy"))
+        # 加载模型参数
+        device = get_device()
+        saved_variables = th.load(os.path.join(load_folder, "policy"), map_location=device)
+        # Load weights
+        self.policy.load_state_dict(saved_variables["state_dict"])
+        self.policy.to(device)
 
         # 加载其他状态
         other_state_dict = th.load(os.path.join(load_folder, "other_state.pth"))
