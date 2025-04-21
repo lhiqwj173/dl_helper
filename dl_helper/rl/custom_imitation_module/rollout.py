@@ -290,6 +290,7 @@ def initialize_cache(input_folder: str):
 
     # 遍历文件，计算并存储元数据
     for file in files:
+        print(f"缓存文件: {file}")
         with open(file, 'rb') as f:
             _transitions = pickle.load(f)
         
@@ -324,6 +325,7 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     # 获取所有文件并随机打乱顺序
     files = list(file_metadata_cache.keys())
     np.random.shuffle(files)
+    print(f'加载文件数量: {len(files)}')
 
     if load_file_num is None:
         load_file_num = len(files)
@@ -338,7 +340,8 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
             break
         total_memory += est_memory
         selected_files.append(file)
-        
+        print(f"加载文件: {file}, 估算内存: {total_memory / (1024**3):.2f} GB")
+
     print(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
     # 初始化形状和类型字典
     shape_dict = {
