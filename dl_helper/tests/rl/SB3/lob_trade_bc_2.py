@@ -63,6 +63,7 @@ run_type = 'train'
 # run_type = 'bc_data'
 
 lr = None
+arg_batch_n = None
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == 'train':
@@ -77,6 +78,8 @@ if len(sys.argv) > 1:
             run_type = 'bc_data'
         elif arg.startswith('lr='):
             lr = float(arg.split('=')[1])
+        elif arg.startswith('batch_n='):
+            arg_batch_n = int(arg.split('=')[1])
 
 train_folder = train_title = f'20250419_lob_trade_bc_2' + ('' if lr is None else f'_lr{lr:2e}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
@@ -351,7 +354,7 @@ if run_type != 'test':
     batch_size = 32
     max_lr = 1.75e-4# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
-    # batch_n = 1
+    batch_n = batch_n if arg_batch_n is None else arg_batch_n
 
     memory_usage = psutil.virtual_memory()
     if run_type == 'bc_data':
