@@ -453,7 +453,7 @@ if run_type != 'test':
     begin = bc_trainer.train_loop_idx
     for i in range(begin, total_epochs // checkpoint_interval):
         log(f'第 {i} 次训练')
-        
+
         _t = time.time()
         bc_trainer.train(
             n_epochs=checkpoint_interval,
@@ -483,11 +483,10 @@ if run_type != 'test':
         df_new['bc/epoch'] += i * checkpoint_interval
         df_new['bc/mean_reward'] = np.nan
         df_new['bc/val_mean_reward'] = np.nan
-        df_new['bc/mean_reward'].iloc[-1] = train_reward
-        df_new['bc/val_mean_reward'].iloc[-1] = val_reward
+        df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+        df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
         df_progress = pd.concat([df_progress, df_new])
         df_progress.ffill(inplace=True)
-        df_progress.to_csv(progress_file_all, index=False)
 
         # 训练进度可视化
         try:
@@ -497,6 +496,8 @@ if run_type != 'test':
             log(f"训练进度可视化失败")
             raise e
         
+        df_progress.to_csv(progress_file_all, index=False)
+
         # 保存模型
         train_folder_manager.checkpoint(bc_trainer)
 

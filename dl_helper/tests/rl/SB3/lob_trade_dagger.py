@@ -393,8 +393,6 @@ if run_type != 'test':
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
         custom_logger=custom_logger,
-        # lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR if run_type=='find_lr' else None,
-        # lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.1},
     )
 
     dagger_trainer = SimpleDAggerTrainer(
@@ -406,8 +404,8 @@ if run_type != 'test':
     )
 
     dagger_trainer.train(
-        total_timesteps=_train_timesteps,
-        # total_timesteps=10000,
+        # total_timesteps=_train_timesteps,
+        total_timesteps=10000,
     )
 
     # 验证模型
