@@ -388,6 +388,7 @@ if run_type != 'test':
         sys.exit()
     
     memory_usage = psutil.virtual_memory()
+    mem_pct_msg = f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)"
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
