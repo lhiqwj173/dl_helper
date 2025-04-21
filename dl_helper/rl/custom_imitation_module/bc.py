@@ -135,13 +135,13 @@ class BCWithLRScheduler(BC):
         """加载模型的状态，包括策略参数和优化器状态。"""
         # 加载模型参数
         device = get_device()
-        saved_variables = th.load(os.path.join(load_folder, "policy"), map_location=device)
+        saved_variables = th.load(os.path.join(load_folder, "policy"), map_location=device, weights_only=False)
         # Load weights
         self.policy.load_state_dict(saved_variables["state_dict"])
         self.policy.to(device)
 
         # 加载其他状态
-        other_state_dict = th.load(os.path.join(load_folder, "other_state.pth"))
+        other_state_dict = th.load(os.path.join(load_folder, "other_state.pth"), weights_only=False)
         self.optimizer.load_state_dict(other_state_dict['optimizer'])
         if self.lr_scheduler and other_state_dict['lr_scheduler'] is not None:
             self.lr_scheduler.load_state_dict(other_state_dict['lr_scheduler'])
