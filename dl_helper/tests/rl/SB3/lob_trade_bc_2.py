@@ -90,7 +90,7 @@ init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
-total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 10000000000000000
+total_epochs = 1 if run_type=='find_lr' else 100 if run_type!='test_model' else 10000000000000000
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 1.75e-4# find_best_lr
@@ -381,8 +381,11 @@ if run_type != 'test':
         sys.exit()
 
     # 遍历读取训练数据
-    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
+    data_folder = rf'/kaggle/input/lob-bc-train-data-filted/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+    # transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
+
+    # for debug
+    transitions = load_trajectories(data_folder, load_file_num = 2)
 
     # 生成验证数据
     t = time.time()
@@ -449,6 +452,8 @@ if run_type != 'test':
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
     for i in range(begin, total_epochs // checkpoint_interval):
+        log(f'第 {i} 次训练')
+        
         _t = time.time()
         bc_trainer.train(
             n_epochs=checkpoint_interval,

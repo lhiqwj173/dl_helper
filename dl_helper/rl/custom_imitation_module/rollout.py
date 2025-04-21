@@ -182,54 +182,87 @@ def combing_trajectories(trajectories: Iterable[types.Transitions]):
 
     return flatten_trajectories(parts)
 
+def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 28.0):
+    """
+    提前创建内存加载 trajectories，支持最大内存限制（单位 GB）。
+    :param input_folder: 包含多个数据文件夹路径的文件夹
+    :param load_file_num: 加载的文件数量，None 表示尽可能多加载
+    :param max_memory_gb: 最大内存限制，单位 GB
+    """
+    max_memory_bytes = max_memory_gb * 1024**3
 
-def load_trajectories(data_folder: str, load_file_num=None):
-    """
-    提前创建内存加载 trajectories
-    """
-    files = [i for i in sorted(os.listdir(data_folder)) if i.endswith('.pkl')]
+    # 获取 input_folder 下的所有数据文件夹路径
+    data_folder_list = [os.path.join(input_folder, i) for i in os.listdir(input_folder)]
+    # 必须是文件夹
+    data_folder_list = [i for i in data_folder_list if os.path.isdir(i)]
+
+    # 收集所有文件夹中的 .pkl 文件
+    files = []
+    for data_folder in data_folder_list:
+        folder_files = [os.path.join(data_folder, i) for i in os.listdir(data_folder) if i.endswith('.pkl')]
+        files.extend(folder_files)
+
+    # 打乱文件顺序，避免每次加载相同文件
+    np.random.shuffle(files)
+    
     if load_file_num is None:
         load_file_num = len(files)
-    files = files[:load_file_num]
 
-    # 读取每个数据的大小
+    # 初始化形状和类型字典
     shape_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
     type_dict: Mapping[str, List[Any]] = {key: None for key in KEYS}
-    for file in files:
-        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
+    selected_files = []
+    total_memory = 0
+
+    # 遍历文件，估算内存并记录形状/类型
+    for file in files[:load_file_num]:
+        with open(file, 'rb') as f:
+            _transitions = pickle.load(f)
+        
+        est_memory = 0
+        for key in KEYS:
+            _data = getattr(_transitions, key)
+            est_memory += _data.nbytes  # 计算 NumPy 数据占用的内存
+
+        # 检查是否超出内存限制
+        if total_memory + est_memory > max_memory_bytes:
+            print(f"[Info] 停止加载：已达到内存上限 {max_memory_gb}GB")
+            break
+
+        total_memory += est_memory
+        selected_files.append(file)
+
+        # 更新数据形状和类型
         for key in KEYS:
             _data = getattr(_transitions, key)
             if shape_dict[key] is None:
                 shape_dict[key] = list(_data.shape)
                 type_dict[key] = _data.dtype
             else:
-                # 累加 cols
                 shape_dict[key][0] += _data.shape[0]
-
         del _transitions
 
-    # 创建数据
-    all_data_dict = {}
-    for key in KEYS:
-        all_data_dict[key] = np.zeros(shape_dict[key], dtype=type_dict[key])
+    # 创建大数组存储所有数据
+    all_data_dict = {
+        key: np.zeros(shape_dict[key], dtype=type_dict[key])
+        for key in KEYS
+    }
 
-    # 拷贝数据
-    start_dict = {key: 0 for key in KEYS}
-    for file in files:
-        _transitions = pickle.load(open(os.path.join(data_folder, file), 'rb'))
+    # 拷贝数据到大数组
+    start = 0
+    for file in selected_files:
+        _transitions = pickle.load(open(file, 'rb'))
+        end = start + _transitions.obs.shape[0]
         for key in KEYS:
             _data = getattr(_transitions, key)
-            end = start_dict[key] + _data.shape[0]
-            all_data_dict[key][start_dict[key]:end] = _data
-            start_dict[key] = end
-
+            all_data_dict[key][start:end] = _data
+        start = end
         del _transitions
 
-    # 创建 Transitions
+    # 封装成 Transitions 对象
     transitions = types.Transitions(**all_data_dict)
 
     return transitions
-
 
 if __name__ == '__main__':
     folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
