@@ -227,7 +227,7 @@ def load_trajectories_0(input_folder: str, load_file_num=None, max_memory_gb: fl
 
         # 检查是否超出内存限制
         if total_memory + est_memory > max_memory_bytes:
-            print(f"[Info] 停止加载：已达到内存上限 {max_memory_gb}GB")
+            print(f"停止加载：已达到内存上限 {max_memory_gb}GB")
             break
 
         total_memory += est_memory
@@ -334,11 +334,12 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     for file in files[:load_file_num]:
         est_memory = file_metadata_cache[file]['est_memory']
         if total_memory + est_memory > max_memory_bytes:
-            print(f"[Info] 停止加载：已达到内存上限 {max_memory_gb}GB")
+            print(f"停止加载：已达到内存上限 {max_memory_gb}GB")
             break
         total_memory += est_memory
         selected_files.append(file)
-
+        
+    print(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
     # 初始化形状和类型字典
     shape_dict = {
         key: [0] + list(file_metadata_cache[selected_files[0]][key]['shape'][1:])
