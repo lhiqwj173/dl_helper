@@ -33,6 +33,8 @@ from imitation.util import logger as imit_logger
 from imitation.util import util
 from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback, enumerate_batches
 
+from py_ext.datetime import beijing_time
+
 class BCWithLRScheduler(BC):
     """支持学习率调度器和性能指标评估的行为克隆 (Behavioral Cloning with LR Scheduler and Metrics).
 
@@ -422,6 +424,10 @@ class BCWithLRScheduler(BC):
             self.optimizer.zero_grad()
 
             if batch_num % log_interval == 0:
+                # 记录时间戳
+                ts = int(beijing_time().timestamp() * 1000)
+                self._bc_logger._logger.record("timestamp", ts)
+
                 # 记录学习率
                 lr = self.optimizer.param_groups[0]['lr']
                 self._bc_logger._logger.record("bc/lr", lr)

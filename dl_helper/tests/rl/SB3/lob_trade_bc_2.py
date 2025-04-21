@@ -449,6 +449,12 @@ if run_type != 'test':
     bc_trainer.set_demonstrations(transitions)
     bc_trainer.set_demonstrations_val(transitions_val)
 
+    # 进度数据文件
+    progress_file = os.path.join(train_folder, f"progress.csv")
+    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+    if os.path.exists(progress_file):
+        os.remove(progress_file)
+
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
     for i in range(begin, total_epochs // checkpoint_interval):
@@ -473,13 +479,13 @@ if run_type != 'test':
         log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
         # 合并到 progress_all.csv
-        progress_file = os.path.join(train_folder, f"progress.csv")
-        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
         if os.path.exists(progress_file_all):
             df_progress = pd.read_csv(progress_file_all)
         else:
             df_progress = pd.DataFrame()
-        df_new = pd.read_csv(progress_file).iloc[len(df_progress):]
+        latest_ts = df_progress.iloc[-1]['timestamp']
+        df_new = pd.read_csv(progress_file)
+        df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
         df_new['bc/epoch'] += i * checkpoint_interval
         df_new['bc/mean_reward'] = np.nan
         df_new['bc/val_mean_reward'] = np.nan
@@ -487,6 +493,7 @@ if run_type != 'test':
         df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
         df_progress = pd.concat([df_progress, df_new])
         df_progress.ffill(inplace=True)
+        df_progress.to_csv(progress_file_all, index=False)
 
         # 训练进度可视化
         try:
@@ -495,8 +502,6 @@ if run_type != 'test':
             pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
             log(f"训练进度可视化失败")
             raise e
-        
-        df_progress.to_csv(progress_file_all, index=False)
 
         # 保存模型
         train_folder_manager.checkpoint(bc_trainer)
