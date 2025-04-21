@@ -27,6 +27,10 @@ class TrainFolderManager:
         self.checkpoint_folder = os.path.join(os.path.abspath(train_folder), 'checkpoint')
         os.makedirs(self.checkpoint_folder, exist_ok=True)
 
+        # 创建最佳点保存目录
+        self.best_checkpoint_folder = os.path.join(os.path.abspath(train_folder), 'best_checkpoint')
+        os.makedirs(self.best_checkpoint_folder, exist_ok=True)
+
         # 检查是否有训练记录
         # 若无，则需要尝试拉取训练最新记录
         if not self.exists():
@@ -137,13 +141,20 @@ class TrainFolderManagerBC(TrainFolderManager):
         """
         return os.path.exists(self.check_point_file())
     
-    def checkpoint(self, bc_trainer):
+    def checkpoint(self, bc_trainer, best=False):
         """
         保存检查点
         """
         # 保存检查点
         bc_trainer.save(self.checkpoint_folder)
-        # 上传alist
+        # 保存最佳检查点
+        if best:
+            # 复制到最佳检查点文件夹
+            if os.path.exists(self.best_checkpoint_folder):
+                shutil.rmtree(self.best_checkpoint_folder)
+            shutil.copytree(self.checkpoint_folder, self.best_checkpoint_folder)
+            log(f'保存最佳检查点到 {self.best_checkpoint_folder}')
+        # 推送
         self.push()
 
     def load_checkpoint(self, bc_trainer):

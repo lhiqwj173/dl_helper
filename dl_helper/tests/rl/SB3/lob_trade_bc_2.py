@@ -84,7 +84,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_2_test' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
+train_folder = train_title = f'20250421_lob_trade_bc_2' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -383,9 +383,9 @@ if run_type != 'test':
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    # transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
-    # for debug
-    transitions = load_trajectories(data_folder, load_file_num = 2)
+    transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
+    # # for debug
+    # transitions = load_trajectories(data_folder, load_file_num = 2)
 
     # 生成验证数据
     rng = np.random.default_rng()
@@ -492,6 +492,12 @@ if run_type != 'test':
         df_progress.ffill(inplace=True)
         df_progress.to_csv(progress_file_all, index=False)
 
+        # 当前点是否是最优的 checkpoint
+        # 使用 recall 判断
+        bset_recall = df_progress['bc/recall'].max()
+        best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+        is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+
         # 训练进度可视化
         try:
             plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
@@ -500,8 +506,9 @@ if run_type != 'test':
             log(f"训练进度可视化失败")
             raise e
 
-        # 保存模型
-        train_folder_manager.checkpoint(bc_trainer)
+        if not in_windows():
+            # 保存模型
+            train_folder_manager.checkpoint(bc_trainer, best=is_best)
 
         if run_type == 'find_lr':
             # 只运行一个 epoch
@@ -511,9 +518,9 @@ if run_type != 'test':
             # 若还有下一次 训练
             # 重新加载 训练数据
             del transitions
-            # transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
-            # for debug
-            transitions = load_trajectories(data_folder, load_file_num = 2)
+            transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
+            # # for debug
+            # transitions = load_trajectories(data_folder, load_file_num = 2)
 
 else:
     # test
