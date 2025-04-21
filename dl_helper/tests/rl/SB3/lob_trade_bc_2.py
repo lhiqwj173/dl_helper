@@ -388,13 +388,16 @@ if run_type != 'test':
         sys.exit()
     
     memory_usage = psutil.virtual_memory()
-    mem_pct_msg = f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)"
+    log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
     transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
     # # for debug
     # transitions = load_trajectories(data_folder, load_file_num = 2)
+    log(f"训练数据样本数: {len(transitions)}")
+    _memory_usage = psutil.virtual_memory()
+    log(f"内存占用：{_memory_usage.percent}% ({_memory_usage.used/1024**3:.3f}GB/{_memory_usage.total/1024**3:.3f}GB)")
 
     # 生成验证数据
     rng = np.random.default_rng()
@@ -403,7 +406,7 @@ if run_type != 'test':
     rollouts_val = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=int(len(transitions)*0.2)),
+        rollout.make_sample_until(min_timesteps=min(int(len(transitions)*0.2), 10_000)),
         rng=rng,
     )
     transitions_val = rollout.flatten_trajectories(rollouts_val)
@@ -460,15 +463,14 @@ if run_type != 'test':
 
     # val 数据一直保持不变
     bc_trainer.set_demonstrations_val(transitions_val)
+    # 添加数据到 bc_trainer 
+    # 训练数据每个epoch都要重新加载
+    bc_trainer.set_demonstrations(transitions)
 
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
     for i in range(begin, total_epochs // checkpoint_interval):
         log(f'第 {i} 次训练')
-
-        # 添加数据到 bc_trainer 
-        # 训练数据每个epoch都要重新加载
-        bc_trainer.set_demonstrations(transitions)
 
         _t = time.time()
         bc_trainer.train(
@@ -526,10 +528,14 @@ if run_type != 'test':
         if i < total_epochs // checkpoint_interval -1:
             # 若还有下一次 训练
             # 重新加载 训练数据
+            bc_trainer.clear_demonstrations()
             del transitions
             transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
             # # for debug
             # transitions = load_trajectories(data_folder, load_file_num = 2)
+            # 重新添加训练数据
+            bc_trainer.set_demonstrations(transitions)
+
 
 else:
     # test

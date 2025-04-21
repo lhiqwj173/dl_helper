@@ -157,7 +157,7 @@ class BCWithLRScheduler(BC):
 
         self._val_data_loader = th.utils.data.DataLoader(
             demonstrations,
-            batch_size=1024,# 验证集batch_size，加快验证速度
+            batch_size=4096,# 验证集batch_size，加快验证速度
             shuffle=False,
         )
 
@@ -165,15 +165,19 @@ class BCWithLRScheduler(BC):
         self._make_val_data_loader(demonstrations)
 
     def set_demonstrations(self, demonstrations: algo_base.AnyTransitions) -> None:
-        if self._demo_data_loader is not None:
-            # 清理已有的数据加载器
-            del self._demo_data_loader
-            self._demo_data_loader = None
+        self.clear_demonstrations()  # 清除已有的训练数据集
 
         self._demo_data_loader = algo_base.make_data_loader(
             demonstrations,
             self.minibatch_size,
         )
+
+    def clear_demonstrations(self) -> None:
+        """清除训练数据集"""
+        if self._demo_data_loader is not None:
+            # 清理已有的数据加载器
+            del self._demo_data_loader
+            self._demo_data_loader = None
 
     def _get_predicted_actions(self, policy, obs_tensor):
         """获取模型预测的动作
