@@ -152,6 +152,41 @@ class TrainFolderManagerBC(TrainFolderManager):
         """
         bc_trainer.load(self.checkpoint_folder)
 
+    def pull(self):
+        """
+        拉取训练最新记录, 并解压覆盖到训练文件夹
+        """
+        client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+        try:
+            _file = f'alist/{self.train_title}.7z'
+            # 下载文件
+            download_folder = f'/{ALIST_UPLOAD_FOLDER}/'
+            client.download(f'{download_folder}{self.train_title}.7z', 'alist/')
+            log(f'download {_file}')
+        except:
+            pass
+
+        if os.path.exists(_file):
+            # 解压文件
+            decompress(_file)
+            log(f'decompress {_file}')
+            # move 
+            folder = os.path.join('/kaggle/working/alist', self.train_title, 'checkpoint')
+            log(f'checkpoint folder {folder}')
+            if os.path.exists(folder):
+                send_wx(f'[{self.train_title}] 使用alist缓存文件继续训练')
+                log(f"使用alist缓存文件继续训练")
+
+                # BC 需要删除 progress.csv
+                os.remove(os.path.join('/kaggle/working/alist', self.train_title, f"progress.csv"))
+
+                # print_directory_tree(self.train_folder, log_func=log)
+                # 覆盖到训练文件夹
+                shutil.copytree(os.path.join('/kaggle/working/alist', self.train_title), self.train_folder, dirs_exist_ok=True)
+                # print_directory_tree(self.train_folder, log_func=log)
+        else:
+            os.makedirs(self.train_folder, exist_ok=True)
+
 class TrainFolderManagerSB3(TrainFolderManager):
 
     def check_point_file(self):

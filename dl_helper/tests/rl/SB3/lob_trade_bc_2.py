@@ -421,16 +421,6 @@ if run_type != 'test':
     send_wx(msg)
     # sys.exit()
 
-    # 初始化进度数据文件
-    progress_file = os.path.join(train_folder, f"progress.csv")
-    if os.path.exists(progress_file):
-        os.remove(progress_file)
-    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
-    if os.path.exists(progress_file_all):
-        df_progress = pd.read_csv(progress_file_all)
-    else:
-        df_progress = pd.DataFrame()
-
     total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
@@ -458,6 +448,14 @@ if run_type != 'test':
     # 添加数据到 bc_trainer
     bc_trainer.set_demonstrations(transitions)
     bc_trainer.set_demonstrations_val(transitions_val)
+
+    # 初始化进度数据文件
+    progress_file = os.path.join(train_folder, f"progress.csv")
+    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+    if os.path.exists(progress_file_all):
+        df_progress = pd.read_csv(progress_file_all)
+    else:
+        df_progress = pd.DataFrame()
 
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
