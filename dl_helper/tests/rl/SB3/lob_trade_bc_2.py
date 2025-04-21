@@ -406,7 +406,7 @@ if run_type != 'test':
     rollouts_val = rollout.rollout(
         expert,
         vec_env,
-        rollout.make_sample_until(min_timesteps=min(int(len(transitions)*0.2), 100_000)),
+        rollout.make_sample_until(min_timesteps=min(int(len(transitions)*0.2), 50_000)),
         rng=rng,
     )
     transitions_val = rollout.flatten_trajectories(rollouts_val)
