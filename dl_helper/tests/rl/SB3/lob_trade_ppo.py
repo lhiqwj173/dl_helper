@@ -36,6 +36,17 @@ model_type = 'CnnPolicy'
 # 'train' or 'test'
 run_type = 'train'
 
+if len(sys.argv) > 1:
+    for arg in sys.argv[1:]:
+        if arg == 'train':
+            run_type = 'train'
+        elif arg == 'find_lr':
+            run_type = 'find_lr'
+        elif arg == 'test':
+            run_type = 'test'
+        elif arg == 'test_model':
+            run_type = 'test_model'
+
 train_folder = train_title = f'lob_trade_ppo'
 os.makedirs(train_folder, exist_ok=True)
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'

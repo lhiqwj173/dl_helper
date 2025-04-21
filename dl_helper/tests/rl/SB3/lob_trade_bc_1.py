@@ -74,7 +74,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('lr='):
             lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_1' + '' if lr is None else f'_lr{lr:2e}'
+train_folder = train_title = f'20250419_lob_trade_bc_1' + ('' if lr is None else f'_lr{lr:2e}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -355,7 +355,7 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else {'lr': lr} if lr else None,
+        optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': lr} if lr else None,
         custom_logger=custom_logger,
     )
 

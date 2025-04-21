@@ -57,11 +57,12 @@ df_progress = pd.read_csv('progress_all.csv')
 find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
 """
 run_type = 'train'
-run_type = 'find_lr'
+# run_type = 'find_lr'
 # run_type = 'test'
 # run_type = 'test_transitions'
 # run_type = 'bc_data'
 
+lr = None
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == 'train':
@@ -74,8 +75,10 @@ if len(sys.argv) > 1:
             run_type = 'test_model'
         elif arg == 'bc_data':
             run_type = 'bc_data'
+        elif arg.startswith('lr='):
+            lr = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_2'
+train_folder = train_title = f'20250419_lob_trade_bc_2' + ('' if lr is None else f'_lr{lr:2e}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -346,19 +349,14 @@ if run_type != 'test':
     total_epochs = 1 if run_type=='find_lr' else 40 if run_type!='test_model' else 10000000000000000
     checkpoint_interval = 1 if run_type!='test_model' else 500
     batch_size = 32
-    max_lr = 0.022# find_best_lr
+    max_lr = 1.75e-4# find_best_lr
     batch_n = 2**5 if run_type=='train' else 1
-    batch_n = 1
-
-    f = rollouts_filter()
-
-    train_timesteps = 5e5 if run_type=='train' else 500
+    # batch_n = 1
 
     memory_usage = psutil.virtual_memory()
-
     if run_type == 'bc_data':
         # 生成训练数据用
-        # while len(f) < train_timesteps:
+        f = rollouts_filter()
         while True:
             # 生成专家数据
             rng = np.random.default_rng()
@@ -378,7 +376,7 @@ if run_type != 'test':
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/bc_train_data' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    transitions = load_trajectories(data_folder, load_file_num = 1 if run_type=='find_lr' else None)
+    transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
 
     # 生成验证数据
     t = time.time()
@@ -421,12 +419,15 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
+        optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': lr} if lr else None,
         custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR if run_type=='train' else MultiplicativeLR if run_type=='find_lr' else None,
-        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if run_type=='train' else {'lr_lambda': lambda epoch: 1.05},
+        lr_scheduler_cls = OneCycleLR if (run_type=='train' and not lr) \
+            else MultiplicativeLR if run_type=='find_lr' \
+                else None,
+        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not lr) \
+            else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
+                else None,
     )
-
     
     # 训练文件夹管理
     if not in_windows():
