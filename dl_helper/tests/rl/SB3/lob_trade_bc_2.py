@@ -84,7 +84,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250419_lob_trade_bc_2' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
+train_folder = train_title = f'20250419_lob_trade_bc_2_test' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
@@ -359,7 +359,6 @@ if run_type != 'test':
 
     vec_env = env
 
-    memory_usage = psutil.virtual_memory()
     if run_type == 'bc_data':
         # 生成训练数据用
         f = rollouts_filter()
@@ -379,16 +378,16 @@ if run_type != 'test':
             # send_wx(f'transitions: {len(transitions)}')
             pickle.dump(transitions, open('transitions.pkl', 'wb'))
         sys.exit()
+    
+    memory_usage = psutil.virtual_memory()
 
     # 遍历读取训练数据
     data_folder = rf'/kaggle/input/lob-bc-train-data-filted/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
     # transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
-
     # for debug
     transitions = load_trajectories(data_folder, load_file_num = 2)
 
     # 生成验证数据
-    t = time.time()
     rng = np.random.default_rng()
     for env in env_objs:
         env.val()
@@ -401,10 +400,7 @@ if run_type != 'test':
     transitions_val = rollout.flatten_trajectories(rollouts_val)
     memory_usage2 = psutil.virtual_memory()
     msg = ''
-    cost_msg = f'生成专家数据耗时: {time.time() - t:.2f} 秒'
-    log(cost_msg)
-    msg += cost_msg + '\n'
-    mem_pct_msg = f"CPU 内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
+    mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
     log(mem_pct_msg)
     msg += mem_pct_msg + '\n'
     mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
@@ -445,10 +441,6 @@ if run_type != 'test':
             log(f"restore from {train_folder_manager.checkpoint_folder}")
             train_folder_manager.load_checkpoint(bc_trainer)
 
-    # 添加数据到 bc_trainer
-    bc_trainer.set_demonstrations(transitions)
-    bc_trainer.set_demonstrations_val(transitions_val)
-
     # 初始化进度数据文件
     progress_file = os.path.join(train_folder, f"progress.csv")
     progress_file_all = os.path.join(train_folder, f"progress_all.csv")
@@ -457,10 +449,17 @@ if run_type != 'test':
     else:
         df_progress = pd.DataFrame()
 
+    # val 数据一直保持不变
+    bc_trainer.set_demonstrations_val(transitions_val)
+
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
     for i in range(begin, total_epochs // checkpoint_interval):
         log(f'第 {i} 次训练')
+
+        # 添加数据到 bc_trainer 
+        # 训练数据每个epoch都要重新加载
+        bc_trainer.set_demonstrations(transitions)
 
         _t = time.time()
         bc_trainer.train(
@@ -507,6 +506,14 @@ if run_type != 'test':
         if run_type == 'find_lr':
             # 只运行一个 epoch
             break
+
+        if i < total_epochs // checkpoint_interval -1:
+            # 若还有下一次 训练
+            # 重新加载 训练数据
+            del transitions
+            # transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
+            # for debug
+            transitions = load_trajectories(data_folder, load_file_num = 2)
 
 else:
     # test
