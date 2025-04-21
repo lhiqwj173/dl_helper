@@ -66,6 +66,7 @@ run_type = 'train'
 # 命令行参数
 arg_lr = None
 arg_batch_n = None
+arg_total_epochs = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -83,14 +84,21 @@ if len(sys.argv) > 1:
             arg_lr = float(arg.split('=')[1])
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
+        elif arg.startswith('total_epochs='):
+            arg_total_epochs = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250421_lob_trade_bc_2' + ('' if arg_lr is None else f'_lr{arg_lr:2e}') + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
+train_folder = train_title = f'20250421_lob_trade_bc_2' \
+    + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
+        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
+            + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
+            
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
 total_epochs = 1 if run_type=='find_lr' else 100 if run_type!='test_model' else 10000000000000000
+total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 1e-4# find_best_lr
