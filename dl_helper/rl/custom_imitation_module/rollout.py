@@ -1,4 +1,4 @@
-import os
+import os, psutil
 import pickle
 from typing import (
     Any,
@@ -232,8 +232,8 @@ def initialize_cache(input_folder: str):
 
 def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
     """
-    提前创建内存加载 trajectories，支持最大内存限制（单位 GB）。
-    
+    提前创建内存加载 trajectories，支持最大内存限制（单位 GB）并考虑实际系统内存。
+
     :param input_folder: 包含多个数据文件夹路径的文件夹
     :param load_file_num: 加载的文件数量，None 表示尽可能多加载
     :param max_memory_gb: 最大内存限制，单位 GB
@@ -255,17 +255,25 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     if load_file_num is None:
         load_file_num = len(files)
 
+    # 获取当前系统可用内存（预留 1GB 缓冲）
+    system_memory_bytes = psutil.virtual_memory().available - 1 * 1024**3
+    effective_memory_limit = min(max_memory_bytes, system_memory_bytes)
+    print(f"系统可用内存: {system_memory_bytes / (1024**3):.2f} GB, 有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
+
     # 根据内存限制选择文件
     selected_files = []
     total_memory = 0
     for file in files[:load_file_num]:
         est_memory = file_metadata_cache[file]['est_memory']
-        if total_memory + est_memory > max_memory_bytes:
-            print(f"停止加载：已达到内存上限 {max_memory_gb}GB")
+        if total_memory + est_memory > effective_memory_limit:
+            print(f"停止加载：已达到内存上限 {effective_memory_limit / (1024**3):.2f} GB")
             break
         total_memory += est_memory
         selected_files.append(file)
         print(f"选择文件: {file}, 估算内存: {total_memory / (1024**3):.2f} GB")
+
+    if not selected_files:
+        raise MemoryError("没有文件可以加载：内存限制过低或系统内存不足")
 
     print(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
 
