@@ -1,7 +1,9 @@
-import time, os
+import time, os, psutil
 import pandas as pd
+from collections import deque
+from typing import Deque
 from stable_baselines3.common.evaluation import evaluate_policy
-from imitation.algorithms.dagger import Optional, rollout, np, DAggerTrainer, vec_env, types, policies
+from imitation.algorithms.dagger import Optional, rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging
 
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
 from dl_helper.tool import report_memory_usage, in_windows
@@ -9,6 +11,9 @@ from dl_helper.tool import report_memory_usage, in_windows
 from py_ext.tool import log
 
 class SimpleDAggerTrainer(DAggerTrainer):
+
+    MEMORY_THRESHOLD = 0.85  # 内存超过 85% 就切换为受控模式
+
     def __init__(
         self,
         *,
@@ -51,6 +56,62 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
+        
+    def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
+        """
+        使用 deque 控制内存使用
+        1. 如果内存超过阈值，则使用 deque 替换 list
+        2. deque 的最大长度为当前所有 demo 的总步数
+        3. 每次添加 demo 时，检查当前总步数是否超过最大步数限制
+        4. 如果超过，则不断移除旧数据，直到总步数不超过最大步数限制
+        """
+        num_demos_by_round = []
+
+        for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
+            round_dir = self._demo_dir_path_for_round(round_num)
+            demo_paths = self._get_demo_paths(round_dir)
+
+            for path in demo_paths:
+                demo = serialize.load(path)[0]  # 假设 demo 是一条 trajectory，list of transitions
+
+                if isinstance(self._all_demos, list):
+                    self._all_demos.append(demo)
+
+                    # 检查内存使用
+                    mem_used_ratio = psutil.virtual_memory().percent / 100.0
+                    if mem_used_ratio > self.MEMORY_THRESHOLD:
+                        print(f"[Memory Warning] RAM usage {mem_used_ratio*100:.1f}%, switching to deque...")
+
+                        # 计算总步数
+                        # 作为最大步数限制
+                        total_steps = sum(len(d) for d in self._all_demos)
+                        self._max_allowed_steps = total_steps
+
+                        # 用 deque 替换 list，限制总步数
+                        new_buffer = deque()
+                        step_count = 0
+                        for d in reversed(self._all_demos):  # 从最新数据向前填充
+                            step_count += len(d)
+                            new_buffer.appendleft(d)
+
+                        self._all_demos.clear()
+                        self._all_demos = new_buffer
+                        self._total_steps = step_count
+                else:
+                    # self._all_demos 已经是 deque
+                    self._all_demos.append(demo)
+                    self._total_steps += len(demo)
+
+                    # 控制容量：如果超出当前最大步数，则不断移除旧数据
+                    while self._total_steps > self._max_allowed_steps:
+                        removed = self._all_demos.popleft()
+                        self._total_steps -= len(removed)
+
+            num_demos_by_round.append(len(demo_paths))
+
+        logging.info(f"Loaded {len(self._all_demos)} total demos, total steps: {self._total_steps}")
+        demo_transitions = rollout.flatten_trajectories(self._all_demos)
+        return demo_transitions, num_demos_by_round
 
     def train(
         self,
