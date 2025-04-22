@@ -12,7 +12,7 @@ from py_ext.tool import log
 
 class SimpleDAggerTrainer(DAggerTrainer):
 
-    MEMORY_THRESHOLD = 0.85  # 内存超过 85% 就切换为受控模式
+    MEMORY_THRESHOLD = 0.8  # 内存超过 85% 就切换为受控模式
 
     def __init__(
         self,
