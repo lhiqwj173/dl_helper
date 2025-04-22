@@ -12,7 +12,7 @@ from py_ext.tool import log
 
 class SimpleDAggerTrainer(DAggerTrainer):
 
-    MEMORY_THRESHOLD = 3  # 可用内存不足 3GB 就切换为 deque 模式
+    MEMORY_THRESHOLD = 5  # 可用内存不足 5GB 就切换为 deque 模式
 
     def __init__(
         self,
