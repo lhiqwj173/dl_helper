@@ -390,7 +390,7 @@ if run_type != 'test':
         # 新训练
         # 使用 BC policy 进行 DAgger 训练
         log(f"使用 BC policy 进行新训练")
-        policy_folder = rf'/kaggle/input/pre_trained_policy/' if not in_windows() else r"D:\L2_DATA_T0_ETF\train_data\RAW\DAGGER_pre_trained_policy"
+        policy_folder = rf'/kaggle/input/pre-trained-policy' if not in_windows() else r"D:\L2_DATA_T0_ETF\train_data\RAW\DAGGER_pre_trained_policy"
         bc_trainer.load(policy_folder)
 
     # 初始化进度数据文件
