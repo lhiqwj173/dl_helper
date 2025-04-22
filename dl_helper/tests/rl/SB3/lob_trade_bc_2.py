@@ -97,7 +97,7 @@ init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
-total_epochs = 1 if run_type=='find_lr' else 100 if run_type!='test_model' else 10000000000000000
+total_epochs = 1 if run_type=='find_lr' else 500 if run_type!='test_model' else 10000000000000000
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
@@ -531,8 +531,11 @@ if run_type != 'test':
         if i < total_epochs // checkpoint_interval -1:
             # 若还有下一次 训练
             # 重新加载 训练数据
+            log('清理训练数据')
             bc_trainer.clear_demonstrations()
             del transitions
+            _memory_usage = psutil.virtual_memory()
+            log(f"内存占用：{_memory_usage.percent}% ({_memory_usage.used/1024**3:.3f}GB/{_memory_usage.total/1024**3:.3f}GB)")
             transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
             # # for debug
             # transitions = load_trajectories(data_folder, load_file_num = 2)

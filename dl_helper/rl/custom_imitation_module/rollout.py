@@ -313,7 +313,7 @@ def initialize_cache(input_folder: str):
         file_metadata_cache[file] = metadata
         del _transitions  # 释放临时变量内存
 
-def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 26.0):
+def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 25.0):
     """
     提前创建内存加载 trajectories，支持最大内存限制（单位 GB）。
     
