@@ -399,7 +399,7 @@ if run_type != 'test':
 
     # 初始化 
     dagger_trainer = SimpleDAggerTrainer(
-        venv=env,
+        venv=vec_env,
         scratch_dir=r'C:\Users\lh\Desktop\temp\temp_dagger' if in_windows() else r"/kaggle/temp",# 临时文件夹，不进行备份
         expert_policy=expert,
         bc_trainer=bc_trainer,
