@@ -109,7 +109,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             num_demos_by_round.append(len(demo_paths))
 
-        logging.info(f"Loaded {len(self._all_demos)} total demos, total steps: {self._total_steps}")
+        logging.info(f"Loaded {len(self._all_demos)} total demos")
         demo_transitions = rollout.flatten_trajectories(self._all_demos)
         return demo_transitions, num_demos_by_round
 
