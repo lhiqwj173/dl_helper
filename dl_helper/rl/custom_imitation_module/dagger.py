@@ -12,7 +12,7 @@ from py_ext.tool import log
 
 class SimpleDAggerTrainer(DAggerTrainer):
 
-    MEMORY_THRESHOLD = 0.8  # 内存超过 85% 就切换为受控模式
+    MEMORY_THRESHOLD = 3  # 可用内存不足 3GB 就切换为 deque 模式
 
     def __init__(
         self,
@@ -78,9 +78,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     self._all_demos.append(demo)
 
                     # 检查内存使用
-                    mem_used_ratio = psutil.virtual_memory().percent / 100.0
-                    if mem_used_ratio > self.MEMORY_THRESHOLD:
-                        print(f"[Memory Warning] RAM usage {mem_used_ratio*100:.1f}%, switching to deque...")
+                    free_mem = psutil.virtual_memory().free / (1024 ** 3)  # GB
+                    print(f"RAM FREE {free_mem:.1f}GB")
+                    if free_mem <= self.MEMORY_THRESHOLD:
+                        print(f"switching to deque...")
 
                         # 计算总步数
                         # 作为最大步数限制
@@ -109,7 +110,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             num_demos_by_round.append(len(demo_paths))
 
-        logging.info(f"Loaded {len(self._all_demos)} total demos")
+        print(f"Loaded {len(self._all_demos)} total demos")
         demo_transitions = rollout.flatten_trajectories(self._all_demos)
         return demo_transitions, num_demos_by_round
 
