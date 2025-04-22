@@ -75,11 +75,12 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 demo = serialize.load(path)[0]  # 假设 demo 是一条 trajectory，list of transitions
 
                 if isinstance(self._all_demos, list):
+                    # 检查内存使用
+                    free_mem = psutil.virtual_memory().available / (1024 ** 3)  # GB
+                    print(f"RAM FREE {free_mem:.1f}GB")
+                    
                     self._all_demos.append(demo)
 
-                    # 检查内存使用
-                    free_mem = psutil.virtual_memory().free / (1024 ** 3)  # GB
-                    print(f"RAM FREE {free_mem:.1f}GB")
                     if free_mem <= self.MEMORY_THRESHOLD:
                         print(f"switching to deque...")
 
