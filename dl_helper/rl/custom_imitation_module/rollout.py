@@ -255,8 +255,8 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     if load_file_num is None:
         load_file_num = len(files)
 
-    # 获取当前系统可用内存（预留 1GB 缓冲）
-    system_memory_bytes = psutil.virtual_memory().available - 1 * 1024**3
+    # 获取当前系统可用内存（预留 2GB 缓冲）
+    system_memory_bytes = psutil.virtual_memory().available - 2 * 1024**3
     effective_memory_limit = min(max_memory_bytes, system_memory_bytes)
     print(f"系统可用内存: {system_memory_bytes / (1024**3):.2f} GB, 有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
 
