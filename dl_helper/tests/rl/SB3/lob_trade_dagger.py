@@ -59,7 +59,7 @@ model_type = 'CnnPolicy'
 
 run_type = 'train'
 # run_type = 'test'
-run_type = 'test_model'
+# run_type = 'test_model'
 
 #################################
 # 命令行参数
