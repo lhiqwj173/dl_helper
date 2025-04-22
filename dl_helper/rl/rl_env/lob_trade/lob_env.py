@@ -1608,7 +1608,7 @@ class LOB_trade_env(gym.Env):
         #数据类型
         res['data_type'] = self.data_producer.data_type
 
-        reward = 0
+        reward = 0.0
 
         # 同时记录评价指标
         if need_close or act_result==RESULT_CLOSE:

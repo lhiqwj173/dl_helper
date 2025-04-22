@@ -8,11 +8,11 @@ from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.policies import ActorCriticPolicy
 
 from imitation.data import rollout
 from imitation.data.wrappers import RolloutInfoWrapper
 from imitation.util import logger as imit_logger
-
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -43,76 +43,75 @@ from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
+from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter, combing_trajectories, load_trajectories
 from dl_helper.rl.custom_imitation_module.dagger import SimpleDAggerTrainer
 
-model_type = 'CnnPolicy'
-# 'train' or 'test' or 'find_lr' or 'test_model'
-# find_lr: 学习率从 1e-6 > 指数增长，限制总batch为150
-# test_model: 使用相同的batch数据，测试模型拟合是否正常
-# 查找最大学习率
-# df_progress = pd.read_csv('progress_all.csv')
-# find_best_lr(df_progress.iloc[50:97]['bc/lr'], df_progress.iloc[50:97]['bc/loss'])
-run_type = 'train'
-_train_timesteps_list = [5e4, 1e6, 2.3e6]
-_train_timesteps = _train_timesteps_list[1]
+"""
+使用 BC policy 进行 DAgger 训练
+1. 初始的专家轨迹从文件中读取
+2. 学习率使用 BC max_lr / 1e2, 手动调度调整
+3. 需要跳过第0轮的训练
+"""
 
+model_type = 'CnnPolicy'
+# 'train' or 'test' or 'test_model'
+# test_model: 使用相同的batch数据，测试模型拟合是否正常
+
+run_type = 'train'
+# run_type = 'test'
+run_type = 'test_model'
+
+#################################
+# 命令行参数
+arg_lr = None
+arg_batch_n = None
+arg_total_epochs = None
+#################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
         if arg == 'train':
             run_type = 'train'
-        elif arg == 'find_lr':
-            run_type = 'find_lr'
         elif arg == 'test':
             run_type = 'test'
         elif arg == 'test_model':
             run_type = 'test_model'
+        elif arg.startswith('lr='):
+            arg_lr = float(arg.split('=')[1])
+        elif arg.startswith('batch_n='):
+            arg_batch_n = int(arg.split('=')[1])
+        elif arg.startswith('total_epochs='):
+            arg_total_epochs = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250416_lob_trade_dagger'
+train_folder = train_title = f'20250422_lob_trade_dagger' \
+    + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
+        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
+            + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
+            
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
-# FOR DEBUG
-# df_progress = pd.read_csv(r"C:\Users\lh\Downloads\progress_all (1).csv")
-# plot_bc_train_progress(train_folder, df_progress=df_progress)
+#################################
+# 训练参数
+total_epochs = 500 if run_type!='test_model' else 10000000000000000
+total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
+checkpoint_interval = 1 if run_type!='test_model' else 500
+batch_size = 32
+max_lr = 1e-4# find_best_lr
+batch_n = 2**7 if run_type=='train' else 1
+batch_n = batch_n if arg_batch_n is None else arg_batch_n
+lr = batch_n * max_lr / 1e2 if arg_lr is None else arg_lr
+# 每轮新增的样本数量
+each_round_train_num = batch_n * batch_size * (2**3)    
+#################################
 
 custom_logger = imit_logger.configure(
     folder=train_folder,
     format_strs=["csv", "stdout"],
 )
 
-class SelfAttention(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.query = nn.Linear(input_dim, input_dim)
-        self.key = nn.Linear(input_dim, input_dim)
-        self.value = nn.Linear(input_dim, input_dim)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        queries = self.query(x)
-        keys = self.key(x)
-        values = self.value(x)
-        scores = torch.bmm(queries, keys.transpose(1, 2)) / (x.size(-1) ** 0.5)
-        attention = self.softmax(scores)
-        weighted = torch.bmm(attention, values)
-        return weighted
-
-class ImprovedSelfAttention(nn.Module):
-    def __init__(self, input_dim, num_heads=4, dropout=0.1):
-        super().__init__()
-        self.multihead_attn = nn.MultiheadAttention(input_dim, num_heads, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(input_dim)
-
-    def forward(self, x):
-        # x: (batch, seq_len, input_dim)
-        attn_output, _ = self.multihead_attn(x, x, x)  # 使用多头注意力
-        # attn_output = self.dropout(attn_output)
-        out = self.norm(x + attn_output)  # 残差连接 + LayerNorm
-        return out
-
 # 自定义特征提取器
 # 参数量: 250795
+# 参数量: 172555
 class DeepLob(BaseFeaturesExtractor):
     def __init__(
             self,
@@ -129,100 +128,67 @@ class DeepLob(BaseFeaturesExtractor):
         # 卷积块
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=(1, 2), stride=(1, 2)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
+            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
-            nn.Tanh(),
-            # nn.BatchNorm2d(32),
+            nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            nn.Tanh(),
-            # nn.BatchNorm2d(32),
+            nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            nn.Tanh(),
-            # nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 5)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(32),
+            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
         )
 
         # Inception 模块
         self.inp1 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(3, 1), padding=(1, 0)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
         self.inp2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
             nn.Conv2d(64, 64, kernel_size=(5, 1), padding=(2, 0)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
         self.inp3 = nn.Sequential(
             nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
             nn.Conv2d(32, 64, kernel_size=(1, 1)),
-            # nn.LeakyReLU(negative_slope=0.01),
             nn.ReLU(),
-            # nn.BatchNorm2d(64),
         )
 
         # LSTM 层 
         self.lstm = nn.LSTM(input_size=64*3, hidden_size=64, num_layers=1, batch_first=True)
 
-        # 自注意力层
-        # self.attention = SelfAttention(128)
-        # self.improved_attention = ImprovedSelfAttention(64)
-
         # 静态特征处理
         self.static_net = nn.Sequential(
             nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
             nn.LayerNorm(self.extra_input_dims * 4),
-            # nn.LeakyReLU(),
             nn.ReLU(),
-            # nn.Dropout(0.1),
+            nn.Dropout(p=0.2)  # 添加 Dropout
         )
 
         # 融合层
         self.fusion = nn.Sequential(
             nn.Linear(64 + self.extra_input_dims * 4, 128),
             nn.LayerNorm(128),
-            # nn.LeakyReLU(),
             nn.ReLU(),
-            # nn.Dropout(0.2),
-            # nn.Linear(64, 64),
-            # nn.LeakyReLU(),
-            # nn.ReLU(),
-            # nn.Dropout(0.2),
             nn.Linear(128, features_dim),
         )
 
@@ -268,19 +234,14 @@ class DeepLob(BaseFeaturesExtractor):
         x_inp2 = self.inp2(x)  # (B, 64, 24, 1)
         x_inp3 = self.inp3(x)  # (B, 64, 24, 1)
         x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)  # (B, 192, 24, 1)
+        x = nn.Dropout2d(p=0.2)(x)  # 添加 Dropout2d
 
         # 调整形状以适配 LSTM
         x = x.permute(0, 2, 1, 3).squeeze(3)  # (B, 24, 192)
 
         # LSTM 处理 取最后一个时间步
         lstm_out, _ = self.lstm(x)  # (B, 24, 64)
-
-        # # # 自注意力
-        # # attn_out = self.attention(lstm_out)  # (B, ?, 128)
-        # # temporal_feat = attn_out[:, -1, :]  # 取最后一个时间步 (B, 128)
-        # attn_out = self.improved_attention(lstm_out)
-        # temporal_feat = attn_out.mean(dim=1)  # 平均池化
-
+        lstm_out = nn.Dropout(p=0.2)(lstm_out)  # 添加 Dropout
         # 取最后一个时间步
         temporal_feat = lstm_out[:, -1, :]  # (B, 64)
 
@@ -289,6 +250,7 @@ class DeepLob(BaseFeaturesExtractor):
 
         # 融合层
         fused_out = torch.cat([temporal_feat, static_out], dim=1)  # (B, 64 + self.extra_input_dims * 4)
+        fused_out = nn.Dropout(p=0.2)(fused_out)  # 添加 Dropout
         fused_out = self.fusion(fused_out)  # (B, features_dim)
 
         # 数值检查
@@ -299,22 +261,21 @@ class DeepLob(BaseFeaturesExtractor):
 
 model_config={
     # 自定义编码器参数  
-    'input_dims' : (30, 20),
+    'input_dims' : (100, 20),
     'extra_input_dims' : 3,
-    'features_dim' : 256,
+    'features_dim' : 128,
 }
 env_config ={
     'data_type': 'train',# 训练/测试
-    'his_len': 30,# 每个样本的 历史数据长度
+    'his_len': 100,# 每个样本的 历史数据长度
     'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
     'train_folder': train_folder,
     'train_title': train_folder,
-    'latest_dates': 100,# 只使用最近 100 个数据
 
-    # 不使用数据增强
-    'use_random_his_window': False,# 是否使用随机历史窗口
-    'use_gaussian_noise_vol': False,# 是否使用高斯噪声
-    'use_spread_add_small_limit_order': False,# 是否使用价差添加小单
+    # 使用数据增强
+    'use_random_his_window': True,# 是否使用随机历史窗口
+    'use_gaussian_noise_vol': True,# 是否使用高斯噪声
+    'use_spread_add_small_limit_order': True,# 是否使用价差添加小单
 }
 
 checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
@@ -323,7 +284,8 @@ checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
 policy_kwargs = dict(
     features_extractor_class=DeepLob,
     features_extractor_kwargs=model_config,
-    net_arch = [128,64]
+    net_arch = [64,32],
+    activation_fn=nn.ReLU
 )
 
 env_objs = []
@@ -352,7 +314,7 @@ if run_type != 'test':
         env, 
         verbose=1, 
         learning_rate=1e-3,
-        ent_coef=0.2,
+        ent_coef=0.01,
         gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
@@ -365,90 +327,130 @@ if run_type != 'test':
     # test_x = env.observation_space.sample()
     # test_x = torch.from_numpy(test_x).unsqueeze(0)
     # log(test_x.shape)
-    # test_x = test_x.float().to(device)
+    # test_x = test_x.float().to(model.policy.device)
     # out = model.policy.features_extractor(test_x)
     # log(out.shape)
     # sys.exit()
 
-    # 训练文件夹管理
-    if not in_windows():
-        train_folder_manager = TrainFolderManagerBC(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(model.policy)
+    vec_env = env
 
-    rng = np.random.default_rng()
+    memory_usage = psutil.virtual_memory()
+    log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
-    total_epochs = 40 if run_type!='test_model' else 10000000000000000
-    batch_size = 32
-    max_lr = 0.022# find_best_lr
-    batch_n = 2**5 if run_type=='train' else 1
-    batch_n = 1
-    # total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
+    # 生成验证数据 固定数量
+    for env in env_objs:
+        env.val()# 切换到验证模式
+    rollouts_val = rollout.rollout(
+        expert,
+        vec_env,
+        rollout.make_sample_until(min_timesteps=50_000 if run_type!='test_model' else 500),
+        rng=np.random.default_rng(),
+    )
+    for env in env_objs:
+        env.train()# 切换回训练模式
+    transitions_val = rollout.flatten_trajectories(rollouts_val)
+    memory_usage2 = psutil.virtual_memory()
+    msg = ''
+    mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
+    log(mem_pct_msg)
+    msg += mem_pct_msg + '\n'
+    mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
+    log(mem_expert_msg)
+    msg += mem_expert_msg + '\n'
+
+    # 检查 transitions 样本均衡度
+    label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
+    log(label_balance)
+    msg += label_balance + '\n'
+    send_wx(msg)
+    # sys.exit()
+
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
         action_space=env.action_space,
+        demonstrations_val = transitions_val,# 验证数据集
         policy=model.policy,
-        rng=rng,
+        rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': 1e-6} if run_type=='find_lr' else None,
+        optimizer_kwargs={'lr': lr},
         custom_logger=custom_logger,
     )
+    
+    # 训练文件夹管理
+    keep_on_train = False
+    if not in_windows():
+        train_folder_manager = TrainFolderManagerBC(train_folder)
+        if train_folder_manager.exists():
+            # 继续训练
+            log(f"restore from {train_folder_manager.checkpoint_folder}")
+            train_folder_manager.load_checkpoint(bc_trainer)
+            keep_on_train = True
 
+    if not keep_on_train:
+        # 新训练
+        # 使用 BC policy 进行 DAgger 训练
+        log(f"使用 BC policy 进行新训练")
+        policy_folder = rf'/kaggle/input/pre_trained_policy/' if not in_windows() else r"D:\L2_DATA_T0_ETF\train_data\RAW\DAGGER_pre_trained_policy"
+        bc_trainer.load(policy_folder)
+
+    # 初始化进度数据文件
+    progress_file = os.path.join(train_folder, f"progress.csv")
+    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+
+    # 初始化 
     dagger_trainer = SimpleDAggerTrainer(
         venv=env,
-        scratch_dir=os.path.join(train_folder, 'dagger'),
+        scratch_dir=r'C:\Users\lh\Desktop\temp\temp_dagger' if in_windows() else r"/kaggle/temp",# 临时文件夹，不进行备份
         expert_policy=expert,
         bc_trainer=bc_trainer,
-        rng=rng,
+        rng=np.random.default_rng(),
     )
 
     dagger_trainer.train(
-        # total_timesteps=_train_timesteps,
-        total_timesteps=10000,
+        total_timesteps = 1_000_000_000_000_000_000, # 不受改参数限制，停止与否取决于训练效果
+
+        train_folder = train_folder,
+        train_title = train_title,
+        train_folder_manager = train_folder_manager,
+        eval_env = env_objs[0],
+        progress_file = progress_file,
+        progress_file_all = progress_file_all,
+        
+        rollout_round_min_timesteps = each_round_train_num if run_type!='test_model' else 500,
     )
 
-    # 验证模型
-    _t = time.time()
-    env = env_objs[0]
-    env.val()
-    val_reward, _ = evaluate_policy(dagger_trainer.policy, env)
-    env.train()
-    train_reward, _ = evaluate_policy(dagger_trainer.policy, env)
-    log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
 else:
     # test
     model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
+    # 加载 BC 训练的策略
+    pretrained_policy = ActorCriticPolicy.load(model_folder)
 
     # 初始化模型
-    env_config['data_type'] = 'test'
+    # env_config['data_type'] = 'test'
     env_config['render_mode'] = 'human'
     test_env = LOB_trade_env(env_config)
-    test_env.test()
+    test_env.train()
     model = PPO(
         model_type, 
         test_env, 
-        verbose=1, 
-        learning_rate=1e-3,
-        ent_coef=0.2,
-        gamma=0.97,
         policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
     )
 
-    # 加载参数
-    model.policy.load(model_folder)
+    # # 加载参数
+    # model.policy.load_state_dict(pretrained_policy.state_dict())
 
     # 专家, 用于参考
     expert = LobExpert_file(pre_cache=False)
     
     # 测试
     rounds = 5
-    rounds = 1
+    # rounds = 1
     for i in range(rounds):
         log('reset')
         seed = random.randint(0, 1000000)
-        # seed = 646508
+        seed = 477977
+        seed = 195789
         obs, info = test_env.reset(seed)
         test_env.render()
 

@@ -1,10 +1,66 @@
-from imitation.algorithms.dagger import SimpleDAggerTrainer as _SimpleDAggerTrainer
-from imitation.algorithms.dagger import Optional, rollout, np
+import time, os
+import pandas as pd
+from stable_baselines3.common.evaluation import evaluate_policy
+from imitation.algorithms.dagger import Optional, rollout, np, DAggerTrainer, vec_env, types, policies
 
-class SimpleDAggerTrainer(_SimpleDAggerTrainer):
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
+from dl_helper.tool import report_memory_usage, in_windows
+
+from py_ext.tool import log
+
+class SimpleDAggerTrainer(DAggerTrainer):
+    def __init__(
+        self,
+        *,
+        venv: vec_env.VecEnv,
+        scratch_dir: types.AnyPath,
+        expert_policy: policies.BasePolicy,
+        rng: np.random.Generator,
+        **dagger_trainer_kwargs,
+    ):
+        """Builds SimpleDAggerTrainer.  
+        修改:   
+            1. 不允许使用 初始数据 expert_trajs  
+            2. 固定 beta 为0.0, 全部使用模仿策略生成轨迹  
+
+        Args:
+            venv: Vectorized training environment. Note that when the robot
+                action is randomly injected (in accordance with `beta_schedule`
+                argument), every individual environment will get a robot action
+                simultaneously for that timestep.
+            scratch_dir: Directory to use to store intermediate training
+                information (e.g. for resuming training).
+            expert_policy: The expert policy used to generate synthetic demonstrations.
+            rng: Random state to use for the random number generator.
+
+        Raises:
+            ValueError: The observation or action space does not match between
+                `venv` and `expert_policy`.
+        """
+        super().__init__(
+            venv=venv,
+            scratch_dir=scratch_dir,
+            rng=rng,
+            beta_schedule=lambda round_num: 0.0,# 固定使用模仿策略生成轨迹
+            **dagger_trainer_kwargs,
+        )
+        self.expert_policy = expert_policy
+        if expert_policy.observation_space != self.venv.observation_space:
+            raise ValueError(
+                "Mismatched observation space between expert_policy and venv",
+            )
+        if expert_policy.action_space != self.venv.action_space:
+            raise ValueError("Mismatched action space between expert_policy and venv")
+
     def train(
         self,
         total_timesteps: int,
+        train_folder, 
+        train_title,
+        train_folder_manager,
+        eval_env, 
+        progress_file, 
+        progress_file_all,
         *,
         rollout_round_min_episodes: int = 3,
         rollout_round_min_timesteps: int = 500,
@@ -46,6 +102,12 @@ class SimpleDAggerTrainer(_SimpleDAggerTrainer):
         total_timestep_count = 0
         round_num = 0
 
+        # 初始化进度数据
+        if os.path.exists(progress_file_all):
+            df_progress = pd.read_csv(progress_file_all)
+        else:
+            df_progress = pd.DataFrame()
+
         while total_timestep_count < total_timesteps:
             collector = self.create_trajectory_collector()
             round_episode_count = 0
@@ -80,6 +142,46 @@ class SimpleDAggerTrainer(_SimpleDAggerTrainer):
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
             # `logger.dump` is called inside BC.train within the following fn call:
+            # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
 
+            # # 检查梯度
+            # check_gradients(self.bc_trainer)
+
+            # 验证模型
+            _t = time.time()
+            eval_env.val()
+            val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            eval_env.train()
+            train_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
+
+            # 合并到 progress_all.csv
+            latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
+            df_new = pd.read_csv(progress_file)
+            df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
+            df_new['bc/epoch'] += round_num * self.DEFAULT_N_EPOCHS
+            df_new['bc/mean_reward'] = np.nan
+            df_new['bc/val_mean_reward'] = np.nan
+            df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+            df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
+            df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
+            df_progress.ffill(inplace=True)
+            df_progress.to_csv(progress_file_all, index=False)
+
+            # 当前点是否是最优的 checkpoint
+            # 使用 recall 判断
+            if 'bc/recall' in list(df_progress):
+                bset_recall = df_progress['bc/recall'].max()
+                best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+                is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+            else:
+                is_best = False
+
+            # 训练进度可视化
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+
+            if not in_windows():
+                # 保存模型
+                train_folder_manager.checkpoint(self.bc_trainer, best=is_best)

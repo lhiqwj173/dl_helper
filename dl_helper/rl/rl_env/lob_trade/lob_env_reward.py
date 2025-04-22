@@ -45,7 +45,7 @@ class BlankRewardStrategy(RewardStrategy):
     无奖励 不结束游戏
     """
     def calculate_reward(self, **kwargs):
-        return 0, False
+        return np.float32(0.0), False
 
 class ClosePositionRewardStrategy(RewardStrategy):
     """
@@ -68,7 +68,7 @@ class ClosePositionRewardStrategy(RewardStrategy):
         # 说明初始化持仓，再第一个step就平仓了
         # 奖励为0
         if len(acc.net_raw) == 2:
-            return 0, False
+            return np.float32(0.0), False
 
         potential_return = res['potential_return']
         acc_return = res['acc_return']
@@ -97,7 +97,7 @@ class HoldPositionRewardStrategy(RewardStrategy):
             **kwargs
         ):
         reward = res['step_return']  # 持仓每步收益率
-        return reward, False
+        return np.float32(reward), False
 
 class ForceStopRewardStrategy(RewardStrategy):
     """
@@ -108,7 +108,7 @@ class ForceStopRewardStrategy(RewardStrategy):
             STD_REWARD=100,
             **kwargs
         ):
-        return -STD_REWARD, True
+        return np.float32(-STD_REWARD), True
 
 class NoPositionRewardStrategy_0(RewardStrategy):
     """
@@ -144,7 +144,7 @@ class NoPositionRewardStrategy_0(RewardStrategy):
         else:
             reward = 0  # 默认值
 
-        return reward, acc_done
+        return np.float32(reward), acc_done
 
 class NoPositionRewardStrategy(RewardStrategy):
     """
@@ -157,7 +157,7 @@ class NoPositionRewardStrategy(RewardStrategy):
             **kwargs
         ):
         reward = -res['step_return_bm']  # 持仓每步收益率的相反数
-        return reward, False
+        return np.float32(reward), False
     
 class RewardCalculator:
     def __init__(self, 
