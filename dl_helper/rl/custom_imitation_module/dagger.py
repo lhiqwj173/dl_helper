@@ -227,7 +227,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._load_all_demos()
 
             # 将数据转换为 transitions
-            transitions = types.Transitions(**self.self.transitions_dict)
+            transitions = types.Transitions(**self.transitions_dict)
 
             if len(transitions) < self.batch_size:
                 raise ValueError(

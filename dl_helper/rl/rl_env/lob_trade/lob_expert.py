@@ -331,8 +331,11 @@ def test_expert():
 def play_lob_data_with_expert(render=True):
     import time
 
+    debug_obs_date = np.float32(12448.0)
+    debug_obs_time = np.float32(0.65676767)
+    init_pos = 1
+
     code = '513050'
-    date = '20240521'
     env = LOB_trade_env({
         # 'data_type': 'val',# 训练/测试
         'data_type': 'train',# 训练/测试
@@ -346,7 +349,9 @@ def play_lob_data_with_expert(render=True):
 
         'render_mode': 'human' if render else 'none',
     },
-    # debug_date=[date],
+    debug_obs_date=debug_obs_date,
+    debug_obs_time=debug_obs_time,
+    debug_init_pos = init_pos,
     dump_bid_ask_accnet=True,
     )
 

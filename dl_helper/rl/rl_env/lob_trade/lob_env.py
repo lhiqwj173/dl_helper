@@ -80,6 +80,7 @@ class data_producer:
             data_std=True, 
             save_folder="", 
             debug_date=[],
+            debug_time=None,
             random_begin_in_day=True,
             latest_dates=-1,
 
@@ -118,6 +119,10 @@ class data_producer:
         self.debug_date = [i.replace('-', '').replace(' ', '') for i in debug_date]
         if self.debug_date:
             log(f'[{data_type}] debug_date: {self.debug_date}')
+        self.debug_time = debug_time
+        if self.debug_time:
+            # 使用指定的时间开始
+            log(f'[{data_type}] debug_time: {self.debug_time}')
 
         self.use_symbols = use_symbols
         self.random_begin_in_day = random_begin_in_day
@@ -242,7 +247,7 @@ class data_producer:
                 ordered_files = []
                 for debug_date in self.debug_date:
                     for file in self.files:
-                        if file.split('.')[0] == debug_date:
+                        if file.split('.')[0][-8:] == debug_date:
                             ordered_files.append(file)
                 self.files = ordered_files
             log(f'[{self.data_type}] prepare files: {[os.path.basename(i) for i in self.files]}')
@@ -305,7 +310,7 @@ class data_producer:
                 begin = symbol_indices[0]
                 end = symbol_indices[-1]
                 self.full_idxs.append([begin, end, USE_CODES.index(symbol)])
-                if self.random_begin_in_day and self.data_type == 'train':
+                if not self.debug_time and (self.random_begin_in_day and self.data_type == 'train'):
                     if hasattr(self, 'begin_before_market_close_sec'):
                         _idx = begin
                         while _idx <= end:
@@ -330,6 +335,19 @@ class data_producer:
                 choose_idx = self.np_random.choice(len(self.idxs))
                 self.idxs = [self.idxs[choose_idx]]
                 self.full_idxs = [self.full_idxs[choose_idx]]
+
+            # 截取测试的时间点
+            if self.debug_time:
+                for idx_obj in self.idxs:
+                    begin, end, _ = idx_obj
+                    _idx = begin
+                    while _idx <= end:
+                        if self.before_market_close_sec[_idx] == int(self.debug_time):
+                            break
+                        _idx += 1
+                    assert _idx != end + 1, f'{int(self.debug_time)} not found'
+                    begin = _idx
+                    idx_obj[0] = begin
 
             # 当前的标的
             self.cur_symbol = USE_CODES[self.idxs[0][2]]
@@ -1369,7 +1387,7 @@ class LOB_trade_env(gym.Env):
     REG_NAME = 'lob'
     ITERATION_DONE_FILE = os.path.join(os.path.expanduser('~'), '_lob_env_iteration_done')
     
-    def __init__(self, config: dict, data_std=True, debug_date='', dump_bid_ask_accnet=False):
+    def __init__(self, config: dict, data_std=True, debug_obs_date=None, debug_obs_time=None, debug_init_pos=None, dump_bid_ask_accnet=False):
         """
         :param config: 配置
             {
@@ -1460,9 +1478,15 @@ class LOB_trade_env(gym.Env):
         self.data_std = data_std
 
         # 测试日期
-        self.debug_date = debug_date
+        self.debug_date = days2date(int(debug_obs_date)) if debug_obs_date else None
         if self.debug_date and isinstance(self.debug_date, str):
             self.debug_date = [self.debug_date]
+
+        # 调试时间
+        self.debug_time = int(debug_obs_time * MAX_SEC_BEFORE_CLOSE) if debug_obs_time else None
+
+        # 调试初始持仓
+        self.debug_init_pos = debug_init_pos
 
         # 初始化日志
         log_name = f'{config["train_title"]}_{beijing_time().strftime("%Y%m%d")}'
@@ -1479,6 +1503,7 @@ class LOB_trade_env(gym.Env):
             data_std=self.data_std, 
             save_folder=self.save_folder, 
             debug_date=self.debug_date,
+            debug_time=self.debug_time,
             random_begin_in_day=self.random_begin_in_day,
             latest_dates=self.latest_dates,
             use_random_his_window=self.use_random_his_window,
@@ -1856,7 +1881,7 @@ class LOB_trade_env(gym.Env):
                 self._render.handle_data({'full_plot_data': full_plot_data})
 
             # 账户
-            pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random, status=acc_status)
+            pos = self.acc.reset(self.data_producer.bid_price[-1], rng = self.np_random, status=acc_status or self.debug_init_pos)
             log(f'acc reset: {pos}')
 
             # 初始化持仓需要记录
