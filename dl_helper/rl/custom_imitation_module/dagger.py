@@ -12,7 +12,7 @@ from py_ext.tool import log
 
 class SimpleDAggerTrainer(DAggerTrainer):
 
-    MEMORY_THRESHOLD = 5  # 可用内存不足 5GB 就切换为 deque 模式
+    MEMORY_THRESHOLD = 10  # 可用内存不足 10GB 就切换为 deque 模式
 
     def __init__(
         self,
@@ -73,14 +73,12 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             for path in demo_paths:
                 demo = serialize.load(path)[0]  # 假设 demo 是一条 trajectory，list of transitions
+                # 检查内存使用
+                free_mem = psutil.virtual_memory().available / (1024 ** 3)  # GB
+                print(f"RAM FREE {free_mem:.1f}GB")
 
                 if isinstance(self._all_demos, list):
-                    # 检查内存使用
-                    free_mem = psutil.virtual_memory().available / (1024 ** 3)  # GB
-                    print(f"RAM FREE {free_mem:.1f}GB")
-                    
                     self._all_demos.append(demo)
-
                     if free_mem <= self.MEMORY_THRESHOLD:
                         print(f"switching to deque...")
 
