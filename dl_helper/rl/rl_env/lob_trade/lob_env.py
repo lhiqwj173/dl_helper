@@ -32,7 +32,7 @@ from dl_helper.rl.rl_utils import date2days, days2date
 from dl_helper.rl.rl_env.lob_trade.lob_env_data_augmentation import random_his_window, gaussian_noise_vol
 from dl_helper.rl.rl_env.lob_trade.lob_env_reward import ClosePositionRewardStrategy, HoldPositionRewardStrategy, NoPositionRewardStrategy, BlankRewardStrategy, ForceStopRewardStrategy, RewardCalculator
 
-from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID, STD_REWARD, FINAL_REWARD
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, STD_REWARD, FINAL_REWARD
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD
@@ -482,7 +482,7 @@ class data_producer:
             返回 symbol_id, before_market_close_sec, x, need_close, self.id
 
             若data_std=False
-            返回 symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std, id_std
+            返回 symbol_id, before_market_close_sec, x, need_close, _id, x_std, sec_std
         """
         # # 测试用
         # print(self.idxs[0])
@@ -604,17 +604,12 @@ class data_producer:
             # 归一化
             before_market_close_sec /= MAX_SEC_BEFORE_CLOSE
 
-            # id
-            # ZSCORE
-            # symbol_id -= MEAN_CODE_ID
-            # symbol_id /= STD_CODE_ID
-            # 归一化
-            symbol_id /= MAX_CODE_ID
+            # id 不需要标准化, 模型中嵌入
+            # 0 - 29 共30个
             return symbol_id, before_market_close_sec, x, self.need_close, self.id, unrealized_log_return_std_data
         else:
             sec_std = (MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE)
-            id_std = (MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID)
-            return symbol_id, before_market_close_sec, x, self.need_close, self.id, unrealized_log_return_std_data, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, self.need_close, self.id, unrealized_log_return_std_data, x_std, sec_std
 
     def get_plot_data(self):
         """
@@ -870,6 +865,8 @@ class Render:
         self.potential_data = None
         self.open_idx = None
         self.pre_n = None
+        self.forbiden_begin_idx = None
+        self.forbiden_end_idx = None
 
         # 绘图对象（延迟初始化）
         self.p1 = None
@@ -985,6 +982,18 @@ class Render:
             movable=False
         )
 
+        # 下午开盘的禁止时间背景
+        self.p1_region_forbiden = pg.LinearRegionItem(
+            brush=pg.mkBrush(color=(255, 0, 0, 50)),  # 填充：淡红色，透明度 50
+            pen=pg.mkPen(color=(255, 0, 0, 255)),     # 边线：纯红色，不透明
+            movable=False
+        )
+        self.p2_region_forbiden = pg.LinearRegionItem(
+            brush=pg.mkBrush(color=(255, 0, 0, 50)),  # 填充：淡红色，透明度 50
+            pen=pg.mkPen(color=(255, 0, 0, 255)),     # 边线：纯红色，不透明
+            movable=False
+        )
+
         # 设置绘图窗口
         self.p1 = self.win.addPlot(row=0, col=0, title="mid_price and net")
         self.p2 = self.win.addPlot(row=1, col=0, title="Cumulative Rewards")
@@ -1020,9 +1029,13 @@ class Render:
 
         self.p1.addItem(self.p1_region, ignoreBounds=True)
         self.p2.addItem(self.p2_region, ignoreBounds=True)
+        self.p1.addItem(self.p1_region_forbiden, ignoreBounds=True)
+        self.p2.addItem(self.p2_region_forbiden, ignoreBounds=True)
 
         self.p1_region.setZValue(-10)
         self.p2_region.setZValue(-10)
+        self.p1_region_forbiden.setZValue(-10)
+        self.p2_region_forbiden.setZValue(-10)
 
         # 创建按钮
         self.button1 = QtWidgets.QPushButton("BUY")
@@ -1187,7 +1200,30 @@ class Render:
                 if self.open_idx is not None:
                     self.open_idx -= 1
             self.net_data_fixed = True
+            self.forbiden_end_idx = hist_end - 1
+            self.forbiden_begin_idx = hist_end - 1 - need_fix_num
             log(f'fix noon data net_raw / rewards: {need_fix_num} 条')
+
+        else:
+            if self.forbiden_end_idx is not None and self.forbiden_begin_idx is not None:
+                if n <= self.pre_n:
+                    self.forbiden_end_idx -= 1
+                    self.forbiden_begin_idx -= 1
+                    self.forbiden_end_idx = max(self.forbiden_end_idx, 0)
+                    self.forbiden_begin_idx = max(self.forbiden_begin_idx, 0)
+
+        # 更新禁止背景数据
+        # 检查 self.open_idx 是否有效
+        if self.forbiden_end_idx is not None and self.forbiden_end_idx != 0:
+            # 设置区域范围为 [self.open_idx, hist_end - 1]
+            self.p1_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx - 1])
+            self.p2_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx - 1])
+            self.p1_region_forbiden.show()
+            self.p2_region_forbiden.show()
+        else:
+            # 隐藏区域
+            self.p1_region_forbiden.hide()
+            self.p2_region_forbiden.hide()
 
         net_value = latest_net_raw / self.std_data['net_raw'] if self.std_data['net_raw'] != 0 else 1.0
         self.data_deque['net_raw'].append(net_value)
@@ -1236,7 +1272,6 @@ class Render:
             log(f'更新曲线数据失败: {e}')
             return
         
-
         # 更新持仓背景数据
         # 检查 self.open_idx 是否有效
         if self.open_idx is not None and self.open_idx < hist_end - 1:
@@ -1602,9 +1637,9 @@ class LOB_trade_env(gym.Env):
             x = x.reshape(-1)
             return symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data
         else:
-            symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self.data_producer.get()
+            symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std = self.data_producer.get()
             x = x.reshape(-1)
-            return symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std
+            return symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std
 
     def _cal_reward(self, action, need_close, info):
         """
@@ -1755,7 +1790,7 @@ class LOB_trade_env(gym.Env):
             if self.data_std:
                 symbol_id, before_market_close_sec, observation, need_close, _id, unrealized_log_return_std_data = self._get_data()
             else:
-                symbol_id, before_market_close_sec, observation, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self._get_data()
+                symbol_id, before_market_close_sec, observation, need_close, _id, unrealized_log_return_std_data, x_std, sec_std = self._get_data()
 
             info = {
                 'id': _id,
@@ -1765,7 +1800,6 @@ class LOB_trade_env(gym.Env):
             if not self.data_std:
                 info['x_std'] = x_std
                 info['sec_std'] = sec_std
-                info['id_std'] = id_std
 
             # 计算奖励
             reward, acc_done, pos, inday_return, unrealized_return, act_result = self._cal_reward(action, need_close, info)
@@ -1803,9 +1837,8 @@ class LOB_trade_env(gym.Env):
             inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
 
             # 添加 静态特征
-            # observation = np.concatenate([observation, [before_market_close_sec, symbol_id, pos, inday_return, unrealized_return]])
             # 20250406 取消收益率
-            observation = np.concatenate([observation, [np.float32(before_market_close_sec), np.float32(symbol_id), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
+            observation = np.concatenate([observation, [np.float32(symbol_id), np.float32(before_market_close_sec), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
 
             # 检查是否结束
             terminated = acc_done or need_close# 游戏终止
@@ -1870,7 +1903,7 @@ class LOB_trade_env(gym.Env):
                 if self.data_std:
                     symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data = self._get_data()
                 else:
-                    symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std, id_std = self._get_data()
+                    symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data, x_std, sec_std = self._get_data()
                 if need_close:
                     # 若是 val 数据，有可能 need_close 为True
                     # 需要过滤
@@ -1890,7 +1923,7 @@ class LOB_trade_env(gym.Env):
             self.run_twice = pos == 1
 
             # 添加 静态特征
-            x = np.concatenate([x, [np.float32(before_market_close_sec), np.float32(symbol_id), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
+            x = np.concatenate([x, [np.float32(symbol_id), np.float32(before_market_close_sec), np.float32(pos), np.float32(date2days(self.data_producer.date))]])
 
             # 记录静态数据，用于输出预测数据
             self.static_data = {
@@ -1903,7 +1936,7 @@ class LOB_trade_env(gym.Env):
             if self.data_std:
                 return x, {'id': _id}
             else:
-                return x, {'x_std': x_std, 'sec_std': sec_std, 'id_std': id_std, 'id': _id}
+                return x, {'x_std': x_std, 'sec_std': sec_std, 'id': _id}
             
         except Exception as e:
             log(f'[{id(self)}][{self.data_producer.data_type}] reset error: {get_exception_msg()}')
@@ -1944,7 +1977,7 @@ class LOB_trade_env(gym.Env):
 
             # 设置 data_producer
             date = days2date(int(obs_date))
-            symbol = USE_CODES[int(obs_symbol*MAX_CODE_ID)]
+            symbol = USE_CODES[int(obs_symbol)]
             # 设置 data_producer files
             _date_file = f'{date}.pkl'
             if os.path.exists(os.path.join(self.data_producer.data_folder, 'train', _date_file)):

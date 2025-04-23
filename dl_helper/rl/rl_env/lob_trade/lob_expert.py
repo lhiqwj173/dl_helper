@@ -15,7 +15,7 @@ import psutil
 from dl_helper.train_param import in_kaggle
 from dl_helper.tool import max_profit_reachable, plot_trades
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
-from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, MEAN_CODE_ID, STD_CODE_ID, MAX_CODE_ID, STD_REWARD
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, STD_REWARD
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
@@ -105,31 +105,48 @@ class LobExpert_file():
         if dtype == np.float32:
             lob_data['before_market_close_sec'] = lob_data['before_market_close_sec'].astype(np.float32)
 
-        # 计算潜在收益
-        trades, total_log_return, self.valleys, self.peaks = max_profit_reachable(
-            # 去掉第一个, 第一个数据无法成交
-            lob_data['BASE买1价'].iloc[1:], 
-            lob_data['BASE卖1价'].iloc[1:], 
-            rep_select='random',
-            rng=self.rng,
-        )# 增加随机泛化
-        # plot_trades((lob_data['BASE买1价']+lob_data['BASE卖1价'])/2, trades, valleys, peaks)
-        # 需要 +1
-        self.valleys = [i+1 for i in self.valleys]
-        self.peaks = [i+1 for i in self.peaks]
+        # 区分上午下午
+        # 12:00 - 15:00 》 10800
+        noon_before_market_close_sec = 10800 / MAX_SEC_BEFORE_CLOSE
+        # 处理 before_market_close_sec nan
+        # 使用 其后第一个非nan + 1/MAX_SEC_BEFORE_CLOSE, 来填充
+        filled = lob_data['before_market_close_sec'].bfill()
+        mask = lob_data['before_market_close_sec'].isna()
+        lob_data['before_market_close_sec'] = np.where(mask, filled + 1/MAX_SEC_BEFORE_CLOSE, lob_data['before_market_close_sec'])
+        am = lob_data.loc[lob_data['before_market_close_sec'] > noon_before_market_close_sec]
+        pm = lob_data.loc[lob_data['before_market_close_sec'] < noon_before_market_close_sec]
 
-        # 添加到 lob_data 中
-        lob_data.loc[self.valleys, 'valley_peak'] = 0
-        lob_data.loc[self.peaks, 'valley_peak'] = 1
+        lob_data['valley_peak'] = np.nan
+        lob_data['action'] = np.nan
+        for _lob_data in [am, pm]:
+            # 第一个数据的索引
+            idx_1st = _lob_data.index[0]
 
-        # b/s/h
-        # 无需提前一个k线，发出信号
-        # trades 中的索引0实际是 lob_data 中的索引1
-        # 沿用 索引0 就已经提前了一个k线
-        buy_idx = [i[0] for i in trades]
-        sell_idx = [i[1] for i in trades]
-        lob_data.loc[buy_idx, 'action'] = ACTION_BUY
-        lob_data.loc[sell_idx, 'action'] = ACTION_SELL
+            # 计算潜在收益
+            trades, total_log_return, _valleys, _peaks = max_profit_reachable(
+                # 去掉第一个, 第一个数据无法成交
+                _lob_data['BASE买1价'].iloc[1:], 
+                _lob_data['BASE卖1价'].iloc[1:], 
+                rep_select='random',
+                rng=self.rng,
+            )# 增加随机泛化
+            # plot_trades((lob_data['BASE买1价']+lob_data['BASE卖1价'])/2, trades, valleys, peaks)
+            # 需要 +1
+            _valleys = [i+1 + idx_1st for i in _valleys]
+            _peaks = [i+1 + idx_1st for i in _peaks]
+
+            # 添加到 lob_data 中
+            lob_data.loc[_valleys, 'valley_peak'] = 0
+            lob_data.loc[_peaks, 'valley_peak'] = 1
+
+            # b/s/h
+            # 无需提前一个k线，发出信号
+            # trades 中的索引0实际是 lob_data 中的索引1
+            # 沿用 索引0 就已经提前了一个k线
+            buy_idx = [i[0] + idx_1st for i in trades]
+            sell_idx = [i[1] + idx_1st for i in trades]
+            lob_data.loc[buy_idx, 'action'] = ACTION_BUY
+            lob_data.loc[sell_idx, 'action'] = ACTION_SELL
 
         # 设置 env 的潜在收益数据，用于可视化
         # 恢复到 full_lob_data 中 
@@ -137,14 +154,27 @@ class LobExpert_file():
         self.full_lob_data['valley_peak'] = np.nan
         self.full_lob_data.iloc[lob_data_begin: lob_data_end, -2:] = lob_data.loc[:, ['action', 'valley_peak']].values
 
-        lob_data['action'] = lob_data['action'].ffill()
-        lob_data['action'] = lob_data['action'].fillna(ACTION_SELL)
+        # 区分上午下午填充
+        am_cond = lob_data['before_market_close_sec'] > noon_before_market_close_sec
+        lob_data.loc[am_cond, 'action'] = lob_data.loc[am_cond, 'action'].ffill()
+        lob_data.loc[am_cond, 'action'] = lob_data.loc[am_cond, 'action'].fillna(ACTION_SELL)
+        pm_cond = lob_data['before_market_close_sec'] < noon_before_market_close_sec
+        lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].ffill()
+        lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].fillna(ACTION_SELL)
 
         # 计算 action==0 时点买入的收益
-        lob_data = calculate_profit(lob_data)
+        am_res = calculate_profit(lob_data.loc[am_cond, :].copy())
+        pm_res = calculate_profit(lob_data.loc[pm_cond, :].copy().reset_index(drop=True))
+        lob_data['profit'] = np.nan
+        lob_data.loc[am_cond, 'profit'] = am_res['profit'].values
+        lob_data.loc[pm_cond, 'profit'] = pm_res['profit'].values
 
         # 计算 action==1 时点卖出节省的收益
-        lob_data = calculate_sell_save(lob_data)
+        am_res = calculate_sell_save(am_res)
+        pm_res = calculate_sell_save(pm_res)
+        lob_data['sell_save'] = np.nan
+        lob_data.loc[am_cond, 'sell_save'] = am_res['sell_save'].values
+        lob_data.loc[pm_cond, 'sell_save'] = pm_res['sell_save'].values
 
         # 最终数据 action, before_market_close_sec, profit, sell_save
         lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save']]
@@ -211,17 +241,17 @@ class LobExpert_file():
         """
         if len(obs.shape) == 1:
             obs_date = obs[-1]
-            obs_symbol = obs[-3]
+            obs_symbol = obs[-4]
         elif len(obs.shape) == 2:
             assert obs.shape[0] == 1
             obs_date = obs[0][-1]
-            obs_symbol = obs[0][-3]
+            obs_symbol = obs[0][-4]
         else:
             raise ValueError(f'obs.shape: {obs.shape}')
         
         # 如果不在缓存数据中，需要准备数据
         date_key = int(obs_date)
-        symbol_key = int(obs_symbol*MAX_CODE_ID)
+        symbol_key = int(obs_symbol)
         if date_key not in self.cache_data or symbol_key not in self.cache_data[date_key]:
             log(f'prepare data for {date_key} {symbol_key}, cache_data: {len(self.cache_data)} dates')
             self.prepare_train_data_file(date_key, symbol_key, dtype=obs.dtype)
@@ -230,13 +260,13 @@ class LobExpert_file():
         return date_key, symbol_key
 
     @staticmethod
-    def _get_action(obs, lob_data, valleys, peaks):
+    def _get_action(obs, lob_data):
         """
         获取专家动作
         obs 单个样本
         """
         # 距离市场关闭的秒数 / pos
-        before_market_close_sec = obs[-4]
+        before_market_close_sec = obs[-3]
         pos = obs[-2]
         
         # 查找 action
@@ -275,12 +305,12 @@ class LobExpert_file():
         # 获取动作
         if len(obs.shape) == 1:
             date_key, symbol_key = self.check_need_prepare_data(obs)
-            return self._get_action(obs, self.cache_data[date_key][symbol_key], self.valleys, self.peaks)
+            return self._get_action(obs, self.cache_data[date_key][symbol_key])
         elif len(obs.shape) == 2:
             rets = []
             for i in obs:
                 date_key, symbol_key = self.check_need_prepare_data(i)
-                rets.append(self._get_action(i, self.cache_data[date_key][symbol_key], self.valleys, self.peaks))
+                rets.append(self._get_action(i, self.cache_data[date_key][symbol_key]))
             return np.array(rets)
         else:
             raise ValueError(f'obs.shape: {obs.shape}')
@@ -362,7 +392,7 @@ def play_lob_data_with_expert(render=True):
     for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        # seed = 755812
+        seed = 192418
         obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
 
@@ -478,5 +508,5 @@ if __name__ == '__main__':
     # dump_file = r"D:\code\dl_helper\get_action.pkl"
     # data = pickle.load(open(dump_file, 'rb'))
     # obs, lob_data, valleys, peaks = data
-    # action = LobExpert._get_action(obs, lob_data, valleys, peaks)
+    # action = LobExpert._get_action(obs, lob_data)
     # print(action)

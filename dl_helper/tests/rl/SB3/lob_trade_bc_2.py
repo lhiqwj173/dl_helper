@@ -36,6 +36,7 @@ from py_ext.tool import init_logger,log
 from py_ext.wechat import send_wx
 from py_ext.datetime import beijing_time
 
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
@@ -101,7 +102,7 @@ total_epochs = 1 if run_type=='find_lr' else 500 if run_type!='test_model' else 
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
-max_lr = 1e-4# find_best_lr
+max_lr = 8e-5# find_best_lr
 batch_n = 2**7 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
@@ -111,40 +112,8 @@ custom_logger = imit_logger.configure(
     format_strs=["csv", "stdout"],
 )
 
-class SelfAttention(nn.Module):
-    def __init__(self, input_dim):
-        super().__init__()
-        self.query = nn.Linear(input_dim, input_dim)
-        self.key = nn.Linear(input_dim, input_dim)
-        self.value = nn.Linear(input_dim, input_dim)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        queries = self.query(x)
-        keys = self.key(x)
-        values = self.value(x)
-        scores = torch.bmm(queries, keys.transpose(1, 2)) / (x.size(-1) ** 0.5)
-        attention = self.softmax(scores)
-        weighted = torch.bmm(attention, values)
-        return weighted
-
-class ImprovedSelfAttention(nn.Module):
-    def __init__(self, input_dim, num_heads=4, dropout=0.1):
-        super().__init__()
-        self.multihead_attn = nn.MultiheadAttention(input_dim, num_heads, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
-        self.norm = nn.LayerNorm(input_dim)
-
-    def forward(self, x):
-        # x: (batch, seq_len, input_dim)
-        attn_output, _ = self.multihead_attn(x, x, x)  # 使用多头注意力
-        # attn_output = self.dropout(attn_output)
-        out = self.norm(x + attn_output)  # 残差连接 + LayerNorm
-        return out
-
 # 自定义特征提取器
-# 参数量: 250795
-# 参数量: 172555
+# 参数量: 176827
 class DeepLob(BaseFeaturesExtractor):
     def __init__(
             self,
@@ -209,17 +178,24 @@ class DeepLob(BaseFeaturesExtractor):
         # LSTM 层 
         self.lstm = nn.LSTM(input_size=64*3, hidden_size=64, num_layers=1, batch_first=True)
 
+        # id 嵌入层
+        self.id_embedding = nn.Embedding(len(USE_CODES), 8)
+
+        # 计算静态特征的输入维度
+        static_input_dim = 8 + (self.extra_input_dims - 1)  # 嵌入维度 + 数值特征维度
+
         # 静态特征处理
         self.static_net = nn.Sequential(
-            nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
-            nn.LayerNorm(self.extra_input_dims * 4),
+            nn.Linear(static_input_dim, static_input_dim * 4),
+            nn.LayerNorm(static_input_dim * 4),
             nn.ReLU(),
-            nn.Dropout(p=0.2)  # 添加 Dropout
+            nn.Dropout(p=0.2)
         )
 
         # 融合层
+        fusion_input_dim = 64 + static_input_dim * 4  # LSTM 输出 64 维 + static_net 输出
         self.fusion = nn.Sequential(
-            nn.Linear(64 + self.extra_input_dims * 4, 128),
+            nn.Linear(fusion_input_dim, 128),
             nn.LayerNorm(128),
             nn.ReLU(),
             nn.Linear(128, features_dim),
@@ -257,6 +233,20 @@ class DeepLob(BaseFeaturesExtractor):
         extra_x = use_obs[:, -self.extra_input_dims:]
         x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)  # (B, 1, 10, 20)
 
+        # 处理静态特征
+        # extra_x 第1列是类别特征（整数索引）
+        cat_feat = extra_x[:, 0].long()  # (B,)，转换为整数类型
+        num_feat = extra_x[:, 1:]  # (B, self.extra_input_dims - 1)，数值特征
+
+        # 嵌入类别特征
+        embedded = self.id_embedding(cat_feat)  # (B, 8)
+
+        # 拼接嵌入向量和数值特征
+        static_input = torch.cat([embedded, num_feat], dim=1)  # (B, 8 + self.extra_input_dims - 1)
+
+        # 静态特征处理
+        static_out = self.static_net(static_input)  # (B, static_input_dim * 4)
+
         # 卷积块
         x = self.conv1(x)  # (B, 32, 28, 10)
         x = self.conv2(x)  # (B, 32, 26, 5)
@@ -277,9 +267,6 @@ class DeepLob(BaseFeaturesExtractor):
         lstm_out = nn.Dropout(p=0.2)(lstm_out)  # 添加 Dropout
         # 取最后一个时间步
         temporal_feat = lstm_out[:, -1, :]  # (B, 64)
-
-        # 静态特征处理
-        static_out = self.static_net(extra_x)  # (B, self.extra_input_dims * 4)
 
         # 融合层
         fused_out = torch.cat([temporal_feat, static_out], dim=1)  # (B, 64 + self.extra_input_dims * 4)
@@ -357,13 +344,13 @@ if run_type != 'test':
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
 
-    # test_x = env.observation_space.sample()
-    # test_x = torch.from_numpy(test_x).unsqueeze(0)
-    # log(test_x.shape)
-    # test_x = test_x.float().to(model.policy.device)
-    # out = model.policy.features_extractor(test_x)
-    # log(out.shape)
-    # sys.exit()
+    test_x = env.observation_space.sample()
+    test_x = torch.from_numpy(test_x).unsqueeze(0)
+    log(test_x.shape)
+    test_x = test_x.float().to(model.policy.device)
+    out = model.policy.features_extractor(test_x)
+    log(out.shape)
+    sys.exit()
 
     vec_env = env
 

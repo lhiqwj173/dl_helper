@@ -32,9 +32,6 @@ USE_CODES = [
     '159636',
     '159659',
 ]
-MEAN_CODE_ID = np.mean(np.arange(len(USE_CODES)))
-STD_CODE_ID = np.std(np.arange(len(USE_CODES)))
-MAX_CODE_ID = len(USE_CODES) - 1
 
 STD_REWARD = 100
 FINAL_REWARD = STD_REWARD * 1000

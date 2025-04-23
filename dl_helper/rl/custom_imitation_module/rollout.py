@@ -35,9 +35,20 @@ def balance_rollout(r):
     cond = (obs[:-1, -2] == 1) & (acts==ACTION_BUY)
     pos_buy_indices = np.where(cond)[0]
     # print(f"持仓买入: {len(pos_buy_indices)} / {len(acts)}")
-    # 随机 pos_sell_indices 相同的个数
-    pos_buy_indices = np.random.choice(pos_buy_indices, size=len(pos_sell_indices), replace=False) if len(pos_buy_indices) else []
-    # print(f"持仓买入(随机): {len(pos_buy_indices)} / {len(acts)} : {pos_buy_indices}")
+
+    if len(pos_buy_indices) > len(pos_sell_indices):
+        # 降采样 pos_buy_indices 
+        # 与 pos_sell_indices 相同的个数
+        pos_buy_indices = np.random.choice(pos_buy_indices, size=len(pos_sell_indices), replace=False) if len(pos_buy_indices) else []
+        # print(f"持仓买入(随机): {len(pos_buy_indices)} / {len(acts)} : {pos_buy_indices}")
+    elif len(pos_buy_indices) < len(pos_sell_indices):
+        # 降采样 pos_sell_indices 
+        # 与 pos_buy_indices 相同的个数
+        pos_sell_indices = np.random.choice(pos_sell_indices, size=len(pos_buy_indices), replace=False) if len(pos_sell_indices) else []
+        # print(f"持仓卖出(随机): {len(pos_sell_indices)} / {len(acts)} : {pos_sell_indices}")
+    # else:
+    #     # 保持不变
+    #     pass
 
     # 查找 obs[-2](pos) == 0 且 act==ACTION_BUY 的数量
     cond = (obs[:-1, -2] == 0) & (acts==ACTION_BUY)
@@ -48,9 +59,20 @@ def balance_rollout(r):
     cond = (obs[:-1, -2] == 0) & (acts==ACTION_SELL)
     blank_sell_indices = np.where(cond)[0]
     # print(f"空仓卖出: {len(blank_sell_indices)} / {len(acts)}")
-    # 随机 blank_buy_indices 相同的个数
-    blank_sell_indices = np.random.choice(blank_sell_indices, size=len(blank_buy_indices), replace=False) if len(blank_sell_indices) else []
-    # print(f"空仓卖出(随机): {len(blank_sell_indices)} / {len(acts)} : {blank_sell_indices}")
+
+    if len(blank_buy_indices) < len(blank_sell_indices):
+        # 降采样 blank_sell_indices
+        # 随机 blank_buy_indices 相同的个数
+        blank_sell_indices = np.random.choice(blank_sell_indices, size=len(blank_buy_indices), replace=False)
+        # print(f"空仓卖出(随机): {len(blank_sell_indices)} / {len(acts)} : {blank_sell_indices}")
+    elif len(blank_buy_indices) > len(blank_sell_indices):
+        # 降采样 blank_buy_indices
+        # 随机 blank_sell_indices 相同的个数
+        blank_buy_indices = np.random.choice(blank_buy_indices, size=len(blank_sell_indices), replace=False)
+        # print(f"空仓买入(随机): {len(blank_buy_indices)} / {len(acts)} : {blank_buy_indices}")
+    # else:
+    #     # 保持不变
+    #     pass
 
     # 合并所有的索引
     wait_concat_list = [i for i in [pos_sell_indices, pos_buy_indices, blank_buy_indices, blank_sell_indices] if len(i)]
@@ -254,8 +276,8 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
     if load_file_num is None:
         load_file_num = len(files)
 
-    # 获取当前系统可用内存（预留 3GB 缓冲）
-    system_memory_bytes = psutil.virtual_memory().available - 3 * 1024**3
+    # 获取当前系统可用内存（预留 4GB 缓冲）
+    system_memory_bytes = psutil.virtual_memory().available - 4 * 1024**3
     effective_memory_limit = min(max_memory_bytes, system_memory_bytes)
     print(f"系统可用内存: {system_memory_bytes / (1024**3):.2f} GB, 有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
 
