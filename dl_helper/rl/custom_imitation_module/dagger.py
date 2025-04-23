@@ -3,12 +3,56 @@ import pandas as pd
 from collections import deque
 from typing import Deque
 from stable_baselines3.common.evaluation import evaluate_policy
-from imitation.algorithms.dagger import Optional, rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging
+from imitation.algorithms.dagger import (
+    Optional, 
+    rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data,
+    Mapping, Any,
+)
 
+from dl_helper.rl.custom_imitation_module.rollout import KEYS
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
 from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
+
+def calculate_sample_size_bytes(sample):
+    total = 0
+    log("各字段内存占用（字节）：")
+    for k, v in sample.items():
+        size = v.nbytes
+        log(f"  {k}: {size} B")
+        total += size
+    log(f"=> 单条样本总计: {total} B\n")
+    return total
+
+def get_max_rows(sample_size_bytes, reserved_gb=2):
+    """
+    参数：
+        sample_size_bytes: 单条样本占用字节数
+        reserved_gb: 保留的系统内存，单位GB（避免内存占满）
+    返回：
+        可分配的最大样本行数
+    """
+    available = psutil.virtual_memory().available
+    reserved_bytes = reserved_gb * 1024 ** 3
+    usable = max(available - reserved_bytes, 0)
+    max_rows = usable // sample_size_bytes
+    log(f"当前系统可用内存: {available / 1024**2:.2f} MB")
+    log(f"预留内存: {reserved_gb} GB")
+    log(f"可用于分配的内存: {usable / 1024**2:.2f} MB")
+    log(f"最多可分配样本条数: {max_rows}\n")
+    return int(max_rows)
+
+def initialize_dataset(spec, num_rows):
+    data = {}
+    for key, (shape, dtype) in spec.items():
+        new_shape = (num_rows, *shape[1:])  # 替换首维为行数
+        if dtype == object:
+            arr = np.empty(new_shape, dtype=dtype)  # object用empty
+        else:
+            arr = np.zeros(new_shape, dtype=dtype)
+        data[key] = arr
+    return data
 
 class SimpleDAggerTrainer(DAggerTrainer):
 
@@ -57,61 +101,158 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
         
+        # 样本数据
+        self.transitions = None
+        self.full = False   # 是否已经满了
+        self.cur_idx = 0    # 可以写入的样本索引
+        
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
-        使用 deque 控制内存使用
-        1. 如果内存超过阈值，则使用 deque 替换 list
-        2. deque 的最大长度为当前所有 demo 的总步数
-        3. 每次添加 demo 时，检查当前总步数是否超过最大步数限制
-        4. 如果超过，则不断移除旧数据，直到总步数不超过最大步数限制
+        载入最新的样本
+        1. 若 self.transitions 未初始化，按照系统的可用内存初始化固定的大小
+        2. 遍历在 self.cur_idx 处写入新的样本
+        3. 若 self.cur_idx 超过了最大容量，则从头开始覆盖，设置 self.full 为 True
         """
-        num_demos_by_round = []
-
+        new_transitions_length = 0
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
             for path in demo_paths:
-                demo = serialize.load(path)[0]  # 假设 demo 是一条 trajectory，list of transitions
-                # 检查内存使用
-                free_mem = psutil.virtual_memory().available / (1024 ** 3)  # GB
-                print(f"RAM FREE {free_mem:.1f}GB")
+                demo = serialize.load(path)[0]
 
-                if isinstance(self._all_demos, list):
-                    self._all_demos.append(demo)
-                    if free_mem <= self.MEMORY_THRESHOLD:
-                        print(f"switching to deque...")
+                # 转为 transitions
+                transitions = rollout.flatten_trajectories(demo)
 
-                        # 计算总步数
-                        # 作为最大步数限制
-                        total_steps = sum(len(d) for d in self._all_demos)
-                        self._max_allowed_steps = total_steps
+                # 检查初始化
+                if self.transitions is None:
+                    # 获取系统可用内存
+                    mem = psutil.virtual_memory().available
+                    # 计算单条数据的占用大小
+                    single_data_dict = {}
+                    for key in KEYS:
+                        d = getattr(transitions, key)
+                        single_data_dict[key] = [[1] + list(d.shape[1:]), d.dtype]
+                    # 根据单行数据，计算最大行数
+                    sample = {key: np.zeros(shape, dtype=dtype) for key, (shape, dtype) in single_data_dict.items()}
+                    sample_size = calculate_sample_size_bytes(sample)
+                    max_rows = get_max_rows(sample_size)
+                    # 初始化数据集
+                    self.transitions = initialize_dataset(single_data_dict, max_rows)
 
-                        # 用 deque 替换 list，限制总步数
-                        new_buffer = deque()
-                        step_count = 0
-                        for d in reversed(self._all_demos):  # 从最新数据向前填充
-                            step_count += len(d)
-                            new_buffer.appendleft(d)
+                capacity = self.transitions[KEYS[0]].shape[0]  # 缓冲区容量
+                t_length = getattr(transitions, KEYS[0]).shape[0]  # 待写入数据长度
+                new_transitions_length += t_length
 
-                        self._all_demos.clear()
-                        self._all_demos = new_buffer
-                        self._total_steps = step_count
+                # 写入数据
+                # 情况1：写入数据比容量大 → 只保留最后 capacity 条
+                if t_length > capacity:
+                    offset = t_length - capacity
+                    for key in KEYS:
+                        data = getattr(transitions, key)
+                        transitions_data = data[offset:]
+                        self.transitions[key][:] = transitions_data
+                    self.cur_idx = 0
+                    self.full = True
                 else:
-                    # self._all_demos 已经是 deque
-                    self._all_demos.append(demo)
-                    self._total_steps += len(demo)
+                    # 正常或跨越写入
+                    begin = self.cur_idx
+                    end = begin + t_length
+                    # 第一段：从当前 cur_idx 到缓冲区尾部
+                    first_part_len = min(capacity - begin, t_length)
+                    # 第二段（如果需要）：从头开始继续写
+                    second_part_len = t_length - first_part_len
+                    for key in KEYS:
+                        data = getattr(transitions, key)
+                        self.transitions[key][begin:begin + first_part_len] = data[:first_part_len]
+                        if second_part_len > 0:
+                            self.transitions[key][0:second_part_len] = data[first_part_len:]
+                            self.full = True
+                    # 更新状态
+                    self.cur_idx = (begin + t_length) % capacity
 
-                    # 控制容量：如果超出当前最大步数，则不断移除旧数据
-                    while self._total_steps > self._max_allowed_steps:
-                        removed = self._all_demos.popleft()
-                        self._total_steps -= len(removed)
+                # 释放内存
+                del transitions
+                del demo  
 
-            num_demos_by_round.append(len(demo_paths))
+        log(f"Loaded {new_transitions_length} transitions")
 
-        print(f"Loaded {len(self._all_demos)} total demos")
-        demo_transitions = rollout.flatten_trajectories(self._all_demos)
-        return demo_transitions, num_demos_by_round
+    def extend_and_update(
+        self,
+        bc_train_kwargs: Optional[Mapping[str, Any]] = None,
+    ) -> int:
+        """Extend internal batch of data and train BC.
+
+        Specifically, this method will load new transitions (if necessary), train
+        the model for a while, and advance the round counter. If there are no fresh
+        demonstrations in the demonstration directory for the current round, then
+        this will raise a `NeedsDemosException` instead of training or advancing
+        the round counter. In that case, the user should call
+        `.create_trajectory_collector()` and use the returned
+        `InteractiveTrajectoryCollector` to produce a new set of demonstrations for
+        the current interaction round.
+
+        Arguments:
+            bc_train_kwargs: Keyword arguments for calling `BC.train()`. If
+                the `log_rollouts_venv` key is not provided, then it is set to
+                `self.venv` by default. If neither of the `n_epochs` and `n_batches`
+                keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
+
+        Returns:
+            New round number after advancing the round counter.
+        """
+        if bc_train_kwargs is None:
+            bc_train_kwargs = {}
+        else:
+            bc_train_kwargs = dict(bc_train_kwargs)
+
+        user_keys = bc_train_kwargs.keys()
+        if "log_rollouts_venv" not in user_keys:
+            bc_train_kwargs["log_rollouts_venv"] = self.venv
+
+        if "n_epochs" not in user_keys and "n_batches" not in user_keys:
+            bc_train_kwargs["n_epochs"] = self.DEFAULT_N_EPOCHS
+
+        logging.info("Loading demonstrations")
+        demo_dir = self._demo_dir_path_for_round()
+        demo_paths = self._get_demo_paths(demo_dir) if demo_dir.is_dir() else []
+        if len(demo_paths) == 0:
+            raise NeedsDemosException(
+                f"No demos found for round {self.round_num} in dir '{demo_dir}'. "
+                f"Maybe you need to collect some demos? See "
+                f".create_trajectory_collector()",
+            )
+        if self._last_loaded_round < self.round_num:
+            self._load_all_demos()
+
+            if len(self.transitions) < self.batch_size:
+                raise ValueError(
+                    "Not enough transitions to form a single batch: "
+                    f"self.batch_size={self.batch_size} > "
+                    f"len(transitions)={len(self.transitions)}",
+                )
+            
+            data_loader = th_data.DataLoader(
+                self.transitions,
+                self.batch_size,
+                drop_last=True,
+                shuffle=True,
+                collate_fn=types.transitions_collate_fn,
+            )
+            self.bc_trainer.set_demonstrations(data_loader)
+            self._last_loaded_round = self.round_num
+        logging.info(f"Training at round {self.round_num}")
+        self.bc_trainer.train(**bc_train_kwargs)
+        self.round_num += 1
+        logging.info(f"New round number is {self.round_num}")
+
+        # 清除训练数据
+        self.bc_trainer.clear_demonstrations()
+
+        # 清理数据
+        del data_loader
+        
+        return self.round_num
 
     def train(
         self,

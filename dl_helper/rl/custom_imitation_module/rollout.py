@@ -21,7 +21,6 @@ from py_ext.wechat import wx
 
 KEYS = ["obs", "next_obs", "acts", "dones", "infos"]
 
-
 def balance_rollout(r):
 
     obs = r.obs
