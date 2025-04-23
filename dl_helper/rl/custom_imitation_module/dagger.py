@@ -122,7 +122,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 demo = serialize.load(path)[0]
 
                 # 转为 transitions
-                transitions = rollout.flatten_trajectories(demo)
+                transitions = rollout.flatten_trajectories([demo])
 
                 # 检查初始化
                 if self.transitions is None:
@@ -213,7 +213,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if "n_epochs" not in user_keys and "n_batches" not in user_keys:
             bc_train_kwargs["n_epochs"] = self.DEFAULT_N_EPOCHS
 
-        logging.info("Loading demonstrations")
+        log("Loading demonstrations")
         demo_dir = self._demo_dir_path_for_round()
         demo_paths = self._get_demo_paths(demo_dir) if demo_dir.is_dir() else []
         if len(demo_paths) == 0:
@@ -222,6 +222,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 f"Maybe you need to collect some demos? See "
                 f".create_trajectory_collector()",
             )
+        # 更新载入训练数据
         if self._last_loaded_round < self.round_num:
             self._load_all_demos()
 
@@ -241,10 +242,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
             self.bc_trainer.set_demonstrations(data_loader)
             self._last_loaded_round = self.round_num
-        logging.info(f"Training at round {self.round_num}")
+        log(f"Training at round {self.round_num}")
         self.bc_trainer.train(**bc_train_kwargs)
         self.round_num += 1
-        logging.info(f"New round number is {self.round_num}")
+        log(f"New round number is {self.round_num}")
 
         # 清除训练数据
         self.bc_trainer.clear_demonstrations()
