@@ -1481,6 +1481,8 @@ class LOB_trade_env(gym.Env):
         self.debug_date = days2date(int(debug_obs_date)) if debug_obs_date else None
         if self.debug_date and isinstance(self.debug_date, str):
             self.debug_date = [self.debug_date]
+        else:
+            self.debug_date = []
 
         # 调试时间
         self.debug_time = int(debug_obs_time * MAX_SEC_BEFORE_CLOSE) if debug_obs_time else None
