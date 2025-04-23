@@ -101,15 +101,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
         
-        # 样本数据
-        self.transitions = None
+        # 样本数据 dict
+        self.transitions_dict = None
         self.full = False   # 是否已经满了
         self.cur_idx = 0    # 可以写入的样本索引
         
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
         载入最新的样本
-        1. 若 self.transitions 未初始化，按照系统的可用内存初始化固定的大小
+        1. 若 self.transitions_dict 未初始化，按照系统的可用内存初始化固定的大小
         2. 遍历在 self.cur_idx 处写入新的样本
         3. 若 self.cur_idx 超过了最大容量，则从头开始覆盖，设置 self.full 为 True
         """
@@ -125,7 +125,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 transitions = rollout.flatten_trajectories([demo])
 
                 # 检查初始化
-                if self.transitions is None:
+                if self.transitions_dict is None:
                     # 获取系统可用内存
                     mem = psutil.virtual_memory().available
                     # 计算单条数据的占用大小
@@ -138,9 +138,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     sample_size = calculate_sample_size_bytes(sample)
                     max_rows = get_max_rows(sample_size)
                     # 初始化数据集
-                    self.transitions = initialize_dataset(single_data_dict, max_rows)
+                    self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
 
-                capacity = self.transitions[KEYS[0]].shape[0]  # 缓冲区容量
+                capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
                 t_length = getattr(transitions, KEYS[0]).shape[0]  # 待写入数据长度
                 new_transitions_length += t_length
 
@@ -151,7 +151,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     for key in KEYS:
                         data = getattr(transitions, key)
                         transitions_data = data[offset:]
-                        self.transitions[key][:] = transitions_data
+                        self.transitions_dict[key][:] = transitions_data
                     self.cur_idx = 0
                     self.full = True
                 else:
@@ -164,9 +164,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     second_part_len = t_length - first_part_len
                     for key in KEYS:
                         data = getattr(transitions, key)
-                        self.transitions[key][begin:begin + first_part_len] = data[:first_part_len]
+                        self.transitions_dict[key][begin:begin + first_part_len] = data[:first_part_len]
                         if second_part_len > 0:
-                            self.transitions[key][0:second_part_len] = data[first_part_len:]
+                            self.transitions_dict[key][0:second_part_len] = data[first_part_len:]
                             self.full = True
                     # 更新状态
                     self.cur_idx = (begin + t_length) % capacity
@@ -226,15 +226,18 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if self._last_loaded_round < self.round_num:
             self._load_all_demos()
 
-            if len(self.transitions) < self.batch_size:
+            # 将数据转换为 transitions
+            transitions = types.Transitions(**self.self.transitions_dict)
+
+            if len(transitions) < self.batch_size:
                 raise ValueError(
                     "Not enough transitions to form a single batch: "
                     f"self.batch_size={self.batch_size} > "
-                    f"len(transitions)={len(self.transitions)}",
+                    f"len(transitions)={len(transitions)}",
                 )
             
             data_loader = th_data.DataLoader(
-                self.transitions,
+                transitions,
                 self.batch_size,
                 drop_last=True,
                 shuffle=True,
@@ -252,6 +255,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         # 清理数据
         del data_loader
+        del transitions
         
         return self.round_num
 
