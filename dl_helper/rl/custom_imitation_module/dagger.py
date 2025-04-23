@@ -52,6 +52,7 @@ def initialize_dataset(spec, num_rows):
         else:
             arr = np.zeros(new_shape, dtype=dtype)
         data[key] = arr
+        log(f"初始化 {key}，形状: {arr.shape}，类型: {arr.dtype}")
     return data
 
 class SimpleDAggerTrainer(DAggerTrainer):
@@ -141,9 +142,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
 
                 capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
-                t_length = getattr(transitions, KEYS[0]).shape[0]  # 待写入数据长度
+                t_length = transitions.acts.shape[0]  # 待写入数据长度
                 new_transitions_length += t_length
 
+                log(f'capacity: {capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
                 # 写入数据
                 # 情况1：写入数据比容量大 → 只保留最后 capacity 条
                 if t_length > capacity:
@@ -157,14 +159,19 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 else:
                     # 正常或跨越写入
                     begin = self.cur_idx
-                    end = begin + t_length
                     # 第一段：从当前 cur_idx 到缓冲区尾部
                     first_part_len = min(capacity - begin, t_length)
                     # 第二段（如果需要）：从头开始继续写
                     second_part_len = t_length - first_part_len
                     for key in KEYS:
                         data = getattr(transitions, key)
-                        self.transitions_dict[key][begin:begin + first_part_len] = data[:first_part_len]
+                        try:
+                            self.transitions_dict[key][begin:begin + first_part_len] = data[:first_part_len]
+                        except Exception as e:
+                            log(f"写入数据失败，key: {key}, begin: {begin}, first_part_len: {first_part_len}")
+                            log(f"data: {data.shape}")
+                            log(f"transitions_dict: {self.transitions_dict[key].shape}")
+                            raise e
                         if second_part_len > 0:
                             self.transitions_dict[key][0:second_part_len] = data[first_part_len:]
                             self.full = True
