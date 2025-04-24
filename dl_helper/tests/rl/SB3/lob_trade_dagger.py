@@ -95,7 +95,7 @@ batch_n = 2**7 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 lr = batch_n * max_lr / 1e2 if arg_lr is None else arg_lr
 # 每轮新增的样本数量
-each_round_train_num = batch_n * batch_size * (2**3)    
+each_round_train_num = batch_n * batch_size * (2**2)    
 #################################
 
 custom_logger = imit_logger.configure(

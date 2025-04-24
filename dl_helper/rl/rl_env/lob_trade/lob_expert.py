@@ -363,6 +363,8 @@ def play_lob_data_with_expert(render=True):
 
     debug_obs_date = np.float32(12448.0)
     debug_obs_time = np.float32(0.65676767)
+    debug_obs_time = 14400 , 12900
+    debug_obs_time = random.uniform(14400/MAX_SEC_BEFORE_CLOSE, 12900/MAX_SEC_BEFORE_CLOSE)
     init_pos = 1
 
     code = '513050'
@@ -379,10 +381,10 @@ def play_lob_data_with_expert(render=True):
 
         'render_mode': 'human' if render else 'none',
     },
-    debug_obs_date=debug_obs_date,
+    # debug_obs_date=debug_obs_date,
     debug_obs_time=debug_obs_time,
-    debug_init_pos = init_pos,
-    dump_bid_ask_accnet=True,
+    # debug_init_pos = init_pos,
+    # dump_bid_ask_accnet=True,
     )
 
     expert = LobExpert_file(pre_cache=False if render else True)
@@ -392,7 +394,8 @@ def play_lob_data_with_expert(render=True):
     for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        seed = 192418
+        seed = 200389
+        print(f'seed: {seed}')
         obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
 

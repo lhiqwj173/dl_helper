@@ -342,7 +342,7 @@ class data_producer:
                     begin, end, _ = idx_obj
                     _idx = begin
                     while _idx <= end:
-                        if self.before_market_close_sec[_idx] == int(self.debug_time):
+                        if self.before_market_close_sec[_idx] <= int(self.debug_time):
                             break
                         _idx += 1
                     assert _idx != end + 1, f'{int(self.debug_time)} not found'
@@ -1191,7 +1191,8 @@ class Render:
         # 若 latest_tick_time 大于 12:00:00
         # 且 self.net_data_fixed == False
         # 需要fix net_raw / rewards
-        if latest_tick_time.time() > pd.Timestamp('12:00:00').time() and self.pre_latest_tick_time is not None and self.pre_latest_tick_time.time() < pd.Timestamp('12:00:00').time() and not self.net_data_fixed:
+        noon_time = pd.Timestamp('12:00:00').time()
+        if latest_tick_time.time() > noon_time and self.pre_latest_tick_time is not None and self.pre_latest_tick_time.time() < noon_time and not self.net_data_fixed:
             # 计算 plot_data 中当前时间点 至 前一个绘图点的时间 数据的数量
             need_fix_num = plot_data.index.get_loc(latest_tick_time) - plot_data.index.get_loc(self.pre_latest_tick_time) - 1
             for i in range(need_fix_num):
@@ -1201,23 +1202,30 @@ class Render:
                     self.open_idx -= 1
             self.net_data_fixed = True
             self.forbiden_end_idx = hist_end - 1
-            self.forbiden_begin_idx = hist_end - 1 - need_fix_num
+            # self.forbiden_begin_idx = hist_end - 1 - need_fix_num
             log(f'fix noon data net_raw / rewards: {need_fix_num} 条')
 
         else:
-            if self.forbiden_end_idx is not None and self.forbiden_begin_idx is not None:
+            # if self.forbiden_end_idx is not None and self.forbiden_begin_idx is not None:
+            if self.forbiden_end_idx is not None:
                 if n <= self.pre_n:
                     self.forbiden_end_idx -= 1
-                    self.forbiden_begin_idx -= 1
+                    # self.forbiden_begin_idx -= 1
                     self.forbiden_end_idx = max(self.forbiden_end_idx, 0)
-                    self.forbiden_begin_idx = max(self.forbiden_begin_idx, 0)
+                    # self.forbiden_begin_idx = max(self.forbiden_begin_idx, 0)
+
+        # 查找 plot_data 中大于 12:00 的第一个时间索引
+        filtered = plot_data[plot_data.index.time > noon_time]
+        if not filtered.empty:
+            first_after_noon = filtered.index[0]
+            self.forbiden_begin_idx = plot_data.index.get_loc(first_after_noon) - 1
 
         # 更新禁止背景数据
         # 检查 self.open_idx 是否有效
-        if self.forbiden_end_idx is not None and self.forbiden_end_idx != 0:
-            # 设置区域范围为 [self.open_idx, hist_end - 1]
-            self.p1_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx - 1])
-            self.p2_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx - 1])
+        if self.forbiden_begin_idx is not None and self.forbiden_end_idx!=0:
+            # 设置区域范围
+            self.p1_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx if self.forbiden_end_idx is not None else len(plot_data) - 1])
+            self.p2_region_forbiden.setRegion([self.forbiden_begin_idx, self.forbiden_end_idx if self.forbiden_end_idx is not None else len(plot_data) - 1])
             self.p1_region_forbiden.show()
             self.p2_region_forbiden.show()
         else:
