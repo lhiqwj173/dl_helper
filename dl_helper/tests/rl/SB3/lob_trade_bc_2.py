@@ -344,13 +344,13 @@ if run_type != 'test':
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
 
-    test_x = env.observation_space.sample()
-    test_x = torch.from_numpy(test_x).unsqueeze(0)
-    log(test_x.shape)
-    test_x = test_x.float().to(model.policy.device)
-    out = model.policy.features_extractor(test_x)
-    log(out.shape)
-    sys.exit()
+    # test_x = env.observation_space.sample()
+    # test_x = torch.from_numpy(test_x).unsqueeze(0)
+    # log(test_x.shape)
+    # test_x = test_x.float().to(model.policy.device)
+    # out = model.policy.features_extractor(test_x)
+    # log(out.shape)
+    # sys.exit()
 
     vec_env = env
 
