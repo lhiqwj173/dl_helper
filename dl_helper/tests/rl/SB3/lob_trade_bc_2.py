@@ -370,8 +370,18 @@ if run_type != 'test':
             )
             f.add_rollouts(rollouts)
             transitions = f.flatten_trajectories()
-            # send_wx(f'transitions: {len(transitions)}')
-            pickle.dump(transitions, open('transitions.pkl', 'wb'))
+
+            # pickle.dump(transitions, open('transitions.pkl', 'wb'))
+            # 写入临时文件
+            temp_file_path = 'transitions_temp.pkl'  # 临时文件名
+            with open(temp_file_path, 'wb') as temp_file:
+                pickle.dump(transitions, temp_file)
+                temp_file.flush()  # 确保数据写入文件系统缓存
+                os.fsync(temp_file.fileno())  # 强制将缓存数据写入磁盘（可选）
+            
+            # 原子性地重命名临时文件为目标文件
+            os.replace(temp_file_path, 'transitions.pkl')
+
         sys.exit()
     
     memory_usage = psutil.virtual_memory()
