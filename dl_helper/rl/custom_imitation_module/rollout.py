@@ -233,11 +233,17 @@ def initialize_cache(input_folder: str):
         print(f"    {file}")
 
     # 遍历文件，计算并存储元数据
+    fail_count = 0
     for file in files:
         print(f"缓存文件: {file}")
-        with open(file, 'rb') as f:
-            _transitions = pickle.load(f)
-        
+        try:
+            with open(file, 'rb') as f:
+                _transitions = pickle.load(f)
+        except Exception as e:
+            print(f"读取文件失败: {file}, 错误: {e}")
+            fail_count += 1
+            continue
+            
         metadata = {}
         est_memory = 0
         for key in KEYS:
@@ -250,6 +256,9 @@ def initialize_cache(input_folder: str):
         metadata['est_memory'] = est_memory
         file_metadata_cache[file] = metadata
         del _transitions  # 释放临时变量内存
+
+    if fail_count:
+        wx.send_message(f'损坏数据: {fail_count}个')
 
 def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
     """
