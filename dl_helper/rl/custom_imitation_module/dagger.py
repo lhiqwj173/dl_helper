@@ -115,6 +115,14 @@ class SimpleDAggerTrainer(DAggerTrainer):
         3. 若 self.cur_idx 超过了最大容量，则从头开始覆盖，设置 self.full 为 True
         """
         new_transitions_length = 0
+
+        for key in KEYS:
+            target_array = self.transitions_dict[key]
+            log(f"检查 key '{key}' 的 writeable 标志: {target_array.flags.writeable}")
+            if not target_array.flags.writeable:
+                log(f"尝试将 key '{key}' 的数组重新设为可写。")
+                target_array.flags.writeable = True # 强制设为 True (但这可能掩盖根本原因)
+
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
@@ -233,36 +241,45 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if self._last_loaded_round < self.round_num:
             self._load_all_demos()
 
-            # 将数据转换为 transitions
-            transitions = types.Transitions(**self.transitions_dict)
+            if self.full:
+                log(f"数据满了，开始训练")
+                # 将数据转换为 transitions
+                transitions = types.Transitions(**self.transitions_dict)
 
-            if len(transitions) < self.batch_size:
-                raise ValueError(
-                    "Not enough transitions to form a single batch: "
-                    f"self.batch_size={self.batch_size} > "
-                    f"len(transitions)={len(transitions)}",
+                if len(transitions) < self.batch_size:
+                    raise ValueError(
+                        "Not enough transitions to form a single batch: "
+                        f"self.batch_size={self.batch_size} > "
+                        f"len(transitions)={len(transitions)}",
+                    )
+                
+                data_loader = th_data.DataLoader(
+                    transitions,
+                    self.batch_size,
+                    drop_last=True,
+                    shuffle=True,
+                    collate_fn=types.transitions_collate_fn,
                 )
-            
-            data_loader = th_data.DataLoader(
-                transitions,
-                self.batch_size,
-                drop_last=True,
-                shuffle=True,
-                collate_fn=types.transitions_collate_fn,
-            )
-            self.bc_trainer.set_demonstrations(data_loader)
+                self.bc_trainer.set_demonstrations(data_loader)
+            else:
+                log(f"数据未满，当前样本数: {self.cur_idx}")
+
             self._last_loaded_round = self.round_num
-        log(f"Training at round {self.round_num}")
-        self.bc_trainer.train(**bc_train_kwargs)
-        self.round_num += 1
-        log(f"New round number is {self.round_num}")
+            
+            if self.full:
+                log(f"Training at round {self.round_num}")
+                self.bc_trainer.train(**bc_train_kwargs)
 
-        # 清除训练数据
-        self.bc_trainer.clear_demonstrations()
+            self.round_num += 1
+            log(f"New round number is {self.round_num}")
 
-        # 清理数据
-        del data_loader
-        del transitions
+            # 清除训练数据
+            self.bc_trainer.clear_demonstrations()
+
+            if self.full:
+                # 清理数据
+                del data_loader
+                del transitions
         
         return self.round_num
 
