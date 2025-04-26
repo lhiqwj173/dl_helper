@@ -139,8 +139,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
                 # 检查初始化
                 if self.transitions_dict is None:
-                    # 获取系统可用内存
-                    mem = psutil.virtual_memory().available
                     # 计算单条数据的占用大小
                     single_data_dict = {}
                     for key in KEYS:
@@ -243,7 +241,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
         # 更新载入训练数据
         if self._last_loaded_round < self.round_num:
-            self._load_all_demos()
+            # self._load_all_demos()
             log(f"[extend_and_update] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             if self.full:
@@ -390,7 +388,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
-            # self.extend_and_update(bc_train_kwargs)
+            self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
             # log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
