@@ -104,8 +104,7 @@ custom_logger = imit_logger.configure(
 )
 
 # 自定义特征提取器
-# 参数量: 250795
-# 参数量: 172555
+# 参数量: 176827
 class DeepLob(BaseFeaturesExtractor):
     def __init__(
             self,
@@ -170,17 +169,24 @@ class DeepLob(BaseFeaturesExtractor):
         # LSTM 层 
         self.lstm = nn.LSTM(input_size=64*3, hidden_size=64, num_layers=1, batch_first=True)
 
+        # id 嵌入层
+        self.id_embedding = nn.Embedding(len(USE_CODES), 8)
+
+        # 计算静态特征的输入维度
+        static_input_dim = 8 + (self.extra_input_dims - 1)  # 嵌入维度 + 数值特征维度
+
         # 静态特征处理
         self.static_net = nn.Sequential(
-            nn.Linear(self.extra_input_dims, self.extra_input_dims * 4),
-            nn.LayerNorm(self.extra_input_dims * 4),
+            nn.Linear(static_input_dim, static_input_dim * 4),
+            nn.LayerNorm(static_input_dim * 4),
             nn.ReLU(),
-            nn.Dropout(p=0.2)  # 添加 Dropout
+            nn.Dropout(p=0.2)
         )
 
         # 融合层
+        fusion_input_dim = 64 + static_input_dim * 4  # LSTM 输出 64 维 + static_net 输出
         self.fusion = nn.Sequential(
-            nn.Linear(64 + self.extra_input_dims * 4, 128),
+            nn.Linear(fusion_input_dim, 128),
             nn.LayerNorm(128),
             nn.ReLU(),
             nn.Linear(128, features_dim),
@@ -218,6 +224,20 @@ class DeepLob(BaseFeaturesExtractor):
         extra_x = use_obs[:, -self.extra_input_dims:]
         x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)  # (B, 1, 10, 20)
 
+        # 处理静态特征
+        # extra_x 第1列是类别特征（整数索引）
+        cat_feat = extra_x[:, 0].long()  # (B,)，转换为整数类型
+        num_feat = extra_x[:, 1:]  # (B, self.extra_input_dims - 1)，数值特征
+
+        # 嵌入类别特征
+        embedded = self.id_embedding(cat_feat)  # (B, 8)
+
+        # 拼接嵌入向量和数值特征
+        static_input = torch.cat([embedded, num_feat], dim=1)  # (B, 8 + self.extra_input_dims - 1)
+
+        # 静态特征处理
+        static_out = self.static_net(static_input)  # (B, static_input_dim * 4)
+
         # 卷积块
         x = self.conv1(x)  # (B, 32, 28, 10)
         x = self.conv2(x)  # (B, 32, 26, 5)
@@ -239,9 +259,6 @@ class DeepLob(BaseFeaturesExtractor):
         # 取最后一个时间步
         temporal_feat = lstm_out[:, -1, :]  # (B, 64)
 
-        # 静态特征处理
-        static_out = self.static_net(extra_x)  # (B, self.extra_input_dims * 4)
-
         # 融合层
         fused_out = torch.cat([temporal_feat, static_out], dim=1)  # (B, 64 + self.extra_input_dims * 4)
         fused_out = nn.Dropout(p=0.2)(fused_out)  # 添加 Dropout
@@ -252,6 +269,7 @@ class DeepLob(BaseFeaturesExtractor):
             raise ValueError("fused_out is nan or inf")
 
         return fused_out
+
 
 model_config={
     # 自定义编码器参数  
