@@ -106,6 +106,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.transitions_dict = None
         self.full = False   # 是否已经满了
         self.cur_idx = 0    # 可以写入的样本索引
+        self.capacity = 0   # 缓冲区容量
         
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
@@ -116,26 +117,27 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
+        # 检查可写性
         if self.transitions_dict:
             for key in KEYS:
                 target_array = self.transitions_dict[key]
-                log(f"检查 key '{key}' 的 writeable 标志: {target_array.flags.writeable}")
+                # log(f"检查 key '{key}' 的 writeable 标志: {target_array.flags.writeable}")
                 if not target_array.flags.writeable:
                     log(f"尝试将 key '{key}' 的数组重新设为可写。")
                     target_array.flags.writeable = True # 强制设为 True (但这可能掩盖根本原因)
-
-        # 缓冲区容量
-        capacity = self.transitions_dict[KEYS[0]].shape[0] if self.transitions_dict else 0
 
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
             for path in demo_paths:
+                log(f'load demo: {path}')
+                log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
                 demo = serialize.load(path)[0]
 
                 # 转为 transitions
                 transitions = rollout.flatten_trajectories([demo])
+                log(f"[after demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
                 # 检查初始化
                 if self.transitions_dict is None:
@@ -150,16 +152,16 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     max_rows = get_max_rows(sample_size)
                     # 初始化数据集
                     self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
-                    capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
+                    self.capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
 
                 t_length = transitions.acts.shape[0]  # 待写入数据长度
                 new_transitions_length += t_length
 
-                log(f'capacity: {capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
+                log(f'capacity: {self.capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
                 # 写入数据
                 # 情况1：写入数据比容量大 → 只保留最后 capacity 条
-                if t_length > capacity:
-                    offset = t_length - capacity
+                if t_length > self.capacity:
+                    offset = t_length - self.capacity
                     for key in KEYS:
                         data = getattr(transitions, key)
                         transitions_data = data[offset:]
@@ -170,7 +172,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     # 正常或跨越写入
                     begin = self.cur_idx
                     # 第一段：从当前 cur_idx 到缓冲区尾部
-                    first_part_len = min(capacity - begin, t_length)
+                    first_part_len = min(self.capacity - begin, t_length)
                     # 第二段（如果需要）：从头开始继续写
                     second_part_len = t_length - first_part_len
                     for key in KEYS:
@@ -186,13 +188,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
                             self.transitions_dict[key][0:second_part_len] = data[first_part_len:]
                             self.full = True
                     # 更新状态
-                    self.cur_idx = (begin + t_length) % capacity
+                    self.cur_idx = (begin + t_length) % self.capacity
 
                 # 释放内存
                 del transitions
                 del demo  
 
-        log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else capacity}")
+                log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
+        log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else self.capacity}")
 
     def extend_and_update(
         self,
@@ -241,8 +245,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
             )
         # 更新载入训练数据
         if self._last_loaded_round < self.round_num:
-            # self._load_all_demos()
+            self._load_all_demos()
             log(f"[extend_and_update] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
+            self._last_loaded_round = self.round_num
 
             if self.full:
                 log(f"数据满了，开始训练")
@@ -263,26 +269,21 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     shuffle=True,
                     collate_fn=types.transitions_collate_fn,
                 )
+                # 设置训练数据
                 self.bc_trainer.set_demonstrations(data_loader)
-            else:
-                log(f"数据未满，当前样本数: {self.cur_idx}")
-
-            self._last_loaded_round = self.round_num
-            
-            if self.full:
                 log(f"Training at round {self.round_num}")
+                # bc 训练
                 self.bc_trainer.train(**bc_train_kwargs)
-
-            self.round_num += 1
-            log(f"New round number is {self.round_num}")
-
-            # 清除训练数据
-            self.bc_trainer.clear_demonstrations()
-
-            if self.full:
+                # 清除训练数据
+                self.bc_trainer.clear_demonstrations()
                 # 清理数据
                 del data_loader
                 del transitions
+            else:
+                log(f"数据未满，当前样本数: {self.cur_idx}")
+
+            self.round_num += 1
+            log(f"New round number is {self.round_num}")
         
         return self.round_num
 
@@ -343,7 +344,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
-            if round_num == 15:
+            if round_num == 10:
                 break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -363,7 +364,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=False,
                 rng=collector.rng,
             )
-            log(f"[train 01] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             for traj in trajectories:
                 self._logger.record_mean(
@@ -389,7 +390,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
-            # self.extend_and_update(bc_train_kwargs)
+            self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
             # log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
