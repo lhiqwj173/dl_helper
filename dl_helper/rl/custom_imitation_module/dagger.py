@@ -244,6 +244,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         # 更新载入训练数据
         if self._last_loaded_round < self.round_num:
             self._load_all_demos()
+            log(f"[extend_and_update] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             if self.full:
                 log(f"数据满了，开始训练")
@@ -380,6 +381,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
+            
+            log(f"[train] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # # 检查梯度
             # check_gradients(self.bc_trainer)
