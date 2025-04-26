@@ -36,6 +36,7 @@ from py_ext.tool import init_logger,log
 from py_ext.wechat import send_wx
 from py_ext.datetime import beijing_time
 
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
