@@ -364,8 +364,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=False,
                 rng=collector.rng,
             )
+            import gc
             del trajectories
-            collector.close()
+            gc.collect()
             log(f"[train 02] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
             import sys
             sys.exit()
