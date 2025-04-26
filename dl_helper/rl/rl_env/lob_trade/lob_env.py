@@ -217,11 +217,16 @@ class data_producer:
                 if self.latest_dates != -1:
                     files = files[-self.latest_dates:]
             
-                # 随机抽取 30 个文件作为val
-                # 使用固定的随机种子， 确保一致
-                rng = np.random.default_rng(0)
-                self.val_files = rng.choice(files, 30, replace=False)
-                self.train_files = [i for i in files if i not in self.val_files]
+                # # 随机抽取 30 个文件作为val
+                # # 使用固定的随机种子， 确保一致
+                # rng = np.random.default_rng(0)
+                # self.val_files = rng.choice(files, 30, replace=False)
+                # self.train_files = [i for i in files if i not in self.val_files]
+
+                # 取最后30个文件作为val
+                self.val_files = files[-30:]
+                # 其余文件作为train
+                self.train_files = files[:-30]
 
             if self.data_type == 'train':
                 return [i for i in self.train_files]
