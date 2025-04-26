@@ -384,6 +384,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # # 检查梯度
             # check_gradients(self.bc_trainer)
 
+            # 检查是否发生训练（数据是否满了）
+            if not self.full:
+                continue
+
             # 验证模型
             _t = time.time()
             eval_env.val()

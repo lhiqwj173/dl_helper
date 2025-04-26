@@ -490,41 +490,37 @@ if run_type != 'test':
 
         # 合并到 progress_all.csv
         latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
+        df_new = pd.read_csv(progress_file)
+        df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
+        df_new['bc/epoch'] += i * checkpoint_interval
+        df_new['bc/mean_reward'] = np.nan
+        df_new['bc/val_mean_reward'] = np.nan
+        df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+        df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
+        df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
+        df_progress.ffill(inplace=True)
+        df_progress.to_csv(progress_file_all, index=False)
+
+        # 当前点是否是最优的 checkpoint
+        # 使用 recall 判断
+        if 'bc/recall' in list(df_progress):
+            bset_recall = df_progress['bc/recall'].max()
+            best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+            is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+        else:
+            is_best = False
+
+        # 训练进度可视化
         try:
-            df_new = pd.read_csv(progress_file)            
-            df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
-            df_new['bc/epoch'] += i * checkpoint_interval
-            df_new['bc/mean_reward'] = np.nan
-            df_new['bc/val_mean_reward'] = np.nan
-            df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
-            df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
-            df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
-            df_progress.ffill(inplace=True)
-            df_progress.to_csv(progress_file_all, index=False)
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+        except Exception as e:
+            pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
+            log(f"训练进度可视化失败")
+            raise e
 
-            # 当前点是否是最优的 checkpoint
-            # 使用 recall 判断
-            if 'bc/recall' in list(df_progress):
-                bset_recall = df_progress['bc/recall'].max()
-                best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
-                is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
-            else:
-                is_best = False
-
-            # 训练进度可视化
-            try:
-                plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
-            except Exception as e:
-                pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
-                log(f"训练进度可视化失败")
-                raise e
-
-            if not in_windows():
-                # 保存模型
-                train_folder_manager.checkpoint(bc_trainer, best=is_best)
-                
-        except pd.errors.EmptyDataError:
-            pass
+        if not in_windows():
+            # 保存模型
+            train_folder_manager.checkpoint(bc_trainer, best=is_best)
 
         if run_type == 'find_lr':
             # 只运行一个 epoch
