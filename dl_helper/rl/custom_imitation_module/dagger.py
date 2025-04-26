@@ -124,7 +124,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     log(f"尝试将 key '{key}' 的数组重新设为可写。")
                     target_array.flags.writeable = True # 强制设为 True (但这可能掩盖根本原因)
 
-        capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
+        # 缓冲区容量
+        capacity = self.transitions_dict[KEYS[0]].shape[0] if self.transitions_dict else 0
+
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
@@ -150,6 +152,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     max_rows = get_max_rows(sample_size)
                     # 初始化数据集
                     self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
+                    capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
 
                 t_length = transitions.acts.shape[0]  # 待写入数据长度
                 new_transitions_length += t_length
