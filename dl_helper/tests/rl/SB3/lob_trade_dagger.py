@@ -90,7 +90,7 @@ init_logger(log_name, home=train_folder, timestamp=False)
 # 训练参数
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
-max_lr = 1e-4# find_best_lr
+max_lr = 8e-5# find_best_lr
 batch_n = 2**7 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 lr = batch_n * max_lr / 1e2 if arg_lr is None else arg_lr
