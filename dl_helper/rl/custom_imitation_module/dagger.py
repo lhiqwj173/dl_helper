@@ -380,13 +380,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
             log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            del trajectories
+            log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
-            log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # # 检查梯度
             # check_gradients(self.bc_trainer)
