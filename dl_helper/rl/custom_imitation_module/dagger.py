@@ -355,7 +355,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
-            log(f"[train 01] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            # log(f"[train 01] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,
@@ -364,12 +364,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=False,
                 rng=collector.rng,
             )
-            import gc
-            del trajectories
-            gc.collect()
-            log(f"[train 02] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-            import sys
-            sys.exit()
+            # log(f"[train 02] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             for traj in trajectories:
                 self._logger.record_mean(
@@ -378,7 +373,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 )
                 round_timestep_count += len(traj)
                 total_timestep_count += len(traj)
-            log(f"[train 03] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            # log(f"[train 03] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             round_episode_count += len(trajectories)
 
@@ -387,20 +382,20 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
-            log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-            del trajectories
-            del sample_until
-            del collector
-            log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            # log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            # del trajectories
+            # del sample_until
+            # del collector
+            # log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
-            self.extend_and_update(bc_train_kwargs)
+            # self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
-            log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-            import sys
-            sys.exit()
+            # log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            # import sys
+            # sys.exit()
 
             # # 检查梯度
             # check_gradients(self.bc_trainer)
