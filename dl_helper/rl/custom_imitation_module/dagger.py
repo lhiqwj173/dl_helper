@@ -25,7 +25,7 @@ def calculate_sample_size_bytes(sample):
     log(f"=> 单条样本总计: {total} B\n")
     return total
 
-def get_max_rows(sample_size_bytes, reserved_gb=2):
+def get_max_rows(sample_size_bytes, reserved_gb=5):
     """
     参数：
         sample_size_bytes: 单条样本占用字节数
