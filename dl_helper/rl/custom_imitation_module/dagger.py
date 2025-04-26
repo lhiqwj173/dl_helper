@@ -355,6 +355,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
+            log(f"[train 01] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,
@@ -363,6 +364,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=False,
                 rng=collector.rng,
             )
+            log(f"[train 02] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             for traj in trajectories:
                 self._logger.record_mean(
@@ -371,6 +373,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 )
                 round_timestep_count += len(traj)
                 total_timestep_count += len(traj)
+            log(f"[train 03] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             round_episode_count += len(trajectories)
 
