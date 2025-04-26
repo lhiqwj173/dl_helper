@@ -116,12 +116,13 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
-        for key in KEYS:
-            target_array = self.transitions_dict[key]
-            log(f"检查 key '{key}' 的 writeable 标志: {target_array.flags.writeable}")
-            if not target_array.flags.writeable:
-                log(f"尝试将 key '{key}' 的数组重新设为可写。")
-                target_array.flags.writeable = True # 强制设为 True (但这可能掩盖根本原因)
+        if self.transitions_dict:
+            for key in KEYS:
+                target_array = self.transitions_dict[key]
+                log(f"检查 key '{key}' 的 writeable 标志: {target_array.flags.writeable}")
+                if not target_array.flags.writeable:
+                    log(f"尝试将 key '{key}' 的数组重新设为可写。")
+                    target_array.flags.writeable = True # 强制设为 True (但这可能掩盖根本原因)
 
         capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
         for round_num in range(self._last_loaded_round + 1, self.round_num + 1):
