@@ -381,6 +381,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
             del trajectories
+            del sample_until
+            del collector
             log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # `logger.dump` is called inside BC.train within the following fn call:
@@ -389,6 +391,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_num += 1
             
             log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            import sys
+            sys.exit()
 
             # # 检查梯度
             # check_gradients(self.bc_trainer)
