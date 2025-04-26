@@ -345,6 +345,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
+            log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
             collector = self.create_trajectory_collector()
             round_episode_count = 0
             round_timestep_count = 0
@@ -377,12 +379,14 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
+            log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
             self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
-            log(f"[train] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            log(f"[train 2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             # # 检查梯度
             # check_gradients(self.bc_trainer)
