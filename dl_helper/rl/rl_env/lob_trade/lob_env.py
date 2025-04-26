@@ -213,6 +213,9 @@ class data_producer:
                 for _type in ['train', 'val']:
                     files.extend([os.path.join(self.data_folder, _type, i) for i in os.listdir(os.path.join(self.data_folder, _type))])
 
+                # 按文件名排序
+                files.sort(key=lambda x: os.path.basename(x))
+
                 # 只使用最近 latest_dates 个数据
                 if self.latest_dates != -1:
                     files = files[-self.latest_dates:]
