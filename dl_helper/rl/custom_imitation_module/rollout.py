@@ -260,6 +260,7 @@ def initialize_cache(input_folder: str):
     if fail_count:
         wx.send_message(f'损坏数据: {fail_count}个')
 
+files = []
 def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
     """
     提前创建内存加载 trajectories，支持最大内存限制（单位 GB）并考虑实际系统内存。
@@ -271,15 +272,19 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
 
     :return: Transitions 对象，包含加载的数据
     """
-    global file_metadata_cache
+    global file_metadata_cache, files
     max_memory_bytes = max_memory_gb * 1024**3  # 转换为字节
 
     # 初始化缓存（如果尚未初始化）
     initialize_cache(input_folder)
 
     # 获取所有文件并随机打乱顺序
-    files = list(file_metadata_cache.keys())
-    np.random.shuffle(files)
+    # 补充files为全部的 file_metadata_cache
+    add_files = [i for i in file_metadata_cache.keys() if i not in files]
+    np.random.shuffle(add_files)
+    print(f'补充文件数量: {len(add_files)}')
+
+    files = files + add_files
     print(f'数据文件数量: {len(files)}')
 
     if load_file_num is None:
@@ -301,6 +306,11 @@ def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: floa
         total_memory += est_memory
         selected_files.append(file)
         print(f"选择文件: {file}, 估算内存: {total_memory / (1024**3):.2f} GB")
+
+    print(f'选择加载文件数量: {len(selected_files)}')
+
+    # 从 files 中删除被选中的文件
+    files = [i for i in files if i not in selected_files]
 
     if not selected_files:
         raise MemoryError("没有文件可以加载：内存限制过低或系统内存不足")
