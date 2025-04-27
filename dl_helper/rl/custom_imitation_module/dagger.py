@@ -25,7 +25,7 @@ def calculate_sample_size_bytes(sample):
     log(f"=> 单条样本总计: {total} B\n")
     return total
 
-def get_max_rows(sample_size_bytes, reserved_gb=23):
+def get_max_rows(sample_size_bytes, reserved_gb=24):
     """
     参数：
         sample_size_bytes: 单条样本占用字节数
@@ -344,7 +344,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
-            if round_num == 10:
+            if round_num == 50:
                 break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
