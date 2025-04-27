@@ -66,6 +66,7 @@ run_type = 'train'
 #################################
 # 命令行参数
 arg_lr = None
+arg_max_lr = None
 arg_batch_n = None
 arg_total_epochs = None
 #################################
@@ -92,6 +93,7 @@ train_folder = train_title = f'20250421_lob_trade_bc_2' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
+                + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:2e}')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -102,7 +104,8 @@ total_epochs = 1 if run_type=='find_lr' else 500 if run_type!='test_model' else 
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
-max_lr = 5.5e-5# find_best_lr
+max_lr = 5.5e-5 # find_best_lr
+max_lr = arg_max_lr if arg_max_lr else max_lr
 batch_n = 2**7 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
