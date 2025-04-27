@@ -88,6 +88,8 @@ if len(sys.argv) > 1:
             arg_batch_n = int(arg.split('=')[1])
         elif arg.startswith('total_epochs='):
             arg_total_epochs = int(arg.split('=')[1])
+        elif arg.startswith('maxlr=') or arg.startswith('max_lr='):
+            arg_max_lr = float(arg.split('=')[1])
 
 train_folder = train_title = f'20250421_lob_trade_bc_2' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
