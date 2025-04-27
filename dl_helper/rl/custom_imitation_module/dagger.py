@@ -16,7 +16,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 from py_ext.tool import log
 
 import gc, sys
-TEST_REST_GB = 24
+TEST_REST_GB = 26
 def debug_mem():
     log('*'* 60)
     obj_list = []
@@ -364,7 +364,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         while total_timestep_count < total_timesteps:
                 
-            if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB + 3) * 1024 ** 3:
+            if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB - 3) * 1024 ** 3:
                 break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
