@@ -1,18 +1,38 @@
-from dl_helper.rl.socket_base import connect_and_tune, CODE, async_send_msg
-import asyncio
+import gc, sys
 
-ip = '1.1.1.1'
-async def main():
-    reader, writer = await connect_and_tune('217.142.135.154', 12346)
-    print(f'grad_coroutine connect to server done')
-    # 发送连接验证
-    await async_send_msg(writer, f'{CODE}_{ip}')
-    print(f'grad_coroutine send CODE_IP done')
-    # 发送指令类型
-    await async_send_msg(writer, f'test:update_gradients')
-    print(f'grad_coroutine send CMD done')
+def log(msg):
+    print(msg)
 
+def debug_mem():
+    log('*'* 60)
+    obj_list = []
+    for obj in gc.get_objects():
+        size = sys.getsizeof(obj)
+        obj_list.append((obj, size))
 
-if __name__ == '__main__':
-    asyncio.run(main())
+    sorted_objs = sorted(obj_list, key=lambda x: x[1], reverse=True)
 
+    msg = ['']
+    for obj, size in sorted_objs[:10]:
+        msg.append(f'OBJ:{id(obj)} TYPE:{type(obj)} SIZE:{size/1024/1024:.2f}MB REPR:{str(obj)[:200]}')
+        referrers = gc.get_referrers(obj)
+        for ref in referrers:
+            msg.append(f'   {str(ref)[:300]}')
+
+    msg_str = '\n'.join(msg)
+    log(msg_str)
+
+# 创建对象
+class MyClass:
+    pass
+
+obj = MyClass()
+global_list = [obj]  # 全局引用
+
+# 删除局部引用
+del obj
+
+# 强制垃圾回收
+gc.collect()
+
+debug_mem()

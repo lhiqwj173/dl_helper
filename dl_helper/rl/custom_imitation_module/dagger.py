@@ -16,7 +16,6 @@ from dl_helper.tool import report_memory_usage, in_windows
 from py_ext.tool import log
 
 import gc, sys
-TEST_REST_GB = 6
 def debug_mem():
     log('*'* 60)
     obj_list = []
@@ -26,9 +25,12 @@ def debug_mem():
 
     sorted_objs = sorted(obj_list, key=lambda x: x[1], reverse=True)
 
-    msg = []
-    for obj, size in sorted_objs[:50]:
-        msg.append(f'OBJ:{id(obj)} TYPE:{type(obj)} SIZE:{size/1024/1024:.2f}MB REPR:{str(obj)[:100]}')
+    msg = ['']
+    for obj, size in sorted_objs[:10]:
+        msg.append(f'OBJ:{id(obj)} TYPE:{type(obj)} SIZE:{size/1024/1024:.2f}MB REPR:{str(obj)[:200]}')
+        referrers = gc.get_referrers(obj)
+        for ref in referrers:
+            msg.append(f'   {str(ref)[:300]}')
 
     msg_str = '\n'.join(msg)
     log(msg_str)
@@ -75,8 +77,6 @@ def initialize_dataset(spec, num_rows):
     return data
 
 class SimpleDAggerTrainer(DAggerTrainer):
-
-    MEMORY_THRESHOLD = 10  # 可用内存不足 10GB 就切换为 deque 模式
 
     def __init__(
         self,
@@ -363,9 +363,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
-                
-            # if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB - 3) * 1024 ** 3:
-            #     break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             collector = self.create_trajectory_collector()
@@ -461,4 +458,5 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 # 保存模型
                 train_folder_manager.checkpoint(self.bc_trainer, best=is_best)
 
+            gc.collect()
             debug_mem()
