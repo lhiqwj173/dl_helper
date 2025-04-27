@@ -1226,7 +1226,9 @@ class Render:
         filtered = plot_data[plot_data.index.time > noon_time]
         if not filtered.empty:
             first_after_noon = filtered.index[0]
-            self.forbiden_begin_idx = plot_data.index.get_loc(first_after_noon) - 1
+            self.forbiden_begin_idx = max(plot_data.index.get_loc(first_after_noon) - 1, 0)
+            if (self.forbiden_begin_idx == 0 and self.forbiden_end_idx is None) or (self.forbiden_begin_idx < hist_end - 1):
+                self.forbiden_begin_idx = None
 
         # 更新禁止背景数据
         # 检查 self.open_idx 是否有效

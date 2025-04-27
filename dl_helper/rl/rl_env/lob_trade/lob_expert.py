@@ -382,7 +382,7 @@ def play_lob_data_with_expert(render=True):
         'render_mode': 'human' if render else 'none',
     },
     # debug_obs_date=debug_obs_date,
-    debug_obs_time=debug_obs_time,
+    # debug_obs_time=debug_obs_time,
     # debug_init_pos = init_pos,
     # dump_bid_ask_accnet=True,
     )
@@ -394,7 +394,7 @@ def play_lob_data_with_expert(render=True):
     for i in range(rounds):
         print('reset')
         seed = random.randint(0, 1000000)
-        seed = 200389
+        # seed = 17442
         print(f'seed: {seed}')
         obs, info = env.reset(seed)
         expert.set_rng(env.np_random)
