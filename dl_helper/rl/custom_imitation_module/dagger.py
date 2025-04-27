@@ -16,7 +16,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 from py_ext.tool import log
 
 import gc, sys
-TEST_REST_GB = 26
+TEST_REST_GB = 6
 def debug_mem():
     log('*'* 60)
     obj_list = []
@@ -44,7 +44,7 @@ def calculate_sample_size_bytes(sample):
     log(f"=> 单条样本总计: {total} B\n")
     return total
 
-def get_max_rows(sample_size_bytes, reserved_gb=TEST_REST_GB):
+def get_max_rows(sample_size_bytes, reserved_gb=6):
     """
     参数：
         sample_size_bytes: 单条样本占用字节数
@@ -364,8 +364,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         while total_timestep_count < total_timesteps:
                 
-            if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB - 3) * 1024 ** 3:
-                break
+            # if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB - 3) * 1024 ** 3:
+            #     break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             collector = self.create_trajectory_collector()

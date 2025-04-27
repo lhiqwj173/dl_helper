@@ -66,6 +66,7 @@ run_type = 'train'
 # 命令行参数
 arg_lr = None
 arg_batch_n = None
+arg_title = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -79,10 +80,13 @@ if len(sys.argv) > 1:
             arg_lr = float(arg.split('=')[1])
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
+        elif arg.startswith('title='):
+            arg_title = arg.split('=')[1]
 
 train_folder = train_title = f'20250422_lob_trade_dagger' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
-        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
+        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
+            + '' if arg_title is None else f'_{arg_title}'
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
