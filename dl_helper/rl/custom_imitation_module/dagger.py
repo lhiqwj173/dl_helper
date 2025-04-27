@@ -364,7 +364,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         while total_timestep_count < total_timesteps:
                 
-            if round_num == 50 or psutil.virtual_memory().available < TEST_REST_GB * 1024 ** 3:
+            if round_num == 50 or psutil.virtual_memory().available < (TEST_REST_GB + 3) * 1024 ** 3:
                 break
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
