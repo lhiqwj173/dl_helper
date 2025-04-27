@@ -91,6 +91,12 @@ if len(sys.argv) > 1:
         elif arg.startswith('maxlr=') or arg.startswith('max_lr='):
             arg_max_lr = float(arg.split('=')[1])
 
+# train_folder = train_title = f'20250421_lob_trade_bc_2' \
+#     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
+#         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
+#             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
+#                 + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}')
+
 train_folder = train_title = f'20250421_lob_trade_bc_2' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
