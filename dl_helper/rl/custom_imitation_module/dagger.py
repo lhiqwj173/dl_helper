@@ -25,7 +25,7 @@ def calculate_sample_size_bytes(sample):
     log(f"=> 单条样本总计: {total} B\n")
     return total
 
-def get_max_rows(sample_size_bytes, reserved_gb=24):
+def get_max_rows(sample_size_bytes, reserved_gb=6):
     """
     参数：
         sample_size_bytes: 单条样本占用字节数
@@ -390,7 +390,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             # `logger.dump` is called inside BC.train within the following fn call:
             # 默认会训练 self.DEFAULT_N_EPOCHS(4) 个EPOCHS
-            # self.extend_and_update(bc_train_kwargs)
+            self.extend_and_update(bc_train_kwargs)
             round_num += 1
             
             # log(f"[train 3] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
