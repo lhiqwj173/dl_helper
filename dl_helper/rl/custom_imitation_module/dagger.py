@@ -417,6 +417,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # # 检查梯度
             # check_gradients(self.bc_trainer)
 
+            gc.collect()
+            debug_mem()
+
             # 检查是否发生训练（数据是否满了）
             if not self.full:
                 continue
@@ -458,5 +461,3 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 # 保存模型
                 train_folder_manager.checkpoint(self.bc_trainer, best=is_best)
 
-            gc.collect()
-            debug_mem()
