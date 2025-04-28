@@ -17,12 +17,12 @@ from py_ext.tool import log
 
 try:
     from memory_profiler import profile
+    import objgraph
 except:
     pass
 
 TEST_REST_GB = 27
 import gc, sys
-import objgraph
 gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
 def debug_mem():
     log('*'* 60)
