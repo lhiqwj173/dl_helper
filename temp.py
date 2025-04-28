@@ -1,38 +1,56 @@
-import gc, sys
+import objgraph
 
-def log(msg):
-    print(msg)
+def take_snapshot(types):
+    """
+    获取指定 types 的当前对象集合。
+    返回 {type_name: set(对象id)} 结构
+    """
+    snapshot = {}
+    for t in types:
+        objs = objgraph.by_type(t)
+        snapshot[t] = set(id(o) for o in objs)
+    return snapshot
 
-def debug_mem():
-    log('*'* 60)
-    obj_list = []
-    for obj in gc.get_objects():
-        size = sys.getsizeof(obj)
-        obj_list.append((obj, size))
+def diff_snapshot(before, after):
+    """
+    比较前后两个快照，找出新增的对象 id
+    返回 {type_name: list(新增对象)}
+    """
+    growth = {}
+    for t in before:
+        new_ids = after[t] - before[t]
+        if new_ids:
+            # 重新从 id 找回对象
+            objs = [o for o in objgraph.by_type(t) if id(o) in new_ids]
+            growth[t] = objs
+    return growth
 
-    sorted_objs = sorted(obj_list, key=lambda x: x[1], reverse=True)
 
-    msg = ['']
-    for obj, size in sorted_objs[:10]:
-        msg.append(f'OBJ:{id(obj)} TYPE:{type(obj)} SIZE:{size/1024/1024:.2f}MB REPR:{str(obj)[:200]}')
-        referrers = gc.get_referrers(obj)
-        for ref in referrers:
-            msg.append(f'   {str(ref)[:300]}')
+snapshot = None
+def debug_growth():
+    global snapshot
+    objgraph.show_growth()
+    result = objgraph.growth()
+    if result:
+        width = max(len(name) for name, _, _ in result)
+        for name, count, delta in result:
+            print('%-*s%9d %+9d\n' % (width, name, count, delta))
 
-    msg_str = '\n'.join(msg)
-    log(msg_str)
+    watch_types = ['tuple', 'dict']
+    before = snapshot
+    after = take_snapshot(watch_types)
 
-# 创建对象
-class MyClass:
-    pass
+    if before is not None:
+        growth = diff_snapshot(before, after)
+        for t, objs in growth.items():
+            print(f"\n类型 {t} 新增了 {len(objs)} 个对象")
+            for o in objs:
+                print(f"  -> {repr(o)}")
+    snapshot = after
 
-obj = MyClass()
-global_list = [obj]  # 全局引用
-
-# 删除局部引用
-del obj
-
-# 强制垃圾回收
-gc.collect()
-
-debug_mem()
+a = []
+debug_growth()
+for i in range(5):
+    a.append([i])
+    debug_growth()
+    print()
