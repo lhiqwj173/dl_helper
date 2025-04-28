@@ -236,8 +236,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 del transitions
                 del demo
                 gc.collect()
-                for g in gc.garbage:
-                    log(g)
+                # for g in gc.garbage:
+                #     log(g)
 
                 debug_growth()
 
