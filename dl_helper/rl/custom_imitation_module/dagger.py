@@ -90,7 +90,7 @@ def debug_growth():
                 for ref in referrers:
                     log(f"      > {ref}")
 
-    snapshot.clear()
+        snapshot.clear()
     snapshot.update(after)
 
 
