@@ -15,6 +15,9 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
+from memory_profiler import profile
+
+TEST_REST_GB = 26
 import gc, sys
 def debug_mem():
     log('*'* 60)
@@ -46,7 +49,7 @@ def calculate_sample_size_bytes(sample):
     log(f"=> 单条样本总计: {total} B\n")
     return total
 
-def get_max_rows(sample_size_bytes, reserved_gb=6):
+def get_max_rows(sample_size_bytes, reserved_gb=TEST_REST_GB):
     """
     参数：
         sample_size_bytes: 单条样本占用字节数
@@ -127,6 +130,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.cur_idx = 0    # 可以写入的样本索引
         self.capacity = 0   # 缓冲区容量
         
+    @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
         载入最新的样本
@@ -217,6 +221,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else self.capacity}")
 
+    @profile(precision=4,stream=open('extend_and_update.log','w+'))
     def extend_and_update(
         self,
         bc_train_kwargs: Optional[Mapping[str, Any]] = None,
@@ -306,6 +311,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         
         return self.round_num
 
+    @profile(precision=4,stream=open('train.log','w+'))
     def train(
         self,
         total_timesteps: int,
@@ -364,6 +370,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         while total_timestep_count < total_timesteps:
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
+            if (TEST_REST_GB - 3) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 3}）GB, 退出')
+                return
 
             collector = self.create_trajectory_collector()
             round_episode_count = 0
