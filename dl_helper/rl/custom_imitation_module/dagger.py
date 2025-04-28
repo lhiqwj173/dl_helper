@@ -15,7 +15,10 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-from memory_profiler import profile
+try:
+    from memory_profiler import profile
+except:
+    pass
 
 TEST_REST_GB = 27
 import gc, sys
@@ -91,7 +94,6 @@ def debug_growth():
         snapshot.update(after)
     else:
         snapshot = after
-
 
 def calculate_sample_size_bytes(sample):
     total = 0
