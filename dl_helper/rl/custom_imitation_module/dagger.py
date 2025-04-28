@@ -17,7 +17,7 @@ from py_ext.tool import log
 
 from memory_profiler import profile
 
-TEST_REST_GB = 26
+TEST_REST_GB = 27
 import gc, sys
 def debug_mem():
     log('*'* 60)
