@@ -91,7 +91,9 @@ def debug_growth():
                     log(f"      > {ref}")
 
         snapshot.clear()
-    snapshot.update(after)
+        snapshot.update(after)
+    else:
+        snapshot = after
 
 
 def calculate_sample_size_bytes(sample):
