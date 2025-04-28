@@ -17,7 +17,7 @@ from py_ext.tool import log
 
 from memory_profiler import profile
 
-TEST_REST_GB = 26
+TEST_REST_GB = 27
 import gc, sys
 def debug_mem():
     log('*'* 60)
@@ -37,7 +37,6 @@ def debug_mem():
 
     msg_str = '\n'.join(msg)
     log(msg_str)
-
 
 def calculate_sample_size_bytes(sample):
     total = 0
@@ -73,10 +72,12 @@ def initialize_dataset(spec, num_rows):
         new_shape = (num_rows, *shape[1:])  # 替换首维为行数
         if dtype == object:
             arr = np.empty(new_shape, dtype=dtype)  # object用empty
+            arr.fill('') 
         else:
             arr = np.zeros(new_shape, dtype=dtype)
+            arr.fill(1.0) 
         data[key] = arr
-        log(f"初始化 {key}，形状: {arr.shape}，类型: {arr.dtype}")
+        print(f"初始化 {key}，形状: {arr.shape}，类型: {arr.dtype}")
     return data
 
 class SimpleDAggerTrainer(DAggerTrainer):
@@ -371,8 +372,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
         while total_timestep_count < total_timesteps:
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-            if (TEST_REST_GB - 3) > psutil.virtual_memory().available / (1024**3):
-                log(f'内存超出限制（{TEST_REST_GB - 3}）GB, 退出')
+            if (TEST_REST_GB - 2) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 2}）GB, 退出')
                 return
 
             collector = self.create_trajectory_collector()
