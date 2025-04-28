@@ -69,7 +69,7 @@ def diff_snapshot(before, after):
 snapshot = None
 def debug_growth():
     global snapshot
-    objgraph.show_growth()
+    # objgraph.show_growth()
     result = objgraph.growth()
     if result:
         width = max(len(name) for name, _, _ in result)
@@ -86,9 +86,6 @@ def debug_growth():
             log(f"\n类型 {t} 新增了 {len(objs)} 个对象")
             for o in objs:
                 log(f"  + {repr(o)}")
-                referrers = gc.get_referrers(o)
-                for ref in referrers:
-                    log(f"      > {ref}")
 
         snapshot.clear()
         snapshot.update(after)
