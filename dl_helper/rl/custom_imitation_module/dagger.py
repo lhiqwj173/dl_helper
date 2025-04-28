@@ -19,6 +19,8 @@ from memory_profiler import profile
 
 TEST_REST_GB = 27
 import gc, sys
+import objgraph
+gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
 def debug_mem():
     log('*'* 60)
     obj_list = []
@@ -37,6 +39,13 @@ def debug_mem():
 
     msg_str = '\n'.join(msg)
     log(msg_str)
+
+def debug_growth():
+    result = objgraph.growth()
+    if result:
+        width = max(len(name) for name, _, _ in result)
+        for name, count, delta in result:
+            log('%-*s%9d %+9d\n' % (width, name, count, delta))
 
 def calculate_sample_size_bytes(sample):
     total = 0
@@ -141,6 +150,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
+        debug_growth()
+
         log(f"_load_all_demos 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
         # 检查可写性
@@ -225,6 +236,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 del transitions
                 del demo
                 gc.collect()
+                for g in gc.garbage:
+                    log(g)
+
+                debug_growth()
 
                 log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
