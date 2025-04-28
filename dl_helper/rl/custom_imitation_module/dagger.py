@@ -88,7 +88,7 @@ def debug_growth():
         for t, objs in growth.items():
             log(f"\n类型 {t} 新增了 {len(objs)} 个对象")
             for o in objs:
-                log(f"  + {repr(o)}")
+                log(f"  + {str(o)[:200]}")
 
         snapshot.clear()
         snapshot.update(after)
