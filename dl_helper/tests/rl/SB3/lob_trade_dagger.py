@@ -354,33 +354,33 @@ if run_type != 'test':
     memory_usage = psutil.virtual_memory()
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
-    # 生成验证数据 固定数量
-    for env in env_objs:
-        env.val()# 切换到验证模式
-    rollouts_val = rollout.rollout(
-        expert,
-        vec_env,
-        rollout.make_sample_until(min_timesteps=50_000 if run_type!='test_model' else 500),
-        rng=np.random.default_rng(),
-    )
-    for env in env_objs:
-        env.train()# 切换回训练模式
-    transitions_val = rollout.flatten_trajectories(rollouts_val)
-    memory_usage2 = psutil.virtual_memory()
-    msg = ''
-    mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
-    log(mem_pct_msg)
-    msg += mem_pct_msg + '\n'
-    mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
-    log(mem_expert_msg)
-    msg += mem_expert_msg + '\n'
+    # # 生成验证数据 固定数量
+    # for env in env_objs:
+    #     env.val()# 切换到验证模式
+    # rollouts_val = rollout.rollout(
+    #     expert,
+    #     vec_env,
+    #     rollout.make_sample_until(min_timesteps=50_000 if run_type!='test_model' else 500),
+    #     rng=np.random.default_rng(),
+    # )
+    # for env in env_objs:
+    #     env.train()# 切换回训练模式
+    # transitions_val = rollout.flatten_trajectories(rollouts_val)
+    # memory_usage2 = psutil.virtual_memory()
+    # msg = ''
+    # mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
+    # log(mem_pct_msg)
+    # msg += mem_pct_msg + '\n'
+    # mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
+    # log(mem_expert_msg)
+    # msg += mem_expert_msg + '\n'
 
-    # 检查 transitions 样本均衡度
-    label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
-    log(label_balance)
-    msg += label_balance + '\n'
-    send_wx(msg)
-    # sys.exit()
+    # # 检查 transitions 样本均衡度
+    # label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
+    # log(label_balance)
+    # msg += label_balance + '\n'
+    # send_wx(msg)
+    # # sys.exit()
 
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,

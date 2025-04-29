@@ -529,15 +529,14 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 log(f'内存超出限制（{TEST_REST_GB - 1}）GB, 退出')
                 return
 
-            collector = self.create_trajectory_collector()
             round_episode_count = 0
             round_timestep_count = 0
 
+            collector = self.create_trajectory_collector()
             sample_until = rollout.make_sample_until(
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
                 min_episodes=rollout_round_min_episodes,
             )
-
             trajectories = rollout.generate_trajectories(
                 policy=self.expert_policy,
                 venv=collector,
@@ -621,7 +620,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             is_best = False
             for file in os.listdir(r'/kaggle/working/'):
                 if file.endswith('.log'):
-                    shutil.move(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
+                    shutil.copy2(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
 
             if not in_windows():
                 # 保存模型
