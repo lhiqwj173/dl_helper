@@ -6,7 +6,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.algorithms.dagger import (
     Optional, 
     rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data, pathlib, 
-    InteractiveTrajectoryCollector, 
+    InteractiveTrajectoryCollector, Callable, VecEnvStepReturn, 
     Mapping, Any,
 )
 
@@ -125,6 +125,100 @@ def debug_growth():
         snapshot.update(after)
     else:
         snapshot = after
+
+class policy_eval_collector(vec_env.VecEnvWrapper):
+    """
+    使用策略生成轨迹
+    记录策略动作 / 专家动作 序列
+    """
+    _last_obs: Optional[np.ndarray]
+
+    def __init__(
+        self,
+        venv: vec_env.VecEnv,
+        get_robot_acts: Callable[[np.ndarray], np.ndarray],
+        rng: np.random.Generator,
+    ) -> None:
+        """Builds InteractiveTrajectoryCollector.
+
+        Args:
+            venv: vectorized environment to sample trajectories from.
+            get_robot_acts: get robot actions that can be substituted for
+                human actions. Takes a vector of observations as input & returns a
+                vector of actions.
+            rng: random state for random number generation.
+        """
+        super().__init__(venv)
+        self.get_robot_acts = get_robot_acts
+        self._last_obs = None
+        self._is_reset = False
+        self.rng = rng
+
+        # 记录动作
+        self.expert_acts = []
+        self.policy_acts = []
+
+    def get_action_sequences(self):
+        """
+        获取专家动作和策略动作序列
+        """
+        return np.concatenate(self.expert_acts), np.concatenate(self.policy_acts)
+
+    def seed(self, seed: Optional[int] = None) -> List[Optional[int]]:
+        """Set the seed for the DAgger random number generator and wrapped VecEnv.
+
+        The DAgger RNG is used along with `self.beta` to determine whether the expert
+        or robot action is forwarded to the wrapped VecEnv.
+
+        Args:
+            seed: The random seed. May be None for completely random seeding.
+
+        Returns:
+            A list containing the seeds for each individual env. Note that all list
+            elements may be None, if the env does not return anything when seeded.
+        """
+        self.rng = np.random.default_rng(seed=seed)
+        return list(self.venv.seed(seed))
+
+    def reset(self) -> np.ndarray:
+        """Resets the environment.
+
+        Returns:
+            obs: first observation of a new trajectory.
+        """
+        obs = self.venv.reset()
+        assert isinstance(obs, np.ndarray)
+        self._last_obs = obs
+        self._is_reset = True
+        return obs
+
+    def step_async(self, actions: np.ndarray) -> None:
+        """
+        actions: 专家动作
+        """
+        assert self._is_reset, "call .reset() before .step()"
+        assert self._last_obs is not None
+
+        # 记录专家动作
+        self.expert_acts.append(actions)
+
+        # 记录策略动作
+        policy_acts = self.get_robot_acts(self._last_obs)
+        self.policy_acts.append(policy_acts)
+
+        # 使用策略动作交互
+        self.venv.step_async(policy_acts)
+
+    def step_wait(self) -> VecEnvStepReturn:
+        """Returns observation, reward, etc after previous `step_async()` call.
+
+        Returns:
+            Observation, reward, dones (is terminal?) and info dict.
+        """
+        next_obs, rews, dones, infos = self.venv.step_wait()
+        assert isinstance(next_obs, np.ndarray)
+        self._last_obs = next_obs
+        return next_obs, rews, dones, infos
 
 def calculate_sample_size_bytes(sample):
     total = 0
