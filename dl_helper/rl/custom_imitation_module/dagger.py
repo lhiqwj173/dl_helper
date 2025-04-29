@@ -234,7 +234,7 @@ def _save_dagger_demo(
     actual_prefix = f"{prefix}-" if prefix else ""
     randbits = int.from_bytes(rng.bytes(16), "big")
     random_uuid = uuid.UUID(int=randbits, version=4).hex
-    filename = f"{actual_prefix}dagger-demo-{trajectory_index}-{random_uuid}.npz"
+    filename = f"{actual_prefix}dagger-demo-{trajectory_index}-{random_uuid}.pkl"
     npz_path = save_dir / filename
     assert (
         not npz_path.exists()
@@ -470,6 +470,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
             new_transitions_length += self._handle_demo_path(path)
 
         return new_transitions_length
+
+    def _get_demo_paths(self, round_dir: pathlib.Path) -> List[pathlib.Path]:
+        # listdir returns filenames in an arbitrary order that depends on the
+        # file system implementation:
+        # https://stackoverflow.com/questions/31534583/is-os-listdir-deterministic
+        # To ensure the order is consistent across file systems,
+        # we sort by the filename.
+        filenames = sorted(os.listdir(round_dir))
+        return [round_dir / f for f in filenames if f.endswith(".pkl")]
 
     @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
