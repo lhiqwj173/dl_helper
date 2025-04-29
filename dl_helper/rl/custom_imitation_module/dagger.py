@@ -117,14 +117,10 @@ def debug_growth():
                 except Exception as e:
                     log(f"  + 无法转换对象 {o}, 错误: {e}")
 
-                backrefs = objgraph.get_backrefs(o)
+                backrefs = gc.get_referrers(o)
                 for ref in backrefs:
                     log(f"      > 引用: {reprlib.repr(ref)[:200]}")
         
-                # 可选：生成引用图（保存为图片）
-                objgraph.show_backrefs([o], filename=f'refs{count}_{t}_{i}.png', max_depth=3)
-
-                
         snapshot.clear()
         snapshot.update(after)
     else:

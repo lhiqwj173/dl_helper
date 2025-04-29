@@ -162,6 +162,7 @@ class TrainFolderManagerBC(TrainFolderManager):
         加载检查点
         """
         bc_trainer.load(self.checkpoint_folder)
+        log(f'加载完毕')
 
     def pull(self):
         """
