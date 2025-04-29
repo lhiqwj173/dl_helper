@@ -65,7 +65,7 @@ run_type = 'train'
 
 #################################
 # 命令行参数
-arg_lr = 1.5e-5
+arg_lr = 6e-6
 arg_batch_n = None
 #################################
 if len(sys.argv) > 1:
@@ -85,7 +85,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
 
-train_folder = train_title = f'20250421_lob_trade_bc_keepon' \
+train_folder = train_title = f'20250429_lob_trade_bc_keepon' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
 
@@ -195,6 +195,9 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(128, features_dim),
         )
 
+        self.dp = nn.Dropout(p=0.2)
+        self.dp2d = nn.Dropout2d(p=0.2)
+
         # 初始化权重
         self._initialize_weights()
 
@@ -251,20 +254,20 @@ class DeepLob(BaseFeaturesExtractor):
         x_inp2 = self.inp2(x)  # (B, 64, 24, 1)
         x_inp3 = self.inp3(x)  # (B, 64, 24, 1)
         x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)  # (B, 192, 24, 1)
-        x = nn.Dropout2d(p=0.2)(x)  # 添加 Dropout2d
+        x = self.dp2d(x)  # 添加 Dropout2d
 
         # 调整形状以适配 LSTM
         x = x.permute(0, 2, 1, 3).squeeze(3)  # (B, 24, 192)
 
         # LSTM 处理 取最后一个时间步
         lstm_out, _ = self.lstm(x)  # (B, 24, 64)
-        lstm_out = nn.Dropout(p=0.2)(lstm_out)  # 添加 Dropout
+        lstm_out = self.dp(lstm_out)  # 添加 Dropout
         # 取最后一个时间步
         temporal_feat = lstm_out[:, -1, :]  # (B, 64)
 
         # 融合层
         fused_out = torch.cat([temporal_feat, static_out], dim=1)  # (B, 64 + self.extra_input_dims * 4)
-        fused_out = nn.Dropout(p=0.2)(fused_out)  # 添加 Dropout
+        fused_out = self.dp(fused_out)  # 添加 Dropout
         fused_out = self.fusion(fused_out)  # (B, features_dim)
 
         # 数值检查
@@ -342,8 +345,11 @@ if run_type != 'test':
     # test_x = torch.from_numpy(test_x).unsqueeze(0)
     # log(test_x.shape)
     # test_x = test_x.float().to(model.policy.device)
-    # out = model.policy.features_extractor(test_x)
-    # log(out.shape)
+    # model.policy.eval()
+    # out1 = model.policy.features_extractor(test_x)
+    # out2 = model.policy.features_extractor(test_x)
+    # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
+    # log(out1.shape)
     # sys.exit()
 
     vec_env = env
@@ -426,9 +432,10 @@ if run_type != 'test':
         observation_space=env.observation_space,
         action_space=env.action_space,
         policy=model.policy,
+        l2_weight=1e-4,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        optimizer_kwargs={'lr': arg_lr},
+        optimizer_kwargs={'lr': arg_lr * batch_n},
         custom_logger=custom_logger,
     )
     
