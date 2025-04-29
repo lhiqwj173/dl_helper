@@ -316,11 +316,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.full = False   # 是否已经满了
         self.cur_idx = 0    # 可以写入的样本索引
         self.capacity = 0   # 缓冲区容量
-        
-    def _demo_dir_path_for_round(self, round_num: Optional[int] = None, _type='train') -> pathlib.Path:
-        if round_num is None:
-            round_num = self.round_num
-        return self.scratch_dir / _type / "demos" / f"round-{round_num:03d}"
 
     def _init_transitions_dict(self, transitions):
         # 计算单条数据的占用大小
@@ -536,25 +531,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
             log(f"New round number is {self.round_num}")
         
         return self.round_num
-
-    def create_trajectory_collector(self, _type='train') -> InteractiveTrajectoryCollector:
-        """Create trajectory collector to extend current round's demonstration set.
-
-        Returns:
-            A collector configured with the appropriate beta, imitator policy, etc.
-            for the current round. Refer to the documentation for
-            `InteractiveTrajectoryCollector` to see how to use this.
-        """
-        save_dir = self._demo_dir_path_for_round(_type='train')
-        beta = self.beta_schedule(self.round_num)
-        collector = InteractiveTrajectoryCollector(
-            venv=self.venv,
-            get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
-            beta=beta,
-            save_dir=save_dir,
-            rng=self.rng,
-        )
-        return collector
 
     @profile(precision=4,stream=open('train.log','w+'))
     def train(
