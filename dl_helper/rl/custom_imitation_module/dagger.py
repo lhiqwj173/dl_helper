@@ -325,7 +325,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 del demo
                 gc.collect()
                 for g in gc.garbage:
-                    log(g)
+                    log(fg)
 
                 # debug_growth()
 
@@ -491,8 +491,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 `self.venv` by default. If neither of the `n_epochs` and `n_batches`
                 keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
         """
-        # # for debug
-        # rollout_round_min_timesteps = 500
+        # for debug
+        rollout_round_min_timesteps = 500
 
         total_timestep_count = 0
         round_num = 0

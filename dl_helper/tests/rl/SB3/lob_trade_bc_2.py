@@ -478,6 +478,7 @@ if run_type != 'test':
 
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
+    log(f'begin: {begin}')
     for i in range(begin, total_epochs // checkpoint_interval):
         log(f'第 {i} 次训练')
 
