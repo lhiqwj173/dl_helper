@@ -255,7 +255,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
-            for path in demo_paths:
+            for path in demo_paths[:1]:
                 log(f'load demo: {path}')
                 log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
                 demo = serialize.load(path)[0]
