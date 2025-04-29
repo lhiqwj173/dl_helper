@@ -334,7 +334,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
     @profile(precision=4,stream=open('_copy_data.log','w+'))
     def _copy_data(self, transitions):
         t_length = transitions.acts.shape[0]  # 待写入数据长度
-        new_transitions_length += t_length
 
         log(f'capacity: {self.capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
         # 写入数据
@@ -374,6 +373,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # 更新状态
             self.cur_idx = (begin + t_length) % self.capacity
 
+        return t_length
+
     @profile(precision=4,stream=open('_handle_demo_path.log','w+'))
     def _handle_demo_path(self, path):
         log(f'load demo: {path}')
@@ -389,7 +390,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._init_transitions_dict(transitions)
 
         # 拷贝数据
-        self._copy_data(transitions)
+        t_length = self._copy_data(transitions)
 
         # 释放内存
         del transitions
@@ -401,12 +402,13 @@ class SimpleDAggerTrainer(DAggerTrainer):
         # debug_growth()
 
         log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+        return t_length
 
     @profile(precision=4,stream=open('_handle_demo_paths.log','w+'))
     def _handle_demo_paths(self, demo_paths):
         new_transitions_length =0
         for path in demo_paths:
-            self._handle_demo_path(path)
+            new_transitions_length += self._handle_demo_path(path)
 
         return new_transitions_length
 
