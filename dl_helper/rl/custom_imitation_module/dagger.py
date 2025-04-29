@@ -46,12 +46,33 @@ def debug_mem():
 def take_snapshot(types):
     """
     获取指定 types 的当前对象集合。
-    返回 {type_name: set(对象id)} 结构
+    返回 {type_name: set(对象id)} 结构，
+    对于 dict 类型，会过滤掉包含指定键的字典对象。
     """
     snapshot = {}
+    
+    # 需要过滤的 dict 键名称列表
+    dict_filter = {'objs', 'after', 'dict', 'tuple'}
+
     for t in types:
         objs = objgraph.by_type(t)
+
+        # 对于 dict 类型，排除包含指定键的字典对象
+        if t == 'dict':
+            filtered_objs = []
+            for d in objs:
+                try:
+                    keys = set(d.keys())
+                except Exception:
+                    # 如果对象无法当作 dict 处理，跳过
+                    continue
+                # 如果字典的键与过滤列表无交集，则保留
+                if not (keys & dict_filter):
+                    filtered_objs.append(d)
+            objs = filtered_objs
+
         snapshot[t] = set(id(o) for o in objs)
+
     return snapshot
 
 def diff_snapshot(before, after):
@@ -69,8 +90,9 @@ def diff_snapshot(before, after):
     return growth
 
 snapshot = None
+count = 0
 def debug_growth():
-    global snapshot
+    global snapshot, count
     
     result = objgraph.growth()
     if result:
@@ -78,7 +100,8 @@ def debug_growth():
         for name, count, delta in result:
             log('%-*s%9d %+9d\n' % (width, name, count, delta))
 
-    watch_types = ['tuple', 'dict']
+    # watch_types = ['tuple', 'dict']
+    watch_types = ['dict']
     before = snapshot
     after = take_snapshot(watch_types)
 
@@ -88,12 +111,20 @@ def debug_growth():
             log(f"\n类型 {t} 新增了 {len(objs)} 个对象")
             log(f"当前内存使用: {psutil.Process().memory_info().rss / 1024 / 1024:.2f} MB")
             for i, o in enumerate(objs):
-                log(f"处理对象 {i}, 类型: {type(o)}")
+                # log(f"处理对象 {i}, 类型: {type(o)}")
                 try:
                     log(f"  + {reprlib.repr(o)[:200]}")
                 except Exception as e:
                     log(f"  + 无法转换对象 {o}, 错误: {e}")
 
+                backrefs = objgraph.get_backrefs(o)
+                for ref in backrefs:
+                    log(f"      > 引用: {reprlib.repr(ref)[:200]}")
+        
+                # 可选：生成引用图（保存为图片）
+                objgraph.show_backrefs([o], filename=f'refs{count}_{t}_{i}.png', max_depth=3)
+
+                
         snapshot.clear()
         snapshot.update(after)
     else:
@@ -211,7 +242,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
-        # debug_growth()
+        debug_growth()
 
         log(f"_load_all_demos 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -228,7 +259,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
-            for path in demo_paths[:1]:
+            for path in demo_paths:
                 log(f'load demo: {path}')
                 log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
                 demo = serialize.load(path)[0]
@@ -300,7 +331,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 # for g in gc.garbage:
                 #     log(g)
 
-                # debug_growth()
+                debug_growth()
 
                 log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
