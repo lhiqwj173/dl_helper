@@ -295,8 +295,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
         transitions = rollout.flatten_trajectories(demo)
         del demo
 
-        log(f"[after demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-
         # 检查初始化
         if self.transitions_dict is None:
             self._init_transitions_dict(transitions)
@@ -306,7 +304,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         # 释放内存
         del transitions
-        
+
         # gc.collect()
         # for g in gc.garbage:
         #     log(f'garbage: {g}')
