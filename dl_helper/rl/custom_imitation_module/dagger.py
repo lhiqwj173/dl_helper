@@ -325,7 +325,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 del demo
                 gc.collect()
                 for g in gc.garbage:
-                    log(fg)
+                    log(f'garbage: {g}')
 
                 # debug_growth()
 
