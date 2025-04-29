@@ -1,4 +1,4 @@
-import time, os, psutil, shutil
+import time, os, psutil, shutil, pickle
 import pandas as pd
 from collections import deque
 from typing import Deque
@@ -8,6 +8,8 @@ from imitation.algorithms.dagger import (
     rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data, pathlib, 
     InteractiveTrajectoryCollector, Callable, VecEnvStepReturn, 
     Mapping, Any,
+    util,uuid,
+    
 )
 
 from dl_helper.rl.custom_imitation_module.rollout import KEYS
@@ -220,6 +222,59 @@ class policy_eval_collector(vec_env.VecEnvWrapper):
         self._last_obs = next_obs
         return next_obs, rews, dones, infos
 
+def _save_dagger_demo(
+    trajectory: types.Trajectory,
+    trajectory_index: int,
+    save_dir: types.AnyPath,
+    rng: np.random.Generator,
+    prefix: str = "",
+) -> None:
+    save_dir = util.parse_path(save_dir)
+    assert isinstance(trajectory, types.Trajectory)
+    actual_prefix = f"{prefix}-" if prefix else ""
+    randbits = int.from_bytes(rng.bytes(16), "big")
+    random_uuid = uuid.UUID(int=randbits, version=4).hex
+    filename = f"{actual_prefix}dagger-demo-{trajectory_index}-{random_uuid}.npz"
+    npz_path = save_dir / filename
+    assert (
+        not npz_path.exists()
+    ), "The following DAgger demonstration path already exists: {0}".format(npz_path)
+
+    # 保存轨迹
+    # serialize.save(npz_path, [trajectory])
+
+    # 保存 transitions
+    transitions = rollout.flatten_trajectories([trajectory])
+    pickle.dump(transitions, open(npz_path, 'wb'))
+
+    logging.info(f"Saved demo at '{npz_path}'")
+
+class InteractiveTransitionsCollector(InteractiveTrajectoryCollector):
+    def step_wait(self) -> VecEnvStepReturn:
+        """Returns observation, reward, etc after previous `step_async()` call.
+
+        Stores the transition, and saves trajectory as demo once complete.
+
+        Returns:
+            Observation, reward, dones (is terminal?) and info dict.
+        """
+        next_obs, rews, dones, infos = self.venv.step_wait()
+        assert isinstance(next_obs, np.ndarray)
+        assert self.traj_accum is not None
+        assert self._last_user_actions is not None
+        self._last_obs = next_obs
+        fresh_demos = self.traj_accum.add_steps_and_auto_finish(
+            obs=next_obs,
+            acts=self._last_user_actions,
+            rews=rews,
+            infos=infos,
+            dones=dones,
+        )
+        for traj_index, traj in enumerate(fresh_demos):
+            _save_dagger_demo(traj, traj_index, self.save_dir, self.rng)
+
+        return next_obs, rews, dones, infos
+    
 def calculate_sample_size_bytes(sample):
     total = 0
     log("各字段内存占用（字节）：")
@@ -379,11 +434,15 @@ class SimpleDAggerTrainer(DAggerTrainer):
     def _handle_demo_path(self, path):
         log(f'load demo: {path}')
         log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-        demo = serialize.load(path)
 
-        # 转为 transitions
-        transitions = rollout.flatten_trajectories(demo)
-        del demo
+        # # 载入轨迹
+        # demo = serialize.load(path)
+        # # 转为 transitions
+        # transitions = rollout.flatten_trajectories(demo)
+        # del demo
+
+        # 载入 transitions
+        transitions = pickle.load(open(path, 'rb'))
 
         # 检查初始化
         if self.transitions_dict is None:
