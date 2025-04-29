@@ -238,7 +238,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
-        debug_growth()
+        # debug_growth()
 
         log(f"_load_all_demos 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -324,10 +324,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 del transitions
                 del demo
                 gc.collect()
-                # for g in gc.garbage:
-                #     log(g)
+                for g in gc.garbage:
+                    log(g)
 
-                debug_growth()
+                # debug_growth()
 
                 log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -491,8 +491,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 `self.venv` by default. If neither of the `n_epochs` and `n_batches`
                 keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
         """
-        # for debug
-        rollout_round_min_timesteps = 500
+        # # for debug
+        # rollout_round_min_timesteps = 500
 
         total_timestep_count = 0
         round_num = 0
