@@ -71,7 +71,7 @@ def diff_snapshot(before, after):
 snapshot = None
 def debug_growth():
     global snapshot
-    # objgraph.show_growth()
+    
     result = objgraph.growth()
     if result:
         width = max(len(name) for name, _, _ in result)
@@ -211,7 +211,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         """
         new_transitions_length = 0
 
-        debug_growth()
+        # debug_growth()
 
         log(f"_load_all_demos 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -228,7 +228,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
-            for path in demo_paths:
+            for path in demo_paths[:1]:
                 log(f'load demo: {path}')
                 log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
                 demo = serialize.load(path)[0]
@@ -300,7 +300,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 # for g in gc.garbage:
                 #     log(g)
 
-                debug_growth()
+                # debug_growth()
 
                 log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
