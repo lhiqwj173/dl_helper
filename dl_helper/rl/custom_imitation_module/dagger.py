@@ -20,6 +20,7 @@ TEST_REST_GB = 27
 
 from memory_profiler import profile
 import objgraph
+import reprlib
 import gc, sys
 gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
 def debug_mem():
@@ -85,9 +86,13 @@ def debug_growth():
         growth = diff_snapshot(before, after)
         for t, objs in growth.items():
             log(f"\n类型 {t} 新增了 {len(objs)} 个对象")
+            log(f"当前内存使用: {psutil.Process().memory_info().rss / 1024 / 1024:.2f} MB")
             for i, o in enumerate(objs):
-                log(f"处理对象 {i}: {type(o)}")
-                log(f"  + {str(o)[:200]}")
+                log(f"处理对象 {i}, 类型: {type(o)}")
+                try:
+                    log(f"  + {reprlib.repr(o)[:200]}")
+                except Exception as e:
+                    log(f"  + 无法转换对象 {o}, 错误: {e}")
 
         snapshot.clear()
         snapshot.update(after)
