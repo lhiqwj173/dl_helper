@@ -678,6 +678,25 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 continue
 
             # # 验证模型
+            # collector = policy_eval_collector(
+            #     venv=self.venv, 
+            #     get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
+            #     rng=self.rng,
+            # )
+            # sample_until = rollout.make_sample_until(
+            #     min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
+            #     min_episodes=rollout_round_min_episodes,
+            # )
+            # trajectories = rollout.generate_trajectories(
+            #     policy=self.expert_policy,
+            #     venv=collector,
+            #     sample_until=sample_until,
+            #     deterministic_policy=False,
+            #     rng=collector.rng,
+            # )
+            # # 获取动作序列
+            # expert_acts, policy_acts = collector.get_action_sequences()
+
             # _t = time.time()
             # eval_env.val()
             # val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
