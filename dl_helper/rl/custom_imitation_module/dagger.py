@@ -230,6 +230,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
     @profile(precision=4,stream=open('_handle_demo_paths.log','w+'))
     def _handle_demo_paths(self, demo_paths):
+        new_transitions_length =0
         for path in demo_paths:
             log(f'load demo: {path}')
             log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
@@ -306,6 +307,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
+        return new_transitions_length
+
     @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
@@ -333,7 +336,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
-            self._handle_demo_paths(demo_paths)
+            new_transitions_length += self._handle_demo_paths(demo_paths)
 
         log(f"_load_all_demos done 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
         log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else self.capacity}")

@@ -442,6 +442,7 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
+        l2_weight=1e-4,
         optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
         custom_logger=custom_logger,
         lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
