@@ -385,7 +385,6 @@ if run_type != 'test':
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
         action_space=env.action_space,
-        demonstrations_val = transitions_val,# 验证数据集
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
@@ -417,6 +416,7 @@ if run_type != 'test':
     # 初始化 
     dagger_trainer = SimpleDAggerTrainer(
         venv=vec_env,
+        env_objs=env_objs,
         scratch_dir=r'C:\Users\lh\Desktop\temp\temp_dagger' if in_windows() else r"/kaggle/temp",# 临时文件夹，不进行备份
         expert_policy=expert,
         bc_trainer=bc_trainer,

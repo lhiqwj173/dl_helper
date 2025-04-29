@@ -5,7 +5,8 @@ from typing import Deque
 from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.algorithms.dagger import (
     Optional, 
-    rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data,
+    rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data, pathlib, 
+    InteractiveTrajectoryCollector, 
     Mapping, Any,
 )
 
@@ -84,7 +85,8 @@ def debug_growth():
         growth = diff_snapshot(before, after)
         for t, objs in growth.items():
             log(f"\n类型 {t} 新增了 {len(objs)} 个对象")
-            for o in objs:
+            for i, o in enumerate(objs):
+                log(f"处理对象 {i}: {type(o)}")
                 log(f"  + {str(o)[:200]}")
 
         snapshot.clear()
@@ -140,6 +142,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self,
         *,
         venv: vec_env.VecEnv,
+        env_objs, 
         scratch_dir: types.AnyPath,
         expert_policy: policies.BasePolicy,
         rng: np.random.Generator,
@@ -179,12 +182,20 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if expert_policy.action_space != self.venv.action_space:
             raise ValueError("Mismatched action space between expert_policy and venv")
         
+        # 实际的环境对象列表
+        self.env_objs = env_objs
+
         # 样本数据 dict
         self.transitions_dict = None
         self.full = False   # 是否已经满了
         self.cur_idx = 0    # 可以写入的样本索引
         self.capacity = 0   # 缓冲区容量
         
+    def _demo_dir_path_for_round(self, round_num: Optional[int] = None, _type='train') -> pathlib.Path:
+        if round_num is None:
+            round_num = self.round_num
+        return self.scratch_dir / _type / "demos" / f"round-{round_num:03d}"
+
     @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
@@ -380,6 +391,25 @@ class SimpleDAggerTrainer(DAggerTrainer):
             log(f"New round number is {self.round_num}")
         
         return self.round_num
+
+    def create_trajectory_collector(self, _type='train') -> InteractiveTrajectoryCollector:
+        """Create trajectory collector to extend current round's demonstration set.
+
+        Returns:
+            A collector configured with the appropriate beta, imitator policy, etc.
+            for the current round. Refer to the documentation for
+            `InteractiveTrajectoryCollector` to see how to use this.
+        """
+        save_dir = self._demo_dir_path_for_round(_type='train')
+        beta = self.beta_schedule(self.round_num)
+        collector = InteractiveTrajectoryCollector(
+            venv=self.venv,
+            get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
+            beta=beta,
+            save_dir=save_dir,
+            rng=self.rng,
+        )
+        return collector
 
     @profile(precision=4,stream=open('train.log','w+'))
     def train(
