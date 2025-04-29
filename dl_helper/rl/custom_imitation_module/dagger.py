@@ -228,6 +228,84 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_num = self.round_num
         return self.scratch_dir / _type / "demos" / f"round-{round_num:03d}"
 
+    @profile(precision=4,stream=open('_handle_demo_paths.log','w+'))
+    def _handle_demo_paths(self, demo_paths):
+        for path in demo_paths:
+            log(f'load demo: {path}')
+            log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            demo = serialize.load(path)[0]
+
+            # 转为 transitions
+            transitions = rollout.flatten_trajectories([demo])
+            log(f"[after demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
+            # 检查初始化
+            if self.transitions_dict is None:
+                # 计算单条数据的占用大小
+                single_data_dict = {}
+                for key in KEYS:
+                    d = getattr(transitions, key)
+                    single_data_dict[key] = [[1] + list(d.shape[1:]), d.dtype]
+                # 根据单行数据，计算最大行数
+                sample = {key: np.zeros(shape, dtype=dtype) for key, (shape, dtype) in single_data_dict.items()}
+                sample_size = calculate_sample_size_bytes(sample)
+                max_rows = get_max_rows(sample_size)
+                # 初始化数据集
+                self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
+                self.capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
+
+            t_length = transitions.acts.shape[0]  # 待写入数据长度
+            new_transitions_length += t_length
+
+            log(f'capacity: {self.capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
+            # 写入数据
+            # 情况1：写入数据比容量大 → 只保留最后 capacity 条
+            if t_length > self.capacity:
+                offset = t_length - self.capacity
+                for key in KEYS:
+                    data = getattr(transitions, key)
+                    # transitions_data = data[offset:]
+                    # self.transitions_dict[key][:] = transitions_data
+                    np.copyto(
+                        self.transitions_dict[key],
+                        data[offset:]
+                    )
+                self.cur_idx = 0
+                self.full = True
+            else:
+                # 正常或跨越写入
+                begin = self.cur_idx
+                # 第一段：从当前 cur_idx 到缓冲区尾部
+                first_part_len = min(self.capacity - begin, t_length)
+                # 第二段（如果需要）：从头开始继续写
+                second_part_len = t_length - first_part_len
+                for key in KEYS:
+                    data = getattr(transitions, key)
+                    # 使用 np.copyto 避免生成切片临时数组
+                    np.copyto(
+                        self.transitions_dict[key][begin:begin+first_part_len],
+                        data[:first_part_len]
+                    )
+                    if second_part_len > 0:
+                        np.copyto(
+                            self.transitions_dict[key][0:second_part_len],
+                            data[first_part_len:]
+                        )
+                        self.full = True
+                # 更新状态
+                self.cur_idx = (begin + t_length) % self.capacity
+
+            # 释放内存
+            del transitions
+            del demo
+            gc.collect()
+            # for g in gc.garbage:
+            #     log(f'garbage: {g}')
+
+            # debug_growth()
+
+            log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
     @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
@@ -255,81 +333,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_dir = self._demo_dir_path_for_round(round_num)
             demo_paths = self._get_demo_paths(round_dir)
 
-            for path in demo_paths[:1]:
-                log(f'load demo: {path}')
-                log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-                demo = serialize.load(path)[0]
-
-                # 转为 transitions
-                transitions = rollout.flatten_trajectories([demo])
-                log(f"[after demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-
-                # 检查初始化
-                if self.transitions_dict is None:
-                    # 计算单条数据的占用大小
-                    single_data_dict = {}
-                    for key in KEYS:
-                        d = getattr(transitions, key)
-                        single_data_dict[key] = [[1] + list(d.shape[1:]), d.dtype]
-                    # 根据单行数据，计算最大行数
-                    sample = {key: np.zeros(shape, dtype=dtype) for key, (shape, dtype) in single_data_dict.items()}
-                    sample_size = calculate_sample_size_bytes(sample)
-                    max_rows = get_max_rows(sample_size)
-                    # 初始化数据集
-                    self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
-                    self.capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
-
-                t_length = transitions.acts.shape[0]  # 待写入数据长度
-                new_transitions_length += t_length
-
-                log(f'capacity: {self.capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
-                # 写入数据
-                # 情况1：写入数据比容量大 → 只保留最后 capacity 条
-                if t_length > self.capacity:
-                    offset = t_length - self.capacity
-                    for key in KEYS:
-                        data = getattr(transitions, key)
-                        # transitions_data = data[offset:]
-                        # self.transitions_dict[key][:] = transitions_data
-                        np.copyto(
-                            self.transitions_dict[key],
-                            data[offset:]
-                        )
-                    self.cur_idx = 0
-                    self.full = True
-                else:
-                    # 正常或跨越写入
-                    begin = self.cur_idx
-                    # 第一段：从当前 cur_idx 到缓冲区尾部
-                    first_part_len = min(self.capacity - begin, t_length)
-                    # 第二段（如果需要）：从头开始继续写
-                    second_part_len = t_length - first_part_len
-                    for key in KEYS:
-                        data = getattr(transitions, key)
-                        # 使用 np.copyto 避免生成切片临时数组
-                        np.copyto(
-                            self.transitions_dict[key][begin:begin+first_part_len],
-                            data[:first_part_len]
-                        )
-                        if second_part_len > 0:
-                            np.copyto(
-                                self.transitions_dict[key][0:second_part_len],
-                                data[first_part_len:]
-                            )
-                            self.full = True
-                    # 更新状态
-                    self.cur_idx = (begin + t_length) % self.capacity
-
-                # 释放内存
-                del transitions
-                del demo
-                gc.collect()
-                # for g in gc.garbage:
-                #     log(f'garbage: {g}')
-
-                # debug_growth()
-
-                log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+            self._handle_demo_paths(demo_paths)
 
         log(f"_load_all_demos done 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
         log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else self.capacity}")
