@@ -6,7 +6,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from imitation.algorithms.dagger import (
     Optional, 
     rollout, np, DAggerTrainer, vec_env, types, policies, Tuple, List, serialize, logging, NeedsDemosException, th_data, pathlib, 
-    InteractiveTrajectoryCollector, Callable, VecEnvStepReturn, 
+    Callable, VecEnvStepReturn, 
     Mapping, Any,
     util,uuid,
 )
@@ -130,10 +130,13 @@ def debug_growth():
 
 class policy_eval_collector(vec_env.VecEnvWrapper):
     """
-    使用策略生成轨迹
-    记录策略动作 / 专家动作 序列
+    - 使用策略生成轨迹，但记录的是专家的动作
+    - 不会本地保存轨迹
     """
+
+    traj_accum: Optional[rollout.TrajectoryAccumulator]
     _last_obs: Optional[np.ndarray]
+    _last_user_actions: Optional[np.ndarray]
 
     def __init__(
         self,
@@ -141,21 +144,22 @@ class policy_eval_collector(vec_env.VecEnvWrapper):
         get_robot_acts: Callable[[np.ndarray], np.ndarray],
         rng: np.random.Generator,
     ) -> None:
+        """
+        Args:
+            venv: vectorized environment to sample trajectories from.
+            get_robot_acts: get robot actions that can be substituted for
+                human actions. Takes a vector of observations as input & returns a
+                vector of actions.
+            rng: random state for random number generation.
+        """
         super().__init__(venv)
         self.get_robot_acts = get_robot_acts
+        self.traj_accum = None
         self._last_obs = None
+        self._done_before = True
         self._is_reset = False
+        self._last_user_actions = None
         self.rng = rng
-
-        # 记录动作
-        self.expert_acts = []
-        self.policy_acts = []
-
-    def get_action_sequences(self):
-        """
-        获取专家动作和策略动作序列
-        """
-        return np.concatenate(self.expert_acts), np.concatenate(self.policy_acts)
 
     def seed(self, seed: Optional[int] = None) -> List[Optional[int]]:
         """Set the seed for the DAgger random number generator and wrapped VecEnv.
@@ -179,42 +183,60 @@ class policy_eval_collector(vec_env.VecEnvWrapper):
         Returns:
             obs: first observation of a new trajectory.
         """
+        self.traj_accum = rollout.TrajectoryAccumulator()
         obs = self.venv.reset()
         assert isinstance(obs, np.ndarray)
+        for i, ob in enumerate(obs):
+            self.traj_accum.add_step({"obs": ob}, key=i)
         self._last_obs = obs
         self._is_reset = True
+        self._last_user_actions = None
         return obs
 
     def step_async(self, actions: np.ndarray) -> None:
         """
-        actions: 专家动作
+        完全使用策略替换专家动作，进行交互
+
+        Args:
+            actions: the _intended_ demonstrator/expert actions for the current
+                state. This will be executed with probability `self.beta`.
+                Otherwise, a "robot" (typically a BC policy) action will be sampled
+                and executed instead via `self.get_robot_act`.
         """
         assert self._is_reset, "call .reset() before .step()"
         assert self._last_obs is not None
 
-        # 记录专家动作
-        self.expert_acts.append(actions)
+        # Replace each given action with a robot action 100% of the time.
+        actual_acts = self.get_robot_acts(self._last_obs)
 
-        # 记录策略动作
-        policy_acts = self.get_robot_acts(self._last_obs)
-        self.policy_acts.append(policy_acts)
-
-        # 使用策略动作交互
-        self.venv.step_async(policy_acts)
+        self._last_user_actions = actions
+        self.venv.step_async(actual_acts)
 
     def step_wait(self) -> VecEnvStepReturn:
         """Returns observation, reward, etc after previous `step_async()` call.
+
+        Stores the transition, and saves trajectory as demo once complete.
 
         Returns:
             Observation, reward, dones (is terminal?) and info dict.
         """
         next_obs, rews, dones, infos = self.venv.step_wait()
         assert isinstance(next_obs, np.ndarray)
+        assert self.traj_accum is not None
+        assert self._last_user_actions is not None
         self._last_obs = next_obs
+        fresh_demos = self.traj_accum.add_steps_and_auto_finish(
+            obs=next_obs,
+            acts=self._last_user_actions,
+            rews=rews,
+            infos=infos,
+            dones=dones,
+        )
+
         return next_obs, rews, dones, infos
 
 
-@profile(precision=4,stream=open('_save_dagger_demo.log','w+'))
+
 def _save_dagger_demo(
     trajectory: types.Trajectory,
     trajectory_index: int,
@@ -245,6 +267,7 @@ def _save_dagger_demo(
     logging.info(f"Saved demo at '{npz_path}'")
 
 class InteractiveTransitionsCollector(_InteractiveTrajectoryCollector):
+    @profile(precision=4,stream=open('step_wait.log','w+'))
     def step_wait(self) -> VecEnvStepReturn:
         """Returns observation, reward, etc after previous `step_async()` call.
 
@@ -663,6 +686,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
+            gc.collect()
+
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             if (TEST_REST_GB - 1) > psutil.virtual_memory().available / (1024**3):
@@ -672,6 +697,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             round_episode_count = 0
             round_timestep_count = 0
 
+            # 采样训练数据
             collector = self.create_trajectory_collector()
             sample_until = rollout.make_sample_until(
                 min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
@@ -684,7 +710,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 deterministic_policy=False,
                 rng=collector.rng,
             )
-            log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
             for traj in trajectories:
                 self._logger.record_mean(
@@ -702,6 +727,28 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
+            # # 采样验证数据
+            # self.bc_trainer.clear_demonstrations_val()
+            # for env in self.env_objs:
+            #     env.val()
+            # rollouts_val = rollout.rollout(
+            #     self.bc_trainer.policy,
+            #     self.venv,
+            #     rollout.make_sample_until(
+            #         min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
+            #         min_episodes=rollout_round_min_episodes,
+            #     ),
+            #     rng=collector.rng,
+            # )
+            # # 替换 样本中的动作为专家动作 TODO
+            # transitions_val = rollout.flatten_trajectories(rollouts_val)
+            # # 设置 验证数据
+            # self.bc_trainer.set_demonstrations_val(transitions_val)
+            # for env in self.env_objs:
+                env.train()
+
+            log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
             # log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
             # del trajectories
             # del sample_until
@@ -716,35 +763,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # # 检查梯度
             # check_gradients(self.bc_trainer)
 
-            # gc.collect()
-            # debug_mem()
-
             # 检查是否发生训练（数据是否满了）
             if not self.full:
                 continue
-
-            # # 验证模型
-            # # 不依赖 bc 类的验证函数
-            # # 需要单独采样
-            # collector = policy_eval_collector(
-            #     venv=self.venv, 
-            #     get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
-            #     rng=self.rng,
-            # )
-            # sample_until = rollout.make_sample_until(
-            #     min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
-            #     min_episodes=rollout_round_min_episodes,
-            # )
-            # trajectories = rollout.generate_trajectories(
-            #     policy=self.expert_policy,
-            #     venv=collector,
-            #     sample_until=sample_until,
-            #     deterministic_policy=False,
-            #     rng=collector.rng,
-            # )
-            # # 获取动作序列
-            # expert_acts, policy_acts = collector.get_action_sequences()
-            # metrics = self.bc_trainer.__compute_metrics(policy_acts, expert_acts)
 
             # _t = time.time()
             # eval_env.val()
@@ -775,8 +796,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # else:
             #     is_best = False
 
-            # # 训练进度可视化
-            # plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+            # 训练进度可视化
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
 
             # for debug
             is_best = False

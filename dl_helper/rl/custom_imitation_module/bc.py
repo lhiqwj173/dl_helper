@@ -115,7 +115,7 @@ class BCWithLRScheduler(BC):
         # 新增：初始化验证集数据加载器
         self._val_data_loader = None
         if demonstrations_val is not None:
-            self._make_val_data_loader(demonstrations_val)
+            self.set_demonstrations_val(demonstrations_val)
 
         # 训练的进度
         self.train_loop_idx = 0
@@ -155,20 +155,13 @@ class BCWithLRScheduler(BC):
                 self.lr_scheduler.load_state_dict(other_state_dict['lr_scheduler'])
             self.train_loop_idx = other_state_dict['train_loop_idx']
 
-    def _make_val_data_loader(self, demonstrations: algo_base.AnyTransitions) -> None:
-        if self._val_data_loader is not None:
-            # 清理已有的数据加载器
-            del self._val_data_loader
-            self._val_data_loader = None
-
+    def set_demonstrations_val(self, demonstrations: algo_base.AnyTransitions) -> None:
+        self.clear_demonstrations_val() # 清除已有的验证数据集
         self._val_data_loader = th.utils.data.DataLoader(
             demonstrations,
             batch_size=4096,# 验证集batch_size，加快验证速度
             shuffle=False,
         )
-
-    def set_demonstrations_val(self, demonstrations: algo_base.AnyTransitions) -> None:
-        self._make_val_data_loader(demonstrations)
 
     def set_demonstrations(self, demonstrations: algo_base.AnyTransitions) -> None:
         self.clear_demonstrations()  # 清除已有的训练数据集
@@ -177,6 +170,13 @@ class BCWithLRScheduler(BC):
             demonstrations,
             self.minibatch_size,
         )
+
+    def clear_demonstrations_val(self) -> None:
+        """清除验证数据集"""
+        if self._val_data_loader is not None:
+            # 清理已有的数据加载器
+            del self._val_data_loader
+            self._val_data_loader = None
 
     def clear_demonstrations(self) -> None:
         """清除训练数据集"""
@@ -319,8 +319,8 @@ class BCWithLRScheduler(BC):
         # 恢复策略为训练模式
         self.policy.set_training_mode(True)
 
-        # FOR DEBUG
-        pickle.dump((all_preds, all_true, total_loss, num_samples), open('val_data.pkl', 'wb'))
+        # # FOR DEBUG
+        # pickle.dump((all_preds, all_true, total_loss, num_samples), open('val_data.pkl', 'wb'))
         
         # 计算平均损失
         avg_loss = total_loss / num_samples if num_samples > 0 else float('inf')

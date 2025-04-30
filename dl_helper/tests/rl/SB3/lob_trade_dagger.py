@@ -278,7 +278,6 @@ class DeepLob(BaseFeaturesExtractor):
 
         return fused_out
 
-
 model_config={
     # 自定义编码器参数  
     'input_dims' : (100, 20),
