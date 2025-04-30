@@ -261,19 +261,17 @@ def initialize_cache(input_folder: str | List[str]):
         wx.send_message(f'损坏数据: {fail_count}个')
 
 files = []
-def load_trajectories(input_folder: str | List[str], load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
+def load_trajectories(input_folder: str | List[str], load_file_num=None, length_limit=None):
     """
     提前创建内存加载 trajectories，支持最大内存限制（单位 GB）并考虑实际系统内存。
 
     :param input_folder: 包含多个数据文件夹路径的文件夹
     :param load_file_num: 加载的文件数量，None 表示尽可能多加载
-    :param max_memory_gb: 最大内存限制，单位 GB
     :param length_limit: 轨迹长度限制，None 表示不限制
 
     :return: Transitions 对象，包含加载的数据
     """
     global file_metadata_cache, files
-    max_memory_bytes = max_memory_gb * 1024**3  # 转换为字节
 
     # 初始化缓存（如果尚未初始化）
     initialize_cache(input_folder)
@@ -290,10 +288,9 @@ def load_trajectories(input_folder: str | List[str], load_file_num=None, max_mem
     if load_file_num is None:
         load_file_num = len(files)
 
-    # 获取当前系统可用内存（预留 4GB 缓冲）
-    system_memory_bytes = psutil.virtual_memory().available - 4 * 1024**3
-    effective_memory_limit = min(max_memory_bytes, system_memory_bytes)
-    print(f"系统可用内存: {system_memory_bytes / (1024**3):.2f} GB, 有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
+    # 获取当前系统可用内存（预留 2GB 缓冲）
+    effective_memory_limit = psutil.virtual_memory().available - 2 * 1024**3
+    print(f"有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
 
     # 根据内存限制选择文件
     selected_files = []

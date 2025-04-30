@@ -70,7 +70,7 @@ arg_max_lr = None
 arg_batch_n = None
 arg_total_epochs = None
 arg_l2_weight = None
-arg_no_dropout = None
+arg_dropout = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -94,23 +94,24 @@ if len(sys.argv) > 1:
             arg_max_lr = float(arg.split('=')[1])
         elif arg.startswith('l2_weight='):
             arg_l2_weight = float(arg.split('=')[1])
-        elif arg == "no_dropout":
-            arg_no_dropout = True
+        elif arg.startswith('dropout='):
+            arg_dropout = float(arg.split('=')[1])
 
-train_folder = train_title = f'20250429_lob_trade_bc_3' \
+# train_folder = train_title = f'20250429_lob_trade_bc_3' \
+train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
                 + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}') \
                     + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}') \
-                        + ('' if arg_no_dropout is None else '_no_dropout')
+                        + ('' if arg_dropout is None else f'_dropout{arg_dropout:.0e}')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
-total_epochs = 1 if run_type=='find_lr' else 200 if run_type!='test_model' else 10000000000000000
+total_epochs = 1 if run_type=='find_lr' else 150 if run_type!='test_model' else 10000000000000000
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
@@ -134,13 +135,13 @@ class DeepLob(BaseFeaturesExtractor):
             features_dim: int = 64,
             input_dims: tuple = (10, 20),
             extra_input_dims: int = 3,
-            no_dropout: bool = arg_no_dropout,
+            dropout_rate: float = arg_dropout,
     ):
         super().__init__(observation_space, features_dim)
 
         self.input_dims = input_dims
         self.extra_input_dims = extra_input_dims
-        self.no_dropout = no_dropout
+        self.dropout_rate = dropout_rate
 
         # 卷积块
         self.conv1 = nn.Sequential(
@@ -150,7 +151,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
+            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),  # 添加 Dropout2d
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
@@ -159,7 +160,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
+            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),  # 添加 Dropout2d
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 5)),
@@ -168,7 +169,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
+            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),  # 添加 Dropout2d
         )
 
         # Inception 模块
@@ -204,7 +205,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(static_input_dim, static_input_dim * 4),
             nn.LayerNorm(static_input_dim * 4),
             nn.ReLU(),
-            nn.Dropout(p=0.2) if not no_dropout else nn.Identity(),
+            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
         )
 
         # 融合层
@@ -216,8 +217,8 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(128, features_dim),
         )
 
-        self.dp = nn.Dropout(p=0.2) if not no_dropout else nn.Identity()
-        self.dp2d = nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity()
+        self.dp = nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity()
+        self.dp2d = nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity()
 
         # 初始化权重
         self._initialize_weights()
@@ -408,6 +409,18 @@ if run_type != 'test':
     memory_usage = psutil.virtual_memory()
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
+    # 生成验证数据
+    rng = np.random.default_rng()
+    for env in env_objs:
+        env.val()
+    rollouts_val = rollout.rollout(
+        expert,
+        vec_env,
+        rollout.make_sample_until(min_timesteps=50_000),
+        rng=rng,
+    )
+    transitions_val = rollout.flatten_trajectories(rollouts_val)
+
     # 遍历读取训练数据
     if not in_windows():
         data_folder = [
@@ -423,17 +436,6 @@ if run_type != 'test':
     _memory_usage = psutil.virtual_memory()
     log(f"内存占用：{_memory_usage.percent}% ({_memory_usage.used/1024**3:.3f}GB/{_memory_usage.total/1024**3:.3f}GB)")
 
-    # 生成验证数据
-    rng = np.random.default_rng()
-    for env in env_objs:
-        env.val()
-    rollouts_val = rollout.rollout(
-        expert,
-        vec_env,
-        rollout.make_sample_until(min_timesteps=min(int(len(transitions)*0.2), 50_000)),
-        rng=rng,
-    )
-    transitions_val = rollout.flatten_trajectories(rollouts_val)
     memory_usage2 = psutil.virtual_memory()
     msg = ''
     mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
