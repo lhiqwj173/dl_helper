@@ -388,8 +388,14 @@ if run_type != 'test':
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
     # 遍历读取训练数据
-    # kaggle 命名失误
-    data_folder = rf'/kaggle/input/pre-trained-policy-2/' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+    # 遍历读取训练数据
+    if not in_windows():
+        data_folder = [
+            rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
+            rf'/kaggle/input/lob-bc-train-data-filted-3/',
+        ]
+    else:
+        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
     transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
     # # for debug
     # transitions = load_trajectories(data_folder, load_file_num = 2)

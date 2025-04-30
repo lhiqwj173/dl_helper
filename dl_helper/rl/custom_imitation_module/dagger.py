@@ -395,6 +395,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                     self.transitions_dict[key],
                     data[offset:]
                 )
+                del data
             self.cur_idx = 0
             self.full = True
         else:
@@ -417,6 +418,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
                         data[first_part_len:]
                     )
                     self.full = True
+                del data
             # 更新状态
             self.cur_idx = (begin + t_length) % self.capacity
 
