@@ -69,6 +69,7 @@ arg_lr = None
 arg_max_lr = None
 arg_batch_n = None
 arg_total_epochs = None
+arg_l2_weight = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -90,12 +91,15 @@ if len(sys.argv) > 1:
             arg_total_epochs = int(arg.split('=')[1])
         elif arg.startswith('maxlr=') or arg.startswith('max_lr='):
             arg_max_lr = float(arg.split('=')[1])
+        elif arg.startswith('l2_weight='):
+            arg_l2_weight = float(arg.split('=')[1])
 
 train_folder = train_title = f'20250429_lob_trade_bc_3' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
-                + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}')
+                + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}') \
+                    + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -450,7 +454,7 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        l2_weight=1e-4,
+        l2_weight=1e-4 if not arg_l2_weight else arg_l2_weight,
         optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
         custom_logger=custom_logger,
         lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \

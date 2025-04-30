@@ -67,6 +67,7 @@ run_type = 'train'
 # 命令行参数
 arg_lr = 6e-6
 arg_batch_n = None
+arg_l2_weight = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -87,7 +88,8 @@ if len(sys.argv) > 1:
 
 train_folder = train_title = f'20250429_lob_trade_bc_keepon' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
-        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}')
+        + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
+            + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}')
 
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -457,7 +459,7 @@ if run_type != 'test':
         observation_space=env.observation_space,
         action_space=env.action_space,
         policy=model.policy,
-        l2_weight=1e-4,
+        l2_weight=1e-4 if not arg_l2_weight else arg_l2_weight,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         optimizer_kwargs={'lr': arg_lr * batch_n},
