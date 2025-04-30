@@ -206,7 +206,7 @@ def combing_trajectories(trajectories: Iterable[types.Transitions]):
 # 全局缓存字典，用于存储文件元数据
 file_metadata_cache = {}
 
-def initialize_cache(input_folder: str):
+def initialize_cache(input_folder: str | List[str]):
     """
     初始化全局缓存，存储每个文件的元数据。
     
@@ -215,15 +215,14 @@ def initialize_cache(input_folder: str):
     global file_metadata_cache
     if file_metadata_cache:  # 如果缓存已存在，直接返回
         return
-
-    # 获取 input_folder 下的所有数据文件夹路径
-    data_folder_list = [os.path.join(input_folder, i) for i in os.listdir(input_folder)]
-    data_folder_list = [i for i in data_folder_list if os.path.isdir(i)]
-    print(f"数据文件夹: {data_folder_list}")
+    
+    if not isinstance(input_folder, list):
+        input_folder = [input_folder]
+    print(f"数据文件夹: {input_folder}")
 
     # 收集所有文件夹中的 .pkl 文件
     files = []
-    for data_folder in data_folder_list:
+    for data_folder in input_folder:
         for root, dirs, filenames in os.walk(data_folder):
             for fname in filenames:
                 if fname.endswith('.pkl'):
@@ -261,7 +260,7 @@ def initialize_cache(input_folder: str):
         wx.send_message(f'损坏数据: {fail_count}个')
 
 files = []
-def load_trajectories(input_folder: str, load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
+def load_trajectories(input_folder: str | List[str], load_file_num=None, max_memory_gb: float = 24.0, length_limit=None):
     """
     提前创建内存加载 trajectories，支持最大内存限制（单位 GB）并考虑实际系统内存。
 

@@ -9,8 +9,8 @@ from imitation.algorithms.dagger import (
     InteractiveTrajectoryCollector, Callable, VecEnvStepReturn, 
     Mapping, Any,
     util,uuid,
-    
 )
+from imitation.algorithms.dagger import InteractiveTrajectoryCollector as _InteractiveTrajectoryCollector
 
 from dl_helper.rl.custom_imitation_module.rollout import KEYS
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients
@@ -18,7 +18,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-TEST_REST_GB = 27
+TEST_REST_GB = 3
 
 from memory_profiler import profile
 import objgraph
@@ -141,15 +141,6 @@ class policy_eval_collector(vec_env.VecEnvWrapper):
         get_robot_acts: Callable[[np.ndarray], np.ndarray],
         rng: np.random.Generator,
     ) -> None:
-        """Builds InteractiveTrajectoryCollector.
-
-        Args:
-            venv: vectorized environment to sample trajectories from.
-            get_robot_acts: get robot actions that can be substituted for
-                human actions. Takes a vector of observations as input & returns a
-                vector of actions.
-            rng: random state for random number generation.
-        """
         super().__init__(venv)
         self.get_robot_acts = get_robot_acts
         self._last_obs = None
@@ -250,7 +241,7 @@ def _save_dagger_demo(
 
     logging.info(f"Saved demo at '{npz_path}'")
 
-class InteractiveTransitionsCollector(InteractiveTrajectoryCollector):
+class InteractiveTransitionsCollector(_InteractiveTrajectoryCollector):
     def step_wait(self) -> VecEnvStepReturn:
         """Returns observation, reward, etc after previous `step_async()` call.
 
@@ -593,6 +584,18 @@ class SimpleDAggerTrainer(DAggerTrainer):
             log(f"New round number is {self.round_num}")
         
         return self.round_num
+
+    def create_trajectory_collector(self) -> InteractiveTransitionsCollector:
+        save_dir = self._demo_dir_path_for_round()
+        beta = self.beta_schedule(self.round_num)
+        collector = InteractiveTransitionsCollector(
+            venv=self.venv,
+            get_robot_acts=lambda acts: self.bc_trainer.policy.predict(acts)[0],
+            beta=beta,
+            save_dir=save_dir,
+            rng=self.rng,
+        )
+        return collector
 
     @profile(precision=4,stream=open('train.log','w+'))
     def train(

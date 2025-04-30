@@ -401,6 +401,8 @@ if run_type != 'test':
             log(f"restore from {train_folder_manager.checkpoint_folder}")
             train_folder_manager.load_checkpoint(bc_trainer)
             keep_on_train = True
+    else:
+        train_folder_manager = None
 
     if not keep_on_train:
         # 新训练
