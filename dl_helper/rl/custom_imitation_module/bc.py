@@ -213,7 +213,8 @@ class BCWithLRScheduler(BC):
         return pred_acts
 
     def __compute_metrics(self, pred_np, true_np):
-        """计算性能指标：accuracy, precision, recall, f1_score
+        """
+        计算性能指标：accuracy, precision, recall, f1_score
         """
         # 计算准确率
         accuracy = accuracy_score(true_np, pred_np)

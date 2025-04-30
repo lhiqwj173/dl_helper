@@ -388,7 +388,6 @@ if run_type != 'test':
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
     # 遍历读取训练数据
-    # 遍历读取训练数据
     if not in_windows():
         data_folder = [
             rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
