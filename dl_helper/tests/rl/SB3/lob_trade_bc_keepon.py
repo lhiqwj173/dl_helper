@@ -85,6 +85,8 @@ if len(sys.argv) > 1:
             arg_lr = float(arg.split('=')[1])
         elif arg.startswith('batch_n='):
             arg_batch_n = int(arg.split('=')[1])
+        elif arg.startswith('l2_weight='):
+            arg_l2_weight = float(arg.split('=')[1])
 
 train_folder = train_title = f'20250429_lob_trade_bc_keepon' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \

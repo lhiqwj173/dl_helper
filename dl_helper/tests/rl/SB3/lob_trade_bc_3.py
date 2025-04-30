@@ -106,7 +106,7 @@ init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
-total_epochs = 1 if run_type=='find_lr' else 500 if run_type!='test_model' else 10000000000000000
+total_epochs = 1 if run_type=='find_lr' else 200 if run_type!='test_model' else 10000000000000000
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
