@@ -70,6 +70,7 @@ arg_max_lr = None
 arg_batch_n = None
 arg_total_epochs = None
 arg_l2_weight = None
+arg_no_dropout = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -93,13 +94,16 @@ if len(sys.argv) > 1:
             arg_max_lr = float(arg.split('=')[1])
         elif arg.startswith('l2_weight='):
             arg_l2_weight = float(arg.split('=')[1])
+        elif arg == "no_dropout":
+            arg_no_dropout = True
 
 train_folder = train_title = f'20250429_lob_trade_bc_3' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
                 + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}') \
-                    + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}')
+                    + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}') \
+                        + ('' if arg_no_dropout is None else '_no_dropout')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -110,7 +114,7 @@ total_epochs = 1 if run_type=='find_lr' else 200 if run_type!='test_model' else 
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
-max_lr = 3e-5 # find_best_lr
+max_lr = 4e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
 batch_n = 2**7 if run_type=='train' else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
@@ -130,11 +134,13 @@ class DeepLob(BaseFeaturesExtractor):
             features_dim: int = 64,
             input_dims: tuple = (10, 20),
             extra_input_dims: int = 3,
+            no_dropout: bool = arg_no_dropout,
     ):
         super().__init__(observation_space, features_dim)
 
         self.input_dims = input_dims
         self.extra_input_dims = extra_input_dims
+        self.no_dropout = no_dropout
 
         # 卷积块
         self.conv1 = nn.Sequential(
@@ -144,7 +150,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
+            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 2), stride=(1, 2)),
@@ -153,7 +159,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
+            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(32, 32, kernel_size=(1, 5)),
@@ -162,7 +168,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 32, kernel_size=(2, 1)),
             nn.ReLU(),
-            nn.Dropout2d(p=0.2),  # 添加 Dropout2d
+            nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity(),  # 添加 Dropout2d
         )
 
         # Inception 模块
@@ -198,7 +204,7 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(static_input_dim, static_input_dim * 4),
             nn.LayerNorm(static_input_dim * 4),
             nn.ReLU(),
-            nn.Dropout(p=0.2)
+            nn.Dropout(p=0.2) if not no_dropout else nn.Identity(),
         )
 
         # 融合层
@@ -210,8 +216,8 @@ class DeepLob(BaseFeaturesExtractor):
             nn.Linear(128, features_dim),
         )
 
-        self.dp = nn.Dropout(p=0.2)
-        self.dp2d = nn.Dropout2d(p=0.2)
+        self.dp = nn.Dropout(p=0.2) if not no_dropout else nn.Identity()
+        self.dp2d = nn.Dropout2d(p=0.2) if not no_dropout else nn.Identity()
 
         # 初始化权重
         self._initialize_weights()
@@ -454,7 +460,7 @@ if run_type != 'test':
         policy=model.policy,
         rng=np.random.default_rng(),
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        l2_weight=1e-4 if not arg_l2_weight else arg_l2_weight,
+        l2_weight=0 if not arg_l2_weight else arg_l2_weight,
         optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
         custom_logger=custom_logger,
         lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
