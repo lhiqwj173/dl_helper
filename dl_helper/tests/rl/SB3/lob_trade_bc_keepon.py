@@ -17,7 +17,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch as th
-from torch.optim.lr_scheduler import OneCycleLR, MultiplicativeLR
+from torch.optim.lr_scheduler import OneCycleLR, MultiplicativeLR, ReduceLROnPlateau
 # th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
@@ -437,6 +437,11 @@ if run_type != 'test':
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         optimizer_kwargs={'lr': arg_lr * batch_n},
         custom_logger=custom_logger,
+        lr_scheduler_cls = ReduceLROnPlateau,
+        lr_scheduler_kwargs={
+            'factor' : 0.5,
+        },
+        lr_scheduler_step_frequency = 'epoch',
     )
     
     # 训练文件夹管理
@@ -545,7 +550,6 @@ if run_type != 'test':
             # transitions = load_trajectories(data_folder, load_file_num = 2)
             # 重新添加训练数据
             bc_trainer.set_demonstrations(transitions)
-
 
 else:
     # test

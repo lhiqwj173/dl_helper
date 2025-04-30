@@ -376,11 +376,11 @@ class BCWithLRScheduler(BC):
             self._bc_logger.log_epoch(epoch_number + 1)
 
             # 如果有调度器，则更新学习率
-            if self.lr_scheduler is not None and self.lr_scheduler_step_frequency=='epoch':
+            # 注意：ReduceLROnPlateau 的 step 方法在 epoch 后 验证 时调用
+            need_step_lr_scheduler = self.lr_scheduler is not None and self.lr_scheduler_step_frequency=='epoch'
+            isReduceLROnPlateau = isinstance(self.lr_scheduler, lr_scheduler.ReduceLROnPlateau)
+            if need_step_lr_scheduler and (not isReduceLROnPlateau):
                 self.lr_scheduler.step()
-                # 记录当前学习率
-                lr = self.optimizer.param_groups[0]['lr']
-                self._bc_logger._logger.record("bc/lr", lr)
 
             # 统计训练集上的指标
             pred_np = np.concatenate(self.all_preds)
@@ -406,6 +406,14 @@ class BCWithLRScheduler(BC):
                     self._bc_logger._logger.record("bc/val_precision", val_metrics.get('precision', 0))
                     self._bc_logger._logger.record("bc/val_recall", val_metrics.get('recall', 0))
                     self._bc_logger._logger.record("bc/val_f1", val_metrics.get('f1', 0))
+
+                # ReduceLROnPlateau step
+                if need_step_lr_scheduler and isReduceLROnPlateau:
+                    self.lr_scheduler.step(val_metrics['loss'])
+
+            # 记录当前学习率
+            lr = self.optimizer.param_groups[0]['lr']
+            self._bc_logger._logger.record("bc/lr", lr)
 
             if on_epoch_end is not None:
                 on_epoch_end()
