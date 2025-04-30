@@ -796,8 +796,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # else:
             #     is_best = False
 
-            # 训练进度可视化
-            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+            # # 训练进度可视化
+            # plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
 
             # for debug
             is_best = False

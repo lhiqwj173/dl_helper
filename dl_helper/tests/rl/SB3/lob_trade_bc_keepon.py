@@ -323,9 +323,6 @@ if run_type != 'test':
     # env = LOB_trade_env(env_config)
     # vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
 
-    # 专家
-    expert = LobExpert_file(pre_cache=True)
-
     model = PPO(
         model_type, 
         env, 
@@ -341,6 +338,26 @@ if run_type != 'test':
     log(model.policy)
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
 
+    # # 测试载入模型参数
+    # bc_trainer = BCWithLRScheduler(
+    #     observation_space=env.observation_space,
+    #     action_space=env.action_space,
+    #     policy=model.policy,
+    #     l2_weight=1e-4,
+    #     rng=np.random.default_rng(),
+    #     batch_size=batch_size * batch_n if run_type=='train' else batch_size,
+    #     optimizer_kwargs={'lr': arg_lr * batch_n},
+    #     custom_logger=custom_logger,
+    #     lr_scheduler_cls = ReduceLROnPlateau,
+    #     lr_scheduler_kwargs={
+    #         'factor' : 0.5,
+    #     },
+    #     lr_scheduler_step_frequency = 'epoch',
+    # )
+    # policy_folder = rf'/kaggle/input/bc-keepon-policy' if not in_windows() else r"D:\L2_DATA_T0_ETF\train_data\RAW\BC_keepon_policy"
+    # bc_trainer.load(policy_folder)
+
+    # # 模型测试
     # test_x = env.observation_space.sample()
     # test_x = torch.from_numpy(test_x).unsqueeze(0)
     # log(test_x.shape)
@@ -353,6 +370,9 @@ if run_type != 'test':
     # sys.exit()
 
     vec_env = env
+
+    # 专家
+    expert = LobExpert_file(pre_cache=True)
 
     if run_type == 'bc_data':
         # 生成训练数据用
