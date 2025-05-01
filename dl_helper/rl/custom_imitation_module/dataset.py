@@ -162,11 +162,9 @@ class TrajectoryDataset(Dataset):
         # 清理之前加载的数据以释放内存
         log(f'清理之前加载的数据')
         if self.data_dict:
-            t = time.time()
+            for key in self.data_dict:
+                del self.data_dict[key]  # 显式删除每个数组
             self.data_dict.clear()
-            gc.collect()
-            log(f'清理之前加载的数据，耗时: {time.time() - t:.2f} 秒')
-
         self.current_index_map = []
         self.loaded_files = []
         
@@ -221,7 +219,7 @@ class TrajectoryDataset(Dataset):
                 
         # 创建大数组存储所有数据
         self.data_dict = {
-            key: np.zeros(shape_dict[key], dtype=type_dict[key])
+            key: np.empty(shape_dict[key], dtype=type_dict[key])
             for key in KEYS
         }
         
