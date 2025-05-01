@@ -1,4 +1,4 @@
-import os
+import os, gc, time
 import pickle
 import numpy as np
 import psutil
@@ -161,7 +161,12 @@ class TrajectoryDataset(Dataset):
             
         # 清理之前加载的数据以释放内存
         log(f'清理之前加载的数据')
-        self.data_dict.clear()
+        if self.data_dict:
+            t = time.time()
+            self.data_dict.clear()
+            gc.collect()
+            log(f'清理之前加载的数据，耗时: {time.time() - t:.2f} 秒')
+
         self.current_index_map = []
         self.loaded_files = []
         
