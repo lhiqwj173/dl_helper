@@ -162,7 +162,7 @@ class TrajectoryDataset(Dataset):
         # 清理之前加载的数据以释放内存
         log(f'清理之前加载的数据')
         if self.data_dict:
-            for key in self.data_dict:
+            for key in list(self.data_dict.keys()):
                 del self.data_dict[key]  # 显式删除每个数组
             self.data_dict.clear()
         self.current_index_map = []
