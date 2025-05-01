@@ -188,7 +188,6 @@ class rollouts_filter:
 
         return flatten_trajectories(cat_parts)
 
-
 def combing_trajectories(trajectories: Iterable[types.Transitions]):
     """
     合并 trajectories 中的数据
@@ -254,6 +253,7 @@ def initialize_cache(input_folder: str | List[str]):
             }
             est_memory += _data.nbytes  # 计算内存使用量
         metadata['est_memory'] = est_memory
+        metadata['length'] = len(_transitions.acts)
         file_metadata_cache[file] = metadata
         del _transitions  # 释放临时变量内存
 

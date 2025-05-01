@@ -379,6 +379,7 @@ if run_type != 'test':
     if run_type == 'bc_data':
         # 生成训练数据用
         f = rollouts_filter()
+        raise Exception('stop')
         while True:
             # 生成专家数据
             rng = np.random.default_rng()
