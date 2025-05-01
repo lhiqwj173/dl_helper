@@ -159,28 +159,22 @@ class TrajectoryDataset(Dataset):
         selected_files = []
         total_memory = 0
         
-        for file_path in self.pending_files[:]:
+        for i, file_path in enumerate(self.pending_files[:]):
             est_memory = self.file_metadata_cache[file_path]['est_memory']
             
             # 检查是否超出内存限制
-            if total_memory + est_memory > self.memory_limit:
-                log(f"停止加载：已达到内存上限 {self.memory_limit / (1024**3):.2f} GB")
-                break
+            # 至少加载一个文件
+            if i > 0 :
+                if total_memory + est_memory > self.memory_limit:
+                    log(f"停止加载：已达到内存上限 {self.memory_limit / (1024**3):.2f} GB")
+                    break
                 
             total_memory += est_memory
             selected_files.append(file_path)
             # 从待加载列表中移除已选择的文件
             self.pending_files.remove(file_path)
             
-        if not selected_files:
-            if self.pending_files:
-                # 如果还有待加载文件但单个文件就超过内存限制
-                log(f"警告：单个文件 {self.pending_files[0]} 的大小 ({self.file_metadata_cache[self.pending_files[0]]['est_memory'] / (1024**3):.2f} GB) 超过内存限制")
-                # 尝试至少加载一个文件
-                selected_files = [self.pending_files.pop(0)]
-            else:
-                return False
-                
+        assert selected_files, "没有选择任何文件"
         log(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
         
         # 初始化形状和类型字典
@@ -294,6 +288,13 @@ class TrajectoryDataset(Dataset):
         self._init_data_loading()
 
 if __name__ == "__main__":
-    dataset = TrajectoryDataset(input_folders=["/home/zhaoyu/data/rl/custom_imitation_module/data/expert_data/expert_data_20250429"])
+    dataset = TrajectoryDataset(
+        input_folders=[r"D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data"],
+        keep_run_size=5,
+    )
     print(len(dataset))
-    print(dataset[0])
+
+    epoch = 10
+    for i in range(epoch):
+        for i in range(len(dataset)):
+            d = dataset[i]

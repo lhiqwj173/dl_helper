@@ -1,3 +1,16 @@
+"""
+接收客户端数据:
+    CODE_title
+
+会根据title返回最新的索引
+    - 默认从0开始, 1小时后重置索引为0
+    - 如果 title 中包含 _b@1000 则从1000开始
+    - 如果 title 以 once 开头 则不重置
+    - 如果 title 以 time 开头 则直接返回当前时间戳ms
+
+"""
+
+
 import socket, time, sys, os, re
 
 CODE = '0QYg9Ky17dWnN4eK'
@@ -106,7 +119,8 @@ def run_idx_manager():
                                 onece_titles[train_title] = begin_idx
                             idx = onece_titles[train_title]
                             onece_titles[train_title] += 1
-                        
+                        elif train_title.startswith('time'):
+                            idx = int(time.time() * 1000)
                         else:
                             if train_title not in titles:
                                 titles[train_title] = begin_idx

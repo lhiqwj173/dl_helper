@@ -41,6 +41,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
 from dl_helper.tool import report_memory_usage, in_windows
+from dl_helper.idx_manager import get_idx
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
@@ -98,7 +99,7 @@ if len(sys.argv) > 1:
             arg_dropout = float(arg.split('=')[1])
 
 # train_folder = train_title = f'20250429_lob_trade_bc_3' \
-train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
+train_folder = train_title = f'20250429_lob_trade_bc_3' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
@@ -379,7 +380,13 @@ if run_type != 'test':
     if run_type == 'bc_data':
         # 生成训练数据用
         f = rollouts_filter()
-        raise Exception('stop')
+        # 此处耗时约10min
+        # 初始化开始时间
+        start_time = time.time()
+        n_hours = 1  # 设置时间阈值（小时）
+        # 请求获取文件名id
+        id = get_idx('time')
+        file_name = f'transitions_{id}.pkl'
         while True:
             # 生成专家数据
             rng = np.random.default_rng()
@@ -394,7 +401,6 @@ if run_type != 'test':
             f.add_rollouts(rollouts)
             transitions = f.flatten_trajectories()
 
-            # pickle.dump(transitions, open('transitions.pkl', 'wb'))
             # 写入临时文件
             temp_file_path = 'transitions_temp.pkl'  # 临时文件名
             with open(temp_file_path, 'wb') as temp_file:
@@ -403,9 +409,19 @@ if run_type != 'test':
                 os.fsync(temp_file.fileno())  # 强制将缓存数据写入磁盘（可选）
             
             # 原子性地重命名临时文件为目标文件
-            os.replace(temp_file_path, 'transitions.pkl')
+            os.replace(temp_file_path, file_name)
 
-        sys.exit()
+            # 检查总运行时间（转换为小时）
+            elapsed_hours = (time.time() - start_time) / 3600
+            if elapsed_hours > n_hours:
+                log(f"总运行时间超过 {n_hours} 小时，上传数据并退出")
+                t = time.time()
+                from py_ext.alist import alist
+                client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
+                client.upload(file_name, '/produce_train_data/')
+                msg = f"{file_name} 上传数据耗时: {time.time() - t:.2f} 秒"
+                send_wx(msg)
+                sys.exit()
     
     memory_usage = psutil.virtual_memory()
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
