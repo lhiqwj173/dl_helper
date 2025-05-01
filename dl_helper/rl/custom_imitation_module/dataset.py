@@ -128,6 +128,7 @@ class TrajectoryDataset(Dataset):
         """初始化数据加载，准备第一批文件"""
         # 复制文件列表以便可以修改
         self.pending_files = self.all_files.copy()
+        self.last_idx = -1  
         
         # 如果启用shuffle，重新打乱文件顺序
         if self.shuffle:
@@ -160,7 +161,6 @@ class TrajectoryDataset(Dataset):
         self.data_dict = {}
         self.current_index_map = []
         self.loaded_files = []
-        self.last_idx = -1  
         
         # 根据内存限制选择文件
         selected_files = []
