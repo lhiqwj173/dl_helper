@@ -21,7 +21,7 @@ class TrajectoryDataset(Dataset):
     def __init__(
         self, 
         input_folders: Union[str, List[str]], 
-        keep_run_size: int = 3,         # 预留缓冲区大小（GB）
+        keep_run_size: int = 5,         # 预留缓冲区大小（GB）
         shuffle: bool = True            # 是否打乱数据
     ):
         """
@@ -51,6 +51,9 @@ class TrajectoryDataset(Dataset):
         self.current_index_max = -1     # 当前加载数据的最大索引
         self.start_indices = {}         # 每个文件在全局索引中的起始位置
         self.epoch = 0                  # 当前训练的epoch
+
+        # 前一个 idx
+        self.last_idx = -1
         
         # 扫描并缓存所有文件的元数据
         self._scan_files()
@@ -129,6 +132,9 @@ class TrajectoryDataset(Dataset):
         # 如果启用shuffle，重新打乱文件顺序
         if self.shuffle:
             random.shuffle(self.pending_files)
+
+        for file_path in self.pending_files:
+            log(f"[pending_files]: {file_path}, 长度: {self.file_metadata_cache[file_path]['length']}")
             
         # 重新计算每个文件的起始索引
         current_idx = 0
@@ -154,6 +160,7 @@ class TrajectoryDataset(Dataset):
         self.data_dict = {}
         self.current_index_map = []
         self.loaded_files = []
+        self.last_idx = -1  
         
         # 根据内存限制选择文件
         selected_files = []
@@ -204,7 +211,7 @@ class TrajectoryDataset(Dataset):
         
         # 初始化索引映射数组和本地索引映射（用于随机打乱）
         self.current_index_map = []
-        local_indices = np.arange(total_samples)
+        # local_indices = np.arange(total_samples)
         
         # 加载并拷贝数据到大数组
         start = 0
@@ -266,6 +273,8 @@ class TrajectoryDataset(Dataset):
         assert idx >= 0 and idx < self.data_length, f"索引 {idx} 超出范围 [0, {self.data_length-1}]"
         assert self.current_index_min <= idx <= self.current_index_max, f"索引 {idx} 必须在范围 [{self.current_index_min}, {self.current_index_max}] 内"
         assert self.current_index_map.size, "数据未加载"
+        assert idx == 1 + self.last_idx, "Dataloader 必须按顺序访问数据, 设置 shuffle=False"
+        self.last_idx = idx
 
         # 获取 idx 对应当前加载数据中的索引
         local_idx = idx - self.current_index_min
@@ -277,7 +286,7 @@ class TrajectoryDataset(Dataset):
         if idx == self.current_index_max:
             if not self._load_next_batch():
                 # 加载失败 > epoch 结束
-                self._init_data_loading()
+                self.on_epoch_end()
 
         return res
 
@@ -294,7 +303,7 @@ if __name__ == "__main__":
     )
     print(len(dataset))
 
-    epoch = 10
+    epoch = 3
     for i in range(epoch):
         for i in range(len(dataset)):
             d = dataset[i]

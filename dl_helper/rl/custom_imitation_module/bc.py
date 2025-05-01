@@ -33,6 +33,8 @@ from imitation.util import logger as imit_logger
 from imitation.util import util
 from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback, enumerate_batches
 
+from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
+
 from py_ext.datetime import beijing_time
 
 class BCWithLRScheduler(BC):
@@ -47,9 +49,10 @@ class BCWithLRScheduler(BC):
         observation_space: gym.Space,
         action_space: gym.Space,
         rng: np.random.Generator,
-        policy: Optional[policies.ActorCriticPolicy] = None,
+        train_dataset: Optional[TrajectoryDataset] = None,              # 新增：训练数据集
         demonstrations: Optional[algo_base.AnyTransitions] = None,
         demonstrations_val: Optional[algo_base.AnyTransitions] = None,  # 新增：验证数据集
+        policy: Optional[policies.ActorCriticPolicy] = None,
         batch_size: int = 32,
         minibatch_size: Optional[int] = None,
         optimizer_cls: Type[th.optim.Optimizer] = th.optim.Adam,
@@ -67,6 +70,7 @@ class BCWithLRScheduler(BC):
 
         Args:
             ...（原有参数保持不变，此处省略详细描述）
+
             demonstrations_val: 用于验证的观察-动作对，可选。如果提供，将用于模型验证。
             lr_scheduler_cls: 使用的学习率调度器类（如 lr_scheduler.StepLR），可选。
             lr_scheduler_kwargs: 调度器的参数字典（如 {'step_size': 10, 'gamma': 0.1}），可选。
@@ -112,6 +116,10 @@ class BCWithLRScheduler(BC):
             if self.n_classes == 2:
                 print(f"检测到二分类问题(n_classes={self.n_classes})，将使用二分类指标计算方式")
                 
+        # 新增：初始化训练数据加载器
+        if train_dataset is not None:
+            self.set_train_dataset(train_dataset)
+
         # 新增：初始化验证集数据加载器
         self._val_data_loader = None
         if demonstrations_val is not None:
@@ -154,6 +162,18 @@ class BCWithLRScheduler(BC):
             if self.lr_scheduler and other_state_dict['lr_scheduler'] is not None:
                 self.lr_scheduler.load_state_dict(other_state_dict['lr_scheduler'])
             self.train_loop_idx = other_state_dict['train_loop_idx']
+
+    def set_train_dataset(self, train_dataset) -> None:
+        if hasattr(self, '_demo_data_loader'):
+            # 清除已有的数据加载器
+            del self._demo_data_loader
+
+        self._demo_data_loader = th.utils.data.DataLoader(
+            train_dataset,
+            batch_size=self.minibatch_size,
+            shuffle=False,# 必须为False, shuffle 在 dataset 中实现
+            drop_last=True,
+        )
 
     def set_demonstrations_val(self, demonstrations: algo_base.AnyTransitions) -> None:
         self.clear_demonstrations_val() # 清除已有的验证数据集

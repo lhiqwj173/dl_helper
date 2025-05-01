@@ -45,6 +45,7 @@ from dl_helper.idx_manager import get_idx
 from dl_helper.train_folder_manager import TrainFolderManagerBC
 
 from dl_helper.rl.custom_imitation_module.bc import BCWithLRScheduler
+from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
 from dl_helper.rl.custom_imitation_module.rollout import rollouts_filter, combing_trajectories, load_trajectories
 
 model_type = 'CnnPolicy'
@@ -112,7 +113,7 @@ init_logger(log_name, home=train_folder, timestamp=False)
 
 #################################
 # 训练参数
-total_epochs = 1 if run_type=='find_lr' else 150 if run_type!='test_model' else 10000000000000000
+total_epochs = 1 if run_type=='find_lr' else 80 if run_type!='test_model' else 10000000000000000
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
@@ -383,7 +384,7 @@ if run_type != 'test':
         # 此处耗时约10min
         # 初始化开始时间
         start_time = time.time()
-        n_hours = 1  # 设置时间阈值（小时）
+        n_hours = 11.5  # 设置时间阈值（小时）
         # 请求获取文件名id
         id = get_idx('time')
         file_name = f'transitions_{id}.pkl'
@@ -446,38 +447,19 @@ if run_type != 'test':
         ]
     else:
         data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
-    # # for debug
-    # transitions = load_trajectories(data_folder, load_file_num = 2)
-    log(f"训练数据样本数: {len(transitions)}")
-    _memory_usage = psutil.virtual_memory()
-    log(f"内存占用：{_memory_usage.percent}% ({_memory_usage.used/1024**3:.3f}GB/{_memory_usage.total/1024**3:.3f}GB)")
+    data_set = TrajectoryDataset(data_folder)
+    log(f"训练数据样本数: {len(data_set)}")
+    memory_usage = psutil.virtual_memory()
+    log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
 
-    memory_usage2 = psutil.virtual_memory()
-    msg = ''
-    mem_pct_msg = f"内存占用：{memory_usage2.percent}% ({memory_usage2.used/1024**3:.3f}GB/{memory_usage2.total/1024**3:.3f}GB)"
-    log(mem_pct_msg)
-    msg += mem_pct_msg + '\n'
-    mem_expert_msg = f"专家数据内存占用：{(memory_usage2.used - memory_usage.used)/1024**3:.3f}GB"
-    log(mem_expert_msg)
-    msg += mem_expert_msg + '\n'
-
-    # 检查 transitions 样本均衡度
-    label_balance = f'训练样本均衡度: {cal_action_balance(transitions)}'
-    log(label_balance)
-    msg += label_balance + '\n'
-    label_balance = f'验证样本均衡度: {cal_action_balance(transitions_val)}'
-    log(label_balance)
-    msg += label_balance + '\n'
-    send_wx(msg)
-    # sys.exit()
-
-    total_steps = total_epochs * len(transitions) // (batch_size * batch_n)
+    total_steps = total_epochs * len(data_set) // (batch_size * batch_n)
     bc_trainer = BCWithLRScheduler(
         observation_space=env.observation_space,
         action_space=env.action_space,
         policy=model.policy,
         rng=np.random.default_rng(),
+        train_dataset=data_set,
+        demonstrations_val=transitions_val,
         batch_size=batch_size * batch_n if run_type=='train' else batch_size,
         l2_weight=0 if not arg_l2_weight else arg_l2_weight,
         optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
@@ -504,12 +486,6 @@ if run_type != 'test':
         df_progress = pd.read_csv(progress_file_all)
     else:
         df_progress = pd.DataFrame()
-
-    # val 数据一直保持不变
-    bc_trainer.set_demonstrations_val(transitions_val)
-    # 添加数据到 bc_trainer 
-    # 训练数据每个epoch都要重新加载
-    bc_trainer.set_demonstrations(transitions)
 
     env = env_objs[0]
     begin = bc_trainer.train_loop_idx
@@ -572,21 +548,6 @@ if run_type != 'test':
         if run_type == 'find_lr':
             # 只运行一个 epoch
             break
-
-        if i < total_epochs // checkpoint_interval -1:
-            # 若还有下一次 训练
-            # 重新加载 训练数据
-            log('清理训练数据')
-            bc_trainer.clear_demonstrations()
-            del transitions
-            _memory_usage = psutil.virtual_memory()
-            log(f"内存占用：{_memory_usage.percent}% ({_memory_usage.used/1024**3:.3f}GB/{_memory_usage.total/1024**3:.3f}GB)")
-            transitions = load_trajectories(data_folder, load_file_num = 2 if run_type=='find_lr' else None)
-            # # for debug
-            # transitions = load_trajectories(data_folder, load_file_num = 2)
-            # 重新添加训练数据
-            bc_trainer.set_demonstrations(transitions)
-
 
 else:
     # test
