@@ -289,7 +289,8 @@ def load_trajectories(input_folder: str | List[str], load_file_num=None, length_
         load_file_num = len(files)
 
     # 获取当前系统可用内存（预留 2GB 缓冲）
-    effective_memory_limit = psutil.virtual_memory().available - 2 * 1024**3
+    # effective_memory_limit = psutil.virtual_memory().available - 2 * 1024**3
+    effective_memory_limit = psutil.virtual_memory().available - 2.5 * 1024**3
     print(f"有效内存限制: {effective_memory_limit / (1024**3):.2f} GB")
 
     # 根据内存限制选择文件
