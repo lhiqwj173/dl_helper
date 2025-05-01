@@ -418,7 +418,7 @@ if run_type != 'test':
                 t = time.time()
                 from py_ext.alist import alist
                 client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
-                client.upload(file_name, '/produce_train_data/')
+                client.upload(file_name, '/bc_train_data/')
                 msg = f"{file_name} 上传数据耗时: {time.time() - t:.2f} 秒"
                 send_wx(msg)
                 sys.exit()
