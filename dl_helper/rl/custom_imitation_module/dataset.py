@@ -171,10 +171,12 @@ class TrajectoryDataset(Dataset):
         self.loaded_files = []
         
         # 使用可用系统内存减去缓冲区
-        available_memory = psutil.virtual_memory().available
+        vm = psutil.virtual_memory()
+        available_memory = vm.available
         log(f'系统剩余内存: {available_memory / (1024**3):.2f} GB')
         self.memory_limit = available_memory - self.keep_run_size
         log(f"当前可用内存限制: {self.memory_limit / (1024**3):.2f} GB")
+        assert vm.percent < 30, "清理内存后至少30%的内存, 当前: {vm.percent}%" 
 
         # 根据内存限制选择文件
         selected_files = []
