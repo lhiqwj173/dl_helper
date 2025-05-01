@@ -37,7 +37,8 @@ class TrajectoryDataset(Dataset):
         self.shuffle = shuffle
         
         # 使用可用系统内存减去缓冲区
-        self.memory_limit = psutil.virtual_memory().available - self.keep_run_size
+        # 每次重新load数据的时候，重新计算
+        self.memory_limit = 0
             
         # 初始化缓存和数据结构
         self.data_length = 0            # 数据集样本总长度
@@ -155,13 +156,21 @@ class TrajectoryDataset(Dataset):
         # 如果没有待加载的文件，则返回False
         if not self.pending_files:
             return False
+        
+        log(f'系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             
         # 清理之前加载的数据以释放内存
-        del self.data_dict
-        self.data_dict = {}
+        log(f'清理之前加载的数据')
+        self.data_dict.clear()
         self.current_index_map = []
         self.loaded_files = []
         
+        # 使用可用系统内存减去缓冲区
+        available_memory = psutil.virtual_memory().available
+        log(f'系统剩余内存: {available_memory / (1024**3):.2f} GB')
+        self.memory_limit = available_memory - self.keep_run_size
+        log(f"当前可用内存限制: {self.memory_limit / (1024**3):.2f} GB")
+
         # 根据内存限制选择文件
         selected_files = []
         total_memory = 0
@@ -297,8 +306,18 @@ class TrajectoryDataset(Dataset):
         self._init_data_loading()
 
 if __name__ == "__main__":
+    from dl_helper.tool import report_memory_usage, in_windows
+
+    if not in_windows():
+        data_folder = [
+            rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
+            rf'/kaggle/input/lob-bc-train-data-filted-3/',
+        ]
+    else:
+        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+
     dataset = TrajectoryDataset(
-        input_folders=[r"D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data"],
+        input_folders=data_folder,
         keep_run_size=5,
     )
     print(len(dataset))
