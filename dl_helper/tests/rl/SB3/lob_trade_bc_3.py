@@ -385,7 +385,7 @@ if run_type != 'test':
         # 初始化开始时间
         start_time = time.time()
         n_hours = 11.5  # 设置时间阈值（小时）
-        n_hours = 1  # 设置时间阈值（小时）
+        # n_hours = 1  # 设置时间阈值（小时）
         # 请求获取文件名id
         id = get_idx('time') if not in_windows() else 0
         file_name = f'transitions_{id}.pkl'
