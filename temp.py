@@ -1,31 +1,27 @@
-from pympler import tracker, muppy, summary
-import sys
+import pickle, time, copy
+from dl_helper.rl.custom_imitation_module.rollout import KEYS
 
-# 1. 在测试前先获取基线内存状态
-baseline_objects = muppy.get_objects()
-baseline_lists = muppy.filter(baseline_objects, Type=list)
+class Test:
+    def __init__(self):
+        flle = r"D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0\1.pkl"
+        with open(flle, 'rb') as f:
+            self.data = pickle.load(f)
+    
+    def __getitem__(self, idx):
+        res = {key: getattr(self.data, key)[idx] for key in KEYS}
+        return copy.deepcopy(res)
 
-# 2. 创建独立的跟踪器
-mem_tracker = tracker.SummaryTracker()
+if __name__ == '__main__':
+    test = Test()
+    ts = []
 
-# 3. 执行测试代码
-a = []
-def func_to_test():
+    # 平均耗时: 9.50 秒
     for i in range(10):
-        a.append([])  # 添加10个空列表
+        print(f'第 {i} 次')
+        t = time.time()
+        for i in range(5000000):
+            res = test[0]
+        cost = time.time() - t
+        ts.append(cost)
 
-func_to_test()
-
-# 4. 获取测试后状态
-post_test_objects = muppy.get_objects()
-post_test_lists = muppy.filter(post_test_objects, Type=list)
-
-# 5. 计算真正的差异
-print(f"显式添加的列表数量: {len(a)}")
-print(f"基线列表数量: {len(baseline_lists)}")
-print(f"测试后列表数量: {len(post_test_lists)}")
-print(f"实际新增列表数量: {len(post_test_lists) - len(baseline_lists)}")
-
-# 6. 更精确的差异分析
-diff = tracker.SummaryTracker()._get_diff(baseline_objects, post_test_objects)
-tracker._format_diff(diff, limit=10, sort='sizeinc')
+    print(f'平均耗时: {sum(ts) / len(ts):.2f} 秒')

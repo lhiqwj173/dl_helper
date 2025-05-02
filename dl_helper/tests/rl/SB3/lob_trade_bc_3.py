@@ -386,7 +386,7 @@ if run_type != 'test':
         start_time = time.time()
         n_hours = 11.5  # 设置时间阈值（小时）
         # 请求获取文件名id
-        id = get_idx('time')
+        id = get_idx('time') if not in_windows() else 0
         file_name = f'transitions_{id}.pkl'
         while True:
             # 生成专家数据
@@ -396,7 +396,7 @@ if run_type != 'test':
             rollouts = rollout.rollout(
                 expert,
                 vec_env,
-                rollout.make_sample_until(min_timesteps=5e5),
+                rollout.make_sample_until(min_timesteps=1e4),
                 rng=rng,
             )
             f.add_rollouts(rollouts)
@@ -548,6 +548,8 @@ if run_type != 'test':
         if run_type == 'find_lr':
             # 只运行一个 epoch
             break
+
+    data_set.stop()
 
 else:
     # test
