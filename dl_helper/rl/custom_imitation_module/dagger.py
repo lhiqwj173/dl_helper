@@ -236,7 +236,6 @@ class policy_eval_collector(vec_env.VecEnvWrapper):
         return next_obs, rews, dones, infos
 
 
-
 def _save_dagger_demo(
     trajectory: types.Trajectory,
     trajectory_index: int,

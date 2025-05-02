@@ -9,7 +9,7 @@ def main():
     3. 压缩成一个单独的压缩包
     """
     # 下载压缩文件
-    alist_folder = r'/bc_train_data/'
+    alist_folder = r'/bc_train_data_wait/'
     local_folder = r'bc_train_data'
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
     files = alist_client.listdir(alist_folder)

@@ -9,9 +9,10 @@ from torch.utils.data import Dataset
 import random, copy
 
 from dl_helper.rl.custom_imitation_module.rollout import KEYS
+from dl_helper.tool import in_windows
 
 from py_ext.tool import log
-from py_ext.wechat import send_wx
+from py_ext.wechat import send_wx, wx
 
 class TrajectoryDataset(Dataset):
     """
@@ -77,7 +78,7 @@ class TrajectoryDataset(Dataset):
         """扫描所有文件夹并缓存文件元数据"""
         log(f"扫描数据文件夹: {self.input_folders}")
 
-        metadata_file = ''
+        metadata_file = rf'/kaggle/input/file-metadata-cache/file_metadata_cache' if not in_windows() else r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\file_metadata_cache'
         
         # 收集所有.pkl文件
         files = []
@@ -86,58 +87,63 @@ class TrajectoryDataset(Dataset):
                 for fname in filenames:
                     if fname.endswith('.pkl'):
                         files.append(os.path.join(root, fname))
-                    elif fname == 'file_metadata_cache':
-                        metadata_file = os.path.join(root, fname)
         
         log(f"找到{len(files)}个数据文件")
 
-        if metadata_file:
+        if os.path.exists(metadata_file):
             log(f'元数据文件: {metadata_file}')
             with open(metadata_file, 'rb') as f:
                 self.file_metadata_cache = pickle.load(f)
         
-        else:
-            # 如果元数据文件不存在，则读取每个文件，获取元数据
-            fail_count = 0
-            for file_path in files:
-                # 需要读取文件，获取元数据
-                try:
-                    with open(file_path, 'rb') as f:
-                        data = pickle.load(f)
-                    
-                    # 提取并存储元数据
-                    metadata = {}
-                    est_memory = 0
-                    for key in KEYS:
-                        try:
-                            _data = getattr(data, key)
-                            metadata[key] = {
-                                'shape': _data.shape,
-                                'dtype': _data.dtype
-                            }
-                            est_memory += _data.nbytes
-                        except AttributeError:
-                            log(f"警告: 文件{file_path}中没有找到键{key}")
-                            fail_count += 1
-                            break
-                    
-                    # 只有当所有键都存在时才添加到缓存
-                    if len(metadata) == len(KEYS):
-                        metadata['est_memory'] = est_memory
-                        metadata['length'] = data.acts.shape[0]  # 所有数组第一维相同
-                        self.file_metadata_cache[file_path] = metadata
-                    del data  # 释放内存
-                except Exception as e:
-                    log(f"读取文件失败: {file_path}, 错误: {e}")
-                    fail_count += 1
+        # 遍历元数据中不存在的文件，获取元数据
+        fail_count = 0
+        new_add = False
+        for file_path in files:
+            if file_path in self.file_metadata_cache:
+                continue
 
-            # 缓存到文件
+            # 需要读取文件，获取元数据
+            try:
+                with open(file_path, 'rb') as f:
+                    data = pickle.load(f)
+                
+                # 提取并存储元数据
+                metadata = {}
+                est_memory = 0
+                for key in KEYS:
+                    try:
+                        _data = getattr(data, key)
+                        metadata[key] = {
+                            'shape': _data.shape,
+                            'dtype': _data.dtype
+                        }
+                        est_memory += _data.nbytes
+                    except AttributeError:
+                        log(f"警告: 文件{file_path}中没有找到键{key}")
+                        fail_count += 1
+                        break
+                
+                # 只有当所有键都存在时才添加到缓存
+                if len(metadata) == len(KEYS):
+                    metadata['est_memory'] = est_memory
+                    metadata['length'] = data.acts.shape[0]  # 所有数组第一维相同
+                    self.file_metadata_cache[file_path] = metadata
+                    new_add = True
+                del data  # 释放内存
+
+            except Exception as e:
+                log(f"读取文件失败: {file_path}, 错误: {e}")
+                fail_count += 1
+
+        # 缓存到文件
+        if new_add:
             pickle.dump(self.file_metadata_cache, open('file_metadata_cache', 'wb'))
-            
-            if fail_count:
-                msg = f'警告: {fail_count}个文件无法使用'
-                log(msg)
-                send_wx(msg)
+            wx.send_file('file_metadata_cache')
+        
+        if fail_count:
+            msg = f'警告: {fail_count}个文件无法使用'
+            log(msg)
+            send_wx(msg)
 
         self.all_files = list(self.file_metadata_cache.keys())
         for metadata in self.file_metadata_cache.values():
@@ -338,6 +344,8 @@ class TrajectoryDataset(Dataset):
 
     def on_epoch_end(self):
         log(f'epoch结束，迭代数据结束，需要更新数据')
+        # 前一个 idx
+        self.last_idx = -1
         self.on_batch_end()
 
 if __name__ == "__main__":
