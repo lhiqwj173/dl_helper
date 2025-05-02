@@ -501,6 +501,7 @@ if run_type != 'test':
         bc_trainer.train(
             n_epochs=checkpoint_interval,
             log_interval = 1 if run_type=='find_lr' else 500,
+            on_epoch_end=lambda: data_set.on_epoch_end(), # 最后的训练数据有可能会被舍弃
         )
         log(f'训练耗时: {time.time() - _t:.2f} 秒')
 

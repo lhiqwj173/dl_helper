@@ -328,10 +328,17 @@ class TrajectoryDataset(Dataset):
         # 判断是否需要加载新的批次文件
         if idx == self.current_index_max:
             log(f'迭代数据结束，需要更新数据')
-            del self.data_dict
-            self.data_dict = {}
+            self.on_batch_end()
 
         return res
+    
+    def on_batch_end(self):
+        del self.data_dict
+        self.data_dict = {}
+
+    def on_epoch_end(self):
+        log(f'epoch结束，迭代数据结束，需要更新数据')
+        self.on_batch_end()
 
 if __name__ == "__main__":
     from dl_helper.tool import in_windows
