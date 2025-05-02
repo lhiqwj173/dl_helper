@@ -418,8 +418,11 @@ if run_type != 'test':
                 log(f"总运行时间超过 {n_hours} 小时，上传数据并退出")
                 t = time.time()
                 from py_ext.alist import alist
+                from py_ext.lzma import compress
+                zip_file = file_name + '.7z'
+                compress(file_name, level=9)
                 client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
-                client.upload(file_name, '/bc_train_data/')
+                client.upload(zip_file, '/bc_train_data/')
                 msg = f"{file_name} 上传数据耗时: {time.time() - t:.2f} 秒"
                 send_wx(msg)
                 sys.exit()
