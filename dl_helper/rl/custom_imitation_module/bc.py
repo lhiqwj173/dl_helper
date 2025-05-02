@@ -413,8 +413,8 @@ class BCWithLRScheduler(BC):
             # 记录训练集损失
             self._bc_logger._logger.record("bc/train_loss", self.all_loss / (pred_np.shape[0]))
 
-            # FOR DEBUG
-            pickle.dump((self.all_preds, self.all_true, self.all_loss, pred_np.shape[0]), open('train_data.pkl', 'wb'))
+            # # FOR DEBUG
+            # pickle.dump((self.all_preds, self.all_true, self.all_loss, pred_np.shape[0]), open('train_data.pkl', 'wb'))
 
             # 在每个epoch结束时在验证集上验证
             if validate_each_epoch and self._val_data_loader is not None:

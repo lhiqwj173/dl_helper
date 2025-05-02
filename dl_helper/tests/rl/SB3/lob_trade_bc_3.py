@@ -119,7 +119,7 @@ checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 3e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
-batch_n = 2**7 if run_type=='train' else 1
+batch_n = 2**7 if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
 
@@ -450,7 +450,8 @@ if run_type != 'test':
             rf'/kaggle/input/lob-bc-train-data-filted-3/',
         ]
     else:
-        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+        # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0'
     data_set = TrajectoryDataset(data_folder)
     log(f"训练数据样本数: {len(data_set)}")
     memory_usage = psutil.virtual_memory()
