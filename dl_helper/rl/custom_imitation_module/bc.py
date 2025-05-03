@@ -67,6 +67,7 @@ class BCWithLRScheduler(BC):
         lr_scheduler_kwargs: Optional[Mapping[str, Any]] = None,                # 新增：调度器参数
         lr_scheduler_step_frequency: str = 'batch',                             # 新增参数：学习率调度器更新频率
         average: str = 'weighted',                                              # 新增参数：多分类指标的平均方式
+        use_mixed_precision: bool = True,                                       # 新增参数：启用混合精度训练
     ):
         """初始化 BCWithLRScheduler。
 
@@ -130,8 +131,9 @@ class BCWithLRScheduler(BC):
         # 训练的进度
         self.train_loop_idx = 0
 
-        # 新增：混合精度训练的 GradScaler，默认禁用，在 train 方法中根据参数启用
-        self.scaler = GradScaler(enabled=False)
+        # 混合精度训练
+        assert th.cuda.is_available() or use_mixed_precision is False, "混合精度训练需要GPU支持"
+        self.scaler = GradScaler(enabled=use_mixed_precision)
 
     def save(self, save_folder):
         """保存当前模型的状态，包括策略参数和优化器状态。"""
@@ -143,6 +145,7 @@ class BCWithLRScheduler(BC):
             'optimizer': self.optimizer.state_dict(),
             'lr_scheduler': self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             'train_loop_idx': self.train_loop_idx,
+            'scaler': self.scaler.state_dict(),
         }
         th.save(other_state_dict, os.path.join(save_folder, "other_state.pth"))
 
@@ -167,6 +170,8 @@ class BCWithLRScheduler(BC):
             if self.lr_scheduler and other_state_dict['lr_scheduler'] is not None:
                 self.lr_scheduler.load_state_dict(other_state_dict['lr_scheduler'])
             self.train_loop_idx = other_state_dict['train_loop_idx']
+            if 'scaler' in other_state_dict:
+                self.scaler.load_state_dict(other_state_dict['scaler'])
 
     def set_train_dataset(self, train_dataset) -> None:
         if hasattr(self, '_demo_data_loader'):
@@ -379,7 +384,6 @@ class BCWithLRScheduler(BC):
         progress_bar: bool = True,
         reset_tensorboard: bool = False,
         validate_each_epoch: bool = True,                   # 新增：每个epoch结束后是否验证
-        use_mixed_precision: bool = True,                   # 新增：启用混合精度训练
         grad_accumulation_steps: Optional[int] = None,      # 新增：梯度累积步数
     ):
         """训练模型，支持学习率调度和性能指标评估。
@@ -398,10 +402,6 @@ class BCWithLRScheduler(BC):
         self._bc_logger.log_epoch(0)
 
         compute_rollout_stats = RolloutStatsComputer(log_rollouts_venv, log_rollouts_n_episodes)
-
-        # 新增：设置 GradScaler 的启用状态，根据 use_mixed_precision 参数
-        assert th.cuda.is_available() or use_mixed_precision is False, "混合精度训练需要GPU支持"
-        self.scaler.set_enabled(use_mixed_precision)
 
         def _on_epoch_end(epoch_number: int):
             if tqdm_progress_bar is not None:
