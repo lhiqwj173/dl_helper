@@ -692,8 +692,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-            if (TEST_REST_GB - 1) > psutil.virtual_memory().available / (1024**3):
-                log(f'内存超出限制（{TEST_REST_GB - 1}）GB, 退出')
+            if (TEST_REST_GB - 3) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 3}）GB, 退出')
 
                 snapshot_2 = tracemalloc.take_snapshot()
                 stats = snapshot_2.compare_to(snapshot_1, 'lineno')
@@ -776,43 +776,43 @@ class SimpleDAggerTrainer(DAggerTrainer):
             if not self.full:
                 continue
 
-            # _t = time.time()
-            # eval_env.val()
-            # val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
-            # eval_env.train()
-            # train_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
-            # log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
+            _t = time.time()
+            eval_env.val()
+            val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            eval_env.train()
+            train_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
-            # # 合并到 progress_all.csv
-            # latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
-            # df_new = pd.read_csv(progress_file)
-            # df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
-            # df_new['bc/epoch'] += round_num * self.DEFAULT_N_EPOCHS
-            # df_new['bc/mean_reward'] = np.nan
-            # df_new['bc/val_mean_reward'] = np.nan
-            # df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
-            # df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
-            # df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
-            # df_progress.ffill(inplace=True)
-            # df_progress.to_csv(progress_file_all, index=False)
+            # 合并到 progress_all.csv
+            latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
+            df_new = pd.read_csv(progress_file)
+            df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
+            df_new['bc/epoch'] += round_num * self.DEFAULT_N_EPOCHS
+            df_new['bc/mean_reward'] = np.nan
+            df_new['bc/val_mean_reward'] = np.nan
+            df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+            df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
+            df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
+            df_progress.ffill(inplace=True)
+            df_progress.to_csv(progress_file_all, index=False)
 
-            # # 当前点是否是最优的 checkpoint
-            # # 使用 recall 判断
-            # if 'bc/recall' in list(df_progress):
-            #     bset_recall = df_progress['bc/recall'].max()
-            #     best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
-            #     is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
-            # else:
-            #     is_best = False
+            # 当前点是否是最优的 checkpoint
+            # 使用 recall 判断
+            if 'bc/recall' in list(df_progress):
+                bset_recall = df_progress['bc/recall'].max()
+                best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+                is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+            else:
+                is_best = False
 
-            # # 训练进度可视化
-            # plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+            # 训练进度可视化
+            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
 
-            # for debug
-            is_best = False
-            for file in os.listdir(r'/kaggle/working/'):
-                if file.endswith('.log'):
-                    shutil.copy2(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
+            # # for debug
+            # is_best = False
+            # for file in os.listdir(r'/kaggle/working/'):
+            #     if file.endswith('.log'):
+            #         shutil.copy2(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
 
             if not in_windows():
                 # 保存模型
