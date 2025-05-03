@@ -22,7 +22,7 @@ from py_ext.tool import log
 TEST_REST_GB = 27
 
 # from memory_profiler import profile
-import objgraph
+# import objgraph
 import reprlib
 import gc, sys
 gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
