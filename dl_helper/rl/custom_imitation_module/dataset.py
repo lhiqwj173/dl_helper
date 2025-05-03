@@ -24,7 +24,7 @@ class TrajectoryDataset(Dataset):
         self, 
         input_folders: Union[str, List[str]], 
         each_load_batch_file_num: int = 3,  # 每批次加载的文件数量
-        pre_load_batch_num: int = 3,        # 预加载的批次数量
+        pre_load_batch_num: int = 4,        # 预加载的批次数量
         shuffle: bool = True                # 是否打乱数据
     ):
         """
