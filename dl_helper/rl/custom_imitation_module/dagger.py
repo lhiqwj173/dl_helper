@@ -21,7 +21,7 @@ from py_ext.tool import log
 
 TEST_REST_GB = 27
 
-from memory_profiler import profile
+# from memory_profiler import profile
 import objgraph
 import reprlib
 import gc, sys
@@ -267,7 +267,7 @@ def _save_dagger_demo(
     logging.info(f"Saved demo at '{npz_path}'")
 
 class InteractiveTransitionsCollector(_InteractiveTrajectoryCollector):
-    @profile(precision=4,stream=open('step_wait.log','w+'))
+    # @profile(precision=4,stream=open('step_wait.log','w+'))
     def step_wait(self) -> VecEnvStepReturn:
         """Returns observation, reward, etc after previous `step_async()` call.
 
@@ -404,7 +404,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.transitions_dict = initialize_dataset(single_data_dict, max_rows)
         self.capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
 
-    @profile(precision=4,stream=open('_copy_data.log','w+'))
+    # @profile(precision=4,stream=open('_copy_data.log','w+'))
     def _copy_data(self, transitions):
         t_length = transitions.acts.shape[0]  # 待写入数据长度
 
@@ -450,7 +450,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         return t_length
 
-    @profile(precision=4,stream=open('_handle_demo_path.log','w+'))
+    # @profile(precision=4,stream=open('_handle_demo_path.log','w+'))
     def _handle_demo_path(self, path):
         log(f'load demo: {path}')
         log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
@@ -483,7 +483,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
         return t_length
 
-    @profile(precision=4,stream=open('_handle_demo_paths.log','w+'))
+    # @profile(precision=4,stream=open('_handle_demo_paths.log','w+'))
     def _handle_demo_paths(self, demo_paths):
         new_transitions_length =0
         for path in demo_paths:
@@ -491,7 +491,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         return new_transitions_length
 
-    @profile(precision=4,stream=open('_load_all_demos.log','w+'))
+    # @profile(precision=4,stream=open('_load_all_demos.log','w+'))
     def _load_all_demos(self) -> Tuple[types.Transitions, List[int]]:
         """
         载入最新的样本
@@ -523,7 +523,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         log(f"_load_all_demos done 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
         log(f"Loaded new transitions {new_transitions_length}, total: {self.cur_idx if not self.full else self.capacity}")
 
-    @profile(precision=4,stream=open('extend_and_update.log','w+'))
+    # @profile(precision=4,stream=open('extend_and_update.log','w+'))
     def extend_and_update(
         self,
         bc_train_kwargs: Optional[Mapping[str, Any]] = None,
@@ -625,7 +625,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         )
         return collector
 
-    @profile(precision=4,stream=open('train.log','w+'))
+    # @profile(precision=4,stream=open('train.log','w+'))
     def train(
         self,
         total_timesteps: int,
