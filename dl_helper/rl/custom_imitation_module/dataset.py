@@ -174,6 +174,7 @@ class TrajectoryDataset(Dataset):
         for file_path in self.pending_files:
             self.start_indices[file_path] = current_idx
             current_idx += self.file_metadata_cache[file_path]['length']
+            log(f'[start_indices]: {file_path}, {self.start_indices[file_path]}, length: {self.file_metadata_cache[file_path]["length"]}')
     
     def _load_thread(self):
         while not self.load_thread_stop:
@@ -246,30 +247,26 @@ class TrajectoryDataset(Dataset):
         start = 0
         for file_path in selected_files:
             log(f"加载文件: {file_path}")
-            try:
-                with open(file_path, 'rb') as f:
-                    transitions = pickle.load(f)
-                    
-                file_length = self.file_metadata_cache[file_path]['length']
-                end = start + file_length
+            with open(file_path, 'rb') as f:
+                transitions = pickle.load(f)
                 
-                # 复制数据到大数组
-                for key in KEYS:
-                    data = getattr(transitions, key)
-                    data_dict[key][start:end] = data[:file_length]
-                    
-                # 记录全局索引范围
-                global_start_idx = self.start_indices[file_path]
-                log(f'global_start_idx: {global_start_idx}')
-                for i in range(file_length):
-                    current_index_map.append(global_start_idx + i)
-                    
-                start = end
-                del transitions  # 释放内存
+            file_length = self.file_metadata_cache[file_path]['length']
+            end = start + file_length
+            
+            # 复制数据到大数组
+            for key in KEYS:
+                data = getattr(transitions, key)
+                data_dict[key][start:end] = data[:file_length]
                 
-            except Exception as e:
-                log(f"加载文件失败: {file_path}, 错误: {e}")
-        
+            # 记录全局索引范围
+            global_start_idx = self.start_indices[file_path]
+            log(f'global_start_idx: {global_start_idx}')
+            for i in range(file_length):
+                current_index_map.append(global_start_idx + i)
+                
+            start = end
+            del transitions  # 释放内存
+                
         # 将列表转换为numpy数组，便于后续操作
         current_index_map = np.array(current_index_map)
         
