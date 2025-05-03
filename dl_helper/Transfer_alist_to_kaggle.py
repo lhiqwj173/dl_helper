@@ -35,12 +35,12 @@ def main():
     files = alist_client.listdir(alist_folder)
     alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
 
-    # 打包文件夹（不压缩，生成 .tar 文件）
-    shutil.make_archive(
-        base_name="bc_train_data",  # 输出文件名（不带扩展名）
-        format="tar",              # 打包格式（不压缩）
-        root_dir=local_folder,  # 要打包的文件夹路径
-    )
+    # # 打包文件夹（不压缩，生成 .tar 文件）
+    # shutil.make_archive(
+    #     base_name="bc_train_data",  # 输出文件名（不带扩展名）
+    #     format="tar",              # 打包格式（不压缩）
+    #     root_dir=local_folder,  # 要打包的文件夹路径
+    # )
 
 if __name__ == '__main__':
     main()
