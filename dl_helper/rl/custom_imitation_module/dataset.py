@@ -325,6 +325,9 @@ class TrajectoryDataset(Dataset):
         # 获取 idx 对应当前加载数据中的索引
         local_idx = idx - self.current_index_min
 
+        if local_idx == 0:
+            log(f'local_idx: {local_idx}, idx: {idx}, self.current_index_min: {self.current_index_min}, self.current_index_max: {self.current_index_max}')
+
         # self.current_index_map 中对应的数据索引
         data_idx = self.current_index_map[local_idx]
         
