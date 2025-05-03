@@ -73,6 +73,7 @@ arg_batch_n = None
 arg_total_epochs = None
 arg_l2_weight = None
 arg_dropout = None
+arg_amp = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -98,6 +99,8 @@ if len(sys.argv) > 1:
             arg_l2_weight = float(arg.split('=')[1])
         elif arg.startswith('dropout='):
             arg_dropout = float(arg.split('=')[1])
+        elif arg == 'amp':
+            arg_amp = True
 
 # train_folder = train_title = f'20250429_lob_trade_bc_3' \
 train_folder = train_title = f'20250429_lob_trade_bc_3' \
@@ -106,7 +109,8 @@ train_folder = train_title = f'20250429_lob_trade_bc_3' \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
                 + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}') \
                     + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}') \
-                        + ('' if arg_dropout is None else f'_dropout{arg_dropout:.0e}')
+                        + ('' if arg_dropout is None else f'_dropout{arg_dropout:.0e}') \
+                            + ('' if arg_amp is None else f'_amp')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -476,7 +480,7 @@ if run_type != 'test':
         lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not arg_lr) \
             else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
                 else None,
-        use_mixed_precision=False,
+        use_mixed_precision=True if arg_amp else False,
     )
     
     # 训练文件夹管理

@@ -67,7 +67,7 @@ class BCWithLRScheduler(BC):
         lr_scheduler_kwargs: Optional[Mapping[str, Any]] = None,                # 新增：调度器参数
         lr_scheduler_step_frequency: str = 'batch',                             # 新增参数：学习率调度器更新频率
         average: str = 'weighted',                                              # 新增参数：多分类指标的平均方式
-        use_mixed_precision: bool = True,                                       # 新增参数：启用混合精度训练
+        use_mixed_precision: bool = False,                                      # 新增参数：启用混合精度训练
     ):
         """初始化 BCWithLRScheduler。
 
