@@ -17,9 +17,10 @@ from typing import (
 import os
 import gymnasium as gym
 import numpy as np
-import torch as th
 import tqdm
 
+import torch as th
+from torch.amp import GradScaler
 from torch.optim import lr_scheduler
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -35,6 +36,7 @@ from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithE
 
 from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
 
+from py_ext.tool import log
 from py_ext.datetime import beijing_time
 
 class BCWithLRScheduler(BC):
@@ -127,6 +129,9 @@ class BCWithLRScheduler(BC):
 
         # 训练的进度
         self.train_loop_idx = 0
+
+        # 新增：混合精度训练的 GradScaler，默认禁用，在 train 方法中根据参数启用
+        self.scaler = GradScaler(enabled=False)
 
     def save(self, save_folder):
         """保存当前模型的状态，包括策略参数和优化器状态。"""
@@ -373,13 +378,17 @@ class BCWithLRScheduler(BC):
         log_rollouts_n_episodes: int = 5,
         progress_bar: bool = True,
         reset_tensorboard: bool = False,
-        validate_each_epoch: bool = True,       # 新增：每个epoch结束后是否验证
+        validate_each_epoch: bool = True,                   # 新增：每个epoch结束后是否验证
+        use_mixed_precision: bool = True,                   # 新增：启用混合精度训练
+        grad_accumulation_steps: Optional[int] = None,      # 新增：梯度累积步数
     ):
         """训练模型，支持学习率调度和性能指标评估。
 
         Args:
             ...（原有参数保持不变，此处省略详细描述）
             validate_each_epoch: 是否在每个epoch结束时在验证集上验证，默认为True
+            use_mixed_precision: 是否启用混合精度训练，默认为False
+            grad_accumulation_steps: 梯度累积步数，累积指定步数后更新参数
         """
         # 转为训练模式
         self.policy.train()
@@ -389,6 +398,10 @@ class BCWithLRScheduler(BC):
         self._bc_logger.log_epoch(0)
 
         compute_rollout_stats = RolloutStatsComputer(log_rollouts_venv, log_rollouts_n_episodes)
+
+        # 新增：设置 GradScaler 的启用状态，根据 use_mixed_precision 参数
+        assert th.cuda.is_available() or use_mixed_precision is False, "混合精度训练需要GPU支持"
+        self.scaler.set_enabled(use_mixed_precision)
 
         def _on_epoch_end(epoch_number: int):
             if tqdm_progress_bar is not None:
@@ -412,9 +425,6 @@ class BCWithLRScheduler(BC):
 
             # 记录训练集损失
             self._bc_logger._logger.record("bc/train_loss", self.all_loss / (pred_np.shape[0]))
-
-            # # FOR DEBUG
-            # pickle.dump((self.all_preds, self.all_true, self.all_loss, pred_np.shape[0]), open('train_data.pkl', 'wb'))
 
             # 在每个epoch结束时在验证集上验证
             if validate_each_epoch and self._val_data_loader is not None:
@@ -454,13 +464,16 @@ class BCWithLRScheduler(BC):
             tqdm_progress_bar = batches_with_stats
 
         def process_batch():
-            self.optimizer.step()
+            # 新增：使用 scaler.step 替代直接 optimizer.step，支持混合精度
+            self.scaler.step(self.optimizer)
+            # 新增：更新缩放器状态
+            self.scaler.update()
+            # 清零梯度
+            self.optimizer.zero_grad(set_to_none=True)
 
             # 如果有调度器，则更新学习率
             if self.lr_scheduler is not None and self.lr_scheduler_step_frequency=='batch':
                 self.lr_scheduler.step()
-                
-            self.optimizer.zero_grad()
 
             if batch_num % log_interval == 0:
                 # 记录时间戳
@@ -479,10 +492,12 @@ class BCWithLRScheduler(BC):
             if on_batch_end is not None:
                 on_batch_end()
 
-        self.optimizer.zero_grad()
+        # self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)  # More memory efficient
         self.all_preds = []
         self.all_true = []
         self.all_loss = 0.0
+        accumulation_counter = 0  # 梯度累积计数器
         
         for (batch_num, minibatch_size, num_samples_so_far), batch in batches_with_stats:
             # 确保策略处于训练模式
@@ -493,7 +508,14 @@ class BCWithLRScheduler(BC):
                 types.maybe_unwrap_dictobs(batch["obs"]),
             )
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
-            training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
+
+            # 使用 autocast 进行前向传播，支持混合精度
+            with th.amp.autocast(device_type='cuda'):
+                training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
+                loss = training_metrics.loss * minibatch_size / self.batch_size
+
+            # 使用 scaler 进行反向传播，支持混合精度
+            self.scaler.scale(loss).backward()
 
             # 获取模型预测
             self.policy.set_training_mode(False)
@@ -503,18 +525,24 @@ class BCWithLRScheduler(BC):
             # 保存当前批次数据，用于计算指标
             self.all_preds.append(pred_acts.cpu().numpy())
             self.all_true.append(acts.cpu().numpy())
-
-            loss = training_metrics.loss * minibatch_size / self.batch_size
-            loss.backward()
             self.all_loss += (training_metrics.loss * minibatch_size).item()
-
+            
             batch_num = batch_num * self.minibatch_size // self.batch_size
-            if num_samples_so_far % self.batch_size == 0:
+
+            # 梯度累积逻辑
+            accumulation_counter += 1
+            if grad_accumulation_steps is not None and accumulation_counter % grad_accumulation_steps == 0:
                 process_batch()
-                
-        if num_samples_so_far % self.batch_size != 0:
+                accumulation_counter = 0
+            elif grad_accumulation_steps is None and num_samples_so_far % self.batch_size == 0:
+                process_batch()
+                accumulation_counter = 0
+
+        if accumulation_counter > 0:
             batch_num += 1
             process_batch()
 
         # 记录loop结束
         self.train_loop_idx += 1
+
+
