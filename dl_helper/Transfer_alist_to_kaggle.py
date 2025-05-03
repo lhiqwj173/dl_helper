@@ -1,4 +1,4 @@
-import os, shutil
+import os, shutil, sys
 from pathlib import Path
 from py_ext.alist import alist
 from py_ext.lzma import decompress, compress_folder
@@ -60,7 +60,7 @@ def batch_tar_and_remove(local_folder, batch_size=20):
         
         print(f"已打包: {tar_name}.tar (包含{len(batch_files)}个文件)")
 
-def main():
+def bc_train_data_wait():
     """
     1. 下载 alist 文件到本地
     2. 打包成一个文件
@@ -75,5 +75,20 @@ def main():
     # 打包文件夹（不压缩，生成 .tar 文件）
     batch_tar_and_remove(local_folder, 40)
 
+def only_transfer():
+    """
+    1. 下载 alist 文件到本地
+    """
+    # 下载压缩文件
+    alist_folder = r'/only_transfer/'
+    local_folder = r'transfer'
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
+    files = alist_client.listdir(alist_folder)
+    alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
+
 if __name__ == '__main__':
-    main()
+    for arg in sys.argv[1:]:
+        if arg == 'bc_train_data_wait':
+            bc_train_data_wait()
+        elif arg == 'only_transfer':
+            only_transfer()
