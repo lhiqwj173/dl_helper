@@ -387,7 +387,7 @@ class BCWithLRScheduler(BC):
         Args:
             ...（原有参数保持不变，此处省略详细描述）
             validate_each_epoch: 是否在每个epoch结束时在验证集上验证，默认为True
-            use_mixed_precision: 是否启用混合精度训练，默认为False
+            use_mixed_precision: 是否启用混合精度训练，默认为True
             grad_accumulation_steps: 梯度累积步数，累积指定步数后更新参数
         """
         # 转为训练模式
