@@ -448,6 +448,7 @@ if run_type != 'test':
         data_folder = [
             rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
             rf'/kaggle/input/lob-bc-train-data-filted-3/',
+            rf'/kaggle/input/lob-bc-train-data-filted-4/'
         ]
     else:
         # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'

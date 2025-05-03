@@ -355,6 +355,7 @@ if __name__ == "__main__":
         data_folder = [
             rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
             rf'/kaggle/input/lob-bc-train-data-filted-3/',
+            rf'/kaggle/input/lob-bc-train-data-filted-4/'
         ]
     else:
         data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
@@ -367,10 +368,10 @@ if __name__ == "__main__":
     print(len(dataset))
 
     t = time.time()
-    epoch = 5
-    for i in range(epoch):
-        for i in range(len(dataset)):
-            d = dataset[i]
+    # epoch = 5
+    # for i in range(epoch):
+    #     for i in range(len(dataset)):
+    #         d = dataset[i]
 
     dataset.stop()
     print(f'耗时: {time.time() - t:.2f} 秒')
