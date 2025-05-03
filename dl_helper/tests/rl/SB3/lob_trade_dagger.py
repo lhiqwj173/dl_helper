@@ -2,6 +2,9 @@
 # !mkdir 3rd && cd 3rd && git clone https://github.com/lhiqwj173/dl_helper.git > /dev/null 2>&1
 # !cd /kaggle/working/3rd/dl_helper && pip install -e . > /dev/null 2>&1
 
+import tracemalloc
+tracemalloc.start(30)
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecCheckNan
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback

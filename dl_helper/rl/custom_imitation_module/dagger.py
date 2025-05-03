@@ -1,3 +1,4 @@
+import tracemalloc
 import time, os, psutil, shutil, pickle
 import pandas as pd
 from collections import deque
@@ -672,6 +673,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 `self.venv` by default. If neither of the `n_epochs` and `n_batches`
                 keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
         """
+        snapshot_1 = tracemalloc.take_snapshot()
+
         # for debug
         rollout_round_min_timesteps = 500
 
@@ -691,6 +694,13 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             if (TEST_REST_GB - 1) > psutil.virtual_memory().available / (1024**3):
                 log(f'内存超出限制（{TEST_REST_GB - 1}）GB, 退出')
+
+                snapshot_2 = tracemalloc.take_snapshot()
+                stats = snapshot_2.compare_to(snapshot_1, 'lineno')
+                for i, stat in enumerate(stats):
+                    log(f'[{i}] {stat}')
+                    tb = [''] + stat.traceback.format()
+                    log('\n'.join(tb))
                 return
 
             round_episode_count = 0
