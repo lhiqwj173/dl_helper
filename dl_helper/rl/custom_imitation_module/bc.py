@@ -509,6 +509,8 @@ class BCWithLRScheduler(BC):
                 types.maybe_unwrap_dictobs(batch["obs"]),
             )
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
+            # 确保动作是整数
+            acts = acts.to(dtype=th.long)
 
             # 使用 autocast 进行前向传播，支持混合精度
             with th.autocast(device_type='cuda' if th.cuda.is_available() else 'cpu', enabled=self.use_mixed_precision, dtype=th.float16):
