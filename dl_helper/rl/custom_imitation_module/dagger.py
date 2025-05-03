@@ -753,7 +753,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # 替换 样本中的动作为专家动作
             parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
             for k in KEYS:
-                parts[k] = getattr(transitions_val, k)
+                parts[k] = getattr(transitions_val, k).copy()
+            del transitions_val
+            del rollouts_val
             for i, obs in enumerate(parts['obs']):
                 parts['acts'][i] = self.expert_policy.predict(obs)[0]
             transitions_val = types.Transitions(**parts)
