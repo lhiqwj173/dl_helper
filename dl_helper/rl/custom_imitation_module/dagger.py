@@ -19,7 +19,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-TEST_REST_GB = 27
+TEST_REST_GB = 25
 
 # from memory_profiler import profile
 # import objgraph
@@ -688,7 +688,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             df_progress = pd.DataFrame()
 
         while total_timestep_count < total_timesteps:
-            gc.collect()
+            # gc.collect()
 
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -697,7 +697,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
                 snapshot_2 = tracemalloc.take_snapshot()
                 stats = snapshot_2.compare_to(snapshot_1, 'lineno')
-                for i, stat in enumerate(stats):
+                for i, stat in enumerate(stats[:10]):
                     log(f'[{i}] {stat}')
                     tb = [''] + stat.traceback.format()
                     log('\n'.join(tb))
