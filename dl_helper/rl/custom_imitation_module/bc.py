@@ -134,6 +134,7 @@ class BCWithLRScheduler(BC):
         # 混合精度训练
         assert th.cuda.is_available() or use_mixed_precision is False, "混合精度训练需要GPU支持"
         self.scaler = GradScaler(enabled=use_mixed_precision)
+        self.use_mixed_precision = use_mixed_precision
 
     def save(self, save_folder):
         """保存当前模型的状态，包括策略参数和优化器状态。"""
@@ -510,7 +511,7 @@ class BCWithLRScheduler(BC):
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
 
             # 使用 autocast 进行前向传播，支持混合精度
-            with th.amp.autocast(device_type='cuda'):
+            with th.autocast(device_type='cuda' if th.cuda.is_available() else 'cpu', enabled=self.use_mixed_precision, dtype=th.float16):
                 training_metrics = self.loss_calculator(self.policy, obs_tensor, acts)
                 loss = training_metrics.loss * minibatch_size / self.batch_size
 
