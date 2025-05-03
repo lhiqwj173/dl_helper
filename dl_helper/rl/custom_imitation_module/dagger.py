@@ -754,7 +754,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # # 设置 验证数据
             # self.bc_trainer.set_demonstrations_val(transitions_val)
             # for env in self.env_objs:
-                env.train()
+            #     env.train()
 
             log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
