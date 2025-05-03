@@ -73,7 +73,7 @@ def main():
     alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
 
     # 打包文件夹（不压缩，生成 .tar 文件）
-    batch_tar_and_remove(local_folder)
+    batch_tar_and_remove(local_folder, 30)
 
 if __name__ == '__main__':
     main()
