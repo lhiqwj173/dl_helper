@@ -390,6 +390,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.cur_idx = 0    # 可以写入的样本索引
         self.capacity = 0   # 缓冲区容量
 
+        self.snapshot_1 = None
+
     def _init_transitions_dict(self, transitions):
         # 计算单条数据的占用大小
         single_data_dict = {}
@@ -488,6 +490,9 @@ class SimpleDAggerTrainer(DAggerTrainer):
         new_transitions_length =0
         for path in demo_paths:
             new_transitions_length += self._handle_demo_path(path)
+            if self.transitions_dict is not None and self.snapshot_1 is None:
+                # 内存初始化后进行快照
+                self.snapshot_1 = tracemalloc.take_snapshot()
 
         return new_transitions_length
 
@@ -673,8 +678,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 `self.venv` by default. If neither of the `n_epochs` and `n_batches`
                 keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
         """
-        snapshot_1 = tracemalloc.take_snapshot()
-
         # for debug
         rollout_round_min_timesteps = 500
 
@@ -696,8 +699,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 log(f'内存超出限制（{TEST_REST_GB - 3}）GB, 退出')
 
                 snapshot_2 = tracemalloc.take_snapshot()
-                stats = snapshot_2.compare_to(snapshot_1, 'lineno')
-                for i, stat in enumerate(stats[:10]):
+                stats = snapshot_2.compare_to(self.snapshot_1, 'traceback')
+                for i, stat in enumerate(stats[:30]):
                     log(f'[{i}] {stat}')
                     tb = [''] + stat.traceback.format()
                     log('\n'.join(tb))
@@ -736,33 +739,33 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
-            # 采样验证数据
-            self.bc_trainer.clear_demonstrations_val()
-            for env in self.env_objs:
-                env.val()
-            rollouts_val = rollout.rollout(
-                self.bc_trainer.policy,
-                self.venv,
-                rollout.make_sample_until(
-                    min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
-                    min_episodes=rollout_round_min_episodes,
-                ),
-                rng=collector.rng,
-            )
-            transitions_val = rollout.flatten_trajectories(rollouts_val)
-            # 替换 样本中的动作为专家动作
-            parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
-            for k in KEYS:
-                parts[k] = getattr(transitions_val, k).copy()
-            del transitions_val
-            del rollouts_val
-            for i, obs in enumerate(parts['obs']):
-                parts['acts'][i] = self.expert_policy.predict(obs)[0]
-            transitions_val = types.Transitions(**parts)
-            # 设置 验证数据
-            self.bc_trainer.set_demonstrations_val(transitions_val)
-            for env in self.env_objs:
-                env.train()
+            # # 采样验证数据
+            # self.bc_trainer.clear_demonstrations_val()
+            # for env in self.env_objs:
+            #     env.val()
+            # rollouts_val = rollout.rollout(
+            #     self.bc_trainer.policy,
+            #     self.venv,
+            #     rollout.make_sample_until(
+            #         min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
+            #         min_episodes=rollout_round_min_episodes,
+            #     ),
+            #     rng=collector.rng,
+            # )
+            # transitions_val = rollout.flatten_trajectories(rollouts_val)
+            # # 替换 样本中的动作为专家动作
+            # parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
+            # for k in KEYS:
+            #     parts[k] = getattr(transitions_val, k).copy()
+            # del transitions_val
+            # del rollouts_val
+            # for i, obs in enumerate(parts['obs']):
+            #     parts['acts'][i] = self.expert_policy.predict(obs)[0]
+            # transitions_val = types.Transitions(**parts)
+            # # 设置 验证数据
+            # self.bc_trainer.set_demonstrations_val(transitions_val)
+            # for env in self.env_objs:
+            #     env.train()
 
             log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
@@ -784,43 +787,43 @@ class SimpleDAggerTrainer(DAggerTrainer):
             if not self.full:
                 continue
 
-            _t = time.time()
-            eval_env.val()
-            val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
-            eval_env.train()
-            train_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
-            log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
+            # _t = time.time()
+            # eval_env.val()
+            # val_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            # eval_env.train()
+            # train_reward, _ = evaluate_policy(self.bc_trainer.policy, eval_env)
+            # log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
 
-            # 合并到 progress_all.csv
-            latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
-            df_new = pd.read_csv(progress_file)
-            df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
-            df_new['bc/epoch'] += round_num * self.DEFAULT_N_EPOCHS
-            df_new['bc/mean_reward'] = np.nan
-            df_new['bc/val_mean_reward'] = np.nan
-            df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
-            df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
-            df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
-            df_progress.ffill(inplace=True)
-            df_progress.to_csv(progress_file_all, index=False)
+            # # 合并到 progress_all.csv
+            # latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
+            # df_new = pd.read_csv(progress_file)
+            # df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
+            # df_new['bc/epoch'] += round_num * self.DEFAULT_N_EPOCHS
+            # df_new['bc/mean_reward'] = np.nan
+            # df_new['bc/val_mean_reward'] = np.nan
+            # df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+            # df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
+            # df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
+            # df_progress.ffill(inplace=True)
+            # df_progress.to_csv(progress_file_all, index=False)
 
-            # 当前点是否是最优的 checkpoint
-            # 使用 recall 判断
-            if 'bc/recall' in list(df_progress):
-                bset_recall = df_progress['bc/recall'].max()
-                best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
-                is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
-            else:
-                is_best = False
+            # # 当前点是否是最优的 checkpoint
+            # # 使用 recall 判断
+            # if 'bc/recall' in list(df_progress):
+            #     bset_recall = df_progress['bc/recall'].max()
+            #     best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+            #     is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
+            # else:
+            #     is_best = False
 
-            # 训练进度可视化
-            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+            # # 训练进度可视化
+            # plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
 
-            # # for debug
-            # is_best = False
-            # for file in os.listdir(r'/kaggle/working/'):
-            #     if file.endswith('.log'):
-            #         shutil.copy2(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
+            # for debug
+            is_best = False
+            for file in os.listdir(r'/kaggle/working/'):
+                if file.endswith('.log'):
+                    shutil.copy2(os.path.join(r'/kaggle/working/', file), os.path.join(train_folder, file))
 
             if not in_windows():
                 # 保存模型
