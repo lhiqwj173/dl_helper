@@ -736,25 +736,31 @@ class SimpleDAggerTrainer(DAggerTrainer):
             self._logger.record("dagger/round_episode_count", round_episode_count)
             self._logger.record("dagger/round_timestep_count", round_timestep_count)
 
-            # # 采样验证数据
-            # self.bc_trainer.clear_demonstrations_val()
-            # for env in self.env_objs:
-            #     env.val()
-            # rollouts_val = rollout.rollout(
-            #     self.bc_trainer.policy,
-            #     self.venv,
-            #     rollout.make_sample_until(
-            #         min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
-            #         min_episodes=rollout_round_min_episodes,
-            #     ),
-            #     rng=collector.rng,
-            # )
-            # # 替换 样本中的动作为专家动作 TODO
-            # transitions_val = rollout.flatten_trajectories(rollouts_val)
-            # # 设置 验证数据
-            # self.bc_trainer.set_demonstrations_val(transitions_val)
-            # for env in self.env_objs:
-            #     env.train()
+            # 采样验证数据
+            self.bc_trainer.clear_demonstrations_val()
+            for env in self.env_objs:
+                env.val()
+            rollouts_val = rollout.rollout(
+                self.bc_trainer.policy,
+                self.venv,
+                rollout.make_sample_until(
+                    min_timesteps=max(rollout_round_min_timesteps, self.batch_size),
+                    min_episodes=rollout_round_min_episodes,
+                ),
+                rng=collector.rng,
+            )
+            transitions_val = rollout.flatten_trajectories(rollouts_val)
+            # 替换 样本中的动作为专家动作
+            parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
+            for k in KEYS:
+                parts[k] = getattr(transitions_val, k)
+            for i, obs in enumerate(parts['obs']):
+                parts['acts'][i] = self.expert_policy.predict(obs)[0]
+            transitions_val = types.Transitions(**parts)
+            # 设置 验证数据
+            self.bc_trainer.set_demonstrations_val(transitions_val)
+            for env in self.env_objs:
+                env.train()
 
             log(f"[train 1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 

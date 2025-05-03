@@ -86,7 +86,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('title='):
             arg_title = arg.split('=')[1]
 
-train_folder = train_title = f'20250422_lob_trade_dagger' \
+train_folder = train_title = f'20250422_lob_trade_dagger_test' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + '' if arg_title is None else f'_{arg_title}'
