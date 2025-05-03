@@ -100,7 +100,7 @@ if len(sys.argv) > 1:
             arg_dropout = float(arg.split('=')[1])
 
 # train_folder = train_title = f'20250429_lob_trade_bc_3' \
-train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
+train_folder = train_title = f'20250429_lob_trade_bc_3' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
@@ -476,6 +476,7 @@ if run_type != 'test':
         lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not arg_lr) \
             else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
                 else None,
+        use_mixed_precision=False,
     )
     
     # 训练文件夹管理
