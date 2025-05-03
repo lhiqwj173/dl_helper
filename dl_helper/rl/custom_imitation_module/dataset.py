@@ -179,8 +179,8 @@ class TrajectoryDataset(Dataset):
         while not self.load_thread_stop:
             if len(self.pre_load_data_list) < self.pre_load_batch_num:
                 log(f'准备加载批次文件数据，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
-                data_dict, current_index_map = self._load_file_data()
-                self.pre_load_data_list.append((data_dict, current_index_map))
+                data_dict, current_index_map, selected_files = self._load_file_data()
+                self.pre_load_data_list.append((data_dict, current_index_map, selected_files))
                 log(f'批次文件数据加载完成，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             else:
                 time.sleep(0.01)
@@ -260,6 +260,7 @@ class TrajectoryDataset(Dataset):
                     
                 # 记录全局索引范围
                 global_start_idx = self.start_indices[file_path]
+                log(f'global_start_idx: {global_start_idx}')
                 for i in range(file_length):
                     current_index_map.append(global_start_idx + i)
                     
@@ -277,7 +278,7 @@ class TrajectoryDataset(Dataset):
             # 随机排列
             np.random.shuffle(current_index_map)
 
-        return data_dict, current_index_map
+        return data_dict, current_index_map, selected_files
   
     def stop(self):
         self.load_thread_stop = True
@@ -305,10 +306,12 @@ class TrajectoryDataset(Dataset):
                 time.sleep(0.1)
 
             log(f'更新迭代数据')
-            self.data_dict, self.current_index_map = self.pre_load_data_list.pop(0)
+            self.data_dict, self.current_index_map, selected_files = self.pre_load_data_list.pop(0)
             self.current_index_min = self.current_index_map.min()
             self.current_index_max = self.current_index_map.max()
             self.current_index_map -= self.current_index_min
+            log(f'self.current_index_min: {self.current_index_min}, self.current_index_max: {self.current_index_max}')
+            log(f'selected_files: {selected_files}')
             if t:
                 cost = time.time() - t
                 msg = f'加载数据耗时: {cost:.2f} 秒'
