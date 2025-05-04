@@ -24,7 +24,7 @@ class TrajectoryDataset(Dataset):
         self, 
         input_folders: Union[str, List[str]], 
         each_load_batch_file_num: int = 3,  # 每批次加载的文件数量
-        pre_load_batch_num: int = 5,        # 预加载的批次数量
+        pre_load_batch_num: int = 3,        # 预加载的批次数量
         shuffle: bool = True                # 是否打乱数据
     ):
         """
@@ -65,6 +65,9 @@ class TrajectoryDataset(Dataset):
 
         # 加载线程启停标志
         self.load_thread_stop = False
+
+        # pending_load_data_num 可用或正在加载的批次数量
+        self.pending_load_data_num = 0
 
         # 线程锁
         self.load_thread_lock = threading.Lock()
@@ -193,7 +196,13 @@ class TrajectoryDataset(Dataset):
     
     def _load_thread(self):
         while not self.load_thread_stop:
-            if len(self.pre_load_data_list) < self.pre_load_batch_num:
+            need_load = False
+            with self.load_thread_lock:
+                if self.pending_load_data_num < self.pre_load_batch_num:
+                    need_load = True
+                    self.pending_load_data_num += 1
+
+            if need_load:
                 log(f'准备加载批次文件数据，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
                 load_data = self._load_file_data()
                 with self.load_thread_lock:
@@ -333,7 +342,8 @@ class TrajectoryDataset(Dataset):
                 # 先对列表进行排序
                 self.pre_load_data_list.sort(key=lambda x: x[1])
                 self.data_dict, self.current_index_min, self.current_index_max, self.current_index_map = self.pre_load_data_list.pop(0)
-
+                self.pending_load_data_num -= 1
+                
             self.current_index_map -= self.current_index_min
             log(f'self.current_index_min: {self.current_index_min}, self.current_index_max: {self.current_index_max}')
             if t:

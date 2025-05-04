@@ -1,8 +1,8 @@
 import numpy as np
 import pickle
 import psutil
-
-KEYS = ['obs', 'acts', 'rews', 'dones', 'infos']
+import gc
+KEYS = ["obs", "next_obs", "acts", "dones", "infos"]
 TEST_REST_GB = 5
 
 def log(msg):
@@ -52,6 +52,7 @@ def initialize_dataset(spec, num_rows):
 
 class Test:
     def __init__(self):
+        self.transitions_dict = None
         self.capacity = 0
         self.cur_idx = 0
         self.full = False
@@ -118,20 +119,25 @@ class Test:
 
     def _handle_demo_path(self, path):
         log(f'load demo: {path}')
-        log(f"[before demo load] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-        # 载入 transitions
+        ava_mem = psutil.virtual_memory().available
+        log(f"[before demo load] 系统可用内存: {ava_mem / (1024**3):.2f} GB")
+
+        # # 载入 transitions
         transitions = pickle.load(open(str(path), 'rb'))
+        # ava_mem2 = psutil.virtual_memory().available
+        # log(f"[pickle.load] 系统可用内存: {ava_mem2 / (1024**3):.2f} GB({(ava_mem2 - ava_mem) / (1024**3):.2f} GB)")
 
-        # 检查初始化
-        if self.transitions_dict is None:
-            self._init_transitions_dict(transitions)
+        # # 检查初始化
+        # if self.transitions_dict is None:
+        #     self._init_transitions_dict(transitions)
+        #     log(f"[init_transitions_dict] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-        # 拷贝数据
-        t_length = self._copy_data(transitions)
+        # # 拷贝数据
+        # t_length = self._copy_data(transitions)
 
-        # 释放内存
-        del transitions
+        # # 释放内存
+        # del transitions
 
         # gc.collect()
         # for g in gc.garbage:
@@ -140,11 +146,36 @@ class Test:
         # debug_growth()
 
         log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-        return t_length
+        # return t_length
     
+class Test:
+    def _handle_demo_path(self, path):
+        log(f'load demo: {path}')
+
+        ava_mem = psutil.virtual_memory().available
+        log(f"[before demo load] 系统可用内存: {ava_mem / (1024**3):.2f} GB")
+
+        # 载入 transitions
+        transitions = pickle.load(open(str(path), 'rb'))
+        ava_mem2 = psutil.virtual_memory().available
+        log(f"[pickle.load] 系统可用内存: {ava_mem2 / (1024**3):.2f} GB({(ava_mem2 - ava_mem) / (1024**3):.2f} GB)")
+
+        # 释放内存
+        del transitions
+        gc.collect()
+
+        log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
 if __name__ == '__main__':
     file = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0\0.pkl'
     test = Test()
 
+    log(f"[0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+
     for i in range(1):
         test._handle_demo_path(file)
+
+    log(f"[1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+    
+    del test
+    log(f"[2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
