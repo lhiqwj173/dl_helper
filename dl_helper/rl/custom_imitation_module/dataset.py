@@ -66,9 +66,12 @@ class TrajectoryDataset(Dataset):
         # 加载线程启停标志
         self.load_thread_stop = False
 
-        # 启动加载线程
-        self.load_thread = threading.Thread(target=self._load_thread)
-        self.load_thread.start()
+        # 线程锁
+        self.load_thread_lock = threading.Lock()
+        # 启动3个加载线程
+        self.load_threads = [threading.Thread(target=self._load_thread) for _ in range(3)]
+        for thread in self.load_threads:
+            thread.start()
 
         # 等待 pre_load_data_list 加载完成
         while len(self.pre_load_data_list) < self.pre_load_batch_num:
@@ -192,11 +195,12 @@ class TrajectoryDataset(Dataset):
         while not self.load_thread_stop:
             if len(self.pre_load_data_list) < self.pre_load_batch_num:
                 log(f'准备加载批次文件数据，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
-                data_dict, current_index_map, selected_files = self._load_file_data()
-                self.pre_load_data_list.append((data_dict, current_index_map, selected_files))
+                load_data = self._load_file_data()
+                with self.load_thread_lock:
+                    self.pre_load_data_list.append(load_data)
                 log(f'批次文件数据加载完成，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             else:
-                time.sleep(0.01)
+                time.sleep(0.001)
 
     def _load_file_data(self):
         """
@@ -205,24 +209,23 @@ class TrajectoryDataset(Dataset):
         """
         log(f'加载数据')
 
-        # 判断是否新的epoch
-        if not self.pending_files:
-            self.epoch += 1
-            log(f"Epoch {self.epoch} 结束，重新初始化数据加载")
-            self._init_data_loading()
-
-        assert self.pending_files, "没有待加载的文件"
+        with self.load_thread_lock:
+            # 判断是否新的epoch
+            if not self.pending_files:
+                self.epoch += 1
+                log(f"Epoch {self.epoch} 结束，重新初始化数据加载")
+                self._init_data_loading()
+            assert self.pending_files, "没有待加载的文件"
+            # 每次load固定数量的文件
+            selected_files = self.pending_files[:self.each_load_batch_file_num]
+            self.pending_files = self.pending_files[self.each_load_batch_file_num:]
 
         # 根据内存限制选择文件
-        selected_files = []
         total_memory = 0
         
-        for i, file_path in enumerate(self.pending_files[:self.each_load_batch_file_num]):# 每次load固定数量的文件
+        for i, file_path in enumerate(selected_files):
             est_memory = self.file_metadata_cache[file_path]['est_memory']
             total_memory += est_memory
-            selected_files.append(file_path)
-            # 从待加载列表中移除已选择的文件
-            self.pending_files.remove(file_path)
             
         assert selected_files, "没有选择任何文件"
         log(f"选择加载 {len(selected_files)} 个文件，总内存：{total_memory / (1024**3):.2f} GB")
@@ -278,20 +281,26 @@ class TrajectoryDataset(Dataset):
                 
             start = end
             del transitions  # 释放内存
-                
+
         # 将列表转换为numpy数组，便于后续操作
         current_index_map = np.array(current_index_map)
+
+        # 最大最小值
+        current_index_map_min = current_index_map.min()
+        current_index_map_max = current_index_map.max()
         
         # 如果启用随机打乱，则打乱当前加载的数据
         if self.shuffle:
             # 随机排列
             np.random.shuffle(current_index_map)
 
-        return data_dict, current_index_map, selected_files
+        return data_dict, current_index_map_min, current_index_map_max, current_index_map
   
     def stop(self):
         self.load_thread_stop = True
-        self.load_thread.join()
+        for thread in self.load_threads:
+            thread.join()
+
     def __len__(self):
         """返回数据集的总长度（所有文件的样本总数）"""
         return self.data_length
@@ -309,18 +318,24 @@ class TrajectoryDataset(Dataset):
         # 加载数据
         if not self.data_dict:
             t = 0
-            while not self.pre_load_data_list:
+            while True:
+                with self.load_thread_lock:  # 获取锁
+                    if self.pre_load_data_list:  # 检查数据是否已加载
+                        break  # 数据已加载，退出循环
+
+                # 如果数据未加载，继续等待
                 t = time.time() if t == 0 else t
                 log(f'等待加载数据')
                 time.sleep(0.1)
 
             log(f'更新迭代数据')
-            self.data_dict, self.current_index_map, selected_files = self.pre_load_data_list.pop(0)
-            self.current_index_min = self.current_index_map.min()
-            self.current_index_max = self.current_index_map.max()
+            with self.load_thread_lock:
+                # 先对列表进行排序
+                self.pre_load_data_list.sort(key=lambda x: x[1])
+                self.data_dict, self.current_index_min, self.current_index_max, self.current_index_map = self.pre_load_data_list.pop(0)
+
             self.current_index_map -= self.current_index_min
             log(f'self.current_index_min: {self.current_index_min}, self.current_index_max: {self.current_index_max}')
-            log(f'selected_files: {selected_files}')
             if t:
                 cost = time.time() - t
                 msg = f'加载数据耗时: {cost:.2f} 秒'
