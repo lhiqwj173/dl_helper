@@ -141,3 +141,10 @@ class Test:
 
         log(f"[after demo done] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
         return t_length
+    
+if __name__ == '__main__':
+    file = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0\0.pkl'
+    test = Test()
+
+    for i in range(1):
+        test._handle_demo_path(file)
