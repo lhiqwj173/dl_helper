@@ -97,7 +97,7 @@ class TrajectoryDataset(Dataset):
         
         # 遍历元数据中不存在的文件，获取元数据
         fail_count = 0
-        new_add = False
+        new_edit = False
         for file_path in files:
             if file_path in self.file_metadata_cache:
                 continue
@@ -128,15 +128,27 @@ class TrajectoryDataset(Dataset):
                     metadata['est_memory'] = est_memory
                     metadata['length'] = data.acts.shape[0]  # 所有数组第一维相同
                     self.file_metadata_cache[file_path] = metadata
-                    new_add = True
+                    new_edit = True
                 del data  # 释放内存
 
             except Exception as e:
                 log(f"读取文件失败: {file_path}, 错误: {e}")
                 fail_count += 1
 
+        # 删除不在files中的缓存数据
+        files_set = set(files)
+        del_count = 0
+        for cached_file in list(self.file_metadata_cache.keys()):
+            if cached_file not in files_set:
+                del self.file_metadata_cache[cached_file]
+                del_count += 1
+                new_edit = True
+        
+        if del_count:
+            log(f"从缓存中删除了{del_count}个不存在的文件:")
+
         # 缓存到文件
-        if new_add:
+        if new_edit:
             pickle.dump(self.file_metadata_cache, open('file_metadata_cache', 'wb'))
             wx.send_file('file_metadata_cache')
         

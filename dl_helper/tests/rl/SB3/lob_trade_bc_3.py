@@ -103,7 +103,7 @@ if len(sys.argv) > 1:
             arg_amp = True
 
 # train_folder = train_title = f'20250429_lob_trade_bc_3' \
-train_folder = train_title = f'20250429_lob_trade_bc_3' \
+train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
@@ -124,6 +124,7 @@ batch_size = 32
 max_lr = 3e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
 batch_n = 2**7 if (run_type=='train' and not in_windows()) else 1
+batch_n = 2**14 if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
 
