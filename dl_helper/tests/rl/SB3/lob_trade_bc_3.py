@@ -17,7 +17,8 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch as th
-from torch.optim.lr_scheduler import OneCycleLR, MultiplicativeLR
+from torch.optim.lr_scheduler import MultiplicativeLR
+from dl_helper.rl.custom_pytorch_module.lrscheduler import OneCycleLR
 # th.autograd.set_detect_anomaly(True)
 import time, pickle
 import numpy as np
@@ -123,8 +124,8 @@ checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 3e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
-batch_n = 2**7 if (run_type=='train' and not in_windows()) else 1
-batch_n = 2**8 if (run_type=='train' and not in_windows()) else 1
+train_kaggle_batch_n = 2**7 if not arg_amp else 2**8
+batch_n = train_kaggle_batch_n if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 #################################
 
