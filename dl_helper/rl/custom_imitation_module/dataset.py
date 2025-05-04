@@ -203,7 +203,7 @@ class TrajectoryDataset(Dataset):
                 log(f'准备加载批次文件数据，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
                 data_dict, current_index_map_min, current_index_map_max, current_index_map = self._load_file_data()
                 with self.load_thread_lock:
-                    log(f'batch_begin_idx: {self.current_idx}')
+                    log(f'batch_begin_idx: {self.current_idx}, current_index_map_min: {current_index_map_min}, current_index_map_max: {current_index_map_max}')
                     current_index_map_min += self.current_idx
                     current_index_map_max += self.current_idx
                     self.current_idx += current_index_map_max + 1
@@ -285,8 +285,8 @@ class TrajectoryDataset(Dataset):
                 data_dict[key][start:end] = data[:file_length]
                 
             for i in range(file_length):
-                current_index_map.append(self.current_idx)
-                self.current_idx += 1
+                current_index_map.append(idx)
+                idx += 1
                 
             start = end
             del transitions  # 释放内存
