@@ -156,7 +156,10 @@ class Test:
         log(f"[before demo load] 系统可用内存: {ava_mem / (1024**3):.2f} GB")
 
         # 载入 transitions
-        transitions = pickle.load(open(str(path), 'rb'))
+        # transitions = pickle.load(open(str(path), 'rb'))
+        with open(str(path), 'rb') as f:
+            transitions = pickle.load(f)
+
         ava_mem2 = psutil.virtual_memory().available
         log(f"[pickle.load] 系统可用内存: {ava_mem2 / (1024**3):.2f} GB({(ava_mem2 - ava_mem) / (1024**3):.2f} GB)")
 
@@ -170,12 +173,11 @@ if __name__ == '__main__':
     file = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0\0.pkl'
     test = Test()
 
-    log(f"[0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+    ava_mem = psutil.virtual_memory().available
 
-    for i in range(1):
+    for i in range(20):
         test._handle_demo_path(file)
 
-    log(f"[1] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
-    
-    del test
-    log(f"[2] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+    log(f"[0] 系统可用内存: {ava_mem / (1024**3):.2f} GB")
+    ava_mem2 = psutil.virtual_memory().available
+    log(f"[1] 系统可用内存: {ava_mem2 / (1024**3):.2f} GB({(ava_mem2 - ava_mem) / (1024**3):.2f} GB)")

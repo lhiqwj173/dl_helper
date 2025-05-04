@@ -262,6 +262,8 @@ def _save_dagger_demo(
     transitions = rollout.flatten_trajectories([trajectory])
     os.makedirs(str(save_dir), exist_ok=True)
     pickle.dump(transitions, open(str(npz_path), 'wb'))
+    log(f"dump 文件大小: {os.path.getsize(npz_path) / (1024**3):.2f} GB")
+
     del transitions
 
     logging.info(f"Saved demo at '{npz_path}'")
@@ -469,6 +471,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         # 检查初始化
         if self.transitions_dict is None:
             self._init_transitions_dict(transitions)
+            log(f"[init_transitions_dict] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
         # 拷贝数据
         t_length = self._copy_data(transitions)
@@ -695,8 +698,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-            if (TEST_REST_GB - 3) > psutil.virtual_memory().available / (1024**3):
-                log(f'内存超出限制（{TEST_REST_GB - 3}）GB, 退出')
+            if (TEST_REST_GB - 5) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 5}）GB, 退出')
 
                 snapshot_2 = tracemalloc.take_snapshot()
                 stats = snapshot_2.compare_to(self.snapshot_1, 'traceback')
