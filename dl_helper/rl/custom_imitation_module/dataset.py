@@ -204,9 +204,10 @@ class TrajectoryDataset(Dataset):
                 data_dict, current_index_map_min, current_index_map_max, current_index_map = self._load_file_data()
                 with self.load_thread_lock:
                     log(f'batch_begin_idx: {self.current_idx}, current_index_map_min: {current_index_map_min}, current_index_map_max: {current_index_map_max}')
+                    _current_index_map_max = current_index_map_max
                     current_index_map_min += self.current_idx
                     current_index_map_max += self.current_idx
-                    self.current_idx += current_index_map_max + 1
+                    self.current_idx += _current_index_map_max + 1
                     self.pre_load_data_list.append((data_dict, current_index_map_min, current_index_map_max, current_index_map))
                 log(f'批次文件数据加载完成，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             else:
