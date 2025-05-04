@@ -75,6 +75,7 @@ arg_total_epochs = None
 arg_l2_weight = None
 arg_dropout = None
 arg_amp = None
+arg_cache_data = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -102,6 +103,8 @@ if len(sys.argv) > 1:
             arg_dropout = float(arg.split('=')[1])
         elif arg == 'amp':
             arg_amp = True
+        elif arg == 'cache':
+            arg_cache_data = True
 
 # train_folder = train_title = f'20250429_lob_trade_bc_3' \
 train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
@@ -433,9 +436,20 @@ if run_type != 'test':
                 msg = f"运行时间: {elapsed_hours:.2f} 小时, {file_name} 上传数据耗时: {time.time() - t:.2f} 秒"
                 send_wx(msg)
                 sys.exit()
-    
-    memory_usage = psutil.virtual_memory()
-    log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+
+    # 遍历读取训练数据
+    if not in_windows():
+        data_folder = [
+            rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
+            rf'/kaggle/input/lob-bc-train-data-filted-3/',
+            rf'/kaggle/input/lob-bc-train-data-filted-4/'
+        ]
+    else:
+        # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0'
+    data_set = TrajectoryDataset(data_folder)
+    if arg_cache_data:
+        sys.exit()
 
     # 生成验证数据
     rng = np.random.default_rng()
@@ -449,17 +463,6 @@ if run_type != 'test':
     )
     transitions_val = rollout.flatten_trajectories(rollouts_val)
 
-    # 遍历读取训练数据
-    if not in_windows():
-        data_folder = [
-            rf'/kaggle/input/pre-trained-policy-2/',# kaggle 命名失误
-            rf'/kaggle/input/lob-bc-train-data-filted-3/',
-            rf'/kaggle/input/lob-bc-train-data-filted-4/'
-        ]
-    else:
-        # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0'
-    data_set = TrajectoryDataset(data_folder)
     log(f"训练数据样本数: {len(data_set)}")
     memory_usage = psutil.virtual_memory()
     log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
