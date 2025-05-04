@@ -51,7 +51,6 @@ class TrajectoryDataset(Dataset):
         self.current_index_map = []     # 当前加载数据的索引映射
         self.current_index_min = -1     # 当前加载数据的最小索引
         self.current_index_max = -1     # 当前加载数据的最大索引
-        self.start_indices = {}         # 每个文件在全局索引中的起始位置
         self.epoch = 0                  # 当前训练的epoch
 
         # 前一个 idx
@@ -68,6 +67,9 @@ class TrajectoryDataset(Dataset):
 
         # pending_load_data_num 可用或正在加载的批次数量
         self.pending_load_data_num = 0
+
+        # 当前加载的批次起始索引
+        self.current_idx = 0
 
         # 线程锁
         self.load_thread_lock = threading.Lock()
@@ -187,12 +189,7 @@ class TrajectoryDataset(Dataset):
             log(f"[pending_files]: {file_path}, 长度: {self.file_metadata_cache[file_path]['length']}")
             
         # 重新计算每个文件的起始索引
-        current_idx = 0
-        self.start_indices = {}
-        for file_path in self.pending_files:
-            self.start_indices[file_path] = current_idx
-            current_idx += self.file_metadata_cache[file_path]['length']
-            log(f'[start_indices]: {file_path}, {self.start_indices[file_path]}, length: {self.file_metadata_cache[file_path]["length"]}')
+        self.current_idx = 0
     
     def _load_thread(self):
         while not self.load_thread_stop:
@@ -204,9 +201,13 @@ class TrajectoryDataset(Dataset):
 
             if need_load:
                 log(f'准备加载批次文件数据，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
-                load_data = self._load_file_data()
+                data_dict, current_index_map_min, current_index_map_max, current_index_map = self._load_file_data()
                 with self.load_thread_lock:
-                    self.pre_load_data_list.append(load_data)
+                    log(f'batch_begin_idx: {self.current_idx}')
+                    current_index_map_min += self.current_idx
+                    current_index_map_max += self.current_idx
+                    self.current_idx += current_index_map_max + 1
+                    self.pre_load_data_list.append((data_dict, current_index_map_min, current_index_map_max, current_index_map))
                 log(f'批次文件数据加载完成，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             else:
                 time.sleep(0.001)
@@ -269,6 +270,7 @@ class TrajectoryDataset(Dataset):
         
         # 加载并拷贝数据到大数组
         start = 0
+        idx = 0
         for file_path in selected_files:
             log(f"加载文件: {file_path}")
             with open(file_path, 'rb') as f:
@@ -282,11 +284,9 @@ class TrajectoryDataset(Dataset):
                 data = getattr(transitions, key)
                 data_dict[key][start:end] = data[:file_length]
                 
-            # 记录全局索引范围
-            global_start_idx = self.start_indices[file_path]
-            log(f'global_start_idx: {global_start_idx}')
             for i in range(file_length):
-                current_index_map.append(global_start_idx + i)
+                current_index_map.append(self.current_idx)
+                self.current_idx += 1
                 
             start = end
             del transitions  # 释放内存
@@ -339,12 +339,9 @@ class TrajectoryDataset(Dataset):
 
             log(f'更新迭代数据')
             with self.load_thread_lock:
-                # 先对列表进行排序
-                self.pre_load_data_list.sort(key=lambda x: x[1])
                 self.data_dict, self.current_index_min, self.current_index_max, self.current_index_map = self.pre_load_data_list.pop(0)
                 self.pending_load_data_num -= 1
-                
-            self.current_index_map -= self.current_index_min
+
             log(f'self.current_index_min: {self.current_index_min}, self.current_index_max: {self.current_index_max}')
             if t:
                 cost = time.time() - t
