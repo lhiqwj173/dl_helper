@@ -84,7 +84,11 @@ def only_transfer():
     local_folder = r'transfer'
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
     files = alist_client.listdir(alist_folder)
-    alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
+
+    for file in files:
+        print(f'开始下载 {file["name"]}')
+        alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
+        print(f'下载完成 {file["name"]}')
 
 def bt_transfer():
     """
