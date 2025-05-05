@@ -447,9 +447,7 @@ if run_type != 'test':
     else:
         # data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
         data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\bc_train_data_0'
-    data_set = TrajectoryDataset(data_folder)
-    if arg_cache_data:
-        sys.exit()
+    data_set = TrajectoryDataset(data_folder, cache=arg_cache_data)
 
     # 生成验证数据
     rng = np.random.default_rng()

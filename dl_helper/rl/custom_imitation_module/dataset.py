@@ -25,7 +25,8 @@ class TrajectoryDataset(Dataset):
         input_folders: Union[str, List[str]], 
         each_load_batch_file_num: int = 3,  # 每批次加载的文件数量
         pre_load_batch_num: int = 3,        # 预加载的批次数量
-        shuffle: bool = True                # 是否打乱数据
+        shuffle: bool = True,               # 是否打乱数据
+        cache: bool = False                 # 是否只缓存数据
     ):
         """
         初始化轨迹数据集。
@@ -35,6 +36,7 @@ class TrajectoryDataset(Dataset):
             each_load_batch_file_num: 每批次加载的文件数量
             pre_load_batch_num: 预加载的批次数量
             shuffle: 是否在每个epoch开始时打乱数据
+            cache: 是否只缓存数据
         """
         self.input_folders = [input_folders] if isinstance(input_folders, str) else input_folders
         self.shuffle = shuffle
@@ -58,6 +60,10 @@ class TrajectoryDataset(Dataset):
         
         # 扫描并缓存所有文件的元数据
         self._scan_files()
+
+        if cache:
+            import sys
+            sys.exit()
         
         # 初始化数据加载
         self._init_data_loading()
