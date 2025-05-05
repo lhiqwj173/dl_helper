@@ -103,15 +103,21 @@ class TrajectoryDataset(Dataset):
             with open(metadata_file, 'rb') as f:
                 self.file_metadata_cache = pickle.load(f)
         
+        # 提取出 broken_files
+        if 'broken_files' not in self.file_metadata_cache:
+            self.file_metadata_cache['broken_files'] = []
+        broken_files = self.file_metadata_cache['broken_files']
+
         # 遍历元数据中不存在的文件，获取元数据
         fail_count = 0
         new_edit = False
         for file_path in files:
-            if file_path in self.file_metadata_cache:
+            if (file_path in self.file_metadata_cache) or (file_path in broken_files):
                 continue
 
             # 需要读取文件，获取元数据
             try:
+                log(f'读取文件元数据: {file_path}')
                 with open(file_path, 'rb') as f:
                     data = pickle.load(f)
                 
@@ -142,16 +148,26 @@ class TrajectoryDataset(Dataset):
             except Exception as e:
                 log(f"读取文件失败: {file_path}, 错误: {e}")
                 fail_count += 1
+                broken_files.append(file_path)
 
         # 删除不在files中的缓存数据
         files_set = set(files)
         del_count = 0
         for cached_file in list(self.file_metadata_cache.keys()):
+            if 'broken_files' == cached_file:
+                continue
             if cached_file not in files_set:
                 del self.file_metadata_cache[cached_file]
                 del_count += 1
                 new_edit = True
         
+        # 删除不在files中的broken_files
+        for broken_file in broken_files[:]:
+            if broken_file not in files_set:
+                broken_files.remove(broken_file)
+                del_count += 1
+                new_edit = True
+
         if del_count:
             log(f"从缓存中删除了{del_count}个不存在的文件:")
 
@@ -160,6 +176,9 @@ class TrajectoryDataset(Dataset):
             pickle.dump(self.file_metadata_cache, open('file_metadata_cache', 'wb'))
             wx.send_file('file_metadata_cache')
         
+        # 剔除掉 broken_files
+        self.file_metadata_cache.pop('broken_files', None)
+
         if fail_count:
             msg = f'警告: {fail_count}个文件无法使用'
             log(msg)
@@ -209,6 +228,14 @@ class TrajectoryDataset(Dataset):
                     current_index_map_max += self.current_idx
                     self.current_idx += _current_index_map_max + 1
                     self.pre_load_data_list.append((data_dict, current_index_map_min, current_index_map_max, current_index_map))
+
+                    # 判断是否新的epoch
+                    assert self.current_idx <= self.data_length, f"current_idx: {self.current_idx}, data_length: {self.data_length}"
+                    if self.current_idx == self.data_length:
+                        self.epoch += 1
+                        log(f"Epoch {self.epoch} 结束，重新初始化数据加载")
+                        self._init_data_loading()
+
                 log(f'批次文件数据加载完成，系统剩余内存: {psutil.virtual_memory().available / (1024**3):.2f} GB')
             else:
                 time.sleep(0.001)
@@ -220,16 +247,14 @@ class TrajectoryDataset(Dataset):
         """
         log(f'加载数据')
 
-        with self.load_thread_lock:
-            # 判断是否新的epoch
-            if not self.pending_files:
-                self.epoch += 1
-                log(f"Epoch {self.epoch} 结束，重新初始化数据加载")
-                self._init_data_loading()
-            assert self.pending_files, "没有待加载的文件"
-            # 每次load固定数量的文件
-            selected_files = self.pending_files[:self.each_load_batch_file_num]
-            self.pending_files = self.pending_files[self.each_load_batch_file_num:]
+        while True:
+            with self.load_thread_lock:
+                if self.pending_files:
+                    # 每次load固定数量的文件
+                    selected_files = self.pending_files[:self.each_load_batch_file_num]
+                    self.pending_files = self.pending_files[self.each_load_batch_file_num:]
+                    break
+            time.sleep(0.01)
 
         # 根据内存限制选择文件
         total_memory = 0

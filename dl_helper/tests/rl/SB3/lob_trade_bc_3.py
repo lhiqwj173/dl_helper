@@ -106,8 +106,7 @@ if len(sys.argv) > 1:
         elif arg == 'cache':
             arg_cache_data = True
 
-# train_folder = train_title = f'20250429_lob_trade_bc_3' \
-train_folder = train_title = f'20250429_lob_trade_bc_3_test' \
+train_folder = train_title = f'20250429_lob_trade_bc_3' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
