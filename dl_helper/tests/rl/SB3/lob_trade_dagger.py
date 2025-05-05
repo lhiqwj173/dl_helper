@@ -3,7 +3,7 @@
 # !cd /kaggle/working/3rd/dl_helper && pip install -e . > /dev/null 2>&1
 
 import tracemalloc
-tracemalloc.start(30)
+# tracemalloc.start(30)
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecCheckNan
@@ -86,7 +86,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('title='):
             arg_title = arg.split('=')[1]
 
-train_folder = train_title = f'20250422_lob_trade_dagger' \
+train_folder = train_title = f'20250505_lob_trade_dagger' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + '' if arg_title is None else f'_{arg_title}'
