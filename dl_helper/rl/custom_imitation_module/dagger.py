@@ -260,11 +260,19 @@ def _save_dagger_demo(
 
     # 保存 transitions
     transitions = rollout.flatten_trajectories([trajectory])
-    os.makedirs(str(save_dir), exist_ok=True)
-    pickle.dump(transitions, open(str(npz_path), 'wb'))
-    log(f"dump 文件大小: {os.path.getsize(npz_path) / (1024**3):.2f} GB")
 
+    # 转为 字典数据
+    data = {} 
+    for key in KEYS:
+        data[key] = getattr(transitions, key).copy()
+
+    os.makedirs(str(save_dir), exist_ok=True)
+    pickle.dump(data, open(str(npz_path), 'wb'))
+    log(f"dump 文件大小: {os.path.getsize(npz_path) / (1024**2):.2f} MB")
+
+    # 释放内存
     del transitions
+    del data
 
     logging.info(f"Saved demo at '{npz_path}'")
 
@@ -394,11 +402,11 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
         self.snapshot_1 = None
 
-    def _init_transitions_dict(self, transitions):
+    def _init_transitions_dict(self, data_dict):
         # 计算单条数据的占用大小
         single_data_dict = {}
         for key in KEYS:
-            d = getattr(transitions, key)
+            d = data_dict[key]
             single_data_dict[key] = [[1] + list(d.shape[1:]), d.dtype]
         # 根据单行数据，计算最大行数
         sample = {key: np.zeros(shape, dtype=dtype) for key, (shape, dtype) in single_data_dict.items()}
@@ -409,8 +417,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
         self.capacity = self.transitions_dict[KEYS[0]].shape[0]  # 缓冲区容量
 
     # @profile(precision=4,stream=open('_copy_data.log','w+'))
-    def _copy_data(self, transitions):
-        t_length = transitions.acts.shape[0]  # 待写入数据长度
+    def _copy_data(self, data_dict):
+        t_length = data_dict['acts'].shape[0]  # 待写入数据长度
 
         log(f'capacity: {self.capacity}, t_length: {t_length}, cur_idx: {self.cur_idx}, full: {self.full}')
         # 写入数据
@@ -418,7 +426,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
         if t_length > self.capacity:
             offset = t_length - self.capacity
             for key in KEYS:
-                data = getattr(transitions, key)
+                data = data_dict[key]
                 # transitions_data = data[offset:]
                 # self.transitions_dict[key][:] = transitions_data
                 np.copyto(
@@ -436,7 +444,7 @@ class SimpleDAggerTrainer(DAggerTrainer):
             # 第二段（如果需要）：从头开始继续写
             second_part_len = t_length - first_part_len
             for key in KEYS:
-                data = getattr(transitions, key)
+                data = data_dict[key]
                 # 使用 np.copyto 避免生成切片临时数组
                 np.copyto(
                     self.transitions_dict[key][begin:begin+first_part_len],
@@ -466,18 +474,18 @@ class SimpleDAggerTrainer(DAggerTrainer):
         # del demo
 
         # 载入 transitions
-        transitions = pickle.load(open(str(path), 'rb'))
+        data_dict = pickle.load(open(str(path), 'rb'))
 
         # 检查初始化
         if self.transitions_dict is None:
-            self._init_transitions_dict(transitions)
+            self._init_transitions_dict(data_dict)
             log(f"[init_transitions_dict] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
         # 拷贝数据
-        t_length = self._copy_data(transitions)
+        t_length = self._copy_data(data_dict)
 
-        # 释放内存
-        del transitions
+        # 释放内存  
+        del data_dict
 
         # gc.collect()
         # for g in gc.garbage:
