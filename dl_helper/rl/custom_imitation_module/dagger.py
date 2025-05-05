@@ -25,7 +25,7 @@ TEST_REST_GB = 15
 # import objgraph
 import reprlib
 import gc, sys
-gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
+# gc.set_debug(gc.DEBUG_SAVEALL)  # 记录无法回收的对象
 def debug_mem():
     log('*'* 60)
     obj_list = []
