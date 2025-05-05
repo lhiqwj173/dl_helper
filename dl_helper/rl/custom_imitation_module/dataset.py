@@ -147,6 +147,7 @@ class TrajectoryDataset(Dataset):
 
             except Exception as e:
                 log(f"读取文件失败: {file_path}, 错误: {e}")
+                new_edit = True
                 fail_count += 1
                 broken_files.append(file_path)
 
