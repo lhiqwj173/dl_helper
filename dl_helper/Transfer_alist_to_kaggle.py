@@ -86,9 +86,22 @@ def only_transfer():
     files = alist_client.listdir(alist_folder)
     alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
 
+def bt_transfer():
+    """
+    1. 下载 bt下载主机 alist 文件到本地
+    """
+    # 下载压缩文件
+    alist_folder = r'/completed/'
+    local_folder = r'completed'
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156')
+    files = alist_client.listdir(alist_folder)
+    alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
+
 if __name__ == '__main__':
     for arg in sys.argv[1:]:
         if arg == 'bc_train_data_wait':
             bc_train_data_wait()
         elif arg == 'only_transfer':
             only_transfer()
+        elif arg == 'bt_transfer':
+            bt_transfer()
