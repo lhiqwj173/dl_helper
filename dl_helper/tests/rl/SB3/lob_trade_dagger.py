@@ -3,7 +3,7 @@
 # !cd /kaggle/working/3rd/dl_helper && pip install -e . > /dev/null 2>&1
 
 import tracemalloc
-# tracemalloc.start(30)
+tracemalloc.start(30)
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecMonitor, VecCheckNan

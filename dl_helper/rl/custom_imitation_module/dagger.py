@@ -707,8 +707,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-            if (TEST_REST_GB - 20) > psutil.virtual_memory().available / (1024**3):
-                log(f'内存超出限制（{TEST_REST_GB - 20}）GB, 退出')
+            if (TEST_REST_GB - 15) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 15}）GB, 退出')
 
                 snapshot_2 = tracemalloc.take_snapshot()
                 stats = snapshot_2.compare_to(self.snapshot_1, 'traceback')
