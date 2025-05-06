@@ -86,7 +86,7 @@ if len(sys.argv) > 1:
         elif arg.startswith('title='):
             arg_title = arg.split('=')[1]
 
-train_folder = train_title = f'20250505_lob_trade_dagger_no_trace' \
+train_folder = train_title = f'20250505_lob_trade_dagger' \
     + ('' if arg_lr is None else f'_lr{arg_lr:2e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + '' if arg_title is None else f'_{arg_title}'
@@ -412,7 +412,8 @@ if run_type != 'test':
         progress_file = progress_file,
         progress_file_all = progress_file_all,
         
-        rollout_round_min_timesteps = each_round_train_num if run_type!='test_model' else 500,
+        # rollout_round_min_timesteps = each_round_train_num if run_type!='test_model' else 500,
+        rollout_round_min_timesteps = each_round_train_num / 4 if run_type!='test_model' else 500,
     )
 
 

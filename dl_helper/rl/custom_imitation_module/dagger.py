@@ -19,7 +19,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-TEST_REST_GB = 27
+TEST_REST_GB = 26
 
 # from memory_profiler import profile
 # import objgraph
@@ -501,10 +501,10 @@ class SimpleDAggerTrainer(DAggerTrainer):
         for path in demo_paths:
             new_transitions_length += self._handle_demo_path(path)
 
-            # # for debug
-            # if self.transitions_dict is not None and self.snapshot_1 is None:
-            #     # 内存初始化后进行快照
-            #     self.snapshot_1 = tracemalloc.take_snapshot()
+            # for debug
+            if self.transitions_dict is not None and self.snapshot_1 is None:
+                # 内存初始化后进行快照
+                self.snapshot_1 = tracemalloc.take_snapshot()
 
         return new_transitions_length
 
@@ -690,9 +690,6 @@ class SimpleDAggerTrainer(DAggerTrainer):
                 `self.venv` by default. If neither of the `n_epochs` and `n_batches`
                 keys are provided, then `n_epochs` is set to `self.DEFAULT_N_EPOCHS`.
         """
-        # for debug
-        rollout_round_min_timesteps = 500
-
         total_timestep_count = 0
         round_num = 0
 
@@ -710,13 +707,14 @@ class SimpleDAggerTrainer(DAggerTrainer):
             if (TEST_REST_GB - 10) > psutil.virtual_memory().available / (1024**3):
                 log(f'内存超出限制（{TEST_REST_GB - 10}）GB, 退出')
 
-                # # for debug
-                # snapshot_2 = tracemalloc.take_snapshot()
-                # stats = snapshot_2.compare_to(self.snapshot_1, 'traceback')
-                # for i, stat in enumerate(stats[:30]):
-                #     log(f'[{i}] {stat}')
-                #     tb = [''] + stat.traceback.format()
-                #     log('\n'.join(tb))
+                # for debug
+                snapshot_2 = tracemalloc.take_snapshot()
+                stats = snapshot_2.compare_to(self.snapshot_1, 'traceback')
+                for i, stat in enumerate(stats[:30]):
+                    log(f'[{i}] {stat}')
+                    tb = [''] + stat.traceback.format()
+                    log('\n'.join(tb))
+
                 return
 
             round_episode_count = 0

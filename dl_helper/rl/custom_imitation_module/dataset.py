@@ -26,7 +26,8 @@ class TrajectoryDataset(Dataset):
         each_load_batch_file_num: int = 3,  # 每批次加载的文件数量
         pre_load_batch_num: int = 3,        # 预加载的批次数量
         shuffle: bool = True,               # 是否打乱数据
-        cache: bool = False                 # 是否只缓存数据
+        cache: bool = False,                # 是否只缓存数据
+        use_his_len: int = None             # 对数据进行预先切片 TODO: 未实现
     ):
         """
         初始化轨迹数据集。
@@ -37,11 +38,13 @@ class TrajectoryDataset(Dataset):
             pre_load_batch_num: 预加载的批次数量
             shuffle: 是否在每个epoch开始时打乱数据
             cache: 是否只缓存数据
+            use_his_len: 对数据进行预先切片
         """
         self.input_folders = [input_folders] if isinstance(input_folders, str) else input_folders
         self.shuffle = shuffle
         self.each_load_batch_file_num = each_load_batch_file_num
         self.pre_load_batch_num = pre_load_batch_num
+        self.use_his_len = use_his_len
             
         # 初始化缓存和数据结构
         self.data_length = 0            # 数据集样本总长度
