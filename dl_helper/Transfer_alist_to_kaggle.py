@@ -1,28 +1,152 @@
-import os, shutil, sys
+import os, shutil, sys, subprocess
 from pathlib import Path
+import time
+import threading
+from tqdm import tqdm
+
 from py_ext.alist import alist
 from py_ext.lzma import decompress, compress_folder
 
-def main_0():
-    """
-    1. 下载 alist 文件到本地
-    2. 遍历解压文件
-    3. 压缩成一个单独的压缩包
-    """
-    # 下载压缩文件
-    alist_folder = r'/bc_train_data_wait/'
-    local_folder = r'bc_train_data'
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
-    files = alist_client.listdir(alist_folder)
-    alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
+CORE_COUNT = os.cpu_count()  # 获取 CPU 核心数
+LIMIT = int(80 * CORE_COUNT)  # 例如 4 核时 limit=320
 
-    # 解压文件
-    files = os.listdir(local_folder)
-    for file in files:
-        decompress(os.path.join(local_folder, file))
+# 定义支持的视频文件扩展名
+VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv'}
 
-    # 压缩成一个单独的压缩包
-    compress_folder(local_folder, local_folder+'.7z', level=9, inplace=False)
+# 文件大小限制（2GB，单位：字节）
+SIZE_LIMIT = 2 * 1024 * 1024 * 1024  # 2GB in bytes
+
+def gpu_available():
+    try:
+        output = subprocess.check_output(['nvidia-smi']).decode('utf-8')
+        return "GPU is available" in output or "NVIDIA" in output
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+def get_file_size(file_path):
+    """获取文件大小（字节）"""
+    return os.path.getsize(file_path)
+
+def get_video_duration(file_path):
+    """获取视频总时长（秒）"""
+    cmd = [
+        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return float(result.stdout.strip())
+
+def calculate_target_bitrate(file_path, target_size):
+    """根据目标文件大小估算码率（kbps）"""
+    duration = get_video_duration(file_path)
+    audio_bitrate = 128  # kbps
+    target_bitrate = ((target_size * 8) / duration - audio_bitrate * 1000) / 1000  # kbps
+    return max(target_bitrate, 1000)  # 最低码率设为1000kbps
+
+def get_original_bitrate(file_path):
+    """获取视频文件的原始码率（kbps）"""
+    cmd = [
+        'ffprobe', '-v', 'error', '-show_entries', 'stream=bit_rate',
+        '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    bitrates = result.stdout.strip().split('\n')
+    video_bitrate = next((int(b) for b in bitrates if b.isdigit()), 0)
+    return video_bitrate / 1000  # 转换为kbps
+
+def read_stream(stream, name, total_duration):
+    """线程函数：实时读取并打印流，同时计算进度和剩余时间"""
+    begin_time = time.time()
+
+    for line in iter(stream.readline, ''):
+        if "out_time=" in line:
+            try:
+                time_str = line.split('=')[1].strip()
+                h, m, s = time_str.split(':')
+                current_time = float(h) * 3600 + float(m) * 60 + float(s)
+                remaining_time = total_duration - current_time
+                progress_percent = (current_time / total_duration) * 100
+                speed = current_time / (time.time() - begin_time)
+                if speed > 0:
+                    left_time = int(remaining_time / speed)
+                    hours = int(left_time // 3600)
+                    minutes = int((left_time % 3600) // 60)
+                    print(f"进度: {progress_percent:.2f}% | 剩余时间: {hours}小时{minutes}分", end='\r')
+                else:
+                    print(f"进度: {progress_percent:.2f}%", end='\r')
+            except:
+                pass
+
+def compress_video(file_path, target_bitrate=None):
+    """使用 FFmpeg 压缩视频文件，根据 GPU 可用性选择加速方式并实时显示输出"""
+    temp_output = file_path + '.temp.mp4'
+    
+    # 如果未指定目标码率，则动态计算
+    if target_bitrate is None:
+        target_bitrate = calculate_target_bitrate(file_path, SIZE_LIMIT)
+    else:
+        target_bitrate = max(target_bitrate, 1000)
+    
+    # 根据 GPU 可用性选择编码器
+    if gpu_available():
+        encoder = 'h264_nvenc'  # GPU 加速
+        device = 'GPU'
+        cmd = ['ffmpeg', '-i', file_path, '-c:v', encoder, '-b:v', f'{target_bitrate}k', '-c:a', 'aac', '-b:a', '128k', '-progress', '-', '-y', temp_output]
+    else:
+        encoder = 'libx264'     # CPU
+        device = 'CPU'
+        cmd = ['ffmpeg', '-i', file_path, '-c:v', encoder, '-b:v', f'{target_bitrate}k', '-c:a', 'aac', '-b:a', '128k', '-progress', '-', '-y', temp_output]
+    
+    try:
+        # 获取视频总时长
+        total_duration = get_video_duration(file_path)
+        
+        # 启动 FFmpeg 进程
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,  # 行缓冲
+        )
+        
+        # 如果使用 CPU，限制 CPU 使用率到 80%
+        if not gpu_available():
+            pid = process.pid
+            cpulimit_cmd = ['cpulimit', '-p', str(pid), '-l', str(LIMIT)]
+            cpulimit_process = subprocess.Popen(cpulimit_cmd)
+        
+        # 创建线程读取 stdout 和 stderr
+        stdout_thread = threading.Thread(target=read_stream, args=(process.stdout, "STDOUT", total_duration))
+        stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, "STDERR", total_duration))
+        
+        stdout_thread.start()
+        stderr_thread.start()
+        
+        # 等待 FFmpeg 进程结束
+        process.wait()
+        
+        # 如果使用了 cpulimit，终止它
+        if not gpu_available():
+            cpulimit_process.terminate()
+        
+        # 等待线程完成
+        stdout_thread.join()
+        stderr_thread.join()
+        
+        # 检查 FFmpeg 是否成功执行
+        if process.returncode == 0:
+            shutil.move(temp_output, file_path)
+            print(f"\n成功压缩并覆盖: {file_path} (目标码率: {target_bitrate}kbps, 使用 {device})")
+        else:
+            raise subprocess.CalledProcessError(process.returncode, cmd)
+    except subprocess.CalledProcessError as e:
+        print(f"压缩失败: {file_path}, 错误: {e}")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+
 
 def batch_tar_and_remove(local_folder, batch_size=20):
     """
@@ -98,8 +222,20 @@ def bt_transfer():
     alist_folder = r'/completed/'
     local_folder = r'completed'
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156')
+
     files = alist_client.listdir(alist_folder)
-    alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
+    VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv']
+    for file in files:
+        # 判断文件是否为视频文件
+        if not any(file['name'].lower().endswith(ext) for ext in VIDEO_EXTENSIONS):
+            continue
+
+        print(f'开始下载 {file["name"]}')
+        alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
+        print(f'下载完成 {file["name"]}')
+
+        # 若是视频文件，执行一边压缩脚本
+        compress_video(local_folder, 2500)
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:
