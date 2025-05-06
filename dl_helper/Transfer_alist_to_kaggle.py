@@ -147,6 +147,38 @@ def compress_video(file_path, target_bitrate=None):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
+def process_folder(folder_path, target_bitrate=None):
+    """递归遍历文件夹并处理视频文件"""
+    # 收集所有视频文件路径
+    video_files = []
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if '.temp.mp4' in file:
+                continue
+            file_path = os.path.join(root, file)
+            if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
+                video_files.append(file_path)
+    
+    if not video_files:
+        print(f"在 {folder_path} 中未找到视频文件")
+        return
+    
+    print(f"共找到 {len(video_files)} 个视频文件")
+    for file_path in tqdm(video_files):
+        size = get_file_size(file_path)
+        original_bitrate = get_original_bitrate(file_path)
+        if target_bitrate is not None:
+            if original_bitrate > target_bitrate * 1.1:  # 允许10%的误差
+                print(f"发现需要压缩的视频文件: {file_path} ({size / 1024 / 1024:.2f}MB, {original_bitrate}kbps)")
+                compress_video(file_path, target_bitrate)
+            else:
+                print(f"跳过文件（码率已足够低）: {file_path}")
+        else:
+            if size > SIZE_LIMIT or original_bitrate > 5000:
+                print(f"发现需要压缩的视频文件: {file_path} ({size / 1024 / 1024:.2f}MB, {original_bitrate}kbps)")
+                compress_video(file_path)
+            else:
+                print(f"跳过文件: {file_path}")
 
 def batch_tar_and_remove(local_folder, batch_size=20):
     """
@@ -235,7 +267,7 @@ def bt_transfer():
         print(f'下载完成 {file["name"]}')
 
         # 若是视频文件，执行一边压缩脚本
-        compress_video(local_folder, 2500)
+        process_folder(local_folder, 2500)
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:
