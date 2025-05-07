@@ -35,6 +35,7 @@ from imitation.util import util
 from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback, enumerate_batches
 
 from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
 
 from py_ext.tool import log
 from py_ext.datetime import beijing_time
@@ -469,6 +470,8 @@ class BCWithLRScheduler(BC):
             self.scaler.step(self.optimizer)
             # 新增：更新缩放器状态
             self.scaler.update()
+            # 检查梯度
+            check_gradients(self)
             # 清零梯度
             self.optimizer.zero_grad(set_to_none=True)
 

@@ -307,7 +307,10 @@ class DeepLob(BaseFeaturesExtractor):
             # 保存出现问题的数据到本地
             log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
             with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump(observations.detach().cpu(), f)
+                pickle.dump({
+                    'state_dict': self.state_dict().cpu(),
+                    'observations': observations.detach().cpu(),
+                }, f)
             raise ValueError("fused_out is nan or inf")
 
         return fused_out
