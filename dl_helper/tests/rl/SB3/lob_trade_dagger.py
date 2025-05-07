@@ -412,8 +412,8 @@ if run_type != 'test':
         progress_file = progress_file,
         progress_file_all = progress_file_all,
         
-        # rollout_round_min_timesteps = each_round_train_num if run_type!='test_model' else 500,
-        rollout_round_min_timesteps = each_round_train_num / 4 if run_type!='test_model' else 500,
+        rollout_round_min_timesteps = each_round_train_num if run_type!='test_model' else 500,
+        # rollout_round_min_timesteps = each_round_train_num / 4 if run_type!='test_model' else 500,
     )
 
 
