@@ -19,7 +19,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-TEST_REST_GB = 26
+TEST_REST_GB = 6
 
 # from memory_profiler import profile
 # import objgraph
@@ -704,8 +704,8 @@ class SimpleDAggerTrainer(DAggerTrainer):
 
             log(f"[train 0] 系统可用内存: {psutil.virtual_memory().available / (1024**3):.2f} GB")
 
-            if (TEST_REST_GB - 8) > psutil.virtual_memory().available / (1024**3):
-                log(f'内存超出限制（{TEST_REST_GB - 8}）GB, 退出')
+            if (TEST_REST_GB - 5) > psutil.virtual_memory().available / (1024**3):
+                log(f'内存超出限制（{TEST_REST_GB - 5}）GB, 退出')
 
                 # for debug
                 snapshot_2 = tracemalloc.take_snapshot()
