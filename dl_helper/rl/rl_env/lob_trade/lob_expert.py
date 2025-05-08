@@ -45,19 +45,20 @@ class LobExpert_file():
         # 数据文件夹
         if in_kaggle:
             self.data_folder = KAGGLE_DATA_FOLDER
-            # input_folder = r'/kaggle/input'
-            # try:
-            #     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-            #     data_folder_name = os.listdir(input_folder)[0]
-            #     self.data_folder = os.path.join(input_folder, data_folder_name)
-            # except:
-            #     self.data_folder = r''
         else:
             self.data_folder = LOCAL_DATA_FOLDER
 
         if self.pre_cache:
             log('cache all expert data')
             self.cache_all()
+
+        self.all_file_paths = []
+        self.all_file_names = []
+        for root, dirs, _files in os.walk(self.data_folder):
+            for _file in _files:
+                if _file.endswith('.pkl'):
+                    self.all_file_paths.append(os.path.join(root, _file))
+                    self.all_file_names.append(_file)
 
     @property
     def observation_space(self):
@@ -193,16 +194,9 @@ class LobExpert_file():
         symbols = [USE_CODES[i] for i in symbol_key]
 
         # 读取数据
-        if _data_file_path == '':
-            _date_file = f'{date}.pkl'
-            if os.path.exists(os.path.join(self.data_folder, 'train', _date_file)):
-                _data_file_path = os.path.join(self.data_folder, 'train', _date_file)
-            elif os.path.exists(os.path.join(self.data_folder, 'val', _date_file)):
-                _data_file_path = os.path.join(self.data_folder, 'val', _date_file)
-            elif os.path.exists(os.path.join(self.data_folder, 'test', _date_file)):
-                _data_file_path = os.path.join(self.data_folder, 'test', _date_file)
-            else:
-                raise ValueError(f'{_date_file} not in {self.data_folder}/train')
+        _date_file = f'{date}.pkl'
+        _idx = self.all_file_names.index(_date_file)
+        _data_file_path = self.all_file_paths[_idx]
         ids, mean_std, x, self.full_lob_data = pickle.load(open(_data_file_path, 'rb'))
 
         # 距离市场关闭的秒数
