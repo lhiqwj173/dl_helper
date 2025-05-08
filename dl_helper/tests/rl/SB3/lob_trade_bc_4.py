@@ -389,7 +389,7 @@ if run_type != 'test':
     # out2 = model.policy.features_extractor(test_x)
     # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
     # log(out1.shape)
-    sys.exit()
+    # sys.exit()
 
     vec_env = env
 

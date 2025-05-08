@@ -134,7 +134,8 @@ class BCWithLRScheduler(BC):
 
         # 混合精度训练
         assert th.cuda.is_available() or use_mixed_precision is False, "混合精度训练需要GPU支持"
-        self.scaler = GradScaler(enabled=use_mixed_precision)
+        self.scaler = GradScaler(init_scale=2048.0, enabled=use_mixed_precision)
+        # self.scaler = GradScaler(enabled=use_mixed_precision)
         self.use_mixed_precision = use_mixed_precision
 
     def save(self, save_folder):
