@@ -358,8 +358,8 @@ if run_type != 'test':
     if run_type == 'bc_data':
         # 初始化开始时间
         start_time = time.time()
-        # n_hours = 11.7  # 设置时间阈值（小时）
-        n_hours = 1  # 设置时间阈值（小时）
+        n_hours = 11.75  # 设置时间阈值（小时）
+        # n_hours = 1  # 设置时间阈值（小时）
         
         # 请求获取文件名id
         id = get_idx('time') if not in_windows() else 0
@@ -372,7 +372,7 @@ if run_type != 'test':
             env = LOB_trade_env(env_config)
             vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
 
-            file_name = f'{t_folder}/{idx}.pkl'
+            file_name = f'{t_folder}/{id}_{idx}.pkl'
 
             # 生成训练数据用
             f = rollouts_filter()
