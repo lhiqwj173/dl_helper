@@ -490,8 +490,6 @@ def check_gradients(model, gradient_threshold_min=1e-5, gradient_threshold_max=1
     """
     检查模型每一层的梯度范数，抛出异常如果发现问题。
     """
-    # for debug
-    gradient_threshold_min = 1e-7
     for name, param in model.policy.named_parameters():
         if param.grad is None:
             continue
