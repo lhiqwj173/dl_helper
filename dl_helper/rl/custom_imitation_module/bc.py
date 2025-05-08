@@ -471,8 +471,8 @@ class BCWithLRScheduler(BC):
             self.scaler.step(self.optimizer)
             # 新增：更新缩放器状态
             self.scaler.update()
-            # 检查梯度
-            check_gradients(self)
+            # # 检查梯度
+            # check_gradients(self)
             # 清零梯度
             self.optimizer.zero_grad(set_to_none=True)
 
