@@ -23,6 +23,7 @@ from py_ext.wechat import wx
 KEYS = ["obs", "next_obs", "acts", "dones", "infos"]
 
 def balance_rollout(r):
+    # TODO 处理不同的id
 
     obs = r.obs
     acts = r.acts
@@ -124,7 +125,7 @@ class rollouts_filter:
     def __init__(self) -> None:
         # mypy struggles without Any annotation here.
         # The necessary constraints are enforced above.
-        self.parts: Mapping[str, List[Any]] = {key: [] for key in KEYS}
+        self.parts_dict = {}
         self._length = 0
 
     def add_rollouts(self, trajectories: Iterable[types.Trajectory]):
@@ -136,34 +137,57 @@ class rollouts_filter:
         assert all_of_type("obs", types.DictObs) or all_of_type("obs", np.ndarray)
         assert all_of_type("acts", np.ndarray)
 
-        for i, traj in enumerate(trajectories):
-            # print(i)
-            try:
-                _obs, _next_obs, _acts, _infos, _rews = balance_rollout(traj)
-            except Exception as e:
-                import pickle
-                pickle.dump(traj, open(f'balance_rollout_error.pkl', 'wb'))
-                wx.send_file(f'balance_rollout_error.pkl')
-                continue
+        # 分类不同的 symbol_id
+        trajectories_dict = {}
+        for traj in trajectories:
+            symbol_id = traj.obs[0, -4]
+            if symbol_id not in trajectories_dict:
+                trajectories_dict[symbol_id] = []
+            trajectories_dict[symbol_id].append(traj)
 
-            if len(_obs) == 0:
-                continue
-            else:
-                self._length += len(_obs)
+        for symbol_id, trajs in trajectories_dict.items():
+            if symbol_id not in self.parts_dict:
+                self.parts_dict[symbol_id] = {key: [] for key in ["obs", "acts", "dones"]}
+            parts = self.parts_dict[symbol_id]
 
-            self.parts["acts"].append(_acts)
-            self.parts["obs"].append(_obs)
-            self.parts["next_obs"].append(_next_obs)
+            for traj in trajs:
+                try:
+                    _obs, _next_obs, _acts, _infos, _rews = balance_rollout(traj)
+                except Exception as e:
+                    import pickle
+                    pickle.dump(traj, open(f'balance_rollout_error.pkl', 'wb'))
+                    wx.send_file(f'balance_rollout_error.pkl')
+                    continue
 
-            dones = np.zeros(len(_acts), dtype=bool)
-            dones[-1] = traj.terminal
-            self.parts["dones"].append(dones)
+                if len(_obs) == 0:
+                    continue
+                else:
+                    self._length += len(_obs)
 
-            if _infos is None:
-                infos = np.array([{}] * len(_acts))
-            else:
-                infos = _infos
-            self.parts["infos"].append(infos)
+                # 只记录最后 obs 最后的3个特征，减少空间占用
+                record_obs = _obs[:, -3:]
+
+                parts["acts"].append(_acts.copy())
+                parts["obs"].append(record_obs.copy())
+
+                # # 可以根据obs推断 不需要记录
+                # parts["next_obs"].append(_next_obs)
+
+                dones = np.zeros(len(_acts), dtype=bool)
+                dones[-1] = traj.terminal
+                parts["dones"].append(dones.copy())
+
+                assert _infos is None, '只处理 info 为 None 的数据（lob_trade）'
+
+                # info 为 None, 不需要记录
+                # if _infos is None:
+                #     infos = np.array([{}] * len(_acts))
+                # else:
+                #     infos = _infos
+                # parts["infos"].append(infos.copy())
+
+    def get_parts_dict(self):
+        return self.parts_dict
 
     def __len__(self):
         return self._length

@@ -142,13 +142,6 @@ class data_producer:
         # 训练数据
         if in_kaggle:
             self.data_folder = KAGGLE_DATA_FOLDER
-            # input_folder = r'/kaggle/input'
-            # try:
-            #     # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-            #     data_folder_name = os.listdir(input_folder)[0]
-            #     self.data_folder = os.path.join(input_folder, data_folder_name)
-            # except:
-            #     self.data_folder = r''
         else:
             self.data_folder = LOCAL_DATA_FOLDER
 
@@ -204,14 +197,17 @@ class data_producer:
         """
         获取数据类型对应的文件列表(路径)
         """
+        assert self.data_type in ['train', 'val'], f'暂时不支持 {self.data_type} 数据类型'
         if self.data_type == 'test':
             return [os.path.join(self.data_folder, self.data_type, i) for i in os.listdir(os.path.join(self.data_folder, self.data_type))]
         else:
             if not hasattr(self, 'train_files'):
                 # train/val 数据
                 files = []
-                for _type in ['train', 'val']:
-                    files.extend([os.path.join(self.data_folder, _type, i) for i in os.listdir(os.path.join(self.data_folder, _type))])
+                for root, dirs, _files in os.walk(self.data_folder):
+                    for _file in _files:
+                        if _file.endswith('.pkl'):
+                            files.append(os.path.join(root, _file))
 
                 # 按文件名排序
                 files.sort(key=lambda x: os.path.basename(x))
@@ -226,10 +222,11 @@ class data_producer:
                 # self.val_files = rng.choice(files, 30, replace=False)
                 # self.train_files = [i for i in files if i not in self.val_files]
 
-                # 取最后30个文件作为val
-                self.val_files = files[-30:]
+                # 取最后20个文件作为val
+                self.val_files = files[-20:]
+
                 # 其余文件作为train
-                self.train_files = files[:-30]
+                self.train_files = files[:-20]
 
             if self.data_type == 'train':
                 return [i for i in self.train_files]
