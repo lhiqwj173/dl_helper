@@ -92,7 +92,7 @@ class LobExpert_file():
         x = x[begin_idx:end_idx]
         lob_data_begin = x[0][0]
         lob_data_end = x[-1][1]
-        lob_data = self.full_lob_data.iloc[lob_data_begin: lob_data_end].reset_index(drop=True).copy()
+        lob_data = self.full_lob_data.iloc[lob_data_begin: lob_data_end].copy()
 
         # 只保留 'BASE买1价', 'BASE卖1价'
         lob_data = lob_data[['BASE买1价', 'BASE卖1价']]
@@ -102,6 +102,8 @@ class LobExpert_file():
         lob_data['before_market_close_sec'] = np.nan
         lob_data.loc[sample_idxs,'before_market_close_sec'] = [i for i in before_market_close_sec[begin_idx:end_idx]]
         lob_data['before_market_close_sec'] /= MAX_SEC_BEFORE_CLOSE
+
+        lob_data = lob_data.reset_index(drop=True)
 
         if dtype == np.float32:
             lob_data['before_market_close_sec'] = lob_data['before_market_close_sec'].astype(np.float32)
@@ -367,7 +369,7 @@ def play_lob_data_with_expert(render=True):
         'data_type': 'train',# 训练/测试
         'his_len': 30,# 每个样本的 历史数据长度
         'need_cols': [item for i in range(5) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
-        'use_symbols': [code],
+        # 'use_symbols': [code],
         'render_freq': 1,
 
         'train_folder': r'C:\Users\lh\Desktop\temp\lob_env',
