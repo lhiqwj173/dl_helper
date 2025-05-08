@@ -19,7 +19,7 @@ from dl_helper.tool import report_memory_usage, in_windows
 
 from py_ext.tool import log
 
-TEST_REST_GB = 6
+TEST_REST_GB = 8
 
 # from memory_profiler import profile
 # import objgraph
