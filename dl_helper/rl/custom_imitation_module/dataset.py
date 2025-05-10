@@ -578,10 +578,10 @@ class LobTrajectoryDataset(Dataset):
         self.need_cols_idx = []
 
         # data_dict 包含的 symbols
-        self.use_symbols = [USE_CODES[i] for i in list(data_dict.keys())]
+        self.use_symbols = [USE_CODES[i] for i in list(self.data_dict.keys())]
 
         # 创建symbol到id的映射字典，避免重复查找
-        self.symbol_to_id = {sym: i for i, sym in enumerate(USE_CODES) if i in data_dict}
+        self.symbol_to_id = {sym: i for i, sym in enumerate(USE_CODES) if i in self.data_dict}
 
         # 缓存对应标的的订单簿数据
         # {symbol_id: {date: _all_raw_data}}

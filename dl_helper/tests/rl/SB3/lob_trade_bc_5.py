@@ -17,6 +17,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch as th
+import torch.nn.functional as F
 from torch.optim.lr_scheduler import MultiplicativeLR
 from dl_helper.rl.custom_pytorch_module.lrscheduler import OneCycleLR
 # th.autograd.set_detect_anomaly(True)
@@ -135,7 +136,7 @@ custom_logger = imit_logger.configure(
 
 # 自定义特征提取器
 # 参数量: 584455
-class DeepLob_xlarge(BaseFeaturesExtractor):
+class DeepLob_large(BaseFeaturesExtractor):
     net_arch = [64,32]
     def __init__(
             self,
@@ -368,824 +369,8 @@ class DeepLob_xlarge(BaseFeaturesExtractor):
 
         return fused_out
 
-# 参数量: 391061
-class DeepLob_large(BaseFeaturesExtractor):
-    net_arch = [48, 24]
-    def __init__(
-            self,
-            observation_space,
-            features_dim: int = 64,
-            input_dims: tuple = (10, 20),
-            extra_input_dims: int = 3,
-            dropout_rate: float = arg_dropout,
-    ):
-        super().__init__(observation_space, features_dim)
-
-        self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims
-        self.dropout_rate = dropout_rate
-
-        # 通道数量介于large和small之间
-        conv1_out = 24  # large是32，small是16
-        conv2_out = 28  # large是32，small是24
-        conv3_out = 32  # 保持32通道
-        inception_out = 48  # large是64，small是32
-
-        # 卷积块1 - 保留三层卷积但减少通道数
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, conv1_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv1_out, input_dims[0], (input_dims[1] // 2)]),
-            nn.ReLU(),
-            nn.Conv2d(conv1_out, conv1_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv1_out, input_dims[0] - 1, (input_dims[1] // 2)]),
-            nn.ReLU(),
-            nn.Conv2d(conv1_out, conv1_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv1_out, input_dims[0] - 2, (input_dims[1] // 2)]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 卷积块2 - 保留large的结构但减少通道数
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(conv1_out, conv2_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv2_out, input_dims[0] - 2, (input_dims[1] // 4)]),
-            nn.ReLU(),
-            nn.Conv2d(conv2_out, conv2_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv2_out, input_dims[0] - 3, (input_dims[1] // 4)]),
-            nn.ReLU(),
-            nn.Conv2d(conv2_out, conv2_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv2_out, input_dims[0] - 4, (input_dims[1] // 4)]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 卷积块3 - 介于large和small之间的复杂度
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(conv2_out, conv3_out, kernel_size=(1, 5)),
-            nn.LayerNorm([conv3_out, input_dims[0] - 4, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Conv2d(conv3_out, conv3_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv3_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-
-        # Inception 模块 - 保留三个分支但减少通道数
-        self.inp1 = nn.Sequential(
-            nn.Conv2d(conv3_out, inception_out, kernel_size=(1, 1)),
-            nn.LayerNorm([inception_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Conv2d(inception_out, inception_out, kernel_size=(3, 1), padding=(1, 0)),
-            nn.LayerNorm([inception_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-        )
-        
-        self.inp2 = nn.Sequential(
-            nn.Conv2d(conv3_out, inception_out, kernel_size=(1, 1)),
-            nn.LayerNorm([inception_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Conv2d(inception_out, inception_out, kernel_size=(5, 1), padding=(2, 0)),
-            nn.LayerNorm([inception_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-        )
-        
-        self.inp3 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
-            nn.Conv2d(conv3_out, inception_out, kernel_size=(1, 1)),
-            nn.LayerNorm([inception_out, input_dims[0] - 5, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-        )
-
-        # 计算LSTM输入维度
-        self.lstm_seq_len = input_dims[0] - 5  # 经过卷积块后的序列长度
-        lstm_hidden_dim = 48  # large是64，small是32
-        
-        # LSTM 层
-        self.lstm = nn.LSTM(input_size=inception_out*3, hidden_size=lstm_hidden_dim, num_layers=1, batch_first=True)
-        self.lstm_norm = nn.LayerNorm([self.lstm_seq_len, lstm_hidden_dim])
-
-        # id 嵌入层
-        embedding_dim = 6  # large是8，small是4
-        self.id_embedding = nn.Embedding(5, embedding_dim)
-
-        # 计算静态特征的输入维度
-        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
-        static_hidden_dim = static_input_dim * 3  # 介于large和small之间
-
-        # 静态特征处理网络 - 比small复杂但比large简单
-        self.static_net = nn.Sequential(
-            nn.Linear(static_input_dim, static_hidden_dim),
-            nn.LayerNorm(static_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
-            nn.Linear(static_hidden_dim, static_hidden_dim * 2),
-            nn.LayerNorm(static_hidden_dim * 2),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-
-        # 融合层 - 介于large的复杂残差结构和small的简单结构之间
-        fusion_input_dim = lstm_hidden_dim + static_hidden_dim * 2
-        fusion_hidden_dim = 96  # large是128，small是64
-        
-        self.fusion_pre = nn.Sequential(
-            nn.Linear(fusion_input_dim, fusion_hidden_dim),
-            nn.LayerNorm(fusion_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 简化的残差连接
-        self.fusion_out = nn.Linear(fusion_hidden_dim, features_dim)
-
-        self.dp = nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity()
-        self.dp2d = nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity()
-
-        # 初始化权重
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        # 对 CNN 和全连接层应用 He 初始化
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            # 对LayerNorm进行初始化
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-        # 对 LSTM 应用特定初始化
-        for name, param in self.lstm.named_parameters():
-            if 'weight_ih' in name:
-                # 输入到隐藏权重使用 He 初始化
-                nn.init.kaiming_normal_(param, mode='fan_in', nonlinearity='relu')
-            elif 'weight_hh' in name:
-                # 隐藏到隐藏权重使用正交初始化
-                nn.init.orthogonal_(param)
-            elif 'bias' in name:
-                # 偏置初始化为零，但将遗忘门偏置设为 1 以改善长期记忆
-                bias_size = param.size(0)
-                param.data.fill_(0.)
-                param.data[bias_size//4:bias_size//2].fill_(1.0)  # 遗忘门偏置设为 1
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # 分离时间序列和静态特征
-        use_obs = observations[:, :-1]  # 最后一维是日期信息，不参与模型计算
-        extra_x = use_obs[:, -self.extra_input_dims:]
-        x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)  # (B, 1, 10, 20)
-
-        # 处理静态特征
-        cat_feat = extra_x[:, 0].long()  # (B,)，转换为整数类型
-        num_feat = extra_x[:, 1:]  # (B, self.extra_input_dims - 1)，数值特征
-
-        # 嵌入类别特征
-        embedded = self.id_embedding(cat_feat)
-
-        # 拼接嵌入向量和数值特征
-        static_input = torch.cat([embedded, num_feat], dim=1)
-
-        # 静态特征处理
-        static_out = self.static_net(static_input)
-
-        # 卷积处理
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-
-        # Inception 模块
-        x_inp1 = self.inp1(x)
-        x_inp2 = self.inp2(x)
-        x_inp3 = self.inp3(x)
-        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)
-        x = self.dp2d(x)
-
-        # 调整形状以适配 LSTM
-        x = x.permute(0, 2, 1, 3).squeeze(3)
-
-        # LSTM 处理
-        lstm_out, _ = self.lstm(x)
-        lstm_out = self.lstm_norm(lstm_out)
-        lstm_out = self.dp(lstm_out)
-        # 取最后一个时间步
-        temporal_feat = lstm_out[:, -1, :]
-
-        # 融合层
-        fused_input = torch.cat([temporal_feat, static_out], dim=1)
-        fused_out = self.fusion_pre(fused_input)
-        fused_out = self.fusion_out(fused_out)
-
-        # 数值检查
-        if torch.isnan(fused_out).any() or torch.isinf(fused_out).any():
-            # 保存出现问题的数据到本地
-            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
-            model_sd = self.state_dict()
-            # 确保在 CPU 上
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("fused_out is nan or inf")
-
-        return fused_out
-
-# 参数量: 174931
-class DeepLob(BaseFeaturesExtractor):
-    net_arch = [32,16]
-    def __init__(
-            self,
-            observation_space,
-            features_dim: int = 32,  # 减少特征维度
-            input_dims: tuple = (10, 20),
-            extra_input_dims: int = 3,
-            dropout_rate: float = arg_dropout,
-    ):
-        super().__init__(observation_space, features_dim)
-
-        self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims
-        self.dropout_rate = dropout_rate
-
-        # 减少通道数
-        conv1_out = 16  # 从32减少到16
-        conv2_out = 24  # 从32减少到24
-        conv3_out = 32  # 保持32通道
-        inception_out = 32  # 从64减少到32
-        
-        # 卷积块1 - 添加LayerNorm但减少通道数
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, conv1_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv1_out, input_dims[0], (input_dims[1] // 2)]),
-            nn.ReLU(),
-            nn.Conv2d(conv1_out, conv1_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv1_out, input_dims[0] - 1, (input_dims[1] // 2)]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 卷积块2 - 减少层数和通道数
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(conv1_out, conv2_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv2_out, input_dims[0] - 1, (input_dims[1] // 4)]),
-            nn.ReLU(),
-            nn.Conv2d(conv2_out, conv2_out, kernel_size=(2, 1)),
-            nn.LayerNorm([conv2_out, input_dims[0] - 2, (input_dims[1] // 4)]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 卷积块3 - 简化结构
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(conv2_out, conv3_out, kernel_size=(1, 5)),
-            nn.LayerNorm([conv3_out, input_dims[0] - 2, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-
-        # 简化的Inception模块 - 只保留两个分支
-        self.inp1 = nn.Sequential(
-            nn.Conv2d(conv3_out, inception_out, kernel_size=(1, 1)),
-            nn.LayerNorm([inception_out, input_dims[0] - 2, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-            nn.Conv2d(inception_out, inception_out, kernel_size=(3, 1), padding=(1, 0)),
-            nn.LayerNorm([inception_out, input_dims[0] - 2, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-        )
-        
-        self.inp2 = nn.Sequential(
-            nn.MaxPool2d(kernel_size=(3, 1), stride=(1, 1), padding=(1, 0)),
-            nn.Conv2d(conv3_out, inception_out, kernel_size=(1, 1)),
-            nn.LayerNorm([inception_out, input_dims[0] - 2, (input_dims[1] // 4) - 4]),
-            nn.ReLU(),
-        )
-
-        # 计算LSTM输入维度 - 由于减少了一些卷积层，序列长度变化
-        self.lstm_seq_len = input_dims[0] - 2  # 更新后的序列长度
-        lstm_hidden_dim = 32  # 从64减少到32
-        
-        # LSTM层 - 减少隐藏单元
-        self.lstm = nn.LSTM(input_size=inception_out*2, hidden_size=lstm_hidden_dim, 
-                           num_layers=1, batch_first=True)
-        self.lstm_norm = nn.LayerNorm([self.lstm_seq_len, lstm_hidden_dim])
-
-        # ID嵌入层 - 减少嵌入维度
-        embedding_dim = 4  # 从8减少到4
-        self.id_embedding = nn.Embedding(5, embedding_dim)
-
-        # 计算静态特征的输入维度
-        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
-        static_hidden_dim = static_input_dim * 2  # 减少隐藏层大小
-
-        # 简化的静态特征处理网络
-        self.static_net = nn.Sequential(
-            nn.Linear(static_input_dim, static_hidden_dim),
-            nn.LayerNorm(static_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-
-        # 融合层 - 简化结构
-        fusion_input_dim = lstm_hidden_dim + static_hidden_dim
-        fusion_hidden_dim = 64  # 从128减少到64
-        
-        self.fusion = nn.Sequential(
-            nn.Linear(fusion_input_dim, fusion_hidden_dim),
-            nn.LayerNorm(fusion_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity(),
-            nn.Linear(fusion_hidden_dim, features_dim),
-        )
-
-        self.dp = nn.Dropout(p=dropout_rate) if dropout_rate else nn.Identity()
-        self.dp2d = nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity()
-
-        # 初始化权重
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        # 对CNN和全连接层应用He初始化
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            # LayerNorm初始化
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-        # LSTM特定初始化
-        for name, param in self.lstm.named_parameters():
-            if 'weight_ih' in name:
-                nn.init.kaiming_normal_(param, mode='fan_in', nonlinearity='relu')
-            elif 'weight_hh' in name:
-                nn.init.orthogonal_(param)
-            elif 'bias' in name:
-                bias_size = param.size(0)
-                param.data.fill_(0.)
-                param.data[bias_size//4:bias_size//2].fill_(1.0)  # 遗忘门偏置设为1
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # 分离时间序列和静态特征
-        use_obs = observations[:, :-1]  # 最后一维是日期信息
-        extra_x = use_obs[:, -self.extra_input_dims:]
-        x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)
-
-        # 处理静态特征
-        cat_feat = extra_x[:, 0].long()
-        num_feat = extra_x[:, 1:]
-
-        # 嵌入类别特征
-        embedded = self.id_embedding(cat_feat)
-
-        # 拼接嵌入向量和数值特征
-        static_input = torch.cat([embedded, num_feat], dim=1)
-
-        # 静态特征处理
-        static_out = self.static_net(static_input)
-
-        # 卷积处理
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-
-        # 简化的Inception模块 - 只有两个分支
-        x_inp1 = self.inp1(x)
-        x_inp2 = self.inp2(x)
-        x = torch.cat((x_inp1, x_inp2), dim=1)
-        x = self.dp2d(x)
-
-        # 调整形状以适配LSTM
-        x = x.permute(0, 2, 1, 3).squeeze(3)
-
-        # LSTM处理
-        lstm_out, _ = self.lstm(x)
-        lstm_out = self.lstm_norm(lstm_out)
-        lstm_out = self.dp(lstm_out)
-        # 取最后一个时间步
-        temporal_feat = lstm_out[:, -1, :]
-
-        # 融合层
-        fused_input = torch.cat([temporal_feat, static_out], dim=1)
-        fused_out = self.fusion(fused_input)
-
-        # 数值检查
-        if torch.isnan(fused_out).any() or torch.isinf(fused_out).any():
-            # 保存出现问题的数据到本地
-            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
-            model_sd = self.state_dict()
-            # 确保在 CPU 上
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("fused_out is nan or inf")
-
-        return fused_out
-
-# 参数量: 70703
-class DeepLob_mid(BaseFeaturesExtractor):
-    net_arch = [16,16]
-    def __init__(
-            self,
-            observation_space,
-            features_dim: int = 16,  # 进一步减少特征维度
-            input_dims: tuple = (10, 20),
-            extra_input_dims: int = 3,
-            dropout_rate: float = arg_dropout,
-    ):
-        super().__init__(observation_space, features_dim)
-
-        self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims
-        self.dropout_rate = dropout_rate
-
-        # 进一步减少通道数和层数
-        conv1_out = 8   # 从16减少到8
-        conv2_out = 16  # 从24减少到16
-        lstm_hidden = 16  # 从32减少到16
-        
-        # 第一卷积块 - 简化为单层
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, conv1_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv1_out, input_dims[0], input_dims[1] // 2]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 第二卷积块 - 简化为单层
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(conv1_out, conv2_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv2_out, input_dims[0], input_dims[1] // 4]),
-            nn.ReLU(),
-            nn.Dropout2d(p=dropout_rate) if dropout_rate else nn.Identity(),
-        )
-        
-        # 移除第三个卷积块，直接连接到特征提取
-        # 使用单个特征提取器替代Inception模块
-        self.feature_extract = nn.Sequential(
-            nn.Conv2d(conv2_out, lstm_hidden*2, kernel_size=(2, 1), padding=(1, 0)),
-            nn.LayerNorm([lstm_hidden*2, input_dims[0], input_dims[1] // 4]),
-            nn.ReLU(),
-            nn.AdaptiveMaxPool2d((input_dims[0] // 2, 1))
-        )
-
-        # 简化LSTM为GRU来减少参数
-        self.rnn = nn.GRU(
-            input_size=lstm_hidden*2,
-            hidden_size=lstm_hidden,
-            num_layers=1,
-            batch_first=True,
-        )
-
-        # 减少嵌入维度
-        embedding_dim = 4
-        self.id_embedding = nn.Embedding(5, embedding_dim)
-
-        # 简化静态特征处理
-        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
-        self.static_net = nn.Sequential(
-            nn.Linear(static_input_dim, lstm_hidden),
-            nn.LayerNorm(lstm_hidden),
-            nn.ReLU(),
-        )
-
-        # 简化融合层
-        fusion_input_dim = lstm_hidden*2  # LSTM输出 + 静态特征
-        self.fusion = nn.Sequential(
-            nn.Linear(fusion_input_dim, features_dim*2),
-            nn.LayerNorm(features_dim*2),
-            nn.ReLU(),
-            nn.Linear(features_dim*2, features_dim),
-        )
-
-        # 初始化权重
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        # 简化的初始化 - 只应用于重要的参数
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # 分离时间序列和静态特征
-        use_obs = observations[:, :-1]  # 最后一维是日期信息
-        extra_x = use_obs[:, -self.extra_input_dims:]
-        x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)
-
-        # 处理静态特征
-        cat_feat = extra_x[:, 0].long()
-        num_feat = extra_x[:, 1:]
-
-        # 嵌入类别特征
-        embedded = self.id_embedding(cat_feat)
-        static_input = torch.cat([embedded, num_feat], dim=1)
-        static_out = self.static_net(static_input)
-
-        # 卷积处理
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.feature_extract(x)
-
-        # 调整形状以适配RNN
-        batch_size = x.size(0)
-        x = x.view(batch_size, -1, x.size(1))  # (B, seq_len, features)
-
-        # RNN处理
-        rnn_out, _ = self.rnn(x)
-        
-        # 取最后一个时间步或使用全局平均池化
-        rnn_feat = rnn_out[:, -1, :]
-        
-        # 融合静态特征和时序特征
-        fused_features = torch.cat([rnn_feat, static_out], dim=1)
-        output = self.fusion(fused_features)
-
-        # 数值检查
-        if torch.isnan(output).any() or torch.isinf(output).any():
-            # 保存出现问题的数据到本地
-            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
-            model_sd = self.state_dict()
-            # 确保在 CPU 上
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("fused_out is nan or inf")
-
-        return output
-
-# 参数量: 34206
+# 参数量: 28031
 class DeepLob_small(BaseFeaturesExtractor):
-    net_arch = [10, 10]
-    def __init__(
-            self,
-            observation_space,
-            features_dim: int = 10,  # 轻量特征维度
-            input_dims: tuple = (10, 20),
-            extra_input_dims: int = 3,
-            dropout_rate: float = arg_dropout,
-    ):
-        super().__init__(observation_space, features_dim)
-
-        self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims
-        self.dropout_rate = dropout_rate
-
-        # 轻量化的通道数设计
-        conv1_out = 6  # 减少第一层通道数
-        conv2_out = 10 # 减少第二层通道数
-        hidden_dim = 10 # 隐藏层维度
-        
-        # 使用分组卷积减少参数量
-        self.conv_net = nn.Sequential(
-            # 第一层卷积 - 正常卷积
-            nn.Conv2d(1, conv1_out, kernel_size=(1, 2), stride=(1, 2)),
-            nn.LayerNorm([conv1_out, input_dims[0], input_dims[1] // 2]),
-            nn.ReLU(),
-            
-            # 第二层卷积 - 分组卷积减少参数
-            nn.Conv2d(conv1_out, conv2_out, kernel_size=(1, 2), stride=(1, 2), groups=2),
-            nn.LayerNorm([conv2_out, input_dims[0], input_dims[1] // 4]),
-            nn.ReLU(),
-            
-            # 特征提取层 - 分组卷积并融合两种感受野
-            nn.Conv2d(conv2_out, hidden_dim, kernel_size=(3, 1), padding=(1, 0), groups=2),
-            nn.LayerNorm([hidden_dim, input_dims[0], input_dims[1] // 4]),
-            nn.ReLU(),
-            
-            # 池化层
-            nn.AdaptiveMaxPool2d((input_dims[0] // 2, 1))
-        )
-        
-        # 使用轻量级时序处理 - 用1D卷积替代GRU/LSTM
-        self.temporal_net = nn.Sequential(
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1, groups=2),
-            nn.LayerNorm([hidden_dim, input_dims[0] // 2]),
-            nn.ReLU(),
-            nn.AdaptiveMaxPool1d(1)  # 全局池化
-        )
-        
-        # 轻量级嵌入
-        embedding_dim = 3
-        self.id_embedding = nn.Embedding(5, embedding_dim)
-        
-        # 静态特征处理 - 简化
-        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
-        self.static_net = nn.Sequential(
-            nn.Linear(static_input_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.ReLU(),
-        )
-        
-        # 特征融合网络
-        self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim*2, features_dim),
-            nn.LayerNorm(features_dim),
-        )
-        
-        # 初始化权重
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Conv1d, nn.Linear)):
-                nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # 分离时间序列和静态特征
-        use_obs = observations[:, :-1]  # 最后一维是日期信息
-        extra_x = use_obs[:, -self.extra_input_dims:]
-        x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)
-
-        # 处理静态特征
-        cat_feat = extra_x[:, 0].long()
-        num_feat = extra_x[:, 1:]
-
-        # 嵌入类别特征
-        embedded = self.id_embedding(cat_feat)
-        static_input = torch.cat([embedded, num_feat], dim=1)
-        static_out = self.static_net(static_input)
-
-        # 卷积特征提取
-        batch_size = x.size(0)
-        x = self.conv_net(x)
-        
-        # 调整形状以适配时序处理
-        x = x.view(batch_size, x.size(1), -1)  # (B, channels, seq_len)
-        
-        # 时序特征提取
-        temporal_out = self.temporal_net(x).squeeze(-1)  # (B, hidden_dim)
-        
-        # 融合静态特征和时序特征
-        fused_features = torch.cat([temporal_out, static_out], dim=1)
-        output = self.fusion(fused_features)
-
-        # 数值检查
-        if torch.isnan(output).any() or torch.isinf(output).any():
-            # 保存出现问题的数据到本地
-            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
-            model_sd = self.state_dict()
-            # 确保在 CPU 上
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("fused_out is nan or inf")
-
-        return output
-
-# 参数量: 12146
-class DeepLob_lite(BaseFeaturesExtractor):
-    net_arch = [10, 8]  # 中等大小的网络架构 
-    def __init__(
-            self,
-            observation_space,
-            features_dim: int = 8,  # 中等特征维度
-            input_dims: tuple = (10, 20),
-            extra_input_dims: int = 3,
-            dropout_rate: float = arg_dropout,
-    ):
-        super().__init__(observation_space, features_dim)
-
-        self.input_dims = input_dims
-        self.extra_input_dims = extra_input_dims
-        self.dropout_rate = dropout_rate
-
-        # 中等通道数设计 - 确保所有通道数都能被分组数整除
-        conv1_out = 6  # 和tiny一样
-        conv2_out = 8  # 介于small和tiny之间
-        hidden_dim = 10  # 确保能被2整除，用于分组卷积
-        
-        # 使用分组卷积减少参数量
-        self.conv_net = nn.Sequential(
-            # 第一层卷积 - 轻量卷积
-            nn.Conv2d(1, conv1_out, kernel_size=(2, 2), stride=(2, 2), padding=(1, 1)),
-            nn.LayerNorm([conv1_out, (input_dims[0] + 1) // 2, (input_dims[1] + 1) // 2]),
-            nn.ReLU(),
-            
-            # 第二层卷积 - 分组卷积减少参数
-            nn.Conv2d(conv1_out, conv2_out, kernel_size=(2, 2), stride=(2, 2), 
-                     padding=(1, 1), groups=2),  # 6 / 2 = 3 个通道/组, 8个输出通道
-            nn.LayerNorm([conv2_out, (input_dims[0] + 3) // 4, (input_dims[1] + 3) // 4]),
-            nn.ReLU(),
-            
-            # 特征提取层 - 使用小卷积核和分组卷积
-            nn.Conv2d(conv2_out, hidden_dim, kernel_size=(2, 1), padding=(1, 0), groups=2),  # 8 / 2 = 4 通道/组, 10个输出通道
-            nn.LayerNorm([hidden_dim, (input_dims[0] + 5) // 4, (input_dims[1] + 3) // 4]),
-            nn.ReLU(),
-            
-            # 池化层
-            nn.AdaptiveMaxPool2d((input_dims[0] // 4, 1))
-        )
-        
-        # 使用轻量级时序处理 - 确保分组数能整除通道数
-        self.temporal_net = nn.Sequential(
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1, groups=2),  # 10 / 2 = 5 通道/组
-            nn.LayerNorm([hidden_dim, input_dims[0] // 4]),
-            nn.ReLU(),
-            nn.AdaptiveMaxPool1d(1)
-        )
-        
-        # 嵌入维度
-        embedding_dim = 3  # 与small相同
-        self.id_embedding = nn.Embedding(5, embedding_dim)
-        
-        # 静态特征处理
-        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
-        self.static_net = nn.Sequential(
-            nn.Linear(static_input_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.ReLU(),
-        )
-        
-        # 特征融合网络
-        self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim*2, features_dim),
-            nn.LayerNorm(features_dim),
-            nn.ReLU(),
-        )
-        
-        # 初始化权重
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Conv1d, nn.Linear)):
-                nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.LayerNorm):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        # 分离时间序列和静态特征
-        use_obs = observations[:, :-1]  # 最后一维是日期信息
-        extra_x = use_obs[:, -self.extra_input_dims:]
-        x = use_obs[:, :-self.extra_input_dims].reshape(-1, 1, *self.input_dims)
-
-        # 处理静态特征
-        cat_feat = extra_x[:, 0].long()
-        num_feat = extra_x[:, 1:]
-
-        # 嵌入类别特征
-        embedded = self.id_embedding(cat_feat)
-        static_input = torch.cat([embedded, num_feat], dim=1)
-        static_out = self.static_net(static_input)
-
-        # 卷积特征提取
-        batch_size = x.size(0)
-        x = self.conv_net(x)
-        
-        # 调整形状以适配时序处理
-        x = x.view(batch_size, x.size(1), -1)  # (B, channels, seq_len)
-        
-        # 时序特征提取
-        temporal_out = self.temporal_net(x).squeeze(-1)  # (B, hidden_dim)
-        
-        # 融合静态特征和时序特征
-        fused_features = torch.cat([temporal_out, static_out], dim=1)
-        output = self.fusion(fused_features)
-
-        # 数值检查
-        if torch.isnan(output).any() or torch.isinf(output).any():
-            # 保存出现问题的数据到本地
-            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
-            model_sd = self.state_dict()
-            # 确保在 CPU 上
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("fused_out is nan or inf")
-
-        return output
-
-# 参数量: 8827
-class DeepLob_tiny(BaseFeaturesExtractor):
     net_arch = [8,8]
     def __init__(
             self,
@@ -1207,19 +392,17 @@ class DeepLob_tiny(BaseFeaturesExtractor):
         
         # 统一使用分组卷积来减少参数
         self.feature_extractor = nn.Sequential(
-            # 第一层：降采样 + 特征提取
-            nn.Conv2d(1, conv1_out, kernel_size=(2, 2), stride=(2, 2), padding=(1, 1)),
-            nn.LayerNorm([conv1_out, (input_dims[0] + 1) // 2, (input_dims[1] + 1) // 2]),
+            nn.Conv2d(1, conv1_out, kernel_size=(1, 2), stride=(1, 2)),
+            nn.LayerNorm([conv1_out, input_dims[0], (input_dims[1] // 2)]),
             nn.ReLU(),
             
-            # 第二层：进一步降采样 + 特征集成
-            nn.Conv2d(conv1_out, hidden_dim, kernel_size=(2, 2), stride=(2, 2), 
-                     padding=(1, 1), groups=2),  # 使用分组卷积减少参数
-            nn.LayerNorm([hidden_dim, (input_dims[0] + 3) // 4, (input_dims[1] + 3) // 4]),
+            nn.Conv2d(conv1_out, hidden_dim, kernel_size=(1, 2), stride=(1, 2)),
+            nn.LayerNorm([hidden_dim, input_dims[0], (input_dims[1] // 4)]),
             nn.ReLU(),
-            
-            # 全局池化层
-            nn.AdaptiveAvgPool2d(1),  # 输出 (B, hidden_dim, 1, 1)
+
+            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=(1, 5)),
+            nn.LayerNorm([hidden_dim, input_dims[0], (input_dims[1] // 4 - 4)]),
+            nn.ReLU(),
         )
         
         # 极简化ID嵌入
@@ -1231,19 +414,32 @@ class DeepLob_tiny(BaseFeaturesExtractor):
         self.static_net = nn.Linear(static_input_dim, hidden_dim)
         self.norm1 = nn.LayerNorm(hidden_dim)
         
-        # 将时序处理简化为轻量级TCN (Temporal Convolutional Network)
-        # 代替RNN降低参数量
-        temporal_in = hidden_dim
+        # 正确实现轻量级TCN，对时序数据进行处理
+        # 计算卷积后的时间维度
+        self.time_dim = input_dims[0]
+        
+        # 轻量级TCN - 使用膨胀卷积和降采样来有效处理时序数据
+        # 传统TCN通常使用膨胀卷积和残差连接来增加感受野
         self.temporal_net = nn.Sequential(
-            nn.Conv1d(1, hidden_dim, kernel_size=3, padding=1, groups=1),
-            nn.LayerNorm([hidden_dim, temporal_in]),
+            # 第一层TCN - 膨胀率=1，输出通道不变
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1, dilation=1),
+            nn.LayerNorm([hidden_dim, self.time_dim]),
             nn.ReLU(),
-            nn.AdaptiveMaxPool1d(1)  # 全局池化到单一特征向量
+            
+            # 第二层TCN - 膨胀率=2，增加感受野，并用步长2降采样
+            nn.Conv1d(hidden_dim, hidden_dim*2, kernel_size=3, padding=2, dilation=2, stride=2),
+            nn.LayerNorm([hidden_dim*2, self.time_dim//2]),
+            nn.ReLU(),
+            
+            # 第三层TCN - 进一步增加通道数和感受野
+            nn.Conv1d(hidden_dim*2, hidden_dim*2, kernel_size=3, padding=4, dilation=4, stride=2),
+            nn.LayerNorm([hidden_dim*2, self.time_dim//4]),
+            nn.ReLU(),
         )
         
-        # 极简融合网络
+        # 极简融合网络 - 更新输入维度以匹配扩展的TCN输出
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim*2, features_dim),
+            nn.Linear(hidden_dim*2 + hidden_dim, features_dim),  # TCN输出现在是hidden_dim*2
             nn.LayerNorm(features_dim),
             nn.ReLU(),
         )
@@ -1252,12 +448,35 @@ class DeepLob_tiny(BaseFeaturesExtractor):
         self._initialize_weights()
 
     def _initialize_weights(self):
-        # 最小化初始化 - 只应用于关键参数
+        """
+        针对不同类型的层使用更适合的初始化方法:
+        - 卷积层: Kaiming初始化 (针对ReLU激活函数优化)
+        - 线性层: Xavier初始化 (适用于一般情况)
+        - 嵌入层: 正态分布初始化
+        - LayerNorm: 默认初始化 (偏置=1，权重=0)
+        """
         for module in self.modules():
-            if isinstance(module, (nn.Conv2d, nn.Conv1d, nn.Linear)):
-                nn.init.xavier_uniform_(module.weight)  # 使用Xavier初始化适合小网络
+            # 卷积层 - 使用He/Kaiming初始化（适合ReLU激活函数后的层）
+            if isinstance(module, (nn.Conv2d, nn.Conv1d)):
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
+            
+            # 线性层 - 使用Xavier/Glorot初始化
+            elif isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+            
+            # 嵌入层 - 使用正态分布初始化
+            elif isinstance(module, nn.Embedding):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+            # LayerNorm - 使用默认初始化（通常是权重=1，偏置=0）
+            # 但我们显式设置它们以确保一致性
+            elif isinstance(module, nn.LayerNorm):
+                nn.init.ones_(module.weight)
+                nn.init.zeros_(module.bias)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         # 分离时间序列和静态特征
@@ -1272,18 +491,24 @@ class DeepLob_tiny(BaseFeaturesExtractor):
         # 嵌入并处理静态特征
         embedded = self.id_embedding(cat_feat)
         static_input = torch.cat([embedded, num_feat], dim=1)
-        static_out = self.norm1(F.relu(self.static_net(static_input)))
+        static_out = self.norm1(F.relu(self.static_net(static_input)))  # (B, hidden_dim)
 
-        # CNN特征提取 - 简化为单一管道
+        # CNN特征提取
         batch_size = x.size(0)
-        conv_features = self.feature_extractor(x)
-        conv_features = conv_features.view(batch_size, -1)
+        conv_features = self.feature_extractor(x)  # (B, hidden_dim, time_dim, 1)
         
-        # 时序处理 - 使用1D卷积替代RNN
-        temporal_input = conv_features.unsqueeze(1)  # 添加通道维度 (B, 1, features)
-        temporal_out = self.temporal_net(temporal_input).squeeze(-1)  # (B, hidden_dim)
+        # 正确处理时序数据 - 调整维度而非展平
+        conv_features = conv_features.squeeze(-1)  # 去掉最后的维度 (B, hidden_dim, time_dim)
         
-        # 简化融合
+        # 时序处理 - 使用增强的TCN处理时序数据
+        # 输入: (B, hidden_dim, time_dim)
+        # 经过三层TCN后输出: (B, hidden_dim*2, time_dim//4)
+        temporal_out = self.temporal_net(conv_features)
+        
+        # 全局池化获取时序特征表示
+        temporal_out = F.adaptive_avg_pool1d(temporal_out, 1).squeeze(-1)  # (B, hidden_dim*2)
+        
+        # 融合静态特征和时序特征
         combined = torch.cat([temporal_out, static_out], dim=1)
         output = self.fusion(combined)
         
@@ -1303,7 +528,149 @@ class DeepLob_tiny(BaseFeaturesExtractor):
 
         return output
 
-model_cls = DeepLob_xlarge
+# 参数量: 1070
+class TCNLob(BaseFeaturesExtractor):
+    net_arch = [4, 4]  # 架构参数保持不变
+    def __init__(
+            self,
+            observation_space,
+            features_dim: int = 8,
+            input_dims: tuple = (10, 20),  # 时间维度和特征维度
+            extra_input_dims: int = 3,
+            dropout_rate: float = arg_dropout,
+    ):
+        super().__init__(observation_space, features_dim)
+
+        self.input_dims = input_dims
+        self.extra_input_dims = extra_input_dims
+        self.dropout_rate = dropout_rate
+        
+        # 核心模型参数
+        hidden_dim = 16 
+
+        # 嵌入维度
+        embedding_dim = 1
+        self.id_embedding = nn.Embedding(5, embedding_dim)
+        
+        # 静态特征处理
+        static_input_dim = embedding_dim + (self.extra_input_dims - 1)
+        self.static_net = nn.Linear(static_input_dim, hidden_dim)
+        
+        # 计算输入特征维度 - 将原始输入直接展平为TCN输入
+        # 输入形状为 [batch, time, features]
+        self.tcn_input_dim = input_dims[1]  # 特征维度
+        
+        # 纯TCN架构替代原来的CNN feature extractor
+        # 定义扩张率，增加感受野
+        dilations = [1, 2, 4]
+        
+        # TCN块 - 每个块包含一个带扩张的1D卷积和残差连接
+        self.tcn_blocks = nn.ModuleList()
+        
+        # 第一层 - 输入投影层
+        self.input_proj = nn.Conv1d(self.tcn_input_dim, hidden_dim, kernel_size=1)
+        
+        # 多层TCN块，使用扩张卷积增加感受野
+        for dilation in dilations:
+            block = nn.Sequential(
+                # 第一个卷积层
+                nn.Conv1d(hidden_dim, hidden_dim*2, kernel_size=3, 
+                         padding=dilation, dilation=dilation),
+                nn.ReLU(),
+                
+                # 第二个卷积层，带瓶颈结构
+                nn.Conv1d(hidden_dim*2, hidden_dim, kernel_size=1),
+                nn.ReLU(),
+            )
+            self.tcn_blocks.append(block)
+            
+        # 全局池化层
+        self.global_pool = nn.AdaptiveMaxPool1d(1)
+        
+        # 融合网络
+        fusion_dim = hidden_dim + hidden_dim
+        self.fusion = nn.Sequential(
+            nn.Linear(fusion_dim, fusion_dim),
+            nn.ReLU(),
+            nn.Linear(fusion_dim, features_dim)
+        )
+        
+        # 初始化权重
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """优化的初始化方法"""
+        for module in self.modules():
+            if hasattr(module, 'weight') and module.weight is not None:
+                if isinstance(module, nn.Conv1d):
+                    # 卷积层使用He初始化
+                    nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+                    if module.bias is not None:
+                        nn.init.zeros_(module.bias)
+                elif isinstance(module, nn.Linear):
+                    nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
+                    if module.bias is not None:
+                        nn.init.uniform_(module.bias, -0.01, 0.01)
+                elif isinstance(module, nn.Embedding):
+                    nn.init.normal_(module.weight, mean=0.0, std=0.01)
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        # 分离时间序列和静态特征
+        use_obs = observations[:, :-1]  # 最后一维是日期信息
+        extra_x = use_obs[:, -self.extra_input_dims:]
+        
+        # 直接将原始时间序列数据重塑为TCN所需的格式
+        # 从 [..., time*features+extra] 到 [..., time, features]
+        batch_size = observations.size(0)
+        time_dim, feature_dim = self.input_dims
+        
+        # 提取非静态特征部分并重塑
+        x = use_obs[:, :-self.extra_input_dims].reshape(batch_size, time_dim, feature_dim)
+        
+        # 处理静态特征
+        cat_feat = extra_x[:, 0].long()
+        num_feat = extra_x[:, 1:]
+        
+        # 嵌入并处理静态特征
+        embedded = self.id_embedding(cat_feat)
+        static_input = torch.cat([embedded, num_feat], dim=1)
+        static_out = F.relu(self.static_net(static_input))
+        
+        # 重新排列时间序列数据为TCN所需的格式: [batch, features, time]
+        # 从 [batch, time, features] 到 [batch, features, time]
+        x = x.transpose(1, 2)
+        
+        # 应用输入投影
+        x = self.input_proj(x)
+        
+        # 应用TCN块，带残差连接
+        for tcn_block in self.tcn_blocks:
+            residual = x
+            x = tcn_block(x)
+            x = x + residual  # 残差连接
+        
+        # 全局池化得到固定维度输出
+        temporal_out = self.global_pool(x).squeeze(-1)
+        
+        # 融合静态和时序特征
+        combined = torch.cat([temporal_out, static_out], dim=1)
+        output = self.fusion(combined)
+        
+        # 数值检查
+        if torch.isnan(output).any() or torch.isinf(output).any():
+            log(f"发现 nan 或 inf 值, 保存数据到本地进行检查")
+            model_sd = self.state_dict()
+            model_sd = {k: v.cpu() for k, v in model_sd.items()}
+            with open('debug_nan_data.pkl', 'wb') as f:
+                pickle.dump({
+                    'state_dict': model_sd,
+                    'observations': observations.detach().cpu(),
+                }, f)
+            raise ValueError("output contains nan or inf")
+
+        return output
+
+model_cls = TCNLob
 
 model_config={
     # 自定义编码器参数  
@@ -1438,17 +805,17 @@ if run_type != 'test':
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
 
     # ###############################################
-    # # 模型检查 1. 验证模式输出是否相同
-    # test_x = env.observation_space.sample()
-    # test_x = torch.from_numpy(test_x).unsqueeze(0)
-    # test_x[:, -4] = 0#symbol_id 0 - 4
-    # log(test_x.shape)
-    # test_x = test_x.float().to(model.policy.device)
-    # model.policy.eval()
-    # out1 = model.policy.features_extractor(test_x)
-    # out2 = model.policy.features_extractor(test_x)
-    # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
-    # log(out1.shape)
+    # 模型检查 1. 验证模式输出是否相同
+    test_x = env.observation_space.sample()
+    test_x = torch.from_numpy(test_x).unsqueeze(0)
+    test_x[:, -4] = 0#symbol_id 0 - 4
+    log(test_x.shape)
+    test_x = test_x.float().to(model.policy.device)
+    model.policy.eval()
+    out1 = model.policy.features_extractor(test_x)
+    out2 = model.policy.features_extractor(test_x)
+    log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
+    log(out1.shape)
     # ###############################################
     # ###############################################
     # # 模型检查 2. 不同batch之间的数据是否污染
@@ -1468,7 +835,7 @@ if run_type != 'test':
     # assert test_batch_obs.grad[0].sum() != 0, "the first sample should have a gradient"
     # assert test_batch_obs.grad[1:].sum() == 0, "Only the first sample should have a gradient"
     # ###############################################
-    # sys.exit()
+    sys.exit()
 
     # 遍历读取训练数据
     if not in_windows():
