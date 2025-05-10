@@ -1,4 +1,5 @@
 import numpy as np
+from dl_helper.train_param import in_kaggle
 
 USE_CODES = [
     '513050',
@@ -57,3 +58,9 @@ LOCAL_DATA_FOLDER = rf'D:\L2_DATA_T0_ETF\train_data\RAW\{TRAIN_DATA_LOCAL_FOLDER
 
 # kaggle 数据文件夹 r'/kaggle/input'
 KAGGLE_DATA_FOLDER = rf"/kaggle/input/{TRAIN_DATA_LOCAL_FOLDER_NAME.replace('_', '-').lower()}"
+
+# 数据文件夹
+if in_kaggle:
+    DATA_FOLDER = KAGGLE_DATA_FOLDER
+else:
+    DATA_FOLDER = LOCAL_DATA_FOLDER

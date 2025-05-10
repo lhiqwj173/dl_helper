@@ -36,7 +36,9 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, STD_REWARD, FINAL
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD
-from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER
+from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
+
+from dl_helper.rl.rl_env.lob_trade.lob_data_helper import fix_raw_data
 
 debug_bid_ask_accnet_code = r"""from dl_helper.tool import max_profit_reachable, plot_trades_plt
 import pandas as pd
@@ -140,10 +142,7 @@ class data_producer:
         self.cols_num = 130 if not self.need_cols else len(self.need_cols)
 
         # 训练数据
-        if in_kaggle:
-            self.data_folder = KAGGLE_DATA_FOLDER
-        else:
-            self.data_folder = LOCAL_DATA_FOLDER
+        self.data_folder = DATA_FOLDER
 
         self.data_type = data_type
         self.cur_data_type = data_type
@@ -360,73 +359,7 @@ class data_producer:
             log(f'[{self.data_type}] init idxs: {self.idxs}')
 
             # 调整数据
-            # fix 在某个时点上所有数据都为0的情况，导致模型出现nan的bug
-            all_cols = list(self.all_raw_data)
-            if 'OBC买10量' in all_cols and 'OSC卖10量' in all_cols:
-                # 订单数据
-                order_cols = [i for i in all_cols if i.startswith('OS') or i.startswith('OB')]
-                order_raw = self.all_raw_data.loc[:, order_cols]
-                self.all_raw_data.loc[(order_raw == 0).all(axis=1), ['OBC买10量', 'OSC卖10量']] = 1
-            if 'OF买10量' in all_cols and 'OF卖10量' in all_cols:
-                # OF数据
-                OF_cols = [i for i in all_cols if i.startswith('OF')]
-                OF_raw = self.all_raw_data.loc[:, OF_cols]
-                self.all_raw_data.loc[(OF_raw == 0).all(axis=1), ['OF买10量', 'OF卖10量']] = 1
-            if '卖10量' in all_cols and '卖10价' not in all_cols:
-                # 深度数据
-                depth_cols = ['卖10量',
-                    '卖9量',
-                    '卖8量',
-                    '卖7量',
-                    '卖6量',
-                    '卖5量',
-                    '卖4量',
-                    '卖3量',
-                    '卖2量',
-                    '卖1量',
-                    '买1量',
-                    '买2量',
-                    '买3量',
-                    '买4量',
-                    '买5量',
-                    '买6量',
-                    '买7量',
-                    '买8量',
-                    '买9量',
-                    '买10量']
-                depth_raw = self.all_raw_data.loc[:, depth_cols]
-                wait_fix_index = depth_raw[(depth_raw == 0).all(axis=1)].index.to_list()
-                if wait_fix_index and wait_fix_index[0] == 0:
-                    # 若第一个数据就为0，填充 卖10量/买10量 为1，最小化影响
-                    self.all_raw_data.loc[0, '卖10量'] = 1
-                    self.all_raw_data.loc[0, '买10量'] = 1
-                    # 去掉第一个记录
-                    wait_fix_index = wait_fix_index[1:]
-
-                self.all_raw_data.loc[wait_fix_index, depth_cols] = np.nan# 先用nan填充，方便后续处理
-                for col in depth_cols:
-                    self.all_raw_data[col] = self.all_raw_data[col].ffill()
-            if 'DB卖1量' in all_cols and 'DS买1量' in all_cols: 
-                # 成交数据
-                deal_cols = [i for i in all_cols if i.startswith('D')]
-                deal_raw = self.all_raw_data.loc[:, deal_cols]
-                self.all_raw_data.loc[(deal_raw == 0).all(axis=1), ['DB卖1量', 'DS买1量']] = 1
-            # 40档位价量数据nan处理
-            if 'BASE卖1量' in all_cols and 'BASE买1量' in all_cols:
-                # 价格nan填充, 使用上一个档位数据 +-0.001 进行填充
-                for i in range(2, 11):
-                    if f'BASE买{i}价' not in all_cols or f'BASE买{i-1}价' not in all_cols:
-                        continue
-
-                    # 买价
-                    self.all_raw_data.loc[:, f'BASE买{i}价'] = self.all_raw_data[f'BASE买{i}价'].fillna(self.all_raw_data[f'BASE买{i-1}价'] - 0.001)
-
-                    # 卖价
-                    self.all_raw_data.loc[:, f'BASE卖{i}价'] = self.all_raw_data[f'BASE卖{i}价'].fillna(self.all_raw_data[f'BASE卖{i-1}价'] + 0.001)
-
-                # 量nan用0填充
-                vol_cols = [i for i in list(self.all_raw_data) if i.startswith('BASE') and '价' not in i]
-                self.all_raw_data[vol_cols] = self.all_raw_data[vol_cols].fillna(0)
+            self.all_raw_data = fix_raw_data(self.all_raw_data) 
 
             # 记录需要的索引，供后续转为numpy时使用
             # BASE买1价 / BASE卖1价
@@ -1487,9 +1420,9 @@ class LOB_trade_env(gym.Env):
         self.random_begin_in_day = config.get('random_begin_in_day', True)
         self.close_trade_need_reset = config.get('close_trade_need_reset', True)
         self.latest_dates = config.get('latest_dates', -1)
-        self.use_random_his_window = config.get('use_random_his_window', True)
-        self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', True)
-        self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', True)
+        self.use_random_his_window = config.get('use_random_his_window', False)
+        self.use_gaussian_noise_vol = config.get('use_gaussian_noise_vol', False)
+        self.use_spread_add_small_limit_order = config.get('use_spread_add_small_limit_order', False)
 
         self.max_drawdown_threshold = abs(config.get('max_drawdown_threshold', 0.01))
 

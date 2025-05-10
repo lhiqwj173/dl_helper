@@ -273,7 +273,7 @@ def bt_transfer():
     # 避免kaggle识别到视频播放
     for file in os.listdir(local_folder):
         if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
-            os.rename(os.path.join(local_folder, file), os.path.join(local_folder, file + '.file'))
+            os.rename(os.path.join(local_folder, file), os.path.join(local_folder, file + 'file'))
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:

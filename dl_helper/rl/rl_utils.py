@@ -1,4 +1,5 @@
 from tqdm import tqdm
+from collections import defaultdict
 import numpy as np
 import math
 import pandas as pd
@@ -486,7 +487,7 @@ def find_best_lr(lrs, losses, smooth_window=5, slope_factor=0.1, plot=True):
     
     return best_lr
 
-def check_gradients(model, gradient_threshold_min=1e-5, gradient_threshold_max=100):
+def check_gradients_0(model, gradient_threshold_min=1e-5, gradient_threshold_max=100):
     """
     检查模型每一层的梯度范数，抛出异常如果发现问题。
     """
@@ -516,6 +517,77 @@ def check_gradients(model, gradient_threshold_min=1e-5, gradient_threshold_max=1
                 f"Gradient explosion detected in {name}: "
                 f"norm = {grad_norm:.6e} > {gradient_threshold_max:.6e}"
             )
+
+def check_gradients(
+    model,
+    gradient_threshold_min=1e-5,
+    gradient_threshold_max=100,
+    plot_histogram=False
+):
+    """
+    检查模型每一层的梯度范数，记录信息并可选抛出异常。
+    
+    Args:
+        model: 深度学习模型（继承自 torch.nn.Module）
+        gradient_threshold_min: 梯度消失的阈值
+        gradient_threshold_max: 梯度爆炸的阈值
+        plot_histogram: 是否绘制梯度范数直方图
+    
+    Returns:
+        dict: 包含每一层的梯度范数信息
+    """
+    grad_norms = defaultdict(float)
+    total_grad_norm = 0.0
+    grad_count = 0
+
+    # 收集梯度信息
+    for name, param in model.named_parameters():
+        if param.grad is None:
+            continue
+
+        grad = param.grad
+        # 检查 NaN 或 Inf
+        if torch.isnan(grad).any() or torch.isinf(grad).any():
+            raise RuntimeError(f"NaN or Inf detected in gradient of {name}")
+
+        # 计算梯度范数
+        grad_norm = torch.norm(grad).item()
+        grad_norms[name] = grad_norm
+        total_grad_norm += grad_norm ** 2
+        grad_count += 1
+
+    # 计算全局梯度范数
+    total_grad_norm = (total_grad_norm ** 0.5) if grad_count > 0 else 0.0
+
+    # 检查全局梯度是否异常
+    not_normal = False
+    if total_grad_norm < gradient_threshold_min:
+        not_normal = True
+        log(f"Potential global gradient vanishing: total norm = {total_grad_norm:.6e}")
+    elif total_grad_norm > gradient_threshold_max:
+        not_normal = True
+        log(f"Potential global gradient explosion: total norm = {total_grad_norm:.6e}")
+
+    # 逐层检查（仅在全局异常时详细分析）
+    if not_normal:
+        for name, grad_norm in grad_norms.items():
+            if grad_norm < gradient_threshold_min:
+                raise RuntimeError(f"Gradient vanishing in {name}: norm = {grad_norm:.6e}")
+            if grad_norm > gradient_threshold_max:
+                raise RuntimeError(f"Gradient explosion in {name}: norm = {grad_norm:.6e}")
+
+    # 可视化梯度分布
+    if plot_histogram:
+        plt.figure(figsize=(10, 6))
+        plt.hist(list(grad_norms.values()), bins=30, log=True)
+        plt.title("Gradient Norm Histogram")
+        plt.xlabel("Gradient Norm")
+        plt.ylabel("Frequency (Log Scale)")
+        plt.savefig("gradient_norm_histogram.png")
+        plt.close()
+        log("Gradient norm histogram saved as 'gradient_norm_histogram.png'")
+
+    return grad_norms
 
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """

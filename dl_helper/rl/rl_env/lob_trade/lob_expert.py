@@ -17,7 +17,7 @@ from dl_helper.tool import max_profit_reachable, plot_trades
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, STD_REWARD
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
-from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER
+from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
 from dl_helper.tool import calculate_profit, calculate_sell_save
@@ -43,10 +43,7 @@ class LobExpert_file():
         self.cache_data = {}
 
         # 数据文件夹
-        if in_kaggle:
-            self.data_folder = KAGGLE_DATA_FOLDER
-        else:
-            self.data_folder = LOCAL_DATA_FOLDER
+        self.data_folder = DATA_FOLDER
 
         if self.pre_cache:
             log('cache all expert data')

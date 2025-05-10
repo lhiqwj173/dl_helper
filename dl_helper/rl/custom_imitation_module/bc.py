@@ -186,6 +186,8 @@ class BCWithLRScheduler(BC):
             batch_size=self.minibatch_size,
             shuffle=False,# 必须为False, shuffle 在 dataset 中实现
             drop_last=True,
+            num_workers=2,
+            pin_memory=True,
         )
 
     def set_demonstrations_val(self, demonstrations: algo_base.AnyTransitions) -> None:
@@ -471,10 +473,6 @@ class BCWithLRScheduler(BC):
             self.scaler.step(self.optimizer)
             # 新增：更新缩放器状态
             self.scaler.update()
-            # # 检查梯度
-            # check_gradients(self)
-            # 清零梯度
-            self.optimizer.zero_grad(set_to_none=True)
 
             # 如果有调度器，则更新学习率
             if self.lr_scheduler is not None and self.lr_scheduler_step_frequency=='batch':
@@ -493,6 +491,16 @@ class BCWithLRScheduler(BC):
                 self._bc_logger.log_batch(
                     batch_num, minibatch_size, num_samples_so_far, training_metrics, rollout_stats
                 )
+
+                plot_gradient_histogram = True
+            else:
+                plot_gradient_histogram = False
+
+            # 检查梯度
+            check_gradients(self, plot_gradient_histogram=plot_gradient_histogram)
+
+            # 清零梯度
+            self.optimizer.zero_grad(set_to_none=True)
 
             if on_batch_end is not None:
                 on_batch_end()
@@ -515,6 +523,10 @@ class BCWithLRScheduler(BC):
             acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
             # 确保动作是整数
             acts = acts.to(dtype=th.long)
+
+            # 保存第一个批次数据
+            if not os.path.exists(f'1st_batch.pkl'):
+                pickle.dump(batch, open(f'1st_batch.pkl', 'wb'))
 
             # 使用 autocast 进行前向传播，支持混合精度
             with th.autocast(device_type='cuda' if th.cuda.is_available() else 'cpu', enabled=self.use_mixed_precision, dtype=th.float16):
