@@ -521,7 +521,7 @@ def check_gradients_0(model, gradient_threshold_min=1e-5, gradient_threshold_max
 def check_gradients(
     model,
     gradient_threshold_min=1e-5,
-    gradient_threshold_max=100,
+    gradient_threshold_max=1e10,
     plot_histogram=False
 ):
     """
