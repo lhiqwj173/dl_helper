@@ -540,7 +540,7 @@ class IndexMapper:
         self.__init__(new_data_dict)
 
 class LobTrajectoryDataset(Dataset):
-    def __init__(self, data_folder:str='', data_config=None, data_dict: Dict[int, Dict[str, np.ndarray]]=None):
+    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None):
         """
         data_config:
             {
@@ -573,8 +573,6 @@ class LobTrajectoryDataset(Dataset):
         self.length = self.mapper.get_total_length()
         self.his_len = data_config.get('his_len', None)
         self.need_cols = data_config.get('need_cols', None)
-        assert self.need_cols is not None, "need_cols 不能为空"
-        assert self.his_len is not None, "his_len 不能为空"
         self.need_cols_idx = []
 
         # data_dict 包含的 symbols
@@ -608,6 +606,8 @@ class LobTrajectoryDataset(Dataset):
                     self.need_cols_idx = [_all_raw_data.columns.get_loc(col) for col in self.need_cols]
                 # 只保留需要的列
                 _all_raw_data = _all_raw_data.loc[:, self.need_cols]
+            else:
+                _all_raw_data = _all_raw_data.iloc[:, :-6]
             # fix raw data
             _all_raw_data = fix_raw_data(_all_raw_data)
             # 储存日raw_data
@@ -740,7 +740,7 @@ class LobTrajectoryDataset(Dataset):
         # 获取订单簿数据
         x_a, x_b = _data_dict['x'][latest_idx]
         raw_data = self.raw_data[days]
-        if x_b - x_a >= self.his_len:
+        if self.his_len and x_b - x_a >= self.his_len:
             # 如果数据足够长，直接取最后his_len个
             order_book_obs = raw_data[x_b-self.his_len:x_b]
         else:
@@ -764,10 +764,22 @@ class LobTrajectoryDataset(Dataset):
         # 返回 final_obs(x), act(y)
         return final_obs, act
     
+def test_lob_trajectory_dataset_dataloader():
+    data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+    dataset = LobTrajectoryDataset(data_folder=data_folder)
+    dataloader = torch.utils.data.DataLoader(
+        dataset, 
+        batch_size=10, 
+        shuffle=True
+    )
+    for batch in dataloader:
+        print(batch)
+
 def test_lob_trajectory_dataset_multi_file():
     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    data_dict = LobTrajectoryDataset(data_folder=data_folder)
-    print(data_dict.keys())
+    dataset = LobTrajectoryDataset(data_folder=data_folder)
+    for i in range(len(dataset))[:10]:
+        d = dataset[i]
 
 def test_lob_trajectory_dataset(shuffle=True):
     file = r"D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data\transitions.pkl"
@@ -850,4 +862,5 @@ if __name__ == "__main__":
     # test_trajectory_dataset()
     # test_lob_trajectory_dataset()
     # test_lob_trajectory_dataset_correct()
-    test_lob_trajectory_dataset_multi_file()
+    # test_lob_trajectory_dataset_multi_file()
+    test_lob_trajectory_dataset_dataloader()

@@ -376,6 +376,16 @@ class BCWithLRScheduler(BC):
         
         return result
 
+    def enumerate_batches(
+        batch_it: Iterable[types.TransitionMapping],
+    ) -> Iterable[Tuple[Tuple[int, int, int], types.TransitionMapping]]:
+        """Prepends batch stats before the batches of a batch iterator."""
+        num_samples_so_far = 0
+        for num_batches, batch in enumerate(batch_it):
+            batch_size = len(batch[0])
+            num_samples_so_far += batch_size
+            yield (num_batches, batch_size, num_samples_so_far), batch
+
     def train(
         self,
         *,
@@ -518,9 +528,9 @@ class BCWithLRScheduler(BC):
             
             obs_tensor = types.map_maybe_dict(
                 lambda x: util.safe_to_tensor(x, device=self.policy.device),
-                types.maybe_unwrap_dictobs(batch["obs"]),
+                types.maybe_unwrap_dictobs(batch[0]),
             )
-            acts = util.safe_to_tensor(batch["acts"], device=self.policy.device)
+            acts = util.safe_to_tensor(batch[1], device=self.policy.device)
             # 确保动作是整数
             acts = acts.to(dtype=th.long)
 

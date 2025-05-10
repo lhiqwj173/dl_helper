@@ -127,6 +127,7 @@ max_lr = arg_max_lr if arg_max_lr else max_lr
 train_kaggle_batch_n = 2**7 if not arg_amp else 2**8
 batch_n = train_kaggle_batch_n if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
+default_rng = np.random.default_rng(0)
 #################################
 
 custom_logger = imit_logger.configure(
@@ -694,8 +695,6 @@ env_config ={
     'use_spread_add_small_limit_order': False,# 是否使用价差添加小单
 }
 
-checkpoint_callback = CustomCheckpointCallback(train_folder=train_folder)
-
 # 配置 policy_kwargs
 policy_kwargs = dict(
     features_extractor_class=model_cls,
@@ -704,310 +703,308 @@ policy_kwargs = dict(
     activation_fn=nn.ReLU
 )
 
-env_objs = []
-def make_env():
-    env = LOB_trade_env(env_config)
-    env_objs.append(env)
-    return RolloutInfoWrapper(env)
+if __name__ == '__main__':
+    env_objs = []
+    def make_env():
+        env = LOB_trade_env(env_config)
+        env_objs.append(env)
+        return RolloutInfoWrapper(env)
 
-if run_type != 'test':
+    if run_type != 'test':
 
-    # 专家
-    expert = LobExpert_file(pre_cache=True)
+        # 专家
+        expert = LobExpert_file(pre_cache=True)
 
-    if run_type == 'bc_data':
-        # 初始化开始时间
-        start_time = time.time()
-        n_hours = 11.75  # 设置时间阈值（小时）
-        # n_hours = 1  # 设置时间阈值（小时）
-        
-        # 请求获取文件名id
-        id = get_idx('time') if not in_windows() else 0
-        zip_file = f'transitions_{id}.7z'
-        t_folder = f'transitions'
-        os.makedirs(t_folder, exist_ok=True)
-
-        def produce_bc_data(idx):
-            # 创建单个环境
-            env = LOB_trade_env(env_config)
-            vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
-
-            file_name = f'{t_folder}/{id}_{idx}.pkl'
-
-            # 生成训练数据用
-            f = rollouts_filter()
-
-            while True:
-                # 生成专家数据
-                rng = np.random.default_rng()
-                
-                # 训练数据
-                rollouts = rollout.rollout(
-                    expert,
-                    vec_env,
-                    rollout.make_sample_until(min_timesteps=1e4),
-                    rng=rng,
-                )
-                f.add_rollouts(rollouts)
-
-                # 检查总运行时间（转换为小时）
-                elapsed_hours = (time.time() - start_time) / 3600
-                if elapsed_hours > n_hours:
-                    break
-
-            # 保存数据
-            parts_dict = f.get_parts_dict()
-            with open(file_name, 'wb') as f:
-                pickle.dump(parts_dict, f)
-
-        # 启动 4 个进程并行生成数据
-        import multiprocessing
-        processes = []
-        for i in range(4):
-            process = multiprocessing.Process(target=produce_bc_data, args=(i,))
-            processes.append(process)
-            process.start()
-        # 等待所有进程结束
-        for process in processes:
-            process.join()
-
-        log(f"总运行时间超过 {n_hours} 小时，上传数据并退出")
-        t = time.time()
-        from py_ext.alist import alist
-        from py_ext.lzma import compress_folder
-        compress_folder(t_folder, zip_file, level=9)
-        client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
-        client.upload(zip_file, '/bc_train_data/')
-        msg = f"运行时间: {((time.time() - start_time) / 3600):.2f} 小时, {zip_file} 上传数据耗时: {time.time() - t:.2f} 秒"
-        send_wx(msg)
-        sys.exit()
-
-    # 创建并行环境（4 个环境）
-    n_envs = 4
-    env = DummyVecEnv([make_env for _ in range(n_envs)])
-    env = VecCheckNan(env, raise_exception=True)  # 添加nan检查
-    env = VecMonitor(env)  # 添加监控器
-    vec_env = env
-
-    model = PPO(
-        model_type, 
-        vec_env, 
-        verbose=1, 
-        learning_rate=1e-3,
-        ent_coef=0.01,
-        gamma=0.97,
-        policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
-    )
-    
-    # 打印模型结构
-    log("模型结构:")
-    log(model.policy)
-    log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
-
-    # ###############################################
-    # # 模型检查 1. 验证模式输出是否相同
-    # test_x = env.observation_space.sample()
-    # test_x = torch.from_numpy(test_x).unsqueeze(0)
-    # test_x[:, -4] = 0#symbol_id 0 - 4
-    # log(test_x.shape)
-    # test_x = test_x.float().to(model.policy.device)
-    # model.policy.eval()
-    # out1 = model.policy.features_extractor(test_x)
-    # out2 = model.policy.features_extractor(test_x)
-    # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
-    # log(out1.shape)
-    # ###############################################
-    # ###############################################
-    # # 模型检查 2. 不同batch之间的数据是否污染
-    # test_batch_size = 10
-    # test_batch_obs = np.array([env.observation_space.sample() for _ in range(test_batch_size)])
-    # test_batch_obs[:, -4] = 0#symbol_id 0 - 4
-    # # 转换为 tensor 格式并确保需要计算梯度
-    # test_batch_obs = torch.tensor(test_batch_obs, dtype=torch.float32, requires_grad=True, device=model.policy.device)
-    # # 通过模型的特征提取器得到输出
-    # model.policy.train()
-    # out = model.policy.features_extractor(test_batch_obs)
-    # # 计算第一个样本的损失
-    # loss = out[0].sum()
-    # loss.backward()
-    # # 检查梯度，仅第一个样本的梯度应该非零
-    # assert test_batch_obs.grad is not None, "Gradient should not be None"
-    # assert test_batch_obs.grad[0].sum() != 0, "the first sample should have a gradient"
-    # assert test_batch_obs.grad[1:].sum() == 0, "Only the first sample should have a gradient"
-    # ###############################################
-    # sys.exit()
-
-    # 遍历读取训练数据
-    if not in_windows():
-        data_folder = rf'/kaggle/input/bc-train-data/'
-    else:
-        data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-    data_set = LobTrajectoryDataset(data_folder, data_config=data_config)
-    log(f"训练数据样本数: {len(data_set)}")
-
-    # 生成验证数据
-    rng = np.random.default_rng()
-    for env in env_objs:
-        env.val()
-    rollouts_val = rollout.rollout(
-        expert,
-        vec_env,
-        rollout.make_sample_until(min_timesteps=50_000 if not in_windows() else 500),
-        rng=rng,
-    )
-    transitions_val = rollout.flatten_trajectories(rollouts_val)
-
-    memory_usage = psutil.virtual_memory()
-    log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
-
-    total_steps = total_epochs * len(data_set) // (batch_size * batch_n)
-    bc_trainer = BCWithLRScheduler(
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-        policy=model.policy,
-        rng=np.random.default_rng(),
-        train_dataset=data_set,
-        demonstrations_val=transitions_val,
-        batch_size=batch_size * batch_n if run_type=='train' else batch_size,
-        l2_weight=0 if not arg_l2_weight else arg_l2_weight,
-        optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
-        custom_logger=custom_logger,
-        lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
-            else MultiplicativeLR if run_type=='find_lr' \
-                else None,
-        lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not arg_lr) \
-            else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
-                else None,
-        use_mixed_precision=True if arg_amp else False,
-    )
-    
-    # 训练文件夹管理
-    if not in_windows():
-        train_folder_manager = TrainFolderManagerBC(train_folder)
-        if train_folder_manager.exists():
-            log(f"restore from {train_folder_manager.checkpoint_folder}")
-            train_folder_manager.load_checkpoint(bc_trainer)
-
-    # 初始化进度数据文件
-    progress_file = os.path.join(train_folder, f"progress.csv")
-    progress_file_all = os.path.join(train_folder, f"progress_all.csv")
-    if os.path.exists(progress_file_all):
-        df_progress = pd.read_csv(progress_file_all)
-    else:
-        df_progress = pd.DataFrame()
-
-    env = env_objs[0]
-    begin = bc_trainer.train_loop_idx
-    log(f'begin: {begin}')
-    for i in range(begin, total_epochs // checkpoint_interval):
-        log(f'第 {i} 次训练')
-
-        _t = time.time()
-        bc_trainer.train(
-            n_epochs=checkpoint_interval,
-            log_interval = 1 if run_type=='find_lr' else 500,
-        )
-        log(f'训练耗时: {time.time() - _t:.2f} 秒')
-
-        # 验证模型
-        _t = time.time()
-        env.val()
-        val_reward, _ = evaluate_policy(bc_trainer.policy, env)
-        env.train()
-        train_reward, _ = evaluate_policy(bc_trainer.policy, env)
-        log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
-
-        # 合并到 progress_all.csv
-        latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
-        df_new = pd.read_csv(progress_file)
-        df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
-        df_new['bc/epoch'] += i * checkpoint_interval
-        df_new['bc/mean_reward'] = np.nan
-        df_new['bc/val_mean_reward'] = np.nan
-        df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
-        df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
-        df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
-        df_progress.ffill(inplace=True)
-        df_progress.to_csv(progress_file_all, index=False)
-
-        # 当前点是否是最优的 checkpoint
-        # 使用 recall 判断
-        if 'bc/recall' in list(df_progress):
-            bset_recall = df_progress['bc/recall'].max()
-            best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
-            is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
-        else:
-            is_best = False
-
-        # 训练进度可视化
-        try:
-            plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
-        except Exception as e:
-            pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
-            log(f"训练进度可视化失败")
-            raise e
-
-        if not in_windows():
-            # 保存模型
-            train_folder_manager.checkpoint(bc_trainer, best=is_best)
-
-        if run_type == 'find_lr':
-            # 只运行一个 epoch
-            break
-
-
-else:
-    # test
-    model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
-    # 加载 BC 训练的策略
-    pretrained_policy = ActorCriticPolicy.load(model_folder)
-
-    # 初始化模型
-    # env_config['data_type'] = 'test'
-    env_config['render_mode'] = 'human'
-    test_env = LOB_trade_env(env_config)
-    test_env.train()
-    model = PPO(
-        model_type, 
-        test_env, 
-        policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
-    )
-
-    # # 加载参数
-    # model.policy.load_state_dict(pretrained_policy.state_dict())
-
-    # 专家, 用于参考
-    expert = LobExpert_file(pre_cache=False)
-    
-    # 测试
-    rounds = 5
-    # rounds = 1
-    for i in range(rounds):
-        log('reset')
-        seed = random.randint(0, 1000000)
-        seed = 477977
-        seed = 195789
-        obs, info = test_env.reset(seed)
-        test_env.render()
-
-        act = 1
-        need_close = False
-        while not need_close:
-            action, _state = model.predict(obs, deterministic=True)
-            expert.get_action(obs)
-            expert.add_potential_data_to_env(test_env)
-
-            obs, reward, terminated, truncated, info = test_env.step(action)
-            test_env.render()
-            need_close = terminated or truncated
+        if run_type == 'bc_data':
+            # 初始化开始时间
+            start_time = time.time()
+            n_hours = 11.75  # 设置时间阈值（小时）
+            # n_hours = 1  # 设置时间阈值（小时）
             
-        log(f'seed: {seed}')
-        if rounds > 1:
-            keep_play = input('keep play? (y)')
-            if keep_play == 'y':
-                continue
+            # 请求获取文件名id
+            id = get_idx('time') if not in_windows() else 0
+            zip_file = f'transitions_{id}.7z'
+            t_folder = f'transitions'
+            os.makedirs(t_folder, exist_ok=True)
+
+            def produce_bc_data(idx):
+                # 创建单个环境
+                env = LOB_trade_env(env_config)
+                vec_env = DummyVecEnv([lambda: RolloutInfoWrapper(env)])
+
+                file_name = f'{t_folder}/{id}_{idx}.pkl'
+
+                # 生成训练数据用
+                f = rollouts_filter()
+
+                while True:
+                    # 生成专家数据
+                    # 训练数据
+                    rollouts = rollout.rollout(
+                        expert,
+                        vec_env,
+                        rollout.make_sample_until(min_timesteps=1e4),
+                        rng=default_rng,
+                    )
+                    f.add_rollouts(rollouts)
+
+                    # 检查总运行时间（转换为小时）
+                    elapsed_hours = (time.time() - start_time) / 3600
+                    if elapsed_hours > n_hours:
+                        break
+
+                # 保存数据
+                parts_dict = f.get_parts_dict()
+                with open(file_name, 'wb') as f:
+                    pickle.dump(parts_dict, f)
+
+            # 启动 4 个进程并行生成数据
+            import multiprocessing
+            processes = []
+            for i in range(4):
+                process = multiprocessing.Process(target=produce_bc_data, args=(i,))
+                processes.append(process)
+                process.start()
+            # 等待所有进程结束
+            for process in processes:
+                process.join()
+
+            log(f"总运行时间超过 {n_hours} 小时，上传数据并退出")
+            t = time.time()
+            from py_ext.alist import alist
+            from py_ext.lzma import compress_folder
+            compress_folder(t_folder, zip_file, level=9)
+            client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
+            client.upload(zip_file, '/bc_train_data/')
+            msg = f"运行时间: {((time.time() - start_time) / 3600):.2f} 小时, {zip_file} 上传数据耗时: {time.time() - t:.2f} 秒"
+            send_wx(msg)
+            sys.exit()
+
+        # 创建并行环境（4 个环境）
+        n_envs = 4
+        env = DummyVecEnv([make_env for _ in range(n_envs)])
+        env = VecCheckNan(env, raise_exception=True)  # 添加nan检查
+        env = VecMonitor(env)  # 添加监控器
+        vec_env = env
+
+        model = PPO(
+            model_type, 
+            vec_env, 
+            verbose=1, 
+            learning_rate=1e-3,
+            ent_coef=0.01,
+            gamma=0.97,
+            policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+        )
+        
+        # 打印模型结构
+        log("模型结构:")
+        log(model.policy)
+        log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
+
+        # ###############################################
+        # # 模型检查 1. 验证模式输出是否相同
+        # test_x = env.observation_space.sample()
+        # test_x = torch.from_numpy(test_x).unsqueeze(0)
+        # test_x[:, -4] = 0#symbol_id 0 - 4
+        # log(test_x.shape)
+        # test_x = test_x.float().to(model.policy.device)
+        # model.policy.eval()
+        # out1 = model.policy.features_extractor(test_x)
+        # out2 = model.policy.features_extractor(test_x)
+        # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
+        # log(out1.shape)
+        # ###############################################
+        # ###############################################
+        # # 模型检查 2. 不同batch之间的数据是否污染
+        # test_batch_size = 10
+        # test_batch_obs = np.array([env.observation_space.sample() for _ in range(test_batch_size)])
+        # test_batch_obs[:, -4] = 0#symbol_id 0 - 4
+        # # 转换为 tensor 格式并确保需要计算梯度
+        # test_batch_obs = torch.tensor(test_batch_obs, dtype=torch.float32, requires_grad=True, device=model.policy.device)
+        # # 通过模型的特征提取器得到输出
+        # model.policy.train()
+        # out = model.policy.features_extractor(test_batch_obs)
+        # # 计算第一个样本的损失
+        # loss = out[0].sum()
+        # loss.backward()
+        # # 检查梯度，仅第一个样本的梯度应该非零
+        # assert test_batch_obs.grad is not None, "Gradient should not be None"
+        # assert test_batch_obs.grad[0].sum() != 0, "the first sample should have a gradient"
+        # assert test_batch_obs.grad[1:].sum() == 0, "Only the first sample should have a gradient"
+        # ###############################################
+        # sys.exit()
+
+        # 遍历读取训练数据
+        if not in_windows():
+            data_folder = rf'/kaggle/input/bc-train-data/'
+        else:
+            data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+        data_set = LobTrajectoryDataset(data_folder, data_config=data_config)
+        log(f"训练数据样本数: {len(data_set)}")
+
+        # 生成验证数据
+        for env in env_objs:
+            env.val()
+        rollouts_val = rollout.rollout(
+            expert,
+            vec_env,
+            rollout.make_sample_until(min_timesteps=50_000 if not in_windows() else 500),
+            rng=default_rng,
+        )
+        transitions_val = rollout.flatten_trajectories(rollouts_val)
+
+        memory_usage = psutil.virtual_memory()
+        log(f"内存占用：{memory_usage.percent}% ({memory_usage.used/1024**3:.3f}GB/{memory_usage.total/1024**3:.3f}GB)")
+
+        total_steps = total_epochs * len(data_set) // (batch_size * batch_n)
+        bc_trainer = BCWithLRScheduler(
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            policy=model.policy,
+            rng=default_rng,
+            train_dataset=data_set,
+            demonstrations_val=transitions_val,
+            batch_size=batch_size * batch_n if run_type=='train' else batch_size,
+            l2_weight=0 if not arg_l2_weight else arg_l2_weight,
+            optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
+            custom_logger=custom_logger,
+            lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
+                else MultiplicativeLR if run_type=='find_lr' \
+                    else None,
+            lr_scheduler_kwargs = {'max_lr':max_lr*batch_n, 'total_steps': total_steps} if (run_type=='train' and not arg_lr) \
+                else {'lr_lambda': lambda epoch: 1.05} if run_type=='find_lr' \
+                    else None,
+            use_mixed_precision=True if arg_amp else False,
+        )
+        
+        # 训练文件夹管理
+        if not in_windows():
+            train_folder_manager = TrainFolderManagerBC(train_folder)
+            if train_folder_manager.exists():
+                log(f"restore from {train_folder_manager.checkpoint_folder}")
+                train_folder_manager.load_checkpoint(bc_trainer)
+
+        # 初始化进度数据文件
+        progress_file = os.path.join(train_folder, f"progress.csv")
+        progress_file_all = os.path.join(train_folder, f"progress_all.csv")
+        if os.path.exists(progress_file_all):
+            df_progress = pd.read_csv(progress_file_all)
+        else:
+            df_progress = pd.DataFrame()
+
+        env = env_objs[0]
+        begin = bc_trainer.train_loop_idx
+        log(f'begin: {begin}')
+        for i in range(begin, total_epochs // checkpoint_interval):
+            log(f'第 {i} 次训练')
+
+            _t = time.time()
+            bc_trainer.train(
+                n_epochs=checkpoint_interval,
+                log_interval = 1 if run_type=='find_lr' else 500,
+            )
+            log(f'训练耗时: {time.time() - _t:.2f} 秒')
+
+            # 验证模型
+            _t = time.time()
+            env.val()
+            val_reward, _ = evaluate_policy(bc_trainer.policy, env)
+            env.train()
+            train_reward, _ = evaluate_policy(bc_trainer.policy, env)
+            log(f"train_reward: {train_reward}, val_reward: {val_reward}, 验证耗时: {time.time() - _t:.2f} 秒")
+
+            # 合并到 progress_all.csv
+            latest_ts = df_progress.iloc[-1]['timestamp'] if len(df_progress) > 0 else 0
+            df_new = pd.read_csv(progress_file)
+            df_new = df_new.loc[df_new['timestamp'] > latest_ts, :]
+            df_new['bc/epoch'] += i * checkpoint_interval
+            df_new['bc/mean_reward'] = np.nan
+            df_new['bc/val_mean_reward'] = np.nan
+            df_new.loc[df_new.index[-1], 'bc/mean_reward'] = train_reward
+            df_new.loc[df_new.index[-1], 'bc/val_mean_reward'] = val_reward
+            df_progress = pd.concat([df_progress, df_new]).reset_index(drop=True)
+            df_progress.ffill(inplace=True)
+            df_progress.to_csv(progress_file_all, index=False)
+
+            # 当前点是否是最优的 checkpoint
+            # 使用 recall 判断
+            if 'bc/recall' in list(df_progress):
+                bset_recall = df_progress['bc/recall'].max()
+                best_epoch = df_progress.loc[df_progress['bc/recall'] == bset_recall, 'bc/epoch'].values[0]
+                is_best = df_progress.iloc[-1]['bc/epoch'] == best_epoch
             else:
+                is_best = False
+
+            # 训练进度可视化
+            try:
+                plot_bc_train_progress(train_folder, df_progress=df_progress, title=train_title)
+            except Exception as e:
+                pickle.dump(df_progress, open('df_progress.pkl', 'wb'))
+                log(f"训练进度可视化失败")
+                raise e
+
+            if not in_windows():
+                # 保存模型
+                train_folder_manager.checkpoint(bc_trainer, best=is_best)
+
+            if run_type == 'find_lr':
+                # 只运行一个 epoch
                 break
 
-    input('all done, press enter to close')
-    test_env.close()
+
+    else:
+        # test
+        model_folder = rf'D:\code\dl_helper\dl_helper\tests\rl\SB3\{train_folder}'
+        # 加载 BC 训练的策略
+        pretrained_policy = ActorCriticPolicy.load(model_folder)
+
+        # 初始化模型
+        # env_config['data_type'] = 'test'
+        env_config['render_mode'] = 'human'
+        test_env = LOB_trade_env(env_config)
+        test_env.train()
+        model = PPO(
+            model_type, 
+            test_env, 
+            policy_kwargs=policy_kwargs if model_type == 'CnnPolicy' else None
+        )
+
+        # # 加载参数
+        # model.policy.load_state_dict(pretrained_policy.state_dict())
+
+        # 专家, 用于参考
+        expert = LobExpert_file(pre_cache=False)
+        
+        # 测试
+        rounds = 5
+        # rounds = 1
+        for i in range(rounds):
+            log('reset')
+            seed = random.randint(0, 1000000)
+            seed = 477977
+            seed = 195789
+            obs, info = test_env.reset(seed)
+            test_env.render()
+
+            act = 1
+            need_close = False
+            while not need_close:
+                action, _state = model.predict(obs, deterministic=True)
+                expert.get_action(obs)
+                expert.add_potential_data_to_env(test_env)
+
+                obs, reward, terminated, truncated, info = test_env.step(action)
+                test_env.render()
+                need_close = terminated or truncated
+                
+            log(f'seed: {seed}')
+            if rounds > 1:
+                keep_play = input('keep play? (y)')
+                if keep_play == 'y':
+                    continue
+                else:
+                    break
+
+        input('all done, press enter to close')
+        test_env.close()
