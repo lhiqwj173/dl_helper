@@ -522,6 +522,7 @@ def check_gradients(
     model,
     gradient_threshold_min=1e-5,
     gradient_threshold_max=1e10,
+    if_raise = False,
     plot_histogram=False
 ):
     """
@@ -531,10 +532,11 @@ def check_gradients(
         model: 深度学习模型（继承自 torch.nn.Module）
         gradient_threshold_min: 梯度消失的阈值
         gradient_threshold_max: 梯度爆炸的阈值
+        if_raise: 是否抛出异常
         plot_histogram: 是否绘制梯度范数直方图
     
     Returns:
-        dict: 包含每一层的梯度范数信息
+        total_grad_norm: 全局梯度范数
     """
     grad_norms = defaultdict(float)
     total_grad_norm = 0.0
@@ -547,6 +549,7 @@ def check_gradients(
 
         grad = param.grad
         # 检查 NaN 或 Inf
+        # 一定会抛出异常
         if torch.isnan(grad).any() or torch.isinf(grad).any():
             raise RuntimeError(f"NaN or Inf detected in gradient of {name}")
 
@@ -572,9 +575,15 @@ def check_gradients(
     if not_normal:
         for name, grad_norm in grad_norms.items():
             if grad_norm < gradient_threshold_min:
-                raise RuntimeError(f"Gradient vanishing in {name}: norm = {grad_norm:.6e}")
+                if if_raise:
+                    raise RuntimeError(f"Gradient vanishing in {name}: norm = {grad_norm:.6e}")
+                else:
+                    log(f"Gradient vanishing in {name}: norm = {grad_norm:.6e}")
             if grad_norm > gradient_threshold_max:
-                raise RuntimeError(f"Gradient explosion in {name}: norm = {grad_norm:.6e}")
+                if if_raise:
+                    raise RuntimeError(f"Gradient explosion in {name}: norm = {grad_norm:.6e}")
+                else:
+                    log(f"Gradient explosion in {name}: norm = {grad_norm:.6e}")
 
     # 可视化梯度分布
     if plot_histogram:
@@ -587,7 +596,7 @@ def check_gradients(
         plt.close()
         log("Gradient norm histogram saved as 'gradient_norm_histogram.png'")
 
-    return grad_norms
+    return total_grad_norm
 
 def simplify_rllib_metrics(data, out_func=print, out_file=''):
     """

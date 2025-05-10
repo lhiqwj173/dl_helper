@@ -483,6 +483,10 @@ class BCWithLRScheduler(BC):
             self.scaler.step(self.optimizer)
             # 新增：更新缩放器状态
             self.scaler.update()
+            # 检查梯度
+            total_grad_norm = check_gradients(self.policy)
+            # 清零梯度
+            self.optimizer.zero_grad(set_to_none=True)
 
             # 如果有调度器，则更新学习率
             if self.lr_scheduler is not None and self.lr_scheduler_step_frequency=='batch':
@@ -497,20 +501,13 @@ class BCWithLRScheduler(BC):
                 lr = self.optimizer.param_groups[0]['lr']
                 self._bc_logger._logger.record("bc/lr", lr)
 
+                # 记录梯度范数
+                self._bc_logger._logger.record("bc/total_grad_norm", total_grad_norm)
+
                 rollout_stats = compute_rollout_stats(self.policy, self.rng)
                 self._bc_logger.log_batch(
                     batch_num, minibatch_size, num_samples_so_far, training_metrics, rollout_stats
                 )
-
-                plot_gradient_histogram = True
-            else:
-                plot_gradient_histogram = False
-
-            # 检查梯度
-            check_gradients(self.policy, plot_histogram=plot_gradient_histogram)
-
-            # 清零梯度
-            self.optimizer.zero_grad(set_to_none=True)
 
             if on_batch_end is not None:
                 on_batch_end()
