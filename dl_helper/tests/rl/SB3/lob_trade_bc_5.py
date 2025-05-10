@@ -124,7 +124,7 @@ checkpoint_interval = 1 if run_type!='test_model' else 500
 batch_size = 32
 max_lr = 3e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
-train_kaggle_batch_n = 2**7 if not arg_amp else 2**8
+train_kaggle_batch_n = 2**10 if not arg_amp else 2**8
 batch_n = train_kaggle_batch_n if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
 default_rng = np.random.default_rng(0)
@@ -867,7 +867,7 @@ if __name__ == '__main__':
             demonstrations_val=transitions_val,
             batch_size=batch_size * batch_n if run_type=='train' else batch_size,
             l2_weight=0 if not arg_l2_weight else arg_l2_weight,
-            optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr} if arg_lr else None,
+            optimizer_kwargs={'lr': 1e-7} if run_type=='find_lr' else {'lr': arg_lr * batch_n} if arg_lr else None,
             custom_logger=custom_logger,
             lr_scheduler_cls = OneCycleLR if (run_type=='train' and not arg_lr) \
                 else MultiplicativeLR if run_type=='find_lr' \
