@@ -507,7 +507,7 @@ class BCWithLRScheduler(BC):
                 plot_gradient_histogram = False
 
             # 检查梯度
-            check_gradients(self, plot_gradient_histogram=plot_gradient_histogram)
+            check_gradients(self, plot_histogram=plot_gradient_histogram)
 
             # 清零梯度
             self.optimizer.zero_grad(set_to_none=True)
