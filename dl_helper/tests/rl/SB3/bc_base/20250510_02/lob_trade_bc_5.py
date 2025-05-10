@@ -107,7 +107,7 @@ if len(sys.argv) > 1:
         elif arg == 'input_zero':
             arg_input_zero = True
 
-train_folder = train_title = f'20250508_lob_trade_bc_5' \
+train_folder = train_title = f'20250510_02_lob_trade_bc_base' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
         + ('' if arg_batch_n is None else f'_batch_n{arg_batch_n}') \
             + ('' if arg_total_epochs is None else f'_epochs{arg_total_epochs}') \
