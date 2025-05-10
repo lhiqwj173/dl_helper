@@ -69,7 +69,7 @@ run_type = 'train'
 
 #################################
 # 命令行参数
-arg_lr = None
+arg_lr = 3e-4
 arg_max_lr = None
 arg_batch_n = None
 arg_total_epochs = None
@@ -805,17 +805,17 @@ if run_type != 'test':
     log(f'参数量: {sum(p.numel() for p in model.policy.parameters())}')
 
     # ###############################################
-    # 模型检查 1. 验证模式输出是否相同
-    test_x = env.observation_space.sample()
-    test_x = torch.from_numpy(test_x).unsqueeze(0)
-    test_x[:, -4] = 0#symbol_id 0 - 4
-    log(test_x.shape)
-    test_x = test_x.float().to(model.policy.device)
-    model.policy.eval()
-    out1 = model.policy.features_extractor(test_x)
-    out2 = model.policy.features_extractor(test_x)
-    log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
-    log(out1.shape)
+    # # 模型检查 1. 验证模式输出是否相同
+    # test_x = env.observation_space.sample()
+    # test_x = torch.from_numpy(test_x).unsqueeze(0)
+    # test_x[:, -4] = 0#symbol_id 0 - 4
+    # log(test_x.shape)
+    # test_x = test_x.float().to(model.policy.device)
+    # model.policy.eval()
+    # out1 = model.policy.features_extractor(test_x)
+    # out2 = model.policy.features_extractor(test_x)
+    # log(f'验证模式输出是否相同: {torch.allclose(out1, out2)}')
+    # log(out1.shape)
     # ###############################################
     # ###############################################
     # # 模型检查 2. 不同batch之间的数据是否污染
@@ -835,7 +835,7 @@ if run_type != 'test':
     # assert test_batch_obs.grad[0].sum() != 0, "the first sample should have a gradient"
     # assert test_batch_obs.grad[1:].sum() == 0, "Only the first sample should have a gradient"
     # ###############################################
-    sys.exit()
+    # sys.exit()
 
     # 遍历读取训练数据
     if not in_windows():
