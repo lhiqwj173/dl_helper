@@ -32,13 +32,23 @@ from imitation.data import rollout, types
 from imitation.policies import base as policy_base
 from imitation.util import logger as imit_logger
 from imitation.util import util
-from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback, enumerate_batches
+from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback
 
 from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
 
 from py_ext.tool import log
 from py_ext.datetime import beijing_time
+
+def enumerate_batches(
+    batch_it: Iterable[types.TransitionMapping],
+) -> Iterable[Tuple[Tuple[int, int, int], types.TransitionMapping]]:
+    """Prepends batch stats before the batches of a batch iterator."""
+    num_samples_so_far = 0
+    for num_batches, batch in enumerate(batch_it):
+        batch_size = len(batch[0])
+        num_samples_so_far += batch_size
+        yield (num_batches, batch_size, num_samples_so_far), batch
 
 class BCWithLRScheduler(BC):
     """支持学习率调度器和性能指标评估的行为克隆 (Behavioral Cloning with LR Scheduler and Metrics).
@@ -375,16 +385,6 @@ class BCWithLRScheduler(BC):
             result.update(metrics)
         
         return result
-
-    def enumerate_batches(
-        batch_it: Iterable[types.TransitionMapping],
-    ) -> Iterable[Tuple[Tuple[int, int, int], types.TransitionMapping]]:
-        """Prepends batch stats before the batches of a batch iterator."""
-        num_samples_so_far = 0
-        for num_batches, batch in enumerate(batch_it):
-            batch_size = len(batch[0])
-            num_samples_so_far += batch_size
-            yield (num_batches, batch_size, num_samples_so_far), batch
 
     def train(
         self,
