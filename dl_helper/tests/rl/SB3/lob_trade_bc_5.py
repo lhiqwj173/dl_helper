@@ -76,6 +76,7 @@ arg_total_epochs = None
 arg_l2_weight = None
 arg_dropout = None
 arg_amp = None
+arg_input_zero = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -103,6 +104,8 @@ if len(sys.argv) > 1:
             arg_dropout = float(arg.split('=')[1])
         elif arg == 'amp':
             arg_amp = True
+        elif arg == 'input_zero':
+            arg_input_zero = True
 
 train_folder = train_title = f'20250508_lob_trade_bc_5' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
@@ -111,7 +114,8 @@ train_folder = train_title = f'20250508_lob_trade_bc_5' \
                 + ('' if arg_max_lr is None else f'_maxlr{arg_max_lr:.0e}') \
                     + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}') \
                         + ('' if arg_dropout is None else f'_dropout{arg_dropout:.0e}') \
-                            + ('' if arg_amp is None else f'_amp')
+                            + ('' if arg_amp is None else f'_amp') \
+                                + ('' if arg_input_zero is None else f'_input_zero')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -840,7 +844,7 @@ if __name__ == '__main__':
             data_folder = rf'/kaggle/input/bc-train-data/'
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-        data_set = LobTrajectoryDataset(data_folder, data_config=data_config)
+        data_set = LobTrajectoryDataset(data_folder, data_config=data_config, input_zero=arg_input_zero)
         log(f"训练数据样本数: {len(data_set)}")
 
         # 生成验证数据

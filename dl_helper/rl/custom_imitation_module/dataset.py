@@ -540,7 +540,7 @@ class IndexMapper:
         self.__init__(new_data_dict)
 
 class LobTrajectoryDataset(Dataset):
-    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None):
+    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False):
         """
         data_config:
             {
@@ -574,6 +574,7 @@ class LobTrajectoryDataset(Dataset):
         self.his_len = data_config.get('his_len', None)
         self.need_cols = data_config.get('need_cols', None)
         self.need_cols_idx = []
+        self.input_zero = input_zero
 
         # data_dict 包含的 symbols
         self.use_symbols = [USE_CODES[i] for i in list(self.data_dict.keys())]
@@ -730,6 +731,10 @@ class LobTrajectoryDataset(Dataset):
         obs = self.data_dict[key]['obs'][list_idx]
         act = self.data_dict[key]['acts'][list_idx]
 
+        if self.input_zero and hasattr(self, 'obs_shape'):
+            # 直接返回空白的obs
+            return np.zeros(self.obs_shape, dtype=np.float32), act
+
         # 获取订单簿数据
         before_market_close_sec = obs[0]
         days = int(obs[2])
@@ -760,6 +765,11 @@ class LobTrajectoryDataset(Dataset):
         final_obs[:len(order_book_obs)] = order_book_obs
         final_obs[len(order_book_obs)] = np.float32(symbol_id)
         final_obs[len(order_book_obs)+1:] = obs
+
+        if self.input_zero and not hasattr(self, 'obs_shape'):
+            # 记录 obs_shape
+            self.obs_shape = final_obs.shape
+            return np.zeros(self.obs_shape, dtype=np.float32), act
 
         # 返回 final_obs(x), act(y)
         return final_obs, act
