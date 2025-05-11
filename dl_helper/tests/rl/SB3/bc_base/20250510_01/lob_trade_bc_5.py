@@ -77,7 +77,7 @@ arg_l2_weight = None
 arg_dropout = None
 arg_amp = None
 arg_input_zero = None
-arg_overfit_mini_batch = True
+arg_overfit_mini_batch = None
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
