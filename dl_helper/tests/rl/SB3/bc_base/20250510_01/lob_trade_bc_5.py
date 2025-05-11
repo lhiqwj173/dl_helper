@@ -71,7 +71,7 @@ run_type = 'train'
 # 命令行参数
 arg_lr = 3e-4
 arg_max_lr = None
-arg_batch_n = None
+arg_batch_n = 2
 arg_total_epochs = None
 arg_l2_weight = None
 arg_dropout = None
