@@ -77,6 +77,7 @@ arg_l2_weight = None
 arg_dropout = None
 arg_amp = None
 arg_input_zero = None
+arg_overfit_mini_batch = True
 #################################
 if len(sys.argv) > 1:
     for arg in sys.argv[1:]:
@@ -106,6 +107,8 @@ if len(sys.argv) > 1:
             arg_amp = True
         elif arg == 'input_zero':
             arg_input_zero = True
+        elif arg == 'overfit_mini_batch':
+            arg_overfit_mini_batch = True
 
 train_folder = train_title = f'20250508_lob_trade_bc_5' \
     + ('' if arg_lr is None else f'_lr{arg_lr:.0e}') \
@@ -115,7 +118,8 @@ train_folder = train_title = f'20250508_lob_trade_bc_5' \
                     + ('' if arg_l2_weight is None else f'_l2weight{arg_l2_weight:.0e}') \
                         + ('' if arg_dropout is None else f'_dropout{arg_dropout:.0e}') \
                             + ('' if arg_amp is None else f'_amp') \
-                                + ('' if arg_input_zero is None else f'_input_zero')
+                                + ('' if arg_input_zero is None else f'_input_zero') \
+                                    + ('' if arg_overfit_mini_batch is None else f'_overfit_mini_batch')
             
 log_name = f'{train_title}_{beijing_time().strftime("%Y%m%d")}'
 init_logger(log_name, home=train_folder, timestamp=False)
@@ -125,12 +129,14 @@ init_logger(log_name, home=train_folder, timestamp=False)
 total_epochs = 1 if run_type=='find_lr' else 80 if run_type!='test_model' else 10000000000000000
 total_epochs = total_epochs if arg_total_epochs is None else arg_total_epochs
 checkpoint_interval = 1 if run_type!='test_model' else 500
-batch_size = 32
+overfit_mini_batch = 5
+batch_size = 32 if not arg_overfit_mini_batch else overfit_mini_batch
 max_lr = 3e-5 # find_best_lr
 max_lr = arg_max_lr if arg_max_lr else max_lr
 train_kaggle_batch_n = 2**10 if not arg_amp else 2**8
 batch_n = train_kaggle_batch_n if (run_type=='train' and not in_windows()) else 1
 batch_n = batch_n if arg_batch_n is None else arg_batch_n
+batch_n = 1 if arg_overfit_mini_batch else batch_n
 default_rng = np.random.default_rng(0)
 #################################
 
@@ -847,7 +853,7 @@ if __name__ == '__main__':
             data_folder = rf'/kaggle/input/bc-train-data/'
         else:
             data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
-        data_set = LobTrajectoryDataset(data_folder, data_config=data_config, input_zero=arg_input_zero)
+        data_set = LobTrajectoryDataset(data_folder, data_config=data_config, input_zero=arg_input_zero, sample_num_limit=overfit_mini_batch if arg_overfit_mini_batch else None)
         log(f"训练数据样本数: {len(data_set)}")
 
         # 生成验证数据
@@ -913,6 +919,35 @@ if __name__ == '__main__':
                 log_interval = 1 if run_type=='find_lr' else 500,
             )
             log(f'训练耗时: {time.time() - _t:.2f} 秒')
+
+            # 小批量过拟合验证
+            if arg_overfit_mini_batch:
+                # 创建 DataLoader，设置 batch_size=5
+                dataloader = torch.utils.data.DataLoader(data_set, batch_size=overfit_mini_batch)
+                # 获取一个 batch
+                batch = next(iter(dataloader))
+                obs = batch[0].to(bc_trainer.policy.device)  # 观测
+                actions = batch[1].to(bc_trainer.policy.device).long()  # 真实动作/类别
+                # 获取动作分布
+                features = bc_trainer.policy.extract_features(obs)
+                latent_pi = bc_trainer.policy.mlp_extractor.forward_actor(features)
+                distribution = bc_trainer.policy._get_action_dist_from_latent(latent_pi)
+                # 提取概率（适用于离散动作空间）
+                probs = distribution.distribution.probs  # 形状为 [batch_size, num_actions]
+                true_class_probs = probs[torch.arange(probs.size(0)), actions]  # 真实类别的概率
+                # 获取预测类别
+                pred_actions = probs.argmax(dim=1)
+                # 构造DataFrame
+                df_overfit = pd.DataFrame({
+                    'y_true': actions.cpu().numpy(),
+                    'y_pred': pred_actions.cpu().numpy(), 
+                    'true_class_probs': true_class_probs.detach().cpu().numpy()
+                })
+                log(f"过拟合验证:\n{df_overfit}")
+                # 保存过拟合验证结果到文件
+                overfit_file = os.path.join(train_folder, f"overfit_mini_batch.csv")
+                df_overfit.to_csv(overfit_file, index=False)
+                log(f"已保存过拟合验证结果到: {overfit_file}")
 
             # 验证模型
             _t = time.time()

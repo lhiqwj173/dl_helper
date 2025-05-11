@@ -540,7 +540,7 @@ class IndexMapper:
         self.__init__(new_data_dict)
 
 class LobTrajectoryDataset(Dataset):
-    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False):
+    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False, sample_num_limit:int=None):
         """
         data_config:
             {
@@ -568,6 +568,25 @@ class LobTrajectoryDataset(Dataset):
             self.data_dict = data_dict
         else:
             self.data_dict = self._load_data_dict(data_folder)
+
+        # 如果设置了样本数限制，按照顺序采样
+        self.sample_num_limit = sample_num_limit
+        if self.sample_num_limit:
+            wait_nums = self.sample_num_limit
+            _new_data_dict = {}
+            while wait_nums > 0:
+                for k, v in self.data_dict.items():
+                    use_num = min(wait_nums, len(v['obs']))
+                    if use_num > 0:
+                        _new_data_dict[k] = {
+                            'obs': v['obs'][:use_num],
+                            'acts': v['acts'][:use_num],
+                            'dones': v['dones'][:use_num],
+                        }
+                        wait_nums -= use_num
+                    if wait_nums == 0:
+                        break
+            self.data_dict = _new_data_dict
 
         self.mapper = IndexMapper({i: len(v['obs']) for i, v in self.data_dict.items()})
         self.length = self.mapper.get_total_length()
@@ -774,6 +793,13 @@ class LobTrajectoryDataset(Dataset):
         # 返回 final_obs(x), act(y)
         return final_obs, act
     
+def test_lob_trajectory_dataset_num_limit():
+    data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
+    dataset = LobTrajectoryDataset(data_folder=data_folder, sample_num_limit=5)
+    print(len(dataset))
+    for i in range(len(dataset)):
+        d = dataset[i]
+
 def test_lob_trajectory_dataset_dataloader():
     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
     dataset = LobTrajectoryDataset(data_folder=data_folder)
@@ -873,4 +899,5 @@ if __name__ == "__main__":
     # test_lob_trajectory_dataset()
     # test_lob_trajectory_dataset_correct()
     # test_lob_trajectory_dataset_multi_file()
-    test_lob_trajectory_dataset_dataloader()
+    # test_lob_trajectory_dataset_dataloader()
+    test_lob_trajectory_dataset_num_limit()
