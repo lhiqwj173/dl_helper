@@ -73,7 +73,7 @@ class test(test_base):
     def get_model(self):
         return SimpleCNN()
     
-    def get_data(self, _type, params, data_sample_getter_func=None):
+    def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
             return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True)
         elif _type == 'test':

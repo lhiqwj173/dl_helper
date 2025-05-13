@@ -48,7 +48,7 @@ class test_base():
 
     # 初始化数据
     # 返回一个 torch dataloader
-    def get_data(self, _type, params, data_sample_getter_func=None):
+    def get_data(self, _type, data_sample_getter_func=None):
         raise NotImplementedError("必须在子类中实现 get_data 方法")
 
     # 初始化模型
@@ -76,7 +76,7 @@ class test_base():
     def get_lr_scheduler_class(self):
         return ''
 
-    def get_lr_scheduler(self, optimizer, params, *args, **kwargs):
+    def get_lr_scheduler(self, optimizer, *args, **kwargs):
         """
         可以在子类中实现 get_lr_scheduler_class 方法， 
         可以是字符串 ['ReduceLR_slow_loss', 'ReduceLROnPlateau', 'WarmupReduceLROnPlateau'] 
