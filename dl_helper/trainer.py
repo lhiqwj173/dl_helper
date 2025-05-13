@@ -654,7 +654,7 @@ def get_data_sampler(data_set, _type):
 
     return train_sampler
 
-def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
+def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
     # 训练实例
     test = test_class(*args, **kwargs)
     try:
@@ -735,8 +735,7 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
         # 绝对学习率优先
         # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
-        # optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
-        optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
         scheduler = test.get_lr_scheduler(optimizer, params)
         criterion = test.get_criterion()
 
@@ -1248,19 +1247,15 @@ def test_func():
                 acc.save_state('checkpoint')
                 acc.print(f'{i} {idx} val checkpoint done')
 
-def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
-    assert mode in ['normal', 'cache_data'], f'mode error: {mode}, must be normal / cache_data'
+def predict(test_class, *args, mode='gpu', train_param={}, model=None, **kwargs):
+    assert mode in ['gpu'], f'mode error: {mode}, must be gpu'
     num_processes = match_num_processes()
     lock = mp.Manager().Lock()
-
-    if mode == 'cache_data':
-        notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
-    elif mode == 'normal':
-        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
+    notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
 
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: xla /xla_tqdm/simple/cache_data/ normal 
+    mode: xla/xla_tqdm/gpu
     args / kwargs 为tester构造参数
 
     可增加字典参数(都可在命令行添加):
@@ -1311,9 +1306,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     elif mode=='xla_tqdm' and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
 
-    elif mode == 'cache_data':
-        notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
-    elif mode == 'normal':
-        notebook_launcher(run_fn_1, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+    elif mode == 'gpu':
+        notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+
     else:
-        raise Exception(f'mode error: {mode}, must be xla / xla_tqdm / simple / cache_data / normal')
+        raise Exception(f'mode error: {mode}, must be xla / xla_tqdm / gpu')

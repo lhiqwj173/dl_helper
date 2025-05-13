@@ -492,7 +492,6 @@ class Dataset_cahce(torch.utils.data.Dataset):
         except Exception as e:
             print(f'index:{index} length:{len(self.x_idx)}')
 
-
 def find_nearest_mini_dataset_length(a, b, world_size):
     if a % b == 0 and b%world_size == 0:
         return b

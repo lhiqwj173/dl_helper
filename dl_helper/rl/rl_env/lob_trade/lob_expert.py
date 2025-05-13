@@ -29,7 +29,7 @@ class LobExpert_file():
     专家策略
     通过 文件 准备数据
     """
-    def __init__(self, env=None, rng=None, pre_cache=False):
+    def __init__(self, env=None, rng=None, pre_cache=False, data_folder=DATA_FOLDER):
         """
         pre_cache: 是否缓存数据 
 
@@ -43,7 +43,7 @@ class LobExpert_file():
         self.cache_data = {}
 
         # 数据文件夹
-        self.data_folder = DATA_FOLDER
+        self.data_folder = data_folder
 
         self.all_file_paths = []
         self.all_file_names = []
