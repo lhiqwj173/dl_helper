@@ -38,10 +38,11 @@ from py_ext.tool import init_logger,log
 from py_ext.wechat import send_wx
 from py_ext.datetime import beijing_time
 
-from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES
+from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_env.lob_trade.lob_expert import LobExpert_file
 from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
+from dl_helper.rl.rl_utils import date2days, days2date
 from dl_helper.tool import report_memory_usage, in_windows
 from dl_helper.idx_manager import get_idx
 from dl_helper.train_folder_manager import TrainFolderManagerBC
@@ -1028,6 +1029,12 @@ if __name__ == '__main__':
                 batch = next(iter(dataloader))
                 obs = batch[0].to(bc_trainer.policy.device)  # 观测
                 actions = batch[1].to(bc_trainer.policy.device).long()  # 真实动作/类别
+                # 样本代码
+                symbols = [USE_CODES[int(i)] for i in obs[:, -4]]
+                # 样本日期
+                dates = [date2days(i) for i in obs[:, -3]]
+                # 样本剩余秒数
+                secs = obs[:, -2].round() * MAX_SEC_BEFORE_CLOSE
                 # 获取动作分布
                 features = bc_trainer.policy.extract_features(obs)
                 latent_pi = bc_trainer.policy.mlp_extractor.forward_actor(features)
@@ -1039,6 +1046,9 @@ if __name__ == '__main__':
                 pred_actions = probs.argmax(dim=1)
                 # 构造DataFrame
                 df_overfit = pd.DataFrame({
+                    'symbol': symbols,
+                    'date': dates,
+                    'sec': secs,
                     'y_true': actions.cpu().numpy(),
                     'y_pred': pred_actions.cpu().numpy(), 
                     'true_class_probs': true_class_probs.detach().cpu().numpy()

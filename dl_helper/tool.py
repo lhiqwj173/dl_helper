@@ -442,8 +442,12 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
     
     参数:
     plateaus (list): 平台期列表
-    rep_select: 波峰波谷的选取方式, 'mid' 表示中间点, 'random' 表示随机点
-    
+    rep_select: 波峰波谷的选取方式
+        'mid' 表示中间点
+        'random' 表示随机点
+        'first' 表示第一个点
+        'last' 表示最后一个点
+
     返回:
     tuple: (peaks, valleys)，分别为波峰和波谷的代表点列表
     """
@@ -470,6 +474,10 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
                     rep = np.random.randint(start, end)
                 else:
                     rep = rng.integers(start, end)
+        elif rep_select == 'first':
+            rep = start
+        elif rep_select == 'last':
+            rep = end
 
         # 如果平台期的点数 > 1
         # 则 rep 应该为 start + 1 之后的点
@@ -506,7 +514,7 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
                 valleys_num_points.append(num_points)
     return peaks, valleys, peaks_num_points, valleys_num_points
 
-def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points, valleys_num_points, fee=5e-5, profit_threshold=0.001):
+def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points, valleys_num_points, fee=5e-5, profit_threshold=0.0, profit_fee_times=0):
     """
     寻找所有可盈利的交易对，最大化对数收益率总和，考虑更低波谷的潜在更大利润。
 
@@ -518,7 +526,8 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
     valleys_num_points (list): 波谷点数列表
     peaks_num_points (list): 波峰点数列表
     fee (float): 交易费率，默认为 5e-5
-    profit_threshold (float): 最小利润，默认为 0.001
+    profit_threshold (float): 最小利润，默认为 0.0
+    profit_fee_times (int): 最小利润率与交易费率的倍数，默认为 0
 
     返回:
     trades (list): 所有可盈利的交易对列表，每个元素为 (valley, peak)
@@ -539,6 +548,13 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         valleys[-1] = min(valleys[-1], len(bid) - 1)
     if peaks:
         peaks[-1] = min(peaks[-1], len(ask) - 1)
+
+    # 记录备选的波谷（相同的价格数值）
+    valley_backup = []
+    find_latest_valley = None
+    # 前一个交易对的数据
+    pre_valley_backup = []
+    pre_find_latest_valley = None
 
     pre_t2 = 0# 上一个波峰t
     while valley_idx < len(valleys) and peak_idx < len(peaks):
@@ -566,9 +582,31 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         while _valley_idx < len(valleys) and valleys[_valley_idx] < t2:
             # 时间药满足小于 t2
             _valley_t = valleys[_valley_idx]
-            if ask[_valley_t] <= ask[t1]:
+            if ask[_valley_t] < ask[t1]:
                 t1 = _valley_t
                 valley_idx = _valley_idx
+                valley_backup = []
+                find_latest_valley = None
+
+            elif ask[_valley_t] == ask[t1]:
+                # 如果ask相等，检查 相同点之间的距离 / 总交易距离 的占比，
+                # 如果占比大于0.2，则用新的点替换之前的波谷
+                # 用于控制 平整 的占比不能过大(买入后很久才开始上涨)
+                no_up_distance = _valley_t - t1
+                total_distance = t2 - t1
+                if no_up_distance / total_distance > 0.2:
+                    if valley_backup and ask[valley_backup[-1][0]] != ask[t1]:
+                        # 不是同一个批次，需要清空
+                        valley_backup = []
+                        find_latest_valley = None
+                    valley_backup.append((t1, valley_idx))
+                    find_latest_valley = _valley_t
+                    t1 = _valley_t
+                    valley_idx = _valley_idx
+                else:
+                    # 记录 平整 的最后一个点
+                    find_latest_valley = _valley_t
+
             _valley_idx += 1
 
         # 若当前波谷ask >= 上一个波峰bid, 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
@@ -582,6 +620,17 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             ):
             # print(f'前一个波峰卖出损失')
             trades[-1] = (trades[-1][0], t2)
+
+            # 遍历计算 平整 的占比
+            for _t1, _valley_idx in pre_valley_backup:
+                _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
+                no_up_distance = _find_latest_valley - _t1
+                total_distance = t2 - _t1
+                if no_up_distance / total_distance <= 0.2:
+                    # 更新 trades[-1]
+                    trades[-1] = (_t1, t2)
+                    break
+
             pre_t2 = t2
             peak_idx += 1
             valley_idx += 1
@@ -589,12 +638,17 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
 
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
-        if sell_income > buy_cost + profit_threshold:
+        profit = sell_income - buy_cost
+        if profit >= profit_threshold and profit/ask[t1] >= profit_fee_times * fee:
             # 确认当前交易
             trades.append((t1, t2))
             pre_t2 = t2
             valley_idx += 1
             peak_idx += 1
+            pre_valley_backup = valley_backup
+            pre_find_latest_valley = find_latest_valley
+            valley_backup = []
+            find_latest_valley = None
         else:
             # 不盈利
             # 1. 对比前一个交易对的波峰，若当前的波峰更高，则修改上一个交易对的波峰为当前波峰
@@ -609,6 +663,17 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 # print(f'当前波峰波谷不盈利，合并到上一个交易对')
                 # 修改上一个交易对的波峰为当前波峰
                 trades[-1] = (trades[-1][0], t2)
+
+                # 遍历计算 平整 的占比
+                for _t1, _valley_idx in pre_valley_backup:
+                    _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
+                    no_up_distance = _find_latest_valley - _t1
+                    total_distance = t2 - _t1
+                    if no_up_distance / total_distance <= 0.2:
+                        # 更新 trades[-1]
+                        trades[-1] = (_t1, t2)
+                        break
+
                 pre_t2 = t2
                 valley_idx += 1
                 peak_idx += 1
@@ -625,7 +690,11 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
 def max_profit_reachable(bid, ask, rep_select='mid', rng=None):
     """
     计算bid/ask序列中 潜在的最大利润
-    rep_select: 波峰波谷的选取方式, 'mid' 表示中间点, 'random' 表示随机点
+    rep_select: 波峰波谷的选取方式
+        'mid' 表示中间点
+        'random' 表示随机点
+        'first' 表示第一个点
+        'last' 表示最后一个点
 
     返回 
     trades: 交易对列表，每个元素为 (t1, t2) 表示交易的起点和终点
@@ -706,7 +775,7 @@ def plot_trades(mid, trades, valleys, peaks):
     # 在浏览器中显示图表
     fig.show(renderer='browser')
 
-def plot_trades_plt(mid, trades, valleys, peaks):
+def plot_trades_plt(mid, trades, valleys, peaks, figsize=(10, 4)):
     """
     使用 Matplotlib 可视化 mid-price 序列和交易机会。
     
@@ -720,7 +789,7 @@ def plot_trades_plt(mid, trades, valleys, peaks):
     time = list(range(len(mid)))
     
     # 创建图表
-    plt.figure(figsize=(10, 4))
+    plt.figure(figsize=figsize)
     
     # 绘制 mid-price 曲线
     plt.plot(time, mid, label='Mid Price', color='blue')
@@ -882,6 +951,31 @@ def calculate_sell_save(df, fee=5e-5):
     df.loc[df.index[final_sell_positions], 'sell_save'] = log_returns
     
     return df
+
+def reset_profit_sell_save(lob_data):
+    """
+    第一个buy动作信号点，下一个时点价格不能下跌（不允许利用这种成交的跳价）
+    第一个sell动作信号点，下一个时点价格不能上涨（不允许利用这种成交的跳价）
+    """
+    # 计算前一行和下一行的值
+    prev_profit = lob_data['profit'].shift(1)
+    prev_sell_save = lob_data['sell_save'].shift(1)
+    next_sell_price = lob_data['BASE卖1价'].shift(-1)
+    next_buy_price = lob_data['BASE买1价'].shift(-1)
+    
+    # 条件1：profit > 0, 前一行 profit <= 0, 且下一个 BASE卖1价 < 当前 BASE卖1价
+    condition1 = (lob_data['profit'] > 0) & (prev_profit <= 0) & (next_sell_price < lob_data['BASE卖1价'])
+    
+    # 条件2：sell_save > 0, 前一行 sell_save <= 0, 且下一个 BASE买1价 > 当前 BASE买1价
+    condition2 = (lob_data['sell_save'] > 0) & (prev_sell_save <= 0) & (next_buy_price > lob_data['BASE买1价'])
+    
+    # 将满足条件1的行的 profit 置为 0
+    lob_data.loc[condition1, 'profit'] = 0
+    
+    # 将满足条件2的行的 sell_save 置为 0
+    lob_data.loc[condition2, 'sell_save'] = 0
+    
+    return lob_data
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2

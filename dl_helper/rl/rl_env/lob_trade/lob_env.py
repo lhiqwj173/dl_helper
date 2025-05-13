@@ -85,6 +85,7 @@ class data_producer:
             debug_time=None,
             random_begin_in_day=True,
             latest_dates=-1,
+            data_folder=DATA_FOLDER,
 
             # 数据增强
             use_random_his_window=True,
@@ -142,7 +143,7 @@ class data_producer:
         self.cols_num = 130 if not self.need_cols else len(self.need_cols)
 
         # 训练数据
-        self.data_folder = DATA_FOLDER
+        self.data_folder = data_folder
 
         self.data_type = data_type
         self.cur_data_type = data_type
@@ -263,115 +264,116 @@ class data_producer:
         按照文件列表读取数据
         每次完成后从文件列表中剔除
         """
-        while (self.files) or (self.cur_data_type != self.data_type):
-            # 更新在用数据类型
-            self.cur_data_type = self.data_type
+        if (not self.idxs) or (self.cur_data_type != self.data_type):
+            while self.files:
+                # 更新在用数据类型
+                self.cur_data_type = self.data_type
 
-            _cur_data_file = self.files.pop(0)
+                _cur_data_file = self.files.pop(0)
 
-            # 路径中只取文件名
-            self.cur_data_file = os.path.basename(_cur_data_file)
+                # 路径中只取文件名
+                self.cur_data_file = os.path.basename(_cur_data_file)
 
-            log(f'[{self.data_type}] load date file: {self.cur_data_file}')
-            self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(_cur_data_file, 'rb'))
-            # 转换数据类型为float32
-            for col in self.all_raw_data.iloc[:, :-3].columns:
-                self.all_raw_data[col] = self.all_raw_data[col].astype('float32')
-            self.all_raw_data = self.all_raw_data.set_index('时间')
+                log(f'[{self.data_type}] load date file: {self.cur_data_file}')
+                self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(_cur_data_file, 'rb'))
+                # 转换数据类型为float32
+                for col in self.all_raw_data.iloc[:, :-3].columns:
+                    self.all_raw_data[col] = self.all_raw_data[col].astype('float32')
+                self.all_raw_data = self.all_raw_data.set_index('时间')
 
-            # 列过滤
-            if self.need_cols:
-                self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
-                # 只保留需要的列
-                self.all_raw_data = self.all_raw_data.loc[:, self.need_cols]
+                # 列过滤
+                if self.need_cols:
+                    self.need_cols_idx = [self.all_raw_data.columns.get_loc(col) for col in self.need_cols]
+                    # 只保留需要的列
+                    self.all_raw_data = self.all_raw_data.loc[:, self.need_cols]
 
-            if self.simple_test:
-                self.ids = self.ids[:8000]
-                self.mean_std = self.mean_std[:8000]
-                self.x = self.x[:8000]
+                if self.simple_test:
+                    self.ids = self.ids[:8000]
+                    self.mean_std = self.mean_std[:8000]
+                    self.x = self.x[:8000]
 
-            # 距离市场关闭的秒数
-            self.date = self.cur_data_file[:8]
-            dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
-            dt = pytz.timezone('Asia/Shanghai').localize(dt)
-            close_ts = int(dt.timestamp())
-            self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
-            self.before_market_close_sec = close_ts - self.before_market_close_sec
+                # 距离市场关闭的秒数
+                self.date = self.cur_data_file[:8]
+                dt = datetime.datetime.strptime(f'{self.date} 15:00:00', '%Y%m%d %H:%M:%S')
+                dt = pytz.timezone('Asia/Shanghai').localize(dt)
+                close_ts = int(dt.timestamp())
+                self.before_market_close_sec = np.array([int(i.split('_')[1]) for i in self.ids])
+                self.before_market_close_sec = close_ts - self.before_market_close_sec
 
-            # 解析标的 随机挑选一个标的数据
-            symbols = np.array([i.split('_')[0] for i in self.ids])
-            unique_symbols = [i for i in np.unique(symbols) if i != '159941']
+                # 解析标的 随机挑选一个标的数据
+                symbols = np.array([i.split('_')[0] for i in self.ids])
+                unique_symbols = np.unique(symbols)
 
-            if self.use_symbols:
-                unique_symbols = [i for i in unique_symbols if i in self.use_symbols]
+                if self.use_symbols:
+                    unique_symbols = [i for i in unique_symbols if i in self.use_symbols]
 
-            # 获取所有标的的起止索引
-            self.full_idxs = []# begin 没有被截断的索引
-            self.idxs = []
-            for symbol in unique_symbols:
-                symbol_mask = symbols == symbol
-                symbol_indices = np.where(symbol_mask)[0]
-                begin = symbol_indices[0]
-                end = symbol_indices[-1]
-                self.full_idxs.append([begin, end, USE_CODES.index(symbol)])
-                if not self.debug_time and (self.random_begin_in_day and self.data_type == 'train'):
-                    if hasattr(self, 'begin_before_market_close_sec'):
+                # 获取所有标的的起止索引
+                self.full_idxs = []# begin 没有被截断的索引
+                self.idxs = []
+                for symbol in unique_symbols:
+                    symbol_mask = symbols == symbol
+                    symbol_indices = np.where(symbol_mask)[0]
+                    begin = symbol_indices[0]
+                    end = symbol_indices[-1]
+                    self.full_idxs.append([begin, end, USE_CODES.index(symbol)])
+                    if not self.debug_time and (self.random_begin_in_day and self.data_type == 'train'):
+                        if hasattr(self, 'begin_before_market_close_sec'):
+                            _idx = begin
+                            while _idx <= end:
+                                if self.before_market_close_sec[_idx] == int(self.begin_before_market_close_sec):
+                                    break
+                                _idx += 1
+                            assert _idx != end + 1, f'{int(self.begin_before_market_close_sec)} not found'
+                            begin = _idx
+                        else:
+                            # begin = random.randint(begin, end-50)# 至少50个数据
+                            begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
+                    self.idxs.append([begin, end, USE_CODES.index(symbol)])
+
+                if not self.idxs:
+                    log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                    continue
+
+                # 训练数据随机选择一个标的
+                # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
+                if self.data_type == 'train' and not self.use_symbols:
+                    # self.idxs = [random.choice(self.idxs)]
+                    choose_idx = self.np_random.choice(len(self.idxs))
+                    self.idxs = [self.idxs[choose_idx]]
+                    self.full_idxs = [self.full_idxs[choose_idx]]
+
+                # 截取测试的时间点
+                if self.debug_time:
+                    for idx_obj in self.idxs:
+                        begin, end, _ = idx_obj
                         _idx = begin
                         while _idx <= end:
-                            if self.before_market_close_sec[_idx] == int(self.begin_before_market_close_sec):
+                            if self.before_market_close_sec[_idx] <= int(self.debug_time):
                                 break
                             _idx += 1
-                        assert _idx != end + 1, f'{int(self.begin_before_market_close_sec)} not found'
+                        assert _idx != end + 1, f'{int(self.debug_time)} not found'
                         begin = _idx
-                    else:
-                        # begin = random.randint(begin, end-50)# 至少50个数据
-                        begin = self.np_random.integers(begin, end-50+1)# 至少50个数据
-                self.idxs.append([begin, end, USE_CODES.index(symbol)])
+                        idx_obj[0] = begin
 
-            if not self.idxs:
-                log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
-                continue
+                # 当前的标的
+                self.cur_symbol = USE_CODES[self.idxs[0][2]]
 
-            # 训练数据随机选择一个标的
-            # 一个日期文件只使用其中的一个标的的数据，避免同一天各个标的之间存在的相关性 对 训练产生影响
-            if self.data_type == 'train':
-                # self.idxs = [random.choice(self.idxs)]
-                choose_idx = self.np_random.choice(len(self.idxs))
-                self.idxs = [self.idxs[choose_idx]]
-                self.full_idxs = [self.full_idxs[choose_idx]]
+                log(f'[{self.data_type}] init idxs: {self.idxs}')
 
-            # 截取测试的时间点
-            if self.debug_time:
-                for idx_obj in self.idxs:
-                    begin, end, _ = idx_obj
-                    _idx = begin
-                    while _idx <= end:
-                        if self.before_market_close_sec[_idx] <= int(self.debug_time):
-                            break
-                        _idx += 1
-                    assert _idx != end + 1, f'{int(self.debug_time)} not found'
-                    begin = _idx
-                    idx_obj[0] = begin
+                # 调整数据
+                self.all_raw_data = fix_raw_data(self.all_raw_data) 
 
-            # 当前的标的
-            self.cur_symbol = USE_CODES[self.idxs[0][2]]
+                # 记录需要的索引，供后续转为numpy时使用
+                # BASE买1价 / BASE卖1价
+                for col in ['BASE买1价', 'BASE卖1价']:
+                    self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
 
-            log(f'[{self.data_type}] init idxs: {self.idxs}')
+                # 准备绘图数据
+                self.pre_plot_data()
 
-            # 调整数据
-            self.all_raw_data = fix_raw_data(self.all_raw_data) 
-
-            # 记录需要的索引，供后续转为numpy时使用
-            # BASE买1价 / BASE卖1价
-            for col in ['BASE买1价', 'BASE卖1价']:
-                self.col_idx[col] = self.all_raw_data.columns.get_loc(col)
-
-            # 准备绘图数据
-            self.pre_plot_data()
-
-            # # 测试用
-            # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
-            break
+                # # 测试用
+                # pickle.dump((self.all_raw_data, self.mean_std, self.x), open(f'{self.data_type}_raw_data.pkl', 'wb'))
+                break
 
     def set_data_type(self, data_type):
         self.data_type = data_type
@@ -1370,7 +1372,7 @@ class LOB_trade_env(gym.Env):
     REG_NAME = 'lob'
     ITERATION_DONE_FILE = os.path.join(os.path.expanduser('~'), '_lob_env_iteration_done')
     
-    def __init__(self, config: dict, data_std=True, debug_obs_date=None, debug_obs_time=None, debug_init_pos=None, dump_bid_ask_accnet=False):
+    def __init__(self, config: dict, data_std=True, debug_obs_date=None, debug_obs_time=None, debug_init_pos=None, dump_bid_ask_accnet=False, data_folder=DATA_FOLDER):
         """
         :param config: 配置
             {
@@ -1491,6 +1493,7 @@ class LOB_trade_env(gym.Env):
             debug_time=self.debug_time,
             random_begin_in_day=self.random_begin_in_day,
             latest_dates=self.latest_dates,
+            data_folder=data_folder,
             use_random_his_window=self.use_random_his_window,
             use_gaussian_noise_vol=self.use_gaussian_noise_vol,
             use_spread_add_small_limit_order=self.use_spread_add_small_limit_order,

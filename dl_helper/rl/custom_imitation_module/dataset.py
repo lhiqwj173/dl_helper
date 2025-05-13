@@ -550,22 +550,29 @@ class LobTrajectoryDataset(Dataset):
 
         data_dict: 
             {
-                0: {
+                0/symbol: {
                     'obs': np.ndarray,
                     'acts': np.ndarray,
-                    'dones': np.ndarray,
                 },
-                1: {
+                1/symbol: {
                     'obs': np.ndarray,
                     'acts': np.ndarray,
-                    'dones': np.ndarray,
                 },
             }
 
-        键为 symbol_id, 值为字典, 字典的键为特征名, 值为 numpy 数组
+        键为 symbol_id/symbol, 值为字典, 字典的键为特征名, 值为 numpy 数组
         """
         if data_dict:
-            self.data_dict = data_dict
+            fix_data_dict = {}
+            # 修改键为 symbol > symbol_id
+            for k in list(data_dict.keys()):
+                if isinstance(k, str):
+                    new_key = USE_CODES.index(k)
+                    fix_data_dict[new_key] = data_dict[k]
+                else:
+                    fix_data_dict[k] = data_dict[k]
+
+            self.data_dict = fix_data_dict
         else:
             self.data_dict = self._load_data_dict(data_folder)
 
@@ -581,7 +588,6 @@ class LobTrajectoryDataset(Dataset):
                         _new_data_dict[k] = {
                             'obs': v['obs'][:use_num],
                             'acts': v['acts'][:use_num],
-                            'dones': v['dones'][:use_num],
                         }
                         wait_nums -= use_num
                     if wait_nums == 0:
@@ -710,7 +716,7 @@ class LobTrajectoryDataset(Dataset):
             data_dict = {}
             for key, length in key_lengths.items():
                 data_dict[key] = {}
-                for k in ['obs', 'acts', 'dones']:
+                for k in ['obs', 'acts']:
                     # 为每个子键值预分配空间
                     data_dict[key][k] = np.empty([key_lengths[key]] + list(key_shape[key][k][1:]), dtype=np.float32)
             
@@ -740,12 +746,12 @@ class LobTrajectoryDataset(Dataset):
     def __getitem__(self, idx):
         """
         1. 根据 idx 获取对应的 symbol_id 和 list_idx
-        2. 根据 symbol_id 和 list_idx 获取对应 obs/acts/dones
+        2. 根据 symbol_id 和 list_idx 获取对应 obs/acts
         3. 根据 obs ([before_market_close_sec, pos, days]) 获取对应的订单簿obs数据
         4. 拼接 final_obs = 订单簿obs + symbol_id + obs
         5. 返回 final_obs(x), act(y)
         """
-        # 获取对应 obs/acts/dones
+        # 获取对应 obs/acts
         key, list_idx = self.mapper.get_key_and_index(idx)
         obs = self.data_dict[key]['obs'][list_idx]
         act = self.data_dict[key]['acts'][list_idx]
@@ -864,7 +870,7 @@ def test_lob_trajectory_dataset_correct():
         # 初始化 
         symbol_id = int(obs[-4])
         if symbol_id not in transitions:
-            transitions[symbol_id] = {i:[] for i in ['obs', 'acts', 'dones']}
+            transitions[symbol_id] = {i:[] for i in ['obs', 'acts']}
             real_transitions[symbol_id] = {'obs':[]}
         act = env.action_space.sample()
         # step填充
@@ -875,7 +881,6 @@ def test_lob_trajectory_dataset_correct():
             if not data_std:
                 transitions[symbol_id]['obs'][-1][-3] /= MAX_SEC_BEFORE_CLOSE
             transitions[symbol_id]['acts'].append(act)
-            transitions[symbol_id]['dones'].append(0)
             real_transitions[symbol_id]['obs'].append(obs)
             obs, reward, terminated, truncated, info = env.step(act)
             done = terminated or truncated

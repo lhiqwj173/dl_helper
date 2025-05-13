@@ -20,7 +20,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
-from dl_helper.tool import calculate_profit, calculate_sell_save
+from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save
 
 from py_ext.tool import log, share_tensor
 
@@ -45,10 +45,6 @@ class LobExpert_file():
         # 数据文件夹
         self.data_folder = DATA_FOLDER
 
-        if self.pre_cache:
-            log('cache all expert data')
-            self.cache_all()
-
         self.all_file_paths = []
         self.all_file_names = []
         for root, dirs, _files in os.walk(self.data_folder):
@@ -56,6 +52,10 @@ class LobExpert_file():
                 if _file.endswith('.pkl'):
                     self.all_file_paths.append(os.path.join(root, _file))
                     self.all_file_names.append(_file)
+
+        if self.pre_cache:
+            log('cache all expert data')
+            self.cache_all()
 
     @property
     def observation_space(self):
@@ -72,15 +72,11 @@ class LobExpert_file():
         """
         缓存所有数据
         """
-        for data_type in os.listdir(self.data_folder):
-            type_folder = os.path.join(self.data_folder, data_type)
-            if not os.path.isdir(type_folder):
-                continue
-            for data in os.listdir(type_folder):
-                data_file = os.path.join(type_folder, data)
-                if not os.path.isfile(data_file):
-                    continue
-                self.prepare_train_data_file(date2days(data.split('.')[0]), _data_file_path=data_file)
+        for root, dirs, _files in os.walk(self.data_folder):
+            for _file in _files:
+                if _file.endswith('.pkl'):
+                    _file_path = os.path.join(root, _file)
+                    self.prepare_train_data_file(date2days(_file.split('.')[0]), _data_file_path=_file_path)
 
         log(f'cache_all done, cache_data: {len(self.cache_data)} dates')
 
@@ -127,7 +123,7 @@ class LobExpert_file():
                 # 去掉第一个, 第一个数据无法成交
                 _lob_data['BASE买1价'].iloc[1:], 
                 _lob_data['BASE卖1价'].iloc[1:], 
-                rep_select='random',
+                rep_select='last',
                 rng=self.rng,
             )# 增加随机泛化
             # plot_trades((lob_data['BASE买1价']+lob_data['BASE卖1价'])/2, trades, valleys, peaks)
@@ -176,8 +172,11 @@ class LobExpert_file():
         lob_data.loc[am_cond, 'sell_save'] = am_res['sell_save'].values
         lob_data.loc[pm_cond, 'sell_save'] = pm_res['sell_save'].values
 
+        # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
+        lob_data = reset_profit_sell_save(lob_data)
+
         # 最终数据 action, before_market_close_sec, profit, sell_save
-        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save']]
+        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'BASE买1价', 'BASE卖1价']]
         return lob_data
 
     def prepare_train_data_file(self, date_key, symbol_key=[], dtype=np.float32, _data_file_path=''):
@@ -193,9 +192,10 @@ class LobExpert_file():
         symbols = [USE_CODES[i] for i in symbol_key]
 
         # 读取数据
-        _date_file = f'{date}.pkl'
-        _idx = self.all_file_names.index(_date_file)
-        _data_file_path = self.all_file_paths[_idx]
+        if _data_file_path == '':
+            _date_file = f'{date}.pkl'
+            _idx = self.all_file_names.index(_date_file)
+            _data_file_path = self.all_file_paths[_idx]
         ids, mean_std, x, self.full_lob_data = pickle.load(open(_data_file_path, 'rb'))
 
         # 距离市场关闭的秒数
@@ -263,25 +263,48 @@ class LobExpert_file():
         pos = obs[-2]
         
         # 查找 action
-        data = lob_data[lob_data['before_market_close_sec'] == before_market_close_sec]
-        assert len(data) == 1, f'len(data): {len(data)}'
+        # 向后多取 future_act_num 个数据
+        future_act_num = 5
+        data = lob_data[lob_data['before_market_close_sec'] <= before_market_close_sec].iloc[:future_act_num]
+        assert len(data) > 0, f'len(data): {len(data)}'# 至少有一个数据
 
-        data = data.iloc[0]
-        res = data['action']
-        if res == ACTION_BUY:
-            if pos == 0 and data['profit'] <= 0:
-                # 若当前位置无持仓且买入收益为负
-                # 维持卖出动作
+        if pos == 0:
+            # 当前空仓
+            # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
+            if len(data[\
+                    (data['action']==ACTION_BUY) & \
+                     (data['profit'] > 0) & \
+                        (data['BASE卖1价'] == data['BASE卖1价'].iloc[0])\
+                            ]) > 0:
+                res = ACTION_BUY
+            else:
                 res = ACTION_SELL
-
-        elif res == ACTION_SELL:
-            if pos == 1 and data['sell_save'] < 0:
-                # 若当前位置有持仓且卖出收益为负
-                # 维持买入动作
+        else:
+            # 当前有持仓
+            # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
+            if len(data[\
+                (data['action']==ACTION_SELL) & \
+                    (data['sell_save'] > 0) & \
+                        (data['BASE买1价'] == data['BASE买1价'].iloc[0])\
+                            ]) > 0:
+                res = ACTION_SELL
+            else:
                 res = ACTION_BUY
 
-        # if len(obs.shape) == 2:
-        #     res = np.array([res])
+        # data = data.iloc[0]
+        # res = data['action']
+        # if res == ACTION_BUY:
+        #     if pos == 0 and data['profit'] <= 0:
+        #         # 若当前位置无持仓且买入收益为负
+        #         # 维持卖出动作
+        #         res = ACTION_SELL
+
+        # elif res == ACTION_SELL:
+        #     if pos == 1 and data['sell_save'] < 0:
+        #         # 若当前位置有持仓且卖出收益为负
+        #         # 维持买入动作
+        #         res = ACTION_BUY
+
         return res
     
     def get_action(self, obs):
