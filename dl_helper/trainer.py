@@ -712,11 +712,12 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
             params.batch_size //= num_processes
             p.print(f'batch_size: {b} -> {params.batch_size}')
         
-            if not params.abs_learning_rate:
-                # 若不存在绝对学习率，需要基于设备调整lr
-                l = params.learning_rate
-                params.learning_rate *= num_processes
-                p.print(f'learning_rate: {l} -> {params.learning_rate}')
+            # 总的batch size 没有变化，所以lr 不需要调整
+            # if not params.abs_learning_rate:
+            #     # 若不存在绝对学习率，需要基于设备调整lr
+            #     l = params.learning_rate
+            #     params.learning_rate *= num_processes
+            #     p.print(f'learning_rate: {l} -> {params.learning_rate}')
 
         # 临时额外的训练参数
         if train_param:
@@ -734,7 +735,8 @@ def run_fn_cache_data(lock, num_processes, test_class, args, kwargs, train_param
 
         # 绝对学习率优先
         # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
         scheduler = test.get_lr_scheduler(optimizer, params)
         criterion = test.get_criterion()
 
@@ -1070,97 +1072,6 @@ def run_fn_1(lock, num_processes, test_class, args, kwargs, train_param={}, mode
     package_root(accelerator, params)
     accelerator.wait_for_everyone()
 
-def run_fn(lock, num_processes, test_class, args, kwargs, train_param={}, model=None):
-    set_seed(42)
-
-    # 训练实例
-    test = test_class(*args, **kwargs)
-
-    # 训练参数
-    params = test.get_param()
-
-    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
-    p = printer(lock, accelerator)
-
-    # 调整参数
-    if num_processes >= 2:
-        # 调整batch_size, 多gpu时的batch_size指的是每个gpu的batch_size
-        b = params.batch_size
-        params.batch_size //= num_processes
-        p.print(f'batch_size: {b} -> {params.batch_size}')
-    
-        if not params.abs_learning_rate:
-            # 若不存在绝对学习率，需要基于设备调整lr
-            l = params.learning_rate
-            params.learning_rate *= num_processes
-            p.print(f'learning_rate: {l} -> {params.learning_rate}')
-
-    p.print(f'batch_size: {params.batch_size}')
-
-    if train_param:
-        for k, v in train_param.items():
-            setattr(params, k, v)
-
-    train_loader = test.get_data('train', params)
-    val_loader = test.get_data('val', params)
-
-    p.print(f'dataset length: {len(train_loader.dataset)}')
-    p.print(f'dataloader length: {len(train_loader)}')
-
-    if accelerator.is_main_process:
-        report_memory_usage(f'init train data done')
-
-    if None is model:
-        model = m_bin_ctabl(60, 40, 100, 40, 120, 10, 3, 1)
-
-    criterion = nn.CrossEntropyLoss()
-    # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30)
-
-    model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-        model, optimizer, train_loader, val_loader, scheduler
-    )
-
-    p.print(f'prepare done')
-    p.print(f'each epoch step: {len(train_loader)}')
-    
-    # 训练循环
-    for epoch in range(params.epochs):
-        model.train()
-        for idx, (data, target) in tqdm(enumerate(train_loader), total=len(train_loader), disable=not accelerator.is_main_process):
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
-                
-            optimizer.zero_grad()
-            output = model(data)
-            loss = criterion(output, target)
-            accelerator.backward(loss)
-            optimizer.step()
-        
-        scheduler.step()
-        accelerator.wait_for_everyone()
-        if accelerator.is_main_process:
-            report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
-
-        model.eval()
-        with torch.no_grad():
-            for idx, (data, target) in tqdm(enumerate(val_loader), total=len(val_loader), disable=not accelerator.is_main_process):
-                # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                if not params.classify and len(target.shape) == 1:
-                    target = target.unsqueeze(1)
-
-                output = model(data)
-                loss = criterion(output, target)
-
-        accelerator.wait_for_everyone()
-        if accelerator.is_main_process:
-            report_memory_usage(f"[{epoch}][{len(val_loader)}] val done")
-
-    if accelerator.is_main_process:
-        report_memory_usage('all done')
-
 def run_fn_xla(index, lock, num_processes, test_class, args, kwargs, train_param={}, model=None, if_tqdm=False):
     ddp = True if is_kaggle() else False
     xm.master_print(f'ddp: {ddp}')
@@ -1399,8 +1310,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, False), start_method='fork')     
     elif mode=='xla_tqdm' and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
-    elif mode == 'simple':
-        notebook_launcher(run_fn, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+
     elif mode == 'cache_data':
         notebook_launcher(run_fn_cache_data, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     elif mode == 'normal':
