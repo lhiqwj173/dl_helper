@@ -17,7 +17,9 @@ from dl_helper.trainer import run
 from dl_helper.tool import model_params_num
 
 from py_ext.tool import log, init_logger
-init_logger('test_mnist', level='INFO')
+
+train_folder = train_title = f'20250513_test_mnist'
+init_logger(train_title, home=train_folder, timestamp=False)
 
 """
 手写 mnist 数据集训练测试
@@ -44,12 +46,13 @@ class SimpleCNN(nn.Module):
         return x
 
 class test(test_base):
+    title_base = train_title
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
         # 实例化 参数对象
         self.para = Params(
-            train_title='test_mnist', 
+            train_title=train_title, 
 
             # 10分类
             classify=True,

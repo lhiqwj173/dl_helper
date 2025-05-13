@@ -1264,7 +1264,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
 
     # 分配idx
     from dl_helper.train_param import get_gpu_info
-    base_title= f'{test_class.title_base()}_{get_gpu_info()}'
+    base_title= f'{test_class.title_base}_{get_gpu_info()}'
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith('idx='):
