@@ -47,6 +47,7 @@ if '__main__' == __name__:
             'pip install einops',
             'pip install torchmetrics',
             'pip install requests_toolbelt',
+            'pip install torchvision',
             'pip install torchstat',
             'pip install torchinfo',
         ]:
