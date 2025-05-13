@@ -1,7 +1,9 @@
+from typing import Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 from py_ext.tool import debug, log
 from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
+from torch.optim.lr_scheduler import LRScheduler
 
 from dl_helper.train_param import tpu_available
 if tpu_available():
@@ -45,6 +47,10 @@ class LRFinder:
     def use_lr(self, lr):
         for i, param_group in enumerate(self.optimizer.param_groups):
             param_group['lr'] = lr   
+
+class blank_scheduler(LRScheduler):
+    def step(self, epoch: Optional[int] = None):
+        pass
 
 class ReduceLROnPlateau(_ReduceLROnPlateau):
     def step(self, loss_array):

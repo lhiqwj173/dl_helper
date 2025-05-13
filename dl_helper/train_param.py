@@ -10,17 +10,10 @@ epochs: 训练轮数
 batch_size: 批次大小
 learning_rate: 学习率
 abs_learning_rate: # 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
-lr_scheduler_class: 学习率调度类
-learning_rate_scheduler_patience: 学习率衰减延迟
 no_better_stop: 早停参数
-random_mask: 随机遮蔽
-random_mask_row: 随机遮蔽行
 amp: 是否使用混合精度: fp16/bf16/no
 label_smoothing: 标签平滑
 weight_decay: 权重衰减
-init_learning_ratio: 测试最优学习率
-increase_ratio: 测试最优学习率增加比例
-data_set: 数据集
 """
 import torch
 from datetime import datetime
@@ -134,22 +127,15 @@ class Params:
   #############################
   train_title = 'train_title'
 
-  describe = 'describe'
-
   # 项目路径
   root = './train_title'
 
   alist_upload_folder = 'train_data'
 
-  workers = 0
-
   debug = False
 
   seed = 42
 
-  k_fold_idx = 0
-  k_fold_k = 0
-  k_fold_ratio = (30,2,1)
   #############################
   # 训练超参数
   #############################
@@ -159,7 +145,6 @@ class Params:
 
   # learning_rate
   learning_rate = 0.001
-  learning_rate_scheduler_patience = 20
   abs_learning_rate = 0
 
   # 早停参数
@@ -168,14 +153,6 @@ class Params:
   # 缓存数据间隔
   checkpointing_steps =  15
 
-  # 随机遮蔽
-  random_mask = 0
-  random_mask_row = 0
-  random_scale = 0
-
-  # 数据降采样
-  down_freq = 0
-
   # 是否使用混合精度
   amp = ''
 
@@ -183,22 +160,9 @@ class Params:
 
   weight_decay=0.01
 
-  # 弃用!!!
-  # 测试最优学习率
-  # 非训练使用
-  init_learning_ratio=0
-  increase_ratio=0.2
-
-  data_set = ''
   y_n = 0
 
-  regress_y_idx = -1
-  classify_y_idx = -1
-  y_func = None
-  y_filter = None
   classify = False
-
-  data_folder = ''
 
   # 模型类型 
   cnn=False
@@ -210,38 +174,21 @@ class Params:
 
   def __init__(
       self,
-      train_title, root, data_set,
+      train_title, 
 
       # 训练参数
-      batch_size, 
-      learning_rate = 0, 
+      batch_size=64, 
+      learning_rate = 3e-4, 
       abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
       epochs=100, 
-      no_better_stop=15, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0.01, workers=0,
+      no_better_stop=15, checkpointing_steps=15, label_smoothing=0.1, weight_decay=0,
       
       alist_upload_folder = 'train_data',
 
-      # 数据增强
-      random_mask=0, random_scale=0, random_mask_row=0, down_freq=0,
-
-      # 测试最优学习率
-      init_learning_ratio = 0, increase_ratio = 0.2, 
-
-      # 学习率衰退延迟
-      learning_rate_scheduler_patience = 20,
-
       # 使用回归数据集参数
       classify = False,cnn=False,
-      y_n=1,regress_y_idx=-1,classify_y_idx=-1,y_func=None,y_filter=None,
+      y_n=1,
       
-      # 数据集路径
-      data_folder = '',
-
-      # 交叉验证
-      k_fold_idx=0,k_fold_k=0,k_fold_ratio=(30,2,1),
-
-      describe='',
-
       debug = False,seed = 42,amp='no',
 
       # 测试运行
@@ -249,14 +196,11 @@ class Params:
 
       # 模型融合
       need_meta_output=False,
-
-
-
   ):
       # 添加训练后缀 (训练设备/混合精度)
       run_device = get_gpu_info()
       self.train_title = f'{train_title}_{run_device}'
-      self.root = f'{root}_{run_device}'
+      self.root = self.train_title
 
       self.alist_upload_folder = alist_upload_folder
 
@@ -275,37 +219,16 @@ class Params:
       self.abs_learning_rate = abs_learning_rate
       self.no_better_stop = no_better_stop
       self.checkpointing_steps = checkpointing_steps
-      self.random_mask = random_mask
-      self.random_scale = random_scale
-      self.random_mask_row = random_mask_row
-      self.down_freq = down_freq
       self.label_smoothing = label_smoothing
       self.weight_decay = weight_decay
-      self.init_learning_ratio = init_learning_ratio
-      self.increase_ratio = increase_ratio
-
-      self.data_set = data_set
 
       self.classify = classify
       self.y_n = y_n
-      self.regress_y_idx = regress_y_idx
-      self.classify_y_idx = classify_y_idx
-      self.y_func = y_func
-      self.y_filter = y_filter
-
-      self.describe = describe
-      self.workers = workers
-
-      self.data_folder = data_folder if data_folder else './data'
 
       self.debug = debug
       self.test = test
       self.seed = seed
       self.need_meta_output = need_meta_output
-
-      self.k_fold_idx = k_fold_idx
-      self.k_fold_k = k_fold_k
-      self.k_fold_ratio = k_fold_ratio
 
       # # log
       # os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)

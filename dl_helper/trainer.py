@@ -611,19 +611,21 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
     if accelerator.is_main_process:
         report_memory_usage(f"output done")       
 
-def save_model_fn(params, model, accelerator, input_shape):
+def save_model_fn(params, model, accelerator, input_shape=None):
     accelerator.wait_for_everyone()
     accelerator.save_model(model, os.path.join(params.root, MODEL_FINAL))
-    model = accelerator.unwrap_model(model)
-    if accelerator.is_local_main_process:
-        onnex_model_save_path = os.path.join(params.root, MODEL_FINAL, f'model.onnx')
-        # 导出onnx
-        try:
-            torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
-            input_names=['input'], output_names=['output'])
-        except Exception as e:
-            log('导出onnx失败')
-            log(e)
+
+    # 导出onnx
+    if input_shape:
+        model = accelerator.unwrap_model(model)
+        if accelerator.is_local_main_process:
+            onnex_model_save_path = os.path.join(params.root, MODEL_FINAL, f'model.onnx')
+            try:
+                torch.onnx.export(model, torch.randn(input_shape).to(accelerator.device), onnex_model_save_path, do_constant_folding=False,
+                input_names=['input'], output_names=['output'])
+            except Exception as e:
+                log('导出onnx失败')
+                log(e)
 
 from dl_helper.models.binctabl import m_bin_ctabl
 
@@ -729,13 +731,14 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             model = test.get_model()
 
         if not only_predict:
-            train_loader = test.get_cache_data('train', params, accelerator)
-            val_loader = test.get_cache_data('val', params, accelerator)
+            train_loader = test.get_data('train', params)
+            val_loader = test.get_data('val', params)
             p.print(f'data init')
 
         # 绝对学习率优先
         # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
+        optimizer = test.get_optimizer(model, params)
         scheduler = test.get_lr_scheduler(optimizer, params)
         criterion = test.get_criterion()
 
@@ -825,7 +828,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
                     # 保存模型
                     p.print(f'epoch {epoch} save_model_fn')
-                    save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+                    save_model_fn(params, model, accelerator)
 
                     if need_save_best_model and accelerator.is_local_main_process:
                         # 拷贝记录最佳模型
@@ -847,22 +850,15 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
                 if tracker.need_test or no_better_need_stop:
                     break
 
-        # 停止继续读取数据
-        if not only_predict:
-            p.print(f'close train data_loading')
-            train_loader.sampler.data_loader_close()
-            p.print(f'close val data_loading')
-            val_loader.sampler.data_loader_close()
-
         p.print(f'test start')
 
         # 准备测试数据
-        test_loader = test.get_cache_data('test', params, accelerator,predict_output=True)
+        test_loader = test.get_data('test', params)
         # 测试
         test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 
         # 保存模型
-        save_model_fn(params, model, accelerator, test.get_in_out_shape()[0])
+        save_model_fn(params, model, accelerator)
 
         # 绘图
         tracker.save_result()
@@ -872,14 +868,12 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 输出模型预测，用于模型融合
         if params.need_meta_output:
-            if not only_predict:
-                train_loader = test.get_cache_data('train', params, accelerator, predict_output=True)
-                val_loader = test.get_cache_data('val', params, accelerator,predict_output=True)
             output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
 
         # 打包
         package_root(accelerator, params)
         accelerator.wait_for_everyone()
+
     except Exception as e:
         exception_str = traceback.format_exc()
         wx.send_message(f'[{params.train_title}] 训练异常:\n{exception_str}')
@@ -1247,15 +1241,15 @@ def test_func():
                 acc.save_state('checkpoint')
                 acc.print(f'{i} {idx} val checkpoint done')
 
-def predict(test_class, *args, mode='gpu', train_param={}, model=None, **kwargs):
-    assert mode in ['gpu'], f'mode error: {mode}, must be gpu'
+def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
+    assert mode in ['normal'], f'mode error: {mode}, must be normal'
     num_processes = match_num_processes()
     lock = mp.Manager().Lock()
     notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
 
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: xla/xla_tqdm/gpu
+    mode: xla/xla_tqdm/normal
     args / kwargs 为tester构造参数
 
     可增加字典参数(都可在命令行添加):
@@ -1306,8 +1300,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     elif mode=='xla_tqdm' and num_processes == 8:
         xmp.spawn(run_fn_xla, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), start_method='fork')  
 
-    elif mode == 'gpu':
+    elif mode == 'normal':
         notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
 
     else:
-        raise Exception(f'mode error: {mode}, must be xla / xla_tqdm / gpu')
+        raise Exception(f'mode error: {mode}, must be xla / xla_tqdm / normal')

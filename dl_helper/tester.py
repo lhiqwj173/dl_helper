@@ -5,7 +5,7 @@ import functools
 
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
-from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder
+from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, blank_scheduler
 from py_ext.tool import log
 
 import torch
@@ -27,7 +27,6 @@ class test_base():
         self.test = test
         self.para = None
         self.findbest_lr = findbest_lr
-        self.lr_scheduler_class = ''
 
     # 获取训练参数
     def get_param(self):
@@ -50,23 +49,7 @@ class test_base():
     # 初始化数据
     # 返回一个 torch dataloader
     def get_data(self, _type, params, data_sample_getter_func=None):
-        return read_data(_type = _type, params=params, data_sample_getter_func = data_sample_getter_func)
-
-    # 返回 局部缓存的数据
-    # 按需读取数据，节省内存
-    # 效率略低
-    def get_cache_data(self, _type, params, accelerator, predict_output=False):
-        dataset = Dataset_cahce(params, _type, accelerator.device, predict_output)
-        debug(f'{_type} dataset done')
-        sampler = DistributedSampler(dataset, accelerator, shuffle = True if (_type == 'train' and not self.debug and not predict_output) else False)
-        debug(f'{_type} sampler done')
-        dataloader = DataLoaderDevice(
-            dataset,
-            batch_size=params.batch_size, sampler=sampler,
-            device=accelerator.device
-        )
-        debug(f'{_type} dataloader done')
-        return dataloader
+        raise NotImplementedError("必须在子类中实现 get_data 方法")
 
     # 初始化模型
     # 返回一个 torch model
@@ -84,23 +67,37 @@ class test_base():
     def get_optimizer(self, model):
         assert self.para, 'should init param in __init__()'
         return torch.optim.AdamW(
-            model.parameters(), lr=self.para.learning_rate, weight_decay=self.para.weight_decay)
+            model.parameters(), lr=self.para.learning_rate if not self.para.abs_learning_rate else self.para.abs_learning_rate, weight_decay=self.para.weight_decay)
 
     def get_transform(self, device):
+        # 此处返回一个空白的 transform
         return transform()
+    
+    def get_lr_scheduler_class(self):
+        return ''
+
     def get_lr_scheduler(self, optimizer, params, *args, **kwargs):
+        """
+        可以在子类中实现 get_lr_scheduler_class 方法， 
+        可以是字符串 ['ReduceLR_slow_loss', 'ReduceLROnPlateau', 'WarmupReduceLROnPlateau'] 
+        或一个自定义类，
+        用于实例化 lr_scheduler
+        若无特别需求，则返回 None, 不使用 lr_scheduler
+        """
+        lr_scheduler_class = self.get_lr_scheduler_class()
+
         if self.findbest_lr:
             lr_scheduler_class = LRFinder
-        elif isinstance(self.lr_scheduler_class, str):
-            if 'ReduceLR_slow_loss' == self.lr_scheduler_class:
+        elif isinstance(lr_scheduler_class, str):
+            if 'ReduceLR_slow_loss' == lr_scheduler_class:
                 lr_scheduler_class = ReduceLR_slow_loss
-            elif 'ReduceLROnPlateau' == self.lr_scheduler_class:
+            elif 'ReduceLROnPlateau' == lr_scheduler_class:
                 lr_scheduler_class = ReduceLROnPlateau
-            elif 'WarmupReduceLROnPlateau' == self.lr_scheduler_class:
+            elif 'WarmupReduceLROnPlateau' == lr_scheduler_class:
                 lr_scheduler_class = WarmupReduceLROnPlateau
-        elif isinstance(self.lr_scheduler_class, type) or isinstance(self.lr_scheduler_class, functools.partial):
-            lr_scheduler_class = self.lr_scheduler_class
+        elif isinstance(lr_scheduler_class, type) or isinstance(lr_scheduler_class, functools.partial):
+            lr_scheduler_class = lr_scheduler_class
         else:
-            raise Exception(f'UNKNOW lr_scheduler_class {self.lr_scheduler_class}')
+            lr_scheduler_class = blank_scheduler
 
-        return lr_scheduler_class(optimizer, *args, patience=params.learning_rate_scheduler_patience, **kwargs)
+        return lr_scheduler_class(optimizer, *args, **kwargs)

@@ -197,7 +197,7 @@ class data_producer:
         """
         获取数据类型对应的文件列表(路径)
         """
-        assert self.data_type in ['train', 'val'], f'暂时不支持 {self.data_type} 数据类型'
+        assert self.debug_date or (self.data_type in ['train', 'val']), f'非指定日期数据，暂时不支持 {self.data_type} 数据类型'
         if self.data_type == 'test':
             return [os.path.join(self.data_folder, self.data_type, i) for i in os.listdir(os.path.join(self.data_folder, self.data_type))]
         else:
@@ -228,9 +228,13 @@ class data_producer:
                 # 其余文件作为train
                 self.train_files = files[:-20]
 
-            if self.data_type == 'train':
+            if self.debug_date:
+                # 返回全部的 files
+                return self.train_files + self.val_files
+
+            elif self.data_type == 'train':
                 return [i for i in self.train_files]
-            else:
+            elif self.data_type == 'val':
                 return [i for i in self.val_files]
 
     def _pre_files(self):
@@ -247,6 +251,7 @@ class data_producer:
 
             if self.data_type == 'train':
                 self.np_random.shuffle(self.files)
+
             if self.debug_date:
                 # 按照 debug_date 的顺序重新排列文件
                 ordered_files = []
