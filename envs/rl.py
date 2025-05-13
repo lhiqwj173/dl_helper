@@ -29,6 +29,7 @@ if '__main__' == __name__:
 
     for cmd in [
             'pip install --upgrade torch ray[rllib]',
+            'pip install --upgrade torchvision',
             # 'pip install --upgrade ray[rllib]',
             'pip install imitation',
             'pip install --upgrade stable-baselines3',
@@ -47,7 +48,6 @@ if '__main__' == __name__:
             'pip install einops',
             'pip install torchmetrics',
             'pip install requests_toolbelt',
-            'pip install torchvision',
             'pip install torchstat',
             'pip install torchinfo',
         ]:
