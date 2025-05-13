@@ -95,6 +95,8 @@ class test_base():
                 lr_scheduler_class = ReduceLROnPlateau
             elif 'WarmupReduceLROnPlateau' == lr_scheduler_class:
                 lr_scheduler_class = WarmupReduceLROnPlateau
+            else:
+                lr_scheduler_class = blank_scheduler
         elif isinstance(lr_scheduler_class, type) or isinstance(lr_scheduler_class, functools.partial):
             lr_scheduler_class = lr_scheduler_class
         else:
