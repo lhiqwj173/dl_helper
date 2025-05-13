@@ -112,6 +112,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
+
+        with torch.no_grad():
+            check_nan(output, ids=active_dataloader.dataset.use_data_id)
+
         accelerator.backward(loss)
         optimizer.step()
 
@@ -169,67 +173,6 @@ def test_train_func(data_file_path, id, test_class):
     batch_indices = _check_nan(output)
 
     print(f"[{idx}] batch_indices: {batch_indices}")
-
-
-def train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
-    # 检查是否存在 step 记录
-    skip_steps = tracker.step_count
-
-    active_dataloader = train_loader
-    model.train()
-    for mini_epoch in range(active_dataloader.sampler.mini_epoch):
-        # 训练
-        for batch in active_dataloader:
-            # # 测试用
-            # _batch = copy.deepcopy(batch)
-            # debug(f'batch')
-            # pickle.dump(batch, open(os.path.join(params.root, f'raw_batch_{accelerator.process_index}.pkl'), 'wb')) 
-            # pickle.dump(active_dataloader.dataset.use_data_id, open(os.path.join(params.root, f'raw_ids_{accelerator.process_index}.pkl'), 'wb')) 
-
-            # 预处理
-            data, target = trans(batch, train=True)
-            # debug(f'data :{data.shape} target :{target.shape}')
-            # printer.print(f'data[0]: {data[0][:5][:5]}', main=False)
-
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
-            # debug(f'unsqueeze')
-                
-            # record_grad(0, model, accelerator.process_index)
-            optimizer.zero_grad()
-            # debug(f'zero_grad')
-            output = model(data)
-            # debug(f'model')
-            loss = criterion(output, target)
-            # printer.print(f'loss: {loss}', main=False)
-            # record_grad(1, model, accelerator.process_index)
-            with torch.no_grad():
-                check_nan(output, ids=active_dataloader.dataset.use_data_id)
-
-            # debug(f'criterion')
-            accelerator.backward(loss)
-            # record_grad(2, model, accelerator.process_index)
-            # debug(f'backward')
-            optimizer.step()
-            # record_grad(3, model, accelerator.process_index)
-            # debug(f'step')
-
-            # 追踪器 记录数据
-            with torch.no_grad():
-                # debug('track')
-                tracker.track('train', output, target, active_dataloader, loss)
-                # debug('track done')
-
-        log(f"[{epoch}][{mini_epoch}] train done")
-
-    # 追踪器，计算必要的数据
-    tracker.update()
-    # debug('update')
-
-    # 缓存checkpoint
-    if need_checkpoint:
-        checkpoint(epoch, accelerator, params, printer, False)
 
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans):
     """
@@ -532,8 +475,8 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             for epoch in range(tracker.epoch_count, params.epochs):
                 p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
                 if tracker.step_in_epoch == 0:
-                    # debug(f'train_fn_mini_epoch')
-                    train_fn_mini_epoch(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
+                    # debug(f'train_fn')
+                    train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
                 # 验证
                 p.print(f'epoch {epoch} val_fn')

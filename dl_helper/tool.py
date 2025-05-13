@@ -954,8 +954,11 @@ def calculate_sell_save(df, fee=5e-5):
 
 def reset_profit_sell_save(lob_data):
     """
-    第一个buy动作信号点，下一个时点价格不能下跌（不允许利用这种成交的跳价）
-    第一个sell动作信号点，下一个时点价格不能上涨（不允许利用这种成交的跳价）
+    剔除掉动作之后下一个点的价格变化带来的优势 (成交价格带来的优势不允许利用)
+    第一个profit>0信号点，下一个时点价格不能下跌
+    第一个profit<0信号点，下一个时点价格不能上涨
+    第一个sell_save>0信号点，下一个时点价格不能上涨
+    第一个sell_save<0信号点，下一个时点价格不能下跌
     """
     # 计算前一行和下一行的值
     prev_profit = lob_data['profit'].shift(1)
@@ -963,17 +966,25 @@ def reset_profit_sell_save(lob_data):
     next_sell_price = lob_data['BASE卖1价'].shift(-1)
     next_buy_price = lob_data['BASE买1价'].shift(-1)
     
+    # 剔除 profit
     # 条件1：profit > 0, 前一行 profit <= 0, 且下一个 BASE卖1价 < 当前 BASE卖1价
-    condition1 = (lob_data['profit'] > 0) & (prev_profit <= 0) & (next_sell_price < lob_data['BASE卖1价'])
-    
-    # 条件2：sell_save > 0, 前一行 sell_save <= 0, 且下一个 BASE买1价 > 当前 BASE买1价
-    condition2 = (lob_data['sell_save'] > 0) & (prev_sell_save <= 0) & (next_buy_price > lob_data['BASE买1价'])
-    
+    profit_cond1 = (lob_data['profit'] > 0) & (prev_profit <= 0) & (next_sell_price < lob_data['BASE卖1价'])
     # 将满足条件1的行的 profit 置为 0
-    lob_data.loc[condition1, 'profit'] = 0
+    lob_data.loc[profit_cond1, 'profit'] = 0
+    # 条件2：profit <= 0, 前一行 profit > 0, 且下一个 BASE卖1价 > 当前 BASE卖1价
+    profit_cond2 = (lob_data['profit'] <= 0) & (prev_profit > 0) & (next_sell_price > lob_data['BASE卖1价'])
+    # 将前一行的profit值赋给当前行 TODO
+    lob_data.loc[profit_cond2, 'profit'] = lob_data.loc[profit_cond2, 'profit'].shift(1) 
     
-    # 将满足条件2的行的 sell_save 置为 0
-    lob_data.loc[condition2, 'sell_save'] = 0
+    # 剔除 sell_save
+    # 条件1：sell_save > 0, 前一行 sell_save <= 0, 且下一个 BASE买1价 > 当前 BASE买1价
+    sell_save_cond1 = (lob_data['sell_save'] > 0) & (prev_sell_save <= 0) & (next_buy_price > lob_data['BASE买1价'])
+    # 将满足条件1的行的 sell_save 置为 0
+    lob_data.loc[sell_save_cond1, 'sell_save'] = 0
+    # 条件2：sell_save <= 0, 前一行 sell_save > 0, 且下一个 BASE买1价 < 当前 BASE买1价
+    sell_save_cond2 = (lob_data['sell_save'] <= 0) & (prev_sell_save > 0) & (next_buy_price < lob_data['BASE买1价'])    
+    # 将前一行的sell_save值赋给当前行
+    lob_data.loc[sell_save_cond2, 'sell_save'] = lob_data.loc[sell_save_cond2, 'sell_save'].shift(1) 
     
     return lob_data
 
