@@ -44,9 +44,7 @@ TYPES_NO_NEED_SYMBOL_SCORE = ['train', 'val']
 
 TYPES_NEED_LABEL_COUNT = ['train', 'val', 'test_final']
 TYPES_NEED_CAL_THRESHOLD = ['test_final', 'test_best']
-TYPES_NEED_OUTPUT = ['train_final', 'train_best', 'val_final', 'val_best', 'test_final', 'test_best']# 用于模型融合 基特征
-TYPES_NEED_PREDICT_OUT_TEST = ['test_final', 'test_best', 'test_dummy']
-TYPES_NEED_OUT = TYPES_NEED_OUTPUT + TYPES_NEED_PREDICT_OUT_TEST
+TYPES_NEED_OUTPUT = ['train_final', 'train_best', 'val_final', 'val_best', 'test_final', 'test_best', 'test_dummy']# 用于模型融合 基特征
 
 def last_value(data):
     """返回最后一个非nan值"""
@@ -703,81 +701,6 @@ class Tracker():
                 pic_file = os.path.join(self.params.root, MODEL_FINAL, f"ROC_curve.png")
                 plot_roc_curve(self.temp['_y_true'], self.temp['softmax_predictions'], pic_file)
 
-        if self.track_update in TYPES_NEED_OUT:
-            if self.accelerator.is_main_process:
-                dataset_type, model_type = self.track_update.split('_')
-                save_folder = os.path.join(self.params.root, f"model_{model_type}")
-
-                # self.printer.print('update test round')
-                # 保存测试数据预测结果
-                all_ids = self.temp['_ids']# code_timestamp: btcusdt_1710289478588
-                all_targets = self.temp['_y_true'].to('cpu')
-                if self.params.classify:
-                    all_predictions = self.temp['softmax_predictions'].to('cpu')
-                else:
-                    all_predictions = self.temp['_y_pred'].to('cpu')
-
-                assert len(all_ids) == all_targets.shape[0] == all_predictions.shape[0], f'{all_ids}, {all_targets.shape}, {all_predictions.shape} predict result length not match'
-
-                if '_' in all_ids[0]:
-                    # 输出预测用于测试
-                    if self.track_update in TYPES_NEED_PREDICT_OUT_TEST:
-                        datas={}
-
-                        # 按标的分类预测
-                        for i in range(all_targets.shape[0]):
-                            symbol, timestamp = all_ids[i].split('_')
-                            if symbol not in datas:
-                                datas[symbol] = []
-                            datas[symbol].append((int(timestamp), all_targets[i], all_predictions[i]))
-
-                        # 储存预测结果
-                        # symbol_begin_end.csv
-                        # self.printer.print('save prediction')
-                        for symbol in datas:
-                            data_list = datas[symbol]
-
-                            # 按照 timestamp 排序
-                            data_list = sorted(data_list, key=lambda x: x[0])
-
-                            # 按照 timestamp 去重
-                            _data_list = []
-                            timestamp_list = []
-                            for i in data_list:
-                                if i[0] not in timestamp_list:
-                                    _data_list.append(i)
-                                    timestamp_list.append(i[0])
-                            data_list = _data_list
-
-                            begin = data_list[0][0]
-                            end = data_list[-1][0]
-                            with open(os.path.join(save_folder, f'{symbol}_{begin}_{end}.csv'), 'w') as f:
-                                f.write('timestamp')
-
-                                # target
-                                target_length = 1 if len(data_list[0][1].shape)==0 else data_list[0][1].shape[0]
-                                if target_length > 1:
-                                    for i in range(target_length):
-                                        f.write(f',target{i}')
-                                else:
-                                    f.write(f',target')
-
-                                for i in range(self.params.y_n):
-                                    f.write(f',{i}')
-                                f.write('\n')
-
-                                for timestamp, target, pro  in data_list:
-                                    pro_str = ','.join([str(float(i)) for i in pro])
-                                    target_str = ','.join([str(float(i)) for i in target]) if target_length > 1 else str(target.item())
-                                    f.write(f'{timestamp},{target_str},{pro_str}\n')
-
-                        # self.printer.print('update test round done')
-                
-                    log(f'{model_type} {dataset_type} 输出完毕')
-            
-            self.printer.print('TYPES_NEED_OUT wait')
-            self.accelerator.wait_for_everyone() 
-
         if 'val' == self.track_update and not self.need_test:
             need_test_temp = torch.tensor(0, device=self.accelerator.device)
             if self.accelerator.is_main_process:
@@ -896,7 +819,7 @@ class Tracker():
         if _type in TYPES_NO_NEED_SYMBOL_SCORE:
             # train/val 不需要, 避免浪费计算
             pass
-        elif _type in TYPES_NEED_OUT and self.data_id_getter_func:
+        elif _type in TYPES_NEED_OUTPUT and self.data_id_getter_func:
             _ids = gather_object(all_ids)
         else:
             pass
@@ -928,7 +851,7 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             # self.printer.print('temp data done')
 
-            if _type in TYPES_NEED_OUT and self.data_id_getter_func:
+            if _type in TYPES_NEED_OUTPUT and self.data_id_getter_func:
                 self.temp['_ids'] += _ids
 
             # self.temp['_codes'] += codes
