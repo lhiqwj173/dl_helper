@@ -576,6 +576,11 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             # 波峰比波谷还低，测试下一个波谷
             valley_idx += 1
             continue
+        
+        if valley_backup and ask[valley_backup[-1][0]] != ask[t1]:
+            # 不是同一个批次，需要清空
+            valley_backup = []
+            find_latest_valley = None
 
         # 当前波峰波谷中的其他波谷,
         # 选择一个最小值
@@ -596,10 +601,6 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 no_up_distance = _valley_t - t1
                 total_distance = t2 - t1
                 if no_up_distance / total_distance > 0.2:
-                    if valley_backup and ask[valley_backup[-1][0]] != ask[t1]:
-                        # 不是同一个批次，需要清空
-                        valley_backup = []
-                        find_latest_valley = None
                     valley_backup.append((t1, valley_idx))
                     find_latest_valley = _valley_t
                     t1 = _valley_t

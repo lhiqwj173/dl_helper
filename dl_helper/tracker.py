@@ -1351,6 +1351,8 @@ class Tracker():
                 # log(f'best_idx {best_idx.shape}')
                 # log(f'best_idx {best_idx}')
                 for i in self.data:
+                    print(f'{i} {type(self.data[i])}')
+                    print(f'{self.data[i]}')
                     if i == 'lr':
                         continue
                     if not None is self.data[i]:
