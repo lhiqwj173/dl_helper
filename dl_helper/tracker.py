@@ -1113,8 +1113,6 @@ class Tracker():
                 # self.printer.print(f'plot f1 score')
 
             title = f'{params.train_title}'
-            if params.describe:
-                title += f' | {params.describe}'
             title+= f' | {datetime.now().strftime("%Y%m%d")}              cost:{cost_hour:.2f}H'
             if self.each_epoch_time_cost:
                 # 单epoch耗时, 预计等待时间, 下次重启 北京时间
