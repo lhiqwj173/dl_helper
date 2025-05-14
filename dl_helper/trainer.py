@@ -240,9 +240,9 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             # 获取模型预测的类别（概率最大的类别）
             predicted_labels = torch.argmax(probabilities, dim=1)
             # 将结果转换为列表形式
-            confidence_scores = confidence_scores.detach().numpy().tolist()
-            predicted_labels = predicted_labels.detach().numpy().tolist()
-            true_labels = target.detach().numpy().tolist()
+            confidence_scores = confidence_scores.detach().cpu().numpy().tolist()
+            predicted_labels = predicted_labels.detach().cpu().numpy().tolist()
+            true_labels = target.detach().cpu().numpy().tolist()
             # 追加输出到 csv
             file = os.path.join(params.root, 'batch_confidence.csv')
             if not os.path.exists(file):
