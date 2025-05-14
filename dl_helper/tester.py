@@ -64,6 +64,10 @@ class test_base():
             if self.para.y_n > 2:
                 return nn.CrossEntropyLoss(label_smoothing=self.para.label_smoothing)
             else:
+                # 暂时不支持一维输出的二分类，都使用 CrossEntropyLoss，
+                return nn.CrossEntropyLoss(label_smoothing=self.para.label_smoothing)
+
+                # TODO
                 # 检查模型是否包含 sigmoid
                 model = self.get_model()
                 forward_code = model.forward.__code__.co_code

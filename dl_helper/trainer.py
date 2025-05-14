@@ -126,7 +126,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 追踪器 记录数据
         with torch.no_grad():
             # debug('track')
-            tracker.track('train', output, target, loss)
+            tracker.track('train', output, data, target, loss)
             # debug('track done')
 
     # 追踪器，计算必要的数据
@@ -204,7 +204,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
             loss = criterion(output, target)
 
             # 追踪器 记录数据
-            tracker.track('val', output, target, active_dataloader, loss)
+            tracker.track('val', output, data, target, loss)
     
     # debug('val loop done')
 
@@ -253,7 +253,7 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
                 loss = criterion(output, target)
 
                 # 追踪器 记录数据
-                tracker.track(test_types[i], output, target, test_data, loss)
+                tracker.track(test_types[i], output, data, target, loss)
 
         # 追踪器，计算必要的数据
         # printer.print('update')
@@ -299,7 +299,7 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
                         output = model(data)
 
                         # 追踪器 记录数据
-                        tracker.track(run_type, output, target, data_loader, None)
+                        tracker.track(run_type, output, data, target, None)
 
                 # 追踪器，计算必要的数据
                 # printer.print('update')

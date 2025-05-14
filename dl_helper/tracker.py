@@ -296,7 +296,7 @@ class Tracker_None():
         pass
 
 class Tracker():
-    def __init__(self, model_name, params, accelerator, scheduler, num_processes, printer):
+    def __init__(self, model_name, params, accelerator, scheduler, num_processes, printer, data_id_getter_func=None):
         self.model_name = model_name
         # 时间统计
         self.begin_time = time.time()
@@ -335,7 +335,8 @@ class Tracker():
         ]
 
         # 用于output输出
-        self.output_datas={}
+        # 格式为 [(id, target, predict), ...]
+        self.output_datas=[]
 
         # 最终数据
         self.data = {}
@@ -353,6 +354,11 @@ class Tracker():
 
         # 储存各个标的的各过程的 0, 1 类f1 score
         self.symbol_score = {}
+
+        # 获取数据 id 的函数
+        # 参数为 batch data，返回 batch id tesnsor格式
+        # 可以用于 模型融合输出
+        self.data_id_getter_func = data_id_getter_func
 
     def record_best_model_epoch(self):
         self.best_model_epoch = self.epoch_count - 1
@@ -427,42 +433,36 @@ class Tracker():
             out_folder = os.path.join(save_folder, dataset_type)
             os.makedirs(out_folder, exist_ok=True)
 
-            self.printer.print(f'输出模型output: {model_type} {dataset_type} 共{len(self.output_datas)}天')
+            self.printer.print(f'输出模型output: {model_type} {dataset_type} 共{len(self.output_datas)}条')
 
-            # 储存数据
-            for date in sorted(self.output_datas.keys()):
-                self.printer.print(f'输出模型output: {model_type} {dataset_type} {date}')
+            # id 排序
+            # 格式为 [(id, target, predict), ...]
+            self.output_datas = sorted(self.output_datas, key=lambda x: x[0])
 
-                # 按照 id 去重
-                _data_list = []
-                id_list = []
-                for i in self.output_datas[date]:
-                    if i[0] not in id_list:
-                        _data_list.append(i)
-                        id_list.append(i[0])
-                self.output_datas[date] = _data_list
+            # self.printer.print(f'输出模型output: {model_type} {dataset_type} {_id}')
+            with open(os.path.join(out_folder, f'{model_type}_{dataset_type}.csv'), 'w') as f:
+                # 输出 列名
+                f.write('id')
+                # 获取 target 维度
+                # 支持多个输出
+                target_length = 1 if len(self.output_datas[0][1].shape)==0 else self.output_datas[0][1].shape[0]
+                if target_length > 1:
+                    for i in range(target_length):
+                        f.write(f',target{i}')
+                else:
+                    f.write(f',target')
+                # 预测类别
+                for i in range(self.params.y_n):
+                    f.write(f',{i}')
+                f.write('\n')
 
-                with open(os.path.join(out_folder, f'{date}.csv'), 'w') as f:
-                    f.write('id')
+                # 储存数据
+                for _id, target, predict in self.output_datas:
+                    predict_str = ','.join([str(float(i)) for i in predict])
+                    target_str = ','.join([str(float(i)) for i in target])
+                    f.write(f'{_id},{target_str},{predict_str}\n')
 
-                    # target
-                    target_length = 1 if len(self.output_datas[date][0][1].shape)==0 else self.output_datas[date][0][1].shape[0]
-                    if target_length > 1:
-                        for i in range(target_length):
-                            f.write(f',target{i}')
-                    else:
-                        f.write(f',target')
-
-                    for i in range(self.params.y_n):
-                        f.write(f',{i}')
-                    f.write('\n')
-
-                    for _id, target, pro in self.output_datas[date]:
-                        pro_str = ','.join([str(float(i)) for i in pro])
-                        target_str = ','.join([str(float(i)) for i in target]) if target_length > 1 else str(target.item())
-                        f.write(f'{_id},{target_str},{pro_str}\n')
-
-            self.output_datas = {}# 重置
+            self.output_datas = []# 重置
             self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
 
         # 等待同步
@@ -479,7 +479,6 @@ class Tracker():
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0)
 
             if self.params.classify:
-
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
 
                 if self.track_update in TYPES_NEED_CAL_THRESHOLD:
@@ -507,10 +506,10 @@ class Tracker():
                 print('class_mcc', flush=True)
 
 
-                # 各个类别按照 code 分类计数 f1 score
-                # train/val 不需要计算
-                if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
-                    class_f1_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+                # # 各个类别按照 code 分类计数 f1 score
+                # # train/val 不需要计算
+                # if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
+                #     class_f1_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
 
                 print('class_f1_each_code', flush=True)
                 # self.printer.print('class_f1_each_code')
@@ -519,11 +518,11 @@ class Tracker():
                 # 计算方差加权 R2
                 variance_weighted_r2 = sklearn_r2_score(self.temp['_y_pred'], self.temp['_y_true'])
 
-                # 各个类别按照 code 分类计数 r2 score
-                # train/val 不需要计算
-                if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
-                    r2_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
-                print('r2_each_code', flush=True)
+                # # 各个类别按照 code 分类计数 r2 score
+                # # train/val 不需要计算
+                # if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
+                #     r2_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
+                # print('r2_each_code', flush=True)
         
             # self.printer.print(f'_loss: {_loss.shape}')
             # self.printer.print(f'balance_acc: {balance_acc.shape}')
@@ -760,7 +759,7 @@ class Tracker():
 
         self.printer.print(f"------------tracker data------------")
 
-    def track(self, _type, output, target, test_dataloader, loss=None):
+    def track(self, _type, output, data, target, loss=None):
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
         # self.printer.print(self.temp[f'{_type}_y_pred'], main=False)
@@ -769,21 +768,19 @@ class Tracker():
         # epoch内的迭代次数
         self.step_count += 1
 
+        # TODO 区分 2分类 与 多分类
         if self.params.classify:
             predict = F.softmax(output, dim=1)
         else:
             predict = output
 
         # 模型 output 输出，用于模型融合训练
-        all_ids = test_dataloader.dataset.use_data_id
-        if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
-            # 按日期分类输出数据
-            for i in range(predict.shape[0]):
-                symbol, timestamp = all_ids[i].split('_')
-                date = datetime.fromtimestamp(int(timestamp)).strftime('%Y%m%d')
-                if date not in self.output_datas:
-                    self.output_datas[date] = []
-                self.output_datas[date].append((all_ids[i], target[i], predict[i]))
+        if self.data_id_getter_func:
+            all_ids = self.data_id_getter_func(data)
+            if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
+                # 按日期分类输出数据
+                for i in range(predict.shape[0]):
+                    self.output_datas.append((all_ids[i], target[i], predict[i]))
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')
@@ -801,17 +798,13 @@ class Tracker():
         # self.printer.print('gather loss, y_true, y_pred done')
         if _type in TYPES_NO_NEED_SYMBOL_SCORE:
             # train/val 不需要, 避免浪费计算
-            codes = []
+            pass
         elif _type in TYPES_NEED_OUT:
-            _ids = gather_object(test_dataloader.dataset.use_data_id)
-            codes = [i.split('_')[0] for i in _ids]
+            if self.data_id_getter_func:
+                _ids = gather_object(all_ids)
         else:
-            _ids = []
-            codes = [i.split('_')[0] for i in test_dataloader.dataset.use_data_id]
-            codes = gather_object(codes)# 汇总到主设备
+            pass
 
-        # 置空
-        test_dataloader.dataset.use_data_id = []
         # self.printer.print('_ids done', main=False)
 
         # 记录label分布
@@ -842,7 +835,7 @@ class Tracker():
             if _type in TYPES_NEED_OUT:
                 self.temp['_ids'] += _ids
 
-            self.temp['_codes'] += codes
+            # self.temp['_codes'] += codes
             self.temp['_num'] += _y_true.shape[0]
 
         # self.printer.print(f"track done", main=False)
