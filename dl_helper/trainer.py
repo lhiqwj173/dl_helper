@@ -228,30 +228,31 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
     # 固定第一个 val batch 统计正确类别的预测置信度 
     if accelerator.is_local_main_process:
-        data, target = first_batch_data
-        # 前向传播，获取模型输出
-        output = model(data)
-        # 对输出应用softmax，获取概率分布
-        probabilities = F.softmax(output, dim=1)
-        # 获取正确类别的预测置信度
-        # torch.gather 从 probabilities 中提取对应 target 的概率值
-        confidence_scores = torch.gather(probabilities, 1, target.unsqueeze(1)).squeeze()
-        # 获取模型预测的类别（概率最大的类别）
-        predicted_labels = torch.argmax(probabilities, dim=1)
-        # 将结果转换为列表形式
-        confidence_scores = confidence_scores.cpu().numpy().tolist()
-        predicted_labels = predicted_labels.cpu().numpy().tolist()
-        true_labels = target.cpu().numpy().tolist()
-        # 追加输出到 csv
-        file = os.path.join(params.root, 'batch_confidence.csv')
-        if not os.path.exists(file):
-            # 写入表头
-            with open(file, 'w') as f:
-                f.write('time,id,confidence,predicted_label,true_label\n')
-        t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(file, 'a') as f:
-            for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
-                f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
+        with torch.no_grad():
+            data, target = first_batch_data
+            # 前向传播，获取模型输出
+            output = model(data)
+            # 对输出应用softmax，获取概率分布
+            probabilities = F.softmax(output, dim=1)
+            # 获取正确类别的预测置信度
+            # torch.gather 从 probabilities 中提取对应 target 的概率值
+            confidence_scores = torch.gather(probabilities, 1, target.unsqueeze(1)).squeeze()
+            # 获取模型预测的类别（概率最大的类别）
+            predicted_labels = torch.argmax(probabilities, dim=1)
+            # 将结果转换为列表形式
+            confidence_scores = confidence_scores.detach().numpy().tolist()
+            predicted_labels = predicted_labels.detach().numpy().tolist()
+            true_labels = target.detach().numpy().tolist()
+            # 追加输出到 csv
+            file = os.path.join(params.root, 'batch_confidence.csv')
+            if not os.path.exists(file):
+                # 写入表头
+                with open(file, 'w') as f:
+                    f.write('time,id,confidence,predicted_label,true_label\n')
+            t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            with open(file, 'a') as f:
+                for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
+                    f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
 
     # # for debug
     # accelerator.wait_for_everyone()
