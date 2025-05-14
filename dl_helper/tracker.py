@@ -561,7 +561,7 @@ class Tracker():
             self.cur_notebook_cost_hour = (time.time() - self.notebook_begin_time) / 3600
 
             # 计算数据
-            _loss = torch.mean(self.temp['_loss']).unsqueeze(0)
+            _loss = torch.mean(self.temp['_loss']).unsqueeze(0).cpu()
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
@@ -574,11 +574,11 @@ class Tracker():
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
-                ).unsqueeze(0)
+                ).unsqueeze(0).cpu()
                 # self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
-                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
                 # self.printer.print('weighted_f1')
 
                 # 计算 recall / macro_0/1/2
@@ -589,7 +589,7 @@ class Tracker():
                 print('class_f1', flush=True)
 
                 # 计算各个类别 mcc
-                class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
+                class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
                 print('class_mcc', flush=True)
 
                 # # 各个类别按照 code 分类计数 f1 score
@@ -602,7 +602,7 @@ class Tracker():
 
             else:
                 # 计算方差加权 R2
-                variance_weighted_r2 = sklearn_r2_score(self.temp['_y_pred'], self.temp['_y_true'])
+                variance_weighted_r2 = sklearn_r2_score(self.temp['_y_pred'], self.temp['_y_true']).cpu()
 
                 # # 各个类别按照 code 分类计数 r2 score
                 # # train/val 不需要计算
