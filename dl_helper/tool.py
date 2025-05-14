@@ -614,7 +614,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and \
             (
                 # 当前波峰更高
-                (bid[t2] > bid[pre_t2]) or \
+                (bid[t2] >= bid[pre_t2]) or \
                 # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
                 ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
             ):
@@ -656,7 +656,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             if pre_t2 > 0 and \
                 (
                     # 当前波峰更高
-                    (bid[t2] > bid[pre_t2]) or \
+                    (bid[t2] >= bid[pre_t2]) or \
                     # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
                     ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
                  ):

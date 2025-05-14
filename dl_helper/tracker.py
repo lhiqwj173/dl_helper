@@ -1242,18 +1242,12 @@ class Tracker():
             ## 记录结果
             result_file = os.path.join(self.params.root, 'result.csv')
 
-            # 数据参数
-            data_dict =  data_str2parm(self.params.data_set)
-
             # 初始化列名
             with open(result_file, 'w') as f:
                 # 训练参数
                 for key in self.params.__dict__:
                     if key != 'y_func':
                         f.write(f'{key},')
-                # 数据参数
-                for i in data_dict:
-                    f.write(f'{i},')
                 # 数据标签分布
                 for i in self.label_counts:
                     f.write(f'label_{i},')
@@ -1282,10 +1276,6 @@ class Tracker():
                 for key in self.params.__dict__:
                     if key != 'y_func':
                         write_values(f, self.params.__dict__[key])
-
-                # 数据参数
-                for i in data_dict:
-                    write_values(f, data_dict[i])
 
                 # 数据标签分布
                 for i in self.label_counts:
