@@ -450,7 +450,6 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             model = accelerator.prepare(model)
 
         p.print(f'prepare done')
-        p.print(f'model device: {model.device}')
 
         # 数据增强
         trans = test.get_transform(accelerator.device)
