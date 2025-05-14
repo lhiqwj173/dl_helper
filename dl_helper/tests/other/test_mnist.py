@@ -45,7 +45,7 @@ class test(test_base):
 
         # 实例化 参数对象
         self.para = Params(
-            train_title=self.train_title, 
+            train_title=self.title_base, 
 
             # 10分类
             classify=True,
