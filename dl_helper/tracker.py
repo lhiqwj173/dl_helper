@@ -845,9 +845,8 @@ class Tracker():
         if _type in TYPES_NO_NEED_SYMBOL_SCORE:
             # train/val 不需要, 避免浪费计算
             pass
-        elif _type in TYPES_NEED_OUT:
-            if self.data_id_getter_func:
-                _ids = gather_object(all_ids)
+        elif _type in TYPES_NEED_OUT and self.data_id_getter_func:
+            _ids = gather_object(all_ids)
         else:
             pass
 
@@ -878,7 +877,7 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             # self.printer.print('temp data done')
 
-            if _type in TYPES_NEED_OUT:
+            if _type in TYPES_NEED_OUT and self.data_id_getter_func:
                 self.temp['_ids'] += _ids
 
             # self.temp['_codes'] += codes
@@ -891,12 +890,12 @@ class Tracker():
             if self.params.classify:
                 val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy().copy())
                 self.printer.print(f'val_class_f1_0:\n{val_class_f1}')
-                for i in range(1, self.params.y_n - 1):
+                for i in range(1, self.params.y_n):
                     _f1 = pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
                     val_class_f1 += _f1
                     self.printer.print(f'val_class_f1_{i}:\n{_f1}')
 
-                return (val_class_f1 / (self.params.y_n - 1)).tolist()
+                return (val_class_f1 / (self.params.y_n)).tolist()
             else:
                 # 返回r2列表
                 return self.data[f'val_r2'].cpu().numpy().tolist()
@@ -1051,7 +1050,7 @@ class Tracker():
                 max_test_f1 = max(data["val_f1"])
                 max_train_class_f1s = []
                 max_val_class_f1s = []
-                for i in range(params.y_n - 1):
+                for i in range(params.y_n):
                     max_train_class_f1 = max(data[f"train_class_f1_{i}"])
                     max_val_class_f1 = max(data[f"val_class_f1_{i}"])
                     max_train_class_f1s.append(max_train_class_f1)
@@ -1149,13 +1148,13 @@ class Tracker():
                         score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
                         score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
 
-                        for i in range(params.y_n - 1):
+                        for i in range(params.y_n):
                             if f'{_type}_class_f1_{i}' not in self.data:
                                 data_lack = True
                                 break
                             score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
 
-                        self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n - 1)]) / (params.y_n - 1)
+                        self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n)]) / (params.y_n)
                     else:
                         if f'{_type}_r2' not in self.data:
                             data_lack = True
@@ -1184,7 +1183,7 @@ class Tracker():
                         f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
                         
                         class_f1_score_datas = []
-                        for j in range(params.y_n - 1):
+                        for j in range(params.y_n):
                             class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
 
                     else:
