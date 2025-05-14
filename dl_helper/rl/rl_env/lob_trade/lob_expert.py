@@ -20,7 +20,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
-from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save
+from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save, process_lob_data_extended
 
 from py_ext.tool import log, share_tensor
 
@@ -171,6 +171,9 @@ class LobExpert_file():
         lob_data['sell_save'] = np.nan
         lob_data.loc[am_cond, 'sell_save'] = am_res['sell_save'].values
         lob_data.loc[pm_cond, 'sell_save'] = pm_res['sell_save'].values
+
+        # 处理非最后一个的 profit <= 0/ sell_save <= 0 块
+        lob_data = process_lob_data_extended(lob_data)
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         lob_data = reset_profit_sell_save(lob_data)

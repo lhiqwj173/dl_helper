@@ -988,6 +988,76 @@ def reset_profit_sell_save(lob_data):
     
     return lob_data
 
+def process_lob_data_extended(df):
+    """
+    处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
+    
+    规则:
+    1. 对于profit<=0连续块，若之间无sell_save>0，只保留最后一个块，其余替换为之前最近的profit>0值。
+    2. 对于sell_save<=0连续块，若之间无profit>0，只保留最后一个块，其余替换为之前最近的sell_save>0值。
+    
+    参数:
+    df (pd.DataFrame): 包含'profit'和'sell_save'列的DataFrame，浮点数值，'profit'和'sell_save'不会同时非零。
+    
+    返回:
+    pd.DataFrame: 处理后的DataFrame。
+    """
+    # --- 处理 profit<=0 连续块 ---
+    # 计算每个位置之前最近的profit>0值
+    df['last_pos_profit'] = df['profit'].where(df['profit'] > 0).ffill()
+    
+    # 定义分组，遇到sell_save>0时组号递增
+    df['group_profit'] = (df['sell_save'] > 0).cumsum()
+    
+    # 标记profit<=0且sell_save=0的行
+    df['is_neg_profit'] = (df['profit'] <= 0) & (df['sell_save'] == 0)
+    
+    # 在每个group内，计算连续块的编号
+    df['block_profit'] = df.groupby('group_profit')['is_neg_profit'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    
+    # 计算每个group内profit<=0的最大块编号
+    temp_profit = df[df['is_neg_profit']].groupby('group_profit')['block_profit'].max()
+    df['group_max_neg_block_profit'] = df['group_profit'].map(temp_profit)
+    
+    # 替换：profit<=0且非最后一个块的行
+    mask_profit = df['is_neg_profit'] & (df['block_profit'] < df['group_max_neg_block_profit'])
+    df.loc[mask_profit, 'profit'] = df.loc[mask_profit, 'last_pos_profit']
+
+    # --- 处理 sell_save<=0 连续块 ---
+    # 计算每个位置之前最近的sell_save>0值
+    df['last_pos_sell_save'] = df['sell_save'].where(df['sell_save'] > 0).ffill()
+    
+    # 定义分组，遇到profit>0时组号递增
+    df['group_sell_save'] = (df['profit'] > 0).cumsum()
+    
+    # 标记sell_save<=0且profit=0的行
+    df['is_neg_sell_save'] = (df['sell_save'] <= 0) & (df['profit'] == 0)
+    
+    # 在每个group内，计算连续块的编号
+    df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    
+    # 计算每个group内sell_save<=0的最大块编号
+    temp_sell_save = df[df['is_neg_sell_save']].groupby('group_sell_save')['block_sell_save'].max()
+    df['group_max_neg_block_sell_save'] = df['group_sell_save'].map(temp_sell_save)
+    
+    # 替换：sell_save<=0且非最后一个块的行
+    mask_sell_save = df['is_neg_sell_save'] & (df['block_sell_save'] < df['group_max_neg_block_sell_save'])
+    df.loc[mask_sell_save, 'sell_save'] = df.loc[mask_sell_save, 'last_pos_sell_save']
+
+    # --- 清理辅助列 ---
+    df.drop(columns=[
+        'last_pos_profit', 'group_profit', 'is_neg_profit', 'block_profit', 'group_max_neg_block_profit',
+        'last_pos_sell_save', 'group_sell_save', 'is_neg_sell_save', 'block_sell_save', 
+        'group_max_neg_block_sell_save'
+    ], inplace=True)
+    
+    return df
+
+
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
     min_class_count = predict_df['target'].value_counts().min()

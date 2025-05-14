@@ -1068,9 +1068,17 @@ class Tracker():
                     max_val_class_f1_xs.append(max_val_class_f1_x)
 
                 colors = [
-                    ('#57C838', '#8DE874'),# 均衡 f1
-                    ('#fc5454', '#feb9b9'),# 类别 0
-                    ('#b03ef9', '#dba5fd'),# 类别 1
+                    ('#57C838', '#8DE874'),  # 均衡 f1 (green)
+                    ('#fc5454', '#feb9b9'),  # 类别 0 (red)
+                    ('#b03ef9', '#dba5fd'),  # 类别 1 (purple)
+                    ('#1E90FF', '#ADD8E6'),  # 类别 2 (blue)
+                    ('#FFA500', '#FFDAB9'),  # 类别 3 (orange)
+                    ('#32CD32', '#98FB98'),  # 类别 4 (lime green)
+                    ('#FF69B4', '#FFB6C1'),  # 类别 5 (pink)
+                    ('#00CED1', '#AFEEEE'),  # 类别 6 (turquoise)
+                    ('#FFD700', '#FFFACD'),  # 类别 7 (yellow)
+                    ('#6A5ACD', '#B0C4DE'),  # 类别 8 (slate blue)
+                    ('#FF4500', '#FFA07A')   # 类别 9 (orange-red)
                 ]
 
                 # 测试集f1
