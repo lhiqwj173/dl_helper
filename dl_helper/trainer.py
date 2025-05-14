@@ -21,6 +21,7 @@ import tempfile
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data.sampler import RandomSampler
 
 from py_ext.tool import log, debug, get_log_folder, _get_caller_info, init_logger
@@ -114,11 +115,12 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         loss = criterion(output, target)
 
         # 检查梯度
-        if check_nan(output):
-            pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
-            wx.send_message(f'训练数据异常 nan/inf')
-            wx.send_file('error_data.pkl')
-            raise Exception('训练数据异常 nan/inf')
+        if accelerator.is_local_main_process:
+            if check_nan(output):
+                pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
+                wx.send_message(f'训练数据异常 nan/inf')
+                wx.send_file('error_data.pkl')
+                raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
         optimizer.step()
@@ -130,8 +132,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             # debug('track done')
 
     # 检查最后一个 batch 的梯度，并记录
-    total_grad_norm = check_gradients(model)
-    tracker.record('total_grad_norm', total_grad_norm)
+    if accelerator.is_local_main_process:
+        total_grad_norm = check_gradients(model)
+        tracker.record('total_grad_norm', total_grad_norm)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -182,6 +185,8 @@ def test_train_func(data_file_path, id, test_class):
 
     print(f"[{idx}] batch_indices: {batch_indices}")
 
+
+
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans):
     """
     异常模型在验证时checkpoint会报错, 默认不进行checkpoint
@@ -195,10 +200,15 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     #     printer.print(f"[{epoch}] skipping val {skip_steps} steps.")
     #     active_dataloader = skip_first_batches(val_data, skip_steps)
 
+    first_batch_data = None
+
     model.eval()
     with torch.no_grad():
         for batch in active_dataloader:
             data, target = trans(batch)
+
+            if None is first_batch_data and accelerator.is_local_main_process:
+                first_batch_data = (data.clone(), target.clone())
             
             # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
             if not params.classify and len(target.shape) == 1:
@@ -215,6 +225,33 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     # 追踪器，计算必要的数据
     tracker.update()
     # debug('val_fn done')
+
+    # 固定第一个 val batch 统计正确类别的预测置信度 
+    if accelerator.is_local_main_process:
+        data, target = first_batch_data
+        # 前向传播，获取模型输出
+        output = model(data)
+        # 对输出应用softmax，获取概率分布
+        probabilities = F.softmax(output, dim=1)
+        # 获取正确类别的预测置信度
+        # torch.gather 从 probabilities 中提取对应 target 的概率值
+        confidence_scores = torch.gather(probabilities, 1, target.unsqueeze(1)).squeeze()
+        # 获取模型预测的类别（概率最大的类别）
+        predicted_labels = torch.argmax(probabilities, dim=1)
+        # 将结果转换为列表形式
+        confidence_scores = confidence_scores.cpu().numpy().tolist()
+        predicted_labels = predicted_labels.cpu().numpy().tolist()
+        true_labels = target.cpu().numpy().tolist()
+        # 追加输出到 csv
+        file = os.path.join(params.root, 'batch_confidence.csv')
+        if not os.path.exists(file):
+            # 写入表头
+            with open(file, 'w') as f:
+                f.write('time,id,confidence,predicted_label,true_label\n')
+        t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(file, 'a') as f:
+            for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
+                f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
 
     # # for debug
     # accelerator.wait_for_everyone()
