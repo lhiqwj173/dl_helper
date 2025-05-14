@@ -551,6 +551,7 @@ class Tracker():
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 print('class_mcc', flush=True)
 
+                # TODO 计算 recall
 
                 # # 各个类别按照 code 分类计数 f1 score
                 # # train/val 不需要计算
@@ -938,7 +939,9 @@ class Tracker():
             for old_key, new_key in zip(old_keys, new_keys):
                 data[new_key] = data.pop(old_key)
 
-            print(data)
+            # print(data)
+            # 将 data 作为 csv 全量保存
+            pickle.dump(data, open(os.path.join(params.root, f'all_data.pkl'), 'wb'))
 
             # 创建图形和坐标轴
             fig, axs = None, None
@@ -1319,6 +1322,7 @@ class Tracker():
                     else:
                         f.write(f',')
                 f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
+        
         self.accelerator.wait_for_everyone()
         # debug('save_result done')
 
