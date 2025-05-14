@@ -1189,7 +1189,7 @@ class Tracker():
                     labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
 
                     # 自定义颜色
-                    colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537']
+                    colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537', '#2E8B57', '#DAA520', '#483D8B', '#FF8C69', '#E6E6FA']
 
                     # 绘制柱状图
                     fig, ax = plt.subplots()
