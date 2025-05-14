@@ -41,17 +41,6 @@ from accelerate.utils import (
 def package_root(accelerator, params):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        # 拷贝 log 文件夹
-        destination_folder = os.path.join(params.root, 'logs')
-        source_folder = get_log_folder()
-        os.makedirs(destination_folder, exist_ok=True)
-        for file in os.listdir(source_folder):
-            src = os.path.join(source_folder, file)
-            target = os.path.join(destination_folder, file)
-            # 覆盖拷贝文件
-            shutil.copy(src, target)
-        print('copy log folder done')
-
         zip_file = f'{params.root}.7z'
         if os.path.exists(zip_file):
             os.remove(zip_file)
