@@ -86,7 +86,6 @@ def class_accuracy(y_pred, y_true, y_n):
     
     return torch.tensor(class_acc, device=y_pred.device)
 
-
 def class_mcc_score(y_pred, y_true, y_n):
     # 转换为numpy计算
     y_pred_np = y_pred.cpu().numpy()
@@ -127,7 +126,6 @@ def sklearn_r2_score(y_pred, y_true):
     
     r2 = sk_r2_score(y_true_np, y_pred_np, multioutput='variance_weighted')
     return torch.tensor(r2, device=y_pred.device, dtype=torch.float32)
-
 
 def class_f1_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
     # train/val/test_final/test_best/test_dummy/final_train/final_val/best_train/best_val
@@ -222,12 +220,53 @@ def r2_score_each_code(_type, symbol_score, codes, y_pred, y_true, y_n, root):
 
         save_df_pic(os.path.join(root, f'{model_type}_symbol_r2.png'),df,(500, 140))
 
-
 def f1_score(y_true, y_pred, y_n):
     # 计算加权 F1 分数
     f1_score = F1Score(num_classes=y_n, average='weighted', task='multiclass').to(y_pred.device)
     return f1_score(y_pred, y_true).unsqueeze(0)
 
+def cal_recall(y_true, y_pred, y_n):
+    """
+    计算多分类任务的 recall。
+    
+    参数:
+        y_true (torch.Tensor): 真实标签，形状为 (N,)，值为 0 到 y_n-1
+        y_pred (torch.Tensor): 预测标签，形状为 (N,)，值为 0 到 y_n-1
+        y_n (int): 类别数
+    
+    返回:
+        dict: 包含每个类别的 recall 和宏平均 recall
+    """
+    # 确保输入是张量
+    y_true = torch.as_tensor(y_true, dtype=torch.long)
+    y_pred = torch.as_tensor(y_pred, dtype=torch.long)
+    
+    # 初始化 TP 和 FN 的计数
+    recalls = []
+    for c in range(y_n):
+        # 真正例 (TP): 预测为 c 且真实标签为 c
+        true_positive = torch.sum((y_pred == c) & (y_true == c)).float()
+        # 真实正例总数 (TP + FN): 真实标签为 c 的样本
+        true_positive_plus_false_negative = torch.sum(y_true == c).float()
+        
+        # 计算 recall
+        if true_positive_plus_false_negative > 0:
+            recall_c = true_positive / true_positive_plus_false_negative
+        else:
+            recall_c = torch.tensor(0.0)  # 如果该类别没有样本，recall 为 0
+        recalls.append(recall_c)
+    
+    # 转换为张量
+    recalls = torch.tensor(recalls)
+    
+    # 计算宏平均 recall
+    macro_recall = recalls.mean() if y_n > 0 else torch.tensor(0.0)
+    
+    # 返回每个类别的 recall 和宏平均 recall
+    result = {f'class_recall_{c}': recalls[c].item() for c in range(y_n)}
+    result['recall'] = macro_recall.item()
+    
+    return result
 
 def plot_roc_curve_0(y_true, y_score, file_path):
     if isinstance(y_true, torch.Tensor):
@@ -538,10 +577,12 @@ class Tracker():
                 ).unsqueeze(0)
                 # self.printer.print('balance_acc')
                 
+                # 计算加权 F1 分数
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 # self.printer.print('weighted_f1')
 
-                torch.cuda.empty_cache()  # 仅在使用GPU的情况下
+                # 计算 recall / macro_0/1/2
+                recall_dict = cal_recall(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
 
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
@@ -550,8 +591,6 @@ class Tracker():
                 # 计算各个类别 mcc
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
                 print('class_mcc', flush=True)
-
-                # TODO 计算 recall
 
                 # # 各个类别按照 code 分类计数 f1 score
                 # # train/val 不需要计算
@@ -584,21 +623,26 @@ class Tracker():
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = balance_acc
                     self.data[f'{self.track_update}_f1'] = weighted_f1
-                    for i in range(len(class_f1) - 1):
+                    self.data[f'{self.track_update}_recall'] = torch.tensor([recall_dict['recall']])
+                    for i in range(len(class_f1)):
                         self.data[f'{self.track_update}_class_mcc_{i}'] = class_mcc[i].unsqueeze(0)
                         self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
+                        self.data[f'{self.track_update}_class_recall_{i}'] = torch.tensor([recall_dict[f'class_recall_{i}']])
 
                 else:
                     self.data[f'{self.track_update}_r2'] = variance_weighted_r2.unsqueeze(0)
+
             else:
                 if _loss >0:
                     self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
-                    for i in range(len(class_f1) - 1):
+                    self.data[f'{self.track_update}_recall'] = torch.cat([self.data[f'{self.track_update}_recall'], torch.tensor([recall_dict['recall']])])
+                    for i in range(len(class_f1)):
                         self.data[f'{self.track_update}_class_mcc_{i}'] = torch.cat([self.data[f'{self.track_update}_class_mcc_{i}'], class_mcc[i].unsqueeze(0)])
                         self.data[f'{self.track_update}_class_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_class_f1_{i}'], class_f1[i].unsqueeze(0)])
+                        self.data[f'{self.track_update}_class_recall_{i}'] = torch.cat([self.data[f'{self.track_update}_class_recall_{i}'], torch.tensor([recall_dict[f'class_recall_{i}']])])
 
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2.unsqueeze(0)])

@@ -129,8 +129,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             tracker.track('train', output, data, target, loss)
             # debug('track done')
 
-    # 检查最后一个 batch 的梯度
+    # 检查最后一个 batch 的梯度，并记录
     total_grad_norm = check_gradients(model)
+    tracker.record('total_grad_norm', total_grad_norm)
 
     # 追踪器，计算必要的数据
     tracker.update()
