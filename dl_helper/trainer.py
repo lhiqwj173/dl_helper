@@ -1,7 +1,7 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tracker import MODEL_FINAL, MODEL_BEST, MODEL_DUMMY, TEST_FINAL, TEST_BEST, TEST_DUMMY
-from dl_helper.tool import report_memory_usage, check_nan, _check_nan
+from dl_helper.tool import report_memory_usage, check_nan
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 from dl_helper.models.dummy import m_dummy
@@ -114,7 +114,11 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         loss = criterion(output, target)
 
         with torch.no_grad():
-            check_nan(output, ids=active_dataloader.dataset.use_data_id)
+            if check_nan(output):
+                pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
+                wx.send_message(f'训练数据异常 nan/inf')
+                wx.send_file('error_data.pkl')
+                raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
         optimizer.step()

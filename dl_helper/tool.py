@@ -1222,24 +1222,18 @@ def model_params_num(model):
     num_params = vector.numel()
     return num_params
 
-def _check_nan(output):
+def check_nan(output):
+    """
+    检查 output 中是否存在 NaN 或 inf
+    存在则返回 True，否则返回 False
+    """
     has_nan = torch.isnan(output).any(dim=-1)  # 检查是否有 NaN
     has_inf = torch.isinf(output).any(dim=-1)  # 检查是否有 inf
-
-    # 找出包含 NaN 或 inf 值的批次索引
-    batch_indices = torch.nonzero(has_nan | has_inf, as_tuple=True)[0]
-    return batch_indices
-
-def check_nan(output, ids):
-    # 找出包含 NaN 或 inf 值的批次索引
-    batch_indices = _check_nan(output)
-    if batch_indices.numel() > 0:
-        bad_ids = []
-        for i in list(batch_indices):
-            bad_ids.append(ids[i])
-        msg = f'训练数据异常 nan/inf ids:{bad_ids}'
-        wx.send_message(msg)
-        raise Exception(msg)
+    
+    if has_nan.any() or has_inf.any():
+        return True
+    else:
+        return False
 
 def stop_all_python_processes():
     current_pid = os.getpid()
