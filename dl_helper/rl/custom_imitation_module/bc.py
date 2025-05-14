@@ -35,7 +35,8 @@ from imitation.util import util
 from imitation.algorithms.bc import BC, RolloutStatsComputer, BatchIteratorWithEpochEndCallback
 
 from dl_helper.rl.custom_imitation_module.dataset import TrajectoryDataset
-from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, check_gradients, cal_action_balance
+from dl_helper.rl.rl_utils import plot_bc_train_progress, CustomCheckpointCallback, cal_action_balance
+from dl_helper.tool import check_gradients
 
 from py_ext.tool import log
 from py_ext.datetime import beijing_time

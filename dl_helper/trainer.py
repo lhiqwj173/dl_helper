@@ -1,7 +1,7 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tracker import MODEL_FINAL, MODEL_BEST, MODEL_DUMMY, TEST_FINAL, TEST_BEST, TEST_DUMMY
-from dl_helper.tool import report_memory_usage, check_nan
+from dl_helper.tool import report_memory_usage, check_nan, check_gradients
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 from dl_helper.models.dummy import m_dummy
@@ -41,6 +41,17 @@ from accelerate.utils import (
 def package_root(accelerator, params):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
+        # # 拷贝 log 文件夹
+        # destination_folder = os.path.join(params.root, 'logs')
+        # source_folder = get_log_folder()
+        # os.makedirs(destination_folder, exist_ok=True)
+        # for file in os.listdir(source_folder):
+        #     src = os.path.join(source_folder, file)
+        #     target = os.path.join(destination_folder, file)
+        #     # 覆盖拷贝文件
+        #     shutil.copy(src, target)
+        # print('copy log folder done')
+
         zip_file = f'{params.root}.7z'
         if os.path.exists(zip_file):
             os.remove(zip_file)
@@ -102,12 +113,12 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         output = model(data)
         loss = criterion(output, target)
 
-        with torch.no_grad():
-            if check_nan(output):
-                pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
-                wx.send_message(f'训练数据异常 nan/inf')
-                wx.send_file('error_data.pkl')
-                raise Exception('训练数据异常 nan/inf')
+        # 检查梯度
+        if check_nan(output):
+            pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
+            wx.send_message(f'训练数据异常 nan/inf')
+            wx.send_file('error_data.pkl')
+            raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
         optimizer.step()
@@ -117,6 +128,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
             # debug('track')
             tracker.track('train', output, data, target, loss)
             # debug('track done')
+
+    # 检查最后一个 batch 的梯度
+    total_grad_norm = check_gradients(model)
 
     # 追踪器，计算必要的数据
     tracker.update()

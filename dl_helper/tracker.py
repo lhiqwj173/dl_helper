@@ -806,6 +806,12 @@ class Tracker():
 
         self.printer.print(f"------------tracker data------------")
 
+    def record(self, key, value):
+        """记录每个epoch的数据"""
+        if key not in self.data:
+            self.data[key] = []
+        self.data[key].append(value)
+
     def track(self, _type, output, data, target, loss=None):
         # assert _type in ['train', 'val', 'test'], f'error: _type({_type}) should in [train, val, test]'
         # self.printer.print(self.temp[f'{_type}_y_true'], main=False)
@@ -1063,7 +1069,7 @@ class Tracker():
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 max_train_class_f1_xs = []
                 max_val_class_f1_xs = []
-                for i in range(params.y_n -1):
+                for i in range(params.y_n):
                     max_train_class_f1_x = data[f"train_class_f1_{i}"].index(max_train_class_f1s[i])
                     max_val_class_f1_x = data[f"val_class_f1_{i}"].index(max_val_class_f1s[i])
                     max_train_class_f1_xs.append(max_train_class_f1_x)
@@ -1086,20 +1092,20 @@ class Tracker():
                 # 测试集f1
                 if 'test_f1' in data:
                     t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
-                    for i in range(params.y_n -1):
+                    for i in range(params.y_n):
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
 
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f} ({last_value(data["train_f1"]):.4f})', c=colors[0][0])[0])
-                for i in range(params.y_n -1):
+                for i in range(params.y_n):
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f} ({last_value(data[f"train_class_f1_{i}"]):.4f})', c=colors[i+1][0])[0])
 
                 # 标记f1最高点
                 t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f} ({max_train_f1:.4f})'))
-                for i in range(params.y_n -1):
+                for i in range(params.y_n):
                     t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
                     t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f} ({max_train_class_f1s[i]:.4f})'))
 

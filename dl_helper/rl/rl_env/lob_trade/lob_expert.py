@@ -267,7 +267,7 @@ class LobExpert_file():
         
         # 查找 action
         # 向后多取 future_act_num 个数据
-        future_act_num = 5
+        future_act_num = 10
         data = lob_data[lob_data['before_market_close_sec'] <= before_market_close_sec].iloc[:future_act_num]
         assert len(data) > 0, f'len(data): {len(data)}'# 至少有一个数据
 
