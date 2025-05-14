@@ -229,7 +229,7 @@ def f1_score(y_true, y_pred, y_n):
     return f1_score(y_pred, y_true).unsqueeze(0)
 
 
-def plot_roc_curve(y_true, y_score, file_path):
+def plot_roc_curve_0(y_true, y_score, file_path):
     if isinstance(y_true, torch.Tensor):
         y_true = y_true.cpu().numpy()
         y_score = y_score.cpu().numpy()
@@ -263,6 +263,52 @@ def plot_roc_curve(y_true, y_score, file_path):
 
     plt.tight_layout()
     plt.savefig(file_path)
+
+    threshold_file = file_path.replace('ROC_curve.png', 'threshold.txt')
+    with open(threshold_file, 'w') as f:
+        d = ",".join([f'{i:.3f}' for i in best_thresholds])
+        f.write(f'{d}\n')
+
+def plot_roc_curve(y_true, y_score, file_path):
+    if isinstance(y_true, torch.Tensor):
+        y_true = y_true.cpu().numpy()
+        y_score = y_score.cpu().numpy()
+
+    n_classes = y_score.shape[1]  # 获取类别数
+    # 动态计算子图的行数和列数
+    cols = min(3, n_classes)  # 每行最多 3 列
+    rows = (n_classes + cols - 1) // cols  # 计算所需行数
+
+    plt.figure(figsize=(15, 5 * rows))  # 动态调整画布高度
+
+    best_thresholds = []
+    for i in range(n_classes):
+        fpr, tpr, _ = roc_curve(y_true == i, y_score[:, i])
+
+        # 计算使 F1 分数最优的阈值
+        precision, recall, thresholds = precision_recall_curve(y_true == i, y_score[:, i])
+        f1_scores = 2 * (precision * recall) / (precision + recall)
+
+        # f1_scores nan -> 备份数据
+        if math.isnan(np.max(f1_scores)):
+            pickle.dump((y_true, y_score), open(file_path.replace('ROC_curve.png', 'y_true_y_score_dump.pkl'), 'wb'))
+
+        best_threshold = thresholds[np.argmax(f1_scores)]
+        best_thresholds.append(best_threshold)
+
+        # 使用动态的子图索引
+        plt.subplot(rows, cols, i + 1)
+        plt.plot(fpr, tpr)
+        plt.plot([0, 1], [0, 1], linestyle='--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'ROC Curve - Class {i} {np.max(f1_scores):.3f}')
+        plt.scatter(fpr[np.argmax(tpr - fpr)], tpr[np.argmax(tpr - fpr)], c='red', marker='x', label=f'Best Threshold: {best_threshold:.3f}')
+        plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(file_path)
+    plt.close()  # 关闭画布，防止内存泄漏
 
     threshold_file = file_path.replace('ROC_curve.png', 'threshold.txt')
     with open(threshold_file, 'w') as f:
