@@ -60,7 +60,22 @@ class test_base():
     # 返回一个 torch loss
     def get_criterion(self):
         assert self.para, 'should init param in __init__()'
-        return nn.CrossEntropyLoss(label_smoothing=self.para.label_smoothing) if self.para.classify else nn.MSELoss()
+        if self.para.classify:
+            if self.para.y_n > 2:
+                return nn.CrossEntropyLoss(label_smoothing=self.para.label_smoothing)
+            else:
+                # 检查模型是否包含 sigmoid
+                model = self.get_model()
+                forward_code = model.forward.__code__.co_code
+                if 'sigmoid' in str(forward_code) or any(isinstance(layer, nn.Sigmoid) for layer in model.modules()):
+                    # 模型最后一层包含 sigmoid
+                    # 使用 BCELoss
+                    return nn.BCELoss()
+                else:
+                    return nn.BCEWithLogitsLoss()
+
+        else:
+            return nn.MSELoss()
 
     # 初始化优化器
     # 返回一个 torch optimizer

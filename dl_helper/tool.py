@@ -973,8 +973,8 @@ def reset_profit_sell_save(lob_data):
     lob_data.loc[profit_cond1, 'profit'] = 0
     # 条件2：profit <= 0, 前一行 profit > 0, 且下一个 BASE卖1价 > 当前 BASE卖1价
     profit_cond2 = (lob_data['profit'] <= 0) & (prev_profit > 0) & (next_sell_price > lob_data['BASE卖1价'])
-    # 将前一行的profit值赋给当前行 TODO
-    lob_data.loc[profit_cond2, 'profit'] = lob_data.loc[profit_cond2, 'profit'].shift(1) 
+    # 将前一行的profit值赋给当前行
+    lob_data.loc[profit_cond2, 'profit'] = prev_profit.loc[profit_cond2]
     
     # 剔除 sell_save
     # 条件1：sell_save > 0, 前一行 sell_save <= 0, 且下一个 BASE买1价 > 当前 BASE买1价
@@ -984,7 +984,7 @@ def reset_profit_sell_save(lob_data):
     # 条件2：sell_save <= 0, 前一行 sell_save > 0, 且下一个 BASE买1价 < 当前 BASE买1价
     sell_save_cond2 = (lob_data['sell_save'] <= 0) & (prev_sell_save > 0) & (next_buy_price < lob_data['BASE买1价'])    
     # 将前一行的sell_save值赋给当前行
-    lob_data.loc[sell_save_cond2, 'sell_save'] = lob_data.loc[sell_save_cond2, 'sell_save'].shift(1) 
+    lob_data.loc[sell_save_cond2, 'sell_save'] = prev_sell_save.loc[sell_save_cond2]
     
     return lob_data
 

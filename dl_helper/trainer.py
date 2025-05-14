@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data.sampler import RandomSampler
 
-from py_ext.tool import log, debug, get_log_folder, _get_caller_info
+from py_ext.tool import log, debug, get_log_folder, _get_caller_info, init_logger
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from py_ext.alist import alist
@@ -344,6 +344,7 @@ class printer():
                 log(head, *msg, caller_info=caller_info)
 
 def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
+
     # 训练实例
     test = test_class(*args, **kwargs)
     try:
@@ -358,6 +359,9 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
         # 在root/title中添加 idx
         params.train_title = f'{params.train_title}_IDX{test.idx}'
         params.root = f'{params.root}_IDX{test.idx}'
+
+        # 初始化日志
+        init_logger(params.train_title, home=params.root, timestamp=False)
 
         # 检查下载训练文件
         if (not params.debug) and accelerator.is_local_main_process:
@@ -439,14 +443,14 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 不需要准备数据
         if not only_predict:
-            model, optimizer, scheduler = accelerator.prepare(
-                model, optimizer, scheduler
+            model, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(
+                model, optimizer, scheduler, train_loader, val_loader
             )
         else:
             model = accelerator.prepare(model)
-        # model = model.to(accelerator.device)
 
         p.print(f'prepare done')
+        p.print(f'model device: {model.device}')
 
         # 数据增强
         trans = test.get_transform(accelerator.device)
@@ -541,6 +545,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 准备测试数据
         test_loader = test.get_data('test')
+        test_loader = accelerator.prepare(test_loader)
         # 测试
         test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 

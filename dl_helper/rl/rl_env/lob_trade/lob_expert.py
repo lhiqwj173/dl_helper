@@ -272,20 +272,31 @@ class LobExpert_file():
             # 当前空仓
             # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
             if len(data[\
-                    (data['action']==ACTION_BUY) & \
-                     (data['profit'] > 0) & \
-                        (data['BASE卖1价'] == data['BASE卖1价'].iloc[0])\
+                # 有买入动作
+                (data['action']==ACTION_BUY) & \
+                    # 潜在收益为正
+                    (data['profit'] > 0) & \
+                        # 价格与当前一致
+                        (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
+                            # 与 第一行数据之间没有发生 BASE卖1价 的下跌
+                            (data['BASE卖1价'].lt(data['BASE卖1价'].cummax()).cumsum() == 0)
                             ]) > 0:
                 res = ACTION_BUY
             else:
                 res = ACTION_SELL
         else:
             # 当前有持仓
+            # 是否马上收盘/休盘 （30s）
+            noon_need_close = (np.float32(12630 / MAX_SEC_BEFORE_CLOSE) >= data['before_market_close_sec']) & (np.float32(12565 / MAX_SEC_BEFORE_CLOSE) < data['before_market_close_sec'])
+            pm_need_close = (np.float32(30 / MAX_SEC_BEFORE_CLOSE) >= data['before_market_close_sec'])
             # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
             if len(data[\
                 (data['action']==ACTION_SELL) & \
-                    (data['sell_save'] > 0) & \
-                        (data['BASE买1价'] == data['BASE买1价'].iloc[0])\
+                    # 潜在收益为正 或 中午/下午收盘
+                    ((data['sell_save'] > 0) | (noon_need_close | pm_need_close)) & \
+                        (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
+                            # 与 第一行数据之间没有发生 BASE买1价 的上涨
+                            (data['BASE买1价'].gt(data['BASE买1价'].cummin()).cumsum() == 0)
                             ]) > 0:
                 res = ACTION_SELL
             else:
