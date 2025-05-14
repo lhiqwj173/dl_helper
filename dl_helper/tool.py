@@ -572,8 +572,8 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             valley_idx += 1
             continue
 
-        if mid[t2] < mid[t1]:
-            # 波峰比波谷还低，测试下一个波谷
+        if mid[t2] <= mid[t1]:
+            # 波峰不高于波谷，测试下一个波谷
             valley_idx += 1
             continue
         

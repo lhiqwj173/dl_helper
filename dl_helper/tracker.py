@@ -560,6 +560,7 @@ class Tracker():
 
             # 计算数据
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0).cpu()
+            print(f"_loss {_loss.device}")
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
@@ -632,7 +633,11 @@ class Tracker():
 
             else:
                 if _loss >0:
+                    name = f"self.data[f'{self.track_update}_loss']"
+                    print(f"{name} {self.data[f'{self.track_update}_loss'].device}")
+                    print(f"_loss {_loss.device}")
                     self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
+                    
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
