@@ -450,7 +450,7 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def cal_threshold_f1score(self):
-        pickle.dump((self.temp, self.params), open('debug_data.pkl', 'wb'))
+        # pickle.dump((self.temp, self.params), open('debug_data.pkl', 'wb'))
 
         folder = self.track_update.replace('test', 'model')
         folder = os.path.join(self.params.root, folder)
