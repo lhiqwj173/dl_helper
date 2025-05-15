@@ -450,6 +450,11 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def cal_threshold_f1score(self):
+        if self.params.y_n > 3:
+            # 类别大于3，不计算threshold
+            # 计算量太大
+            return
+
         # pickle.dump((self.temp, self.params), open('debug_data.pkl', 'wb'))
 
         folder = self.track_update.replace('test', 'model')
@@ -463,33 +468,33 @@ class Tracker():
             thresholds = [float(i) for i in thresholds]
 
         thresholds = torch.tensor(thresholds,device=self.temp['softmax_predictions'].device)
-        print(f"thresholds: {thresholds}")
+        # print(f"thresholds: {thresholds}")
         categories = [i for i in range(self.params.y_n)]
 
         combinations = []
         for r in range(1, len(categories) + 1):
             combinations.extend(itertools.permutations(categories, r))
-        print(f"combinations: {combinations}")
+        # print(f"combinations: {combinations}")
 
         combinations = [i for i in combinations if len(i) == len(categories)]
         combinations = [torch.tensor(i,device=self.temp['softmax_predictions'].device) for i in combinations]
-        print(f"combinations: {combinations}")
+        # print(f"combinations: {combinations}")
 
         thresholded_predictions = self.temp['softmax_predictions'] > thresholds
         thresholded_predictions_int = thresholded_predictions.int()
-        print(f"thresholded_predictions_int")
+        # print(f"thresholded_predictions_int")
         rets = []
         for comb in combinations:
-            print(f"comb: {comb}")
+            # print(f"comb: {comb}")
             # 预测类别
             y_pred = torch.argmax(thresholded_predictions_int[:, comb], dim=1)
 
-            print(y_pred.shape)
-            print(self.temp['_y_true'].shape)
+            # print(y_pred.shape)
+            # print(self.temp['_y_true'].shape)
             balance_acc = cal_balance_acc(
                 y_pred, self.temp['_y_true'], self.params.y_n
             ).unsqueeze(0)
-            self.printer.print('balance_acc')
+            # self.printer.print('balance_acc')
             
             # 计算加权 F1 分数
             f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(y_pred.device)
@@ -497,11 +502,11 @@ class Tracker():
         
             rets.append((comb, balance_acc, weighted_f1))
 
-        print(f"rets: {rets}")
+        # print(f"rets: {rets}")
 
         # 按照 weighted_f1 排序
         rets = sorted(rets, key=lambda x: x[2])
-        print(f"sorted rets: {rets}")
+        # print(f"sorted rets: {rets}")
 
         with open(threshold_file, 'a')as f:
             f.write('comb,balance_acc,weighted_f1\n')
@@ -576,43 +581,39 @@ class Tracker():
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
-                print(f"self.temp['softmax_predictions']")
 
                 if self.track_update in TYPES_NEED_CAL_THRESHOLD:
                     self.cal_threshold_f1score()
-                print(f"cal_threshold_f1score")
 
                 _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
-                print(f"_, self.temp['_y_pred']")
 
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 ).unsqueeze(0).cpu()
-                self.printer.print('balance_acc')
+                # self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
-                self.printer.print('weighted_f1')
+                # self.printer.print('weighted_f1')
 
                 # 计算 recall / macro_0/1/2
                 recall_dict = cal_recall(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
 
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
-                print('class_f1', flush=True)
+                # print('class_f1', flush=True)
 
                 # 计算各个类别 mcc
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
-                print('class_mcc', flush=True)
+                # print('class_mcc', flush=True)
 
                 # # 各个类别按照 code 分类计数 f1 score
                 # # train/val 不需要计算
                 # if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
                 #     class_f1_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
 
-                print('class_f1_each_code', flush=True)
-                self.printer.print('class_f1_each_code')
+                # self.printer.print('class_f1_each_code')
 
             else:
                 # 计算方差加权 R2
@@ -624,7 +625,7 @@ class Tracker():
                 #     r2_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
                 # print('r2_each_code', flush=True)
         
-            self.printer.print(f'_loss: {_loss.shape}')
+            # self.printer.print(f'_loss: {_loss.shape}')
             # self.printer.print(f'balance_acc: {balance_acc.shape}')
             # self.printer.print(f'weighted_f1: {weighted_f1.shape}')
 
@@ -664,7 +665,6 @@ class Tracker():
 
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2.unsqueeze(0)])
-            self.printer.print('record data done')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
