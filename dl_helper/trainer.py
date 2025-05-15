@@ -465,6 +465,8 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
                 setattr(params, k, v)
                 p.print(f'{k}-> {v}')
 
+        assert params is test.get_param(), f'params is not test.para'
+
         if None is model:
             model = test.get_model()
 
