@@ -504,6 +504,8 @@ class Tracker():
         if self.params.classify and self.accelerator.is_main_process and self.track_update not in self.label_count_done and self.track_update in TYPES_NEED_LABEL_COUNT:
             self.label_count_done[self.track_update] = True
 
+        self.printer.print(f'update {self.track_update}')
+
         # 模型 output 输出，用于模型融合训练
         # > train/val/test > date_file
         # id,target,0,1,2
@@ -564,11 +566,15 @@ class Tracker():
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
+                print(f"self.temp['softmax_predictions']")
+                pickle.dump(self.temp['softmax_predictions'], open('softmax_predictions.pkl', 'wb'))
 
                 if self.track_update in TYPES_NEED_CAL_THRESHOLD:
                     self.cal_threshold_f1score()
+                print(f"cal_threshold_f1score")
 
                 _, self.temp['_y_pred'] = torch.max(self.temp['softmax_predictions'], dim=1)
+                print(f"_, self.temp['_y_pred']")
 
                 # 改用 Balanced Accuracy
                 balance_acc = cal_balance_acc(
