@@ -725,19 +725,27 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     # 分配idx
     from dl_helper.train_param import get_gpu_info
     base_title= f'{test_class.title_base}_{get_gpu_info()}'
+    new_kwargs = {}
     if len(sys.argv) > 1:
         for arg in sys.argv[1:]:
             if arg.startswith('idx='):
                 kwargs['idx'] = int(arg.split('=')[1])
-            if arg.startswith('amp='):
+            elif arg.startswith('amp='):
                 kwargs['amp'] = arg.split('=')[1]
-            if arg.startswith('findbest_lr='):
+            elif arg.startswith('findbest_lr='):
                 kwargs['findbest_lr'] = arg.split('=')[1]
-            if arg == 'test':
+            elif arg == 'test':
                 kwargs['test'] = True
+            elif '=' in arg:
+                # 其他参数
+                k, v = arg.split('=')
+                kwargs[k] = v
+                new_kwargs[k] = v
 
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
     if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
+    for k, v in new_kwargs.items():
+        base_title += f'_{k}@{v}'
     if 'test' in kwargs and kwargs['test']:
         kwargs['idx'] = 0
     if 'idx' not in kwargs:
