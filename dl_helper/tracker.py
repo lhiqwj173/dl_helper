@@ -560,7 +560,7 @@ class Tracker():
 
             # 计算数据
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0).cpu()
-            # print(f"_loss {_loss.device}")
+            print(f"_loss {_loss.device}")
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
@@ -574,18 +574,18 @@ class Tracker():
                 balance_acc = cal_balance_acc(
                     self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n
                 ).unsqueeze(0).cpu()
-                # self.printer.print('balance_acc')
+                self.printer.print('balance_acc')
                 
                 # 计算加权 F1 分数
                 weighted_f1 = f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
-                # self.printer.print('weighted_f1')
+                self.printer.print('weighted_f1')
 
                 # 计算 recall / macro_0/1/2
                 recall_dict = cal_recall(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
 
                 # 计算各个类别 f1 score
                 class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
-                # print('class_f1', flush=True)
+                print('class_f1', flush=True)
 
                 # 计算各个类别 mcc
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
@@ -597,7 +597,7 @@ class Tracker():
                 #     class_f1_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
 
                 print('class_f1_each_code', flush=True)
-                # self.printer.print('class_f1_each_code')
+                self.printer.print('class_f1_each_code')
 
             else:
                 # 计算方差加权 R2
@@ -609,7 +609,7 @@ class Tracker():
                 #     r2_score_each_code(self.track_update, self.symbol_score, self.temp['_codes'], self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n, self.params.root)
                 # print('r2_each_code', flush=True)
         
-            # self.printer.print(f'_loss: {_loss.shape}')
+            self.printer.print(f'_loss: {_loss.shape}')
             # self.printer.print(f'balance_acc: {balance_acc.shape}')
             # self.printer.print(f'weighted_f1: {weighted_f1.shape}')
 

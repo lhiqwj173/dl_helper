@@ -285,7 +285,6 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
         model.eval()
         with torch.no_grad():
             for batch in test_data:
-                printer.print(f'batch: {batch} begin')
                 data, target = trans(batch)
 
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
@@ -297,10 +296,6 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
 
                 # 追踪器 记录数据
                 tracker.track(test_types[i], output, data, target, loss)
-
-                printer.print(f'batch: {batch} done')
-
-        printer.print(f'all batch done')
 
         # 追踪器，计算必要的数据
         # printer.print('update')
