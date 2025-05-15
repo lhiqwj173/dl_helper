@@ -59,9 +59,9 @@ class test(test_base):
         ])
 
         # 3. 下载并加载MNIST数据集
-        self.train_dataset = torchvision.datasets.MNIST(root=os.path.join(self.para.root, 'data'), train=True, 
+        self.train_dataset = torchvision.datasets.MNIST(root='data', train=True, 
                                                 transform=transform, download=True)
-        self.test_dataset = torchvision.datasets.MNIST(root=os.path.join(self.para.root, 'data'), train=False, 
+        self.test_dataset = torchvision.datasets.MNIST(root='data', train=False, 
                                         transform=transform)
         
         # 4. 划分训练集和验证集（80%训练，20%验证）
