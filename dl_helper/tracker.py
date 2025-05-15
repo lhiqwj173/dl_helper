@@ -105,10 +105,10 @@ def class_mcc_score(y_pred, y_true, y_n):
 def class_f1_score(y_pred, y_true, y_n):
     # 计算每个类别的 F1 分数
     f1_score = F1Score(num_classes=y_n, average='none', task='multiclass').to(y_pred.device)  # 设置 average='none' 以计算每个类别的 F1 分数
-    print('F1Score', flush=True)
+    # print('F1Score', flush=True)
     # 计算 F1 Score
     class_f1 = f1_score(y_pred, y_true)
-    print('compute', flush=True)
+    # print('compute', flush=True)
     return class_f1
 
 def r2_score(y_pred, y_true):
@@ -584,8 +584,8 @@ class Tracker():
                 recall_dict = cal_recall(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
 
                 # 计算各个类别 f1 score
-                class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n)
-                print('class_f1', flush=True)
+                class_f1 = class_f1_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
+                # print('class_f1', flush=True)
 
                 # 计算各个类别 mcc
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()

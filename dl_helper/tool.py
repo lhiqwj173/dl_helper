@@ -480,15 +480,15 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
         elif rep_select == 'last':
             rep = end
 
-        # # 如果平台期的点数 > 1
-        # # 则 rep 应该为 start + 1 之后的点
-        # if num_points > 1:
-        #     rep = max(start + 1, rep)
+        # 如果平台期的点数 > 1
+        # 则 rep 应该为 start + 1 之后的点
+        if num_points > 1:
+            rep = max(start + 1, rep)
 
-        # # 如果平台期的点数 == 1
-        # # 则 rep 应该为 start + 1
-        # if num_points == 1:
-        #     rep = start + 1
+        # 如果平台期的点数 == 1
+        # 则 rep 应该为 start + 1
+        if num_points == 1:
+            rep = start + 1
 
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:
