@@ -743,7 +743,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 new_kwargs[k] = v
 
     if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
-    if 'amp' in kwargs: base_title+=f'_{kwargs["amp"]}'
+    if 'amp' in kwargs and kwargs['amp'] in ['fp8', 'fp16', 'bf16']:
+        base_title+=f'_{kwargs["amp"]}'
     for k, v in new_kwargs.items():
         base_title += f'_{k}@{v}'
     if 'test' in kwargs and kwargs['test']:

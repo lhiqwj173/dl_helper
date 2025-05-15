@@ -198,6 +198,8 @@ class Params:
 
       # 模型融合
       need_meta_output=False,
+
+      **kwargs
   ):
       # 添加训练后缀 (训练设备/混合精度)
       run_device = get_gpu_info()
@@ -213,25 +215,25 @@ class Params:
 
       if self.amp in ['fp8', 'fp16', 'bf16']:
           self.train_title = f'{self.train_title }_{self.amp}'
-          self.root = f'{self.root }_{self.amp}'
+          self.root = f'{self.root}_{self.amp}'
         
-      self.epochs = epochs
-      self.batch_n = batch_n
-      self.batch_size = batch_size * batch_n
-      self.learning_rate = learning_rate * batch_n
-      self.abs_learning_rate = abs_learning_rate
-      self.no_better_stop = no_better_stop
-      self.checkpointing_steps = checkpointing_steps
-      self.label_smoothing = label_smoothing
-      self.weight_decay = weight_decay
+      self.epochs = int(epochs)
+      self.batch_n = int(batch_n)
+      self.batch_size = int(batch_size) * self.batch_n
+      self.learning_rate = float(learning_rate) * self.batch_n
+      self.abs_learning_rate = int(abs_learning_rate)
+      self.no_better_stop = int(no_better_stop)
+      self.checkpointing_steps = int(checkpointing_steps)
+      self.label_smoothing = float(label_smoothing)
+      self.weight_decay = float(weight_decay)
 
-      self.classify = classify
-      self.y_n = y_n
+      self.classify = bool(classify)
+      self.y_n = int(y_n)
 
-      self.debug = debug
-      self.test = test
-      self.seed = seed
-      self.need_meta_output = need_meta_output
+      self.debug = bool(debug)
+      self.test = bool(test)
+      self.seed = int(seed)
+      self.need_meta_output = bool(need_meta_output)
 
       # # log
       # os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)

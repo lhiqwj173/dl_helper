@@ -43,8 +43,7 @@ class test(test_base):
     def __init__(self, *args, target_type=1, **kwargs):
         super().__init__(*args, **kwargs)
 
-        params_kwargs = {k: v for k, v in kwargs.items() if k not in ['idx', 'findbest_lr', 'data_folder']}
-        params_kwargs['train_title'] = self.title_base
+        params_kwargs = {k: v for k, v in kwargs.items()}
         params_kwargs['y_n'] = 10
         params_kwargs['classify'] = True
 
