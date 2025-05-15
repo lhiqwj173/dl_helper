@@ -488,7 +488,7 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
         # 如果平台期的点数 == 1
         # 则 rep 应该为 start + 1
         if num_points == 1:
-            if abs(plateaus[i + 1][2] - value) < 0.0013:
+            if i < n - 1 and abs(plateaus[i + 1][2] - value) < 0.0013:
                 rep = start + 1
 
         if i == 0:  # 第一个平台期
@@ -885,6 +885,19 @@ def calculate_sell_save(df, fee=5e-5):
     2. 在下一个 action==0 后的下一行的 BASE卖1价 买入
     3. 计算对数收益，考虑交易费用 fee=5e-5
     """
+    # 最后一行添加一个买入点，价格为0.0
+    new_row = {
+        'BASE买1价': 0.0, 
+        'BASE卖1价': 0.0, 
+        'before_market_close_sec': 0.0, 
+        'valley_peak': 0, 
+        'action': 0, 
+        'profit': 0.0, 
+    }
+    # 使用 loc 添加 2 行
+    df.loc[len(df)] = new_row
+    df.loc[len(df)] = new_row
+
     # 原地添加 sell_save 列并初始化为0
     df['sell_save'] = 0.0
     
@@ -927,7 +940,7 @@ def calculate_sell_save(df, fee=5e-5):
             # 获取最近的买入点
             next_buy_positions[i] = np.min(buy_positions[mask])
             next_buy_found[i] = True
-    
+
     # 只保留找到了下一个买入点的卖出点
     valid_sell_positions = sell_positions[next_buy_found]
     valid_next_buy_positions = next_buy_positions[next_buy_found]
@@ -953,6 +966,9 @@ def calculate_sell_save(df, fee=5e-5):
     # 更新DataFrame中的sell_save列
     df.loc[df.index[final_sell_positions], 'sell_save'] = log_returns
     
+    # 删除最后一行
+    df = df.iloc[:-2]
+
     return df
 
 def reset_profit_sell_save(lob_data):
