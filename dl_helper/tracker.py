@@ -461,6 +461,7 @@ class Tracker():
             thresholds = [float(i) for i in thresholds]
 
         thresholds = torch.tensor(thresholds,device=self.temp['softmax_predictions'].device)
+        print(f"thresholds: {thresholds}")
         categories = [i for i in range(self.params.y_n)]
 
         combinations = []
@@ -469,20 +470,23 @@ class Tracker():
 
         combinations = [i for i in combinations if len(i) == len(categories)]
         combinations = [torch.tensor(i,device=self.temp['softmax_predictions'].device) for i in combinations]
+        print(f"combinations: {combinations}")
 
         thresholded_predictions = self.temp['softmax_predictions'] > thresholds
         thresholded_predictions_int = thresholded_predictions.int()
+        print(f"thresholded_predictions_int")
         rets = []
         for comb in combinations:
+            print(f"comb: {comb}")
             # 预测类别
             y_pred = torch.argmax(thresholded_predictions_int[:, comb], dim=1)
 
-            # print(y_pred.shape)
-            # print(self.temp['_y_true'].shape)
+            print(y_pred.shape)
+            print(self.temp['_y_true'].shape)
             balance_acc = cal_balance_acc(
                 y_pred, self.temp['_y_true'], self.params.y_n
             ).unsqueeze(0)
-            # self.printer.print('balance_acc')
+            self.printer.print('balance_acc')
             
             # 计算加权 F1 分数
             f1_score = F1Score(num_classes=self.params.y_n, average='weighted', task='multiclass').to(y_pred.device)
@@ -490,8 +494,11 @@ class Tracker():
         
             rets.append((comb, balance_acc, weighted_f1))
 
+        print(f"rets: {rets}")
+
         # 按照 weighted_f1 排序
         rets = sorted(rets, key=lambda x: x[2])
+        print(f"sorted rets: {rets}")
 
         with open(threshold_file, 'a')as f:
             f.write('comb,balance_acc,weighted_f1\n')
@@ -567,7 +574,6 @@ class Tracker():
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
                 print(f"self.temp['softmax_predictions']")
-                pickle.dump(self.temp['softmax_predictions'], open('softmax_predictions.pkl', 'wb'))
 
                 if self.track_update in TYPES_NEED_CAL_THRESHOLD:
                     self.cal_threshold_f1score()
