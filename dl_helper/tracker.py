@@ -362,6 +362,22 @@ def max_downward_slope(numbers):
         slopes.append(slope)
     return slopes.index(min(slopes))
 
+def move_numbered_columns_to_end(df):
+    # 获取所有列名
+    cols = df.columns.tolist()
+    
+    # 筛选以_数字结尾的列
+    numbered_cols = [col for col in cols if col.split('_')[-1].isdigit()]
+    
+    # 保持非编号列的原始顺序
+    non_numbered_cols = [col for col in cols if col not in numbered_cols]
+    
+    # 按原始顺序组合：非编号列 + 编号列
+    new_order = non_numbered_cols + numbered_cols
+    
+    # 重新排列DataFrame的列
+    return df[new_order]
+
 class Tracker_None():
     def __init__(self, *args, **kwargs):
         self.epoch_count = 0
@@ -939,7 +955,8 @@ class Tracker():
 
             # print(data)
             # 将 data 作为 csv 全量保存
-            pickle.dump(data, open(os.path.join(params.root, f'all_data.pkl'), 'wb'))
+            df = move_numbered_columns_to_end(pd.DataFrame(data))
+            df.to_csv(os.path.join(params.root, f'all_data.csv'), index=False)
 
             # 创建图形和坐标轴
             fig, axs = None, None
