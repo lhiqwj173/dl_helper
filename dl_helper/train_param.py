@@ -175,7 +175,7 @@ class Params:
 
   def __init__(
       self,
-      train_title, 
+      train_title='test', 
 
       # 训练参数
       batch_size=64, 

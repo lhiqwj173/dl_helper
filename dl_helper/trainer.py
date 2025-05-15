@@ -732,8 +732,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['idx'] = int(arg.split('=')[1])
             elif arg.startswith('amp='):
                 kwargs['amp'] = arg.split('=')[1]
-            elif arg.startswith('findbest_lr='):
-                kwargs['findbest_lr'] = arg.split('=')[1]
+            elif arg in ['findbest_lr', 'find_lr', 'findlr']:
+                kwargs['findbest_lr'] = True
             elif arg == 'test':
                 kwargs['test'] = True
             elif '=' in arg:
@@ -742,7 +742,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs[k] = v
                 new_kwargs[k] = v
 
-    if 'findbest_lr' in kwargs: base_title+='_findbest_lr'
+    if 'findbest_lr' in kwargs: base_title+='_findlr'
     if 'amp' in kwargs and kwargs['amp'] in ['fp8', 'fp16', 'bf16']:
         base_title+=f'_{kwargs["amp"]}'
     for k, v in new_kwargs.items():
@@ -753,6 +753,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         kwargs['idx'] = get_idx(base_title)
 
     log(f'begin:{base_title} idx: {kwargs["idx"]}')
+    kwargs['train_title'] = base_title
 
     num_processes = match_num_processes()
 
