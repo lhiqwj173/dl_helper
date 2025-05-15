@@ -488,7 +488,8 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
         # 如果平台期的点数 == 1
         # 则 rep 应该为 start + 1
         if num_points == 1:
-            rep = start + 1
+            if abs(plateaus[i + 1][2] - value) < 0.0013:
+                rep = start + 1
 
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:

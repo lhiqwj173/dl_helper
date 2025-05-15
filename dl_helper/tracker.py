@@ -560,7 +560,7 @@ class Tracker():
 
             # 计算数据
             _loss = torch.mean(self.temp['_loss']).unsqueeze(0).cpu()
-            print(f"_loss {_loss.device}")
+            # print(f"_loss {_loss.device}")
 
             if self.params.classify:
                 self.temp['softmax_predictions'] = self.temp['_y_pred']
@@ -649,7 +649,7 @@ class Tracker():
 
                 else:
                     self.data[f'{self.track_update}_r2'] = torch.cat([self.data[f'{self.track_update}_r2'], variance_weighted_r2.unsqueeze(0)])
-            # self.printer.print('record data done')
+            self.printer.print('record data done')
 
         # self.printer.print('update tracker...')
         if 'train' == self.track_update:
