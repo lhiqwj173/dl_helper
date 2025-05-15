@@ -633,11 +633,11 @@ class Tracker():
 
             else:
                 if _loss >0:
-                    name = f"self.data[f'{self.track_update}_loss']"
-                    print(f"{name} {self.data[f'{self.track_update}_loss'].device}")
-                    print(f"_loss {_loss.device}")
+                    # name = f"self.data[f'{self.track_update}_loss']"
+                    # print(f"{name} {self.data[f'{self.track_update}_loss'].device}")
+                    # print(f"_loss {_loss.device}")
                     self.data[f'{self.track_update}_loss'] = torch.cat([self.data[f'{self.track_update}_loss'], _loss])
-                    
+
                 if self.params.classify:
                     self.data[f'{self.track_update}_acc'] = torch.cat([self.data[f'{self.track_update}_acc'], balance_acc])
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
@@ -782,6 +782,10 @@ class Tracker():
         """记录每个epoch的数据"""
         if key not in self.data:
             self.data[key] = []
+        
+        if isinstance(value, torch.Tensor):
+            value = value.cpu().item()
+
         self.data[key].append(value)
 
     def track(self, _type, output, data, target, loss=None):
@@ -1307,10 +1311,6 @@ class Tracker():
         # debug('save_result done')
 
     def state_dict(self):
-        # self.params = params
-        # self.accelerator = accelerator
-        # self.scheduler = scheduler
-        # self.printer = printer
         return {key: value for key, value in self.__dict__.items() if key not in self.no_need_save_parm}
 
     def load_state_dict(self, state_dict):
@@ -1337,7 +1337,7 @@ class Tracker():
 
         for i in self.data:
             if isinstance(self.data[i], torch.Tensor):
-                self.data[i] = self.data[i].to(self.accelerator.device)
+                self.data[i] = self.data[i]
 
 if __name__ == '__main__':
     import torch
