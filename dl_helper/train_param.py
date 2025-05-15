@@ -142,6 +142,7 @@ class Params:
   epochs = 100
 
   batch_size = 64
+  batch_n = 1
 
   # learning_rate
   learning_rate = 0.001
@@ -178,6 +179,7 @@ class Params:
 
       # 训练参数
       batch_size=64, 
+      batch_n=1,
       learning_rate = 3e-4, 
       abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
       epochs=100, 
@@ -214,8 +216,9 @@ class Params:
           self.root = f'{self.root }_{self.amp}'
         
       self.epochs = epochs
-      self.batch_size = batch_size
-      self.learning_rate = learning_rate
+      self.batch_n = batch_n
+      self.batch_size = batch_size * batch_n
+      self.learning_rate = learning_rate * batch_n
       self.abs_learning_rate = abs_learning_rate
       self.no_better_stop = no_better_stop
       self.checkpointing_steps = checkpointing_steps
