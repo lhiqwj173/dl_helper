@@ -450,6 +450,8 @@ class Tracker():
         self.mini_epoch_count += 1
 
     def cal_threshold_f1score(self):
+        pickle.dump((self.temp, self.params), open('debug_data.pkl', 'wb'))
+
         folder = self.track_update.replace('test', 'model')
         folder = os.path.join(self.params.root, folder)
 
@@ -467,6 +469,7 @@ class Tracker():
         combinations = []
         for r in range(1, len(categories) + 1):
             combinations.extend(itertools.permutations(categories, r))
+        print(f"combinations: {combinations}")
 
         combinations = [i for i in combinations if len(i) == len(categories)]
         combinations = [torch.tensor(i,device=self.temp['softmax_predictions'].device) for i in combinations]
