@@ -103,16 +103,20 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
     model.train()
     for batch in active_dataloader:
+        printer.print(f'batch begin')
+
         # 预处理
         data, target = trans(batch, train=True)
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
+        printer.print(f'batch unsqueeze')
             
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
+        printer.print(f'batch loss')
 
         # 检查梯度
         if accelerator.is_local_main_process:
@@ -123,31 +127,29 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
                 raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
+        printer.print(f'batch backward')
         optimizer.step()
+        printer.print(f'batch step')
 
         # 追踪器 记录数据
         with torch.no_grad():
-            # debug('track')
             tracker.track('train', output, data, target, loss)
-            # debug('track done')
+        printer.print(f'batch track')
 
     # 检查最后一个 batch 的梯度，并记录
     if accelerator.is_local_main_process:
         total_grad_norm = check_gradients(model)
         tracker.record('total_grad_norm', total_grad_norm)
+        printer.print(f'batch check_gradients')
 
     # 追踪器，计算必要的数据
     tracker.update()
-    # debug('update')
+    printer.print(f'batch update')
 
     # 缓存checkpoint
     if need_checkpoint:
         checkpoint(epoch, accelerator, params, printer, False)
-
-    # # for debug
-    # accelerator.wait_for_everyone()
-    # if accelerator.is_main_process:
-    #     report_memory_usage(f"[{epoch}][{len(train_loader)}] train done")
+    printer.print(f'batch checkpoint')
 
 def record_grad(idx, model, rank):
     with open(f'grad_{rank}.txt', 'a') as f:
@@ -527,7 +529,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             for epoch in range(tracker.epoch_count, params.epochs):
                 p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
                 if tracker.step_in_epoch == 0:
-                    # debug(f'train_fn')
+                    p.print(f'epoch {epoch} train_fn')
                     train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
                 # 验证
