@@ -116,6 +116,7 @@ class LeavesData(Dataset):
 
 class test(test_base):
     title_base = '20250516_test_leaf'
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

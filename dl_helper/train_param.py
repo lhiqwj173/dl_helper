@@ -202,8 +202,7 @@ class Params:
       **kwargs
   ):
       # 添加训练后缀 (训练设备/混合精度)
-      run_device = get_gpu_info()
-      self.train_title = f'{train_title}_{run_device}'
+      self.train_title = f'{train_title}'
       self.root = self.train_title
 
       self.alist_upload_folder = alist_upload_folder
