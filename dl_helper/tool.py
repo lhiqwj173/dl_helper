@@ -653,6 +653,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         sell_income = bid[t2] * (1 - fee)
         profit = sell_income - buy_cost
         if profit >= profit_threshold and profit/ask[t1] >= profit_fee_times * fee:
+            print(f'上涨斜率: {profit/(t2 - t1)}')
             # 确认当前交易
             trades.append((t1, t2))
             pre_t2 = t2

@@ -1068,7 +1068,7 @@ class Tracker():
                 max_test_f1 = max(data["val_f1"])
                 max_train_class_f1s = []
                 max_val_class_f1s = []
-                for i in range(min(5, params.y_n)):
+                for i in range(min(3, params.y_n)):
                     max_train_class_f1 = max(data[f"train_class_f1_{i}"])
                     max_val_class_f1 = max(data[f"val_class_f1_{i}"])
                     max_train_class_f1s.append(max_train_class_f1)
@@ -1078,7 +1078,7 @@ class Tracker():
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 max_train_class_f1_xs = []
                 max_val_class_f1_xs = []
-                for i in range(min(5, params.y_n)):
+                for i in range(min(3, params.y_n)):
                     max_train_class_f1_x = data[f"train_class_f1_{i}"].index(max_train_class_f1s[i])
                     max_val_class_f1_x = data[f"val_class_f1_{i}"].index(max_val_class_f1s[i])
                     max_train_class_f1_xs.append(max_train_class_f1_x)
@@ -1101,20 +1101,20 @@ class Tracker():
                 # 测试集f1
                 if 'test_f1' in data:
                     t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
-                    for i in range(min(5, params.y_n)):
+                    for i in range(min(3, params.y_n)):
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
 
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f} ({last_value(data["train_f1"]):.4f})', c=colors[0][0])[0])
-                for i in range(min(5, params.y_n)):
+                for i in range(min(3, params.y_n)):
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f} ({last_value(data[f"train_class_f1_{i}"]):.4f})', c=colors[i+1][0])[0])
 
                 # 标记f1最高点
                 t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f} ({max_train_f1:.4f})'))
-                for i in range(min(5, params.y_n)):
+                for i in range(min(3, params.y_n)):
                     t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
                     t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f} ({max_train_class_f1s[i]:.4f})'))
 
@@ -1165,13 +1165,13 @@ class Tracker():
                     score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
                     score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
 
-                    for i in range(min(5, params.y_n)):
+                    for i in range(min(3, params.y_n)):
                         if f'{_type}_class_f1_{i}' not in self.data:
                             data_lack = True
                             break
                         score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
 
-                    self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(min(5, params.y_n))]) / (min(5, params.y_n))
+                    self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(min(3, params.y_n))]) / (min(3, params.y_n))
                 else:
                     if f'{_type}_r2' not in self.data:
                         data_lack = True
@@ -1200,7 +1200,7 @@ class Tracker():
                     f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
                     
                     class_f1_score_datas = []
-                    for j in range(min(5, params.y_n)):
+                    for j in range(min(3, params.y_n)):
                         class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
 
                 else:

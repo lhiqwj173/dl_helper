@@ -311,6 +311,10 @@ class data_producer:
 
                 if self.use_symbols:
                     unique_symbols = [i for i in unique_symbols if i in self.use_symbols]
+                
+                if not unique_symbols:
+                    log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}')
+                    continue
 
                 # 获取所有标的的起止索引
                 self.full_idxs = []# begin 没有被截断的索引
@@ -573,19 +577,18 @@ class data_producer:
         if rng is not None:
             self.np_random = rng
 
-        while True:
-            self._pre_files()
-            self._load_data()
-            if not self.idxs:
-                # 没有成功加载到可用数据，需要重新准备文件
-                # 当天数据中没有指定标的
-                log(f'[{self.data_type}] no data for date: {self.date}' + '' if not self.use_symbols else f', symbols: {self.use_symbols}, will repre files')
-                continue
-            break
+        self._pre_files()
+        self._load_data()
+        if not self.idxs:
+            # 没有成功加载到可用数据，需要重新准备文件
+            # 当天数据中没有指定标的
+            log(f'[{self.data_type}] no data for date: {self.date}' + ('' if not self.use_symbols else f', symbols: {self.use_symbols}, will repre files'))
+            return False
 
         self.last_data_idx = None
         self.bid_price = []
         self.ask_price = []
+        return True
 
 class Account:
     """
@@ -1855,7 +1858,11 @@ class LOB_trade_env(gym.Env):
             log(f'[{id(self)}][{self.data_producer.data_type}] reset')
 
             while True:
-                self.data_producer.reset(rng = self.np_random)
+                if not self.data_producer.reset(rng = self.np_random):
+                    # 指定日期标的，而没有找到数据
+                    # 正常不指定的情况下不应该发生
+                    raise ValueError(f'指定的数据不存在')
+
                 if self.data_std:
                     symbol_id, before_market_close_sec, x, need_close, _id, unrealized_log_return_std_data = self._get_data()
                 else:
