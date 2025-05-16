@@ -182,7 +182,7 @@ class LobExpert_file():
         lob_data = filte_no_move(lob_data)
 
         # 最终数据 action, before_market_close_sec, profit, sell_save, no_move_len
-        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'no_move_len', 'BASE买1价', 'BASE卖1价']]
+        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'BASE买1价', 'BASE卖1价']]
         return lob_data
 
     def prepare_train_data_file(self, date_key, symbol_key=[], dtype=np.float32, _data_file_path=''):
