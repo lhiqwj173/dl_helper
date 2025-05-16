@@ -134,7 +134,7 @@ class test(test_base):
         img_path = '../input/classify-leaves/'
         self.train_dataset = LeavesData(train_path, img_path, mode='train')
         self.val_dataset = LeavesData(train_path, img_path, mode='valid')
-        self.test_dataset = LeavesData(test_path, img_path, mode='test')
+        # self.test_dataset = LeavesData(test_path, img_path, mode='test')
 
     def get_model(self):
         # # EfficientNet-B0         模型参数量: 11689512
@@ -161,6 +161,7 @@ class test(test_base):
         elif _type == 'val':
             return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False)
         elif _type == 'test':
+            return None
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False)
         
 if '__main__' == __name__:

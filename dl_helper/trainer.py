@@ -593,9 +593,10 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 准备测试数据
         test_loader = test.get_data('test')
-        test_loader = accelerator.prepare(test_loader)
-        # 测试
-        test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
+        if test_loader:
+            test_loader = accelerator.prepare(test_loader)
+            # 测试
+            test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 
         # 保存模型
         save_model_fn(params, model, accelerator)
