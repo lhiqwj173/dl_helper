@@ -95,29 +95,31 @@ def checkpoint(epoch, accelerator, params, printer, need_check=True):
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
+    printer.print(f'train_fn step_count: {skip_steps}',main=False)
 
     active_dataloader = train_loader
+    printer.print(f'train_fn active_dataloader: {id(active_dataloader)}',main=False)
     # if skip_steps > 0:
     #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
     #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
     for batch in active_dataloader:
-        printer.print(f'batch begin')
+        printer.print(f'batch begin',main=False)
 
         # 预处理
         data, target = trans(batch, train=True)
-        printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}')
+        printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}',main=False)
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
             target = target.unsqueeze(1)
-        printer.print(f'batch unsqueeze')
+        printer.print(f'batch unsqueeze',main=False)
             
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
-        printer.print(f'batch loss')
+        printer.print(f'batch loss',main=False)
 
         # 检查梯度
         if accelerator.is_local_main_process:
@@ -128,20 +130,20 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
                 raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
-        printer.print(f'batch backward')
+        printer.print(f'batch backward',main=False)
         optimizer.step()
-        printer.print(f'batch step')
+        printer.print(f'batch step',main=False)
 
         # 追踪器 记录数据
         with torch.no_grad():
             tracker.track('train', output, data, target, loss)
-        printer.print(f'batch track')
+        printer.print(f'batch track',main=False)
 
     # 检查最后一个 batch 的梯度，并记录
     if accelerator.is_local_main_process:
         total_grad_norm = check_gradients(model)
         tracker.record('total_grad_norm', total_grad_norm)
-        printer.print(f'batch check_gradients')
+        printer.print(f'batch check_gradients',main=False)
 
     # 追踪器，计算必要的数据
     tracker.update()
@@ -526,11 +528,11 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 训练循环
         if not only_predict:
-            p.print(f'train start')
+            p.print(f'train start',main=False)
             for epoch in range(tracker.epoch_count, params.epochs):
                 p.print(f'epoch {epoch} tracker.step_in_epoch: {tracker.step_in_epoch}')
                 if tracker.step_in_epoch == 0:
-                    p.print(f'epoch {epoch} train_fn')
+                    p.print(f'epoch {epoch} train_fn',main=False)
                     train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, p, trans)
 
                 # 验证
