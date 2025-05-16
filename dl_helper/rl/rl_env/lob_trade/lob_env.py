@@ -1675,7 +1675,7 @@ class LOB_trade_env(gym.Env):
                 #     acc_return = res['trade_return']
 
                 # train/test/val 都会在平仓时结束游戏，所以使用所有数据完整计算
-                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:])
+                _, max_profit_reachable_bm, _, _ = max_profit_reachable(self.data_producer.bid_price[1:], self.data_producer.ask_price[1:],rep_select='last')
                 # 日内完整的策略收益率
                 acc_return = res['trade_return']
 

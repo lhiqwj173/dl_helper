@@ -543,7 +543,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
     def cal_profit(t1, t2):
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
-        return np.log(sell_income / buy_cost)
+        return np.log(sell_income / buy_cost), sell_income - buy_cost
 
     # 控制边界范围
     if valleys:
@@ -653,7 +653,6 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         sell_income = bid[t2] * (1 - fee)
         profit = sell_income - buy_cost
         if profit >= profit_threshold and profit/ask[t1] >= profit_fee_times * fee:
-            print(f'上涨斜率: {profit/(t2 - t1)}')
             # 确认当前交易
             trades.append((t1, t2))
             pre_t2 = t2
@@ -696,9 +695,15 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 peak_idx += 1
 
     # 计算总对数收益率
+    slope = []
     for t1, t2 in trades:
-        total_log_return += cal_profit(t1, t2)
+        profit, diff = cal_profit(t1, t2)
+        total_log_return += profit
+        slope.append((profit/(t2 - t1), diff, t1, t2))
 
+    print(f'slope')
+    for p, d, t1, t2 in slope:
+        print(f'{p}, {d}, {t1}, {t2}, {t2 - t1}')
     return trades, total_log_return
 
 def max_profit_reachable(bid, ask, rep_select='mid', rng=None):
