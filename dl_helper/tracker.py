@@ -1211,7 +1211,18 @@ class Tracker():
                 labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
 
                 # 自定义颜色
-                colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537', '#2E8B57', '#DAA520', '#483D8B', '#FF8C69', '#E6E6FA']
+                colors = [
+                    '#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537',
+                    '#2E8B57', '#DAA520', '#483D8B', '#FF8C69', '#E6E6FA',
+                    '#5A2A7A', '#8A70A0', '#C0B8D4', '#F2F0F5', '#F5774A',
+                    '#3A9C68', '#E1B036', '#554A9C', '#FF9A7A', '#ECEBFF',
+                    '#68288E', '#987FB5', '#CCC4E0', '#F8F6FA', '#F88A5E',
+                    '#46AD79', '#E8BB4C', '#6257AD', '#FFA88B', '#F2F0FF',
+                    '#7636A2', '#A68ECA', '#D8D0EC', '#FDFCFF', '#FB9C72',
+                    '#52BE8A', '#EFC662', '#6F64BE', '#FFB69C', '#F8F5FF',
+                    '#8344B6', '#B49DDF', '#E4DCF8', '#FFFFFF', '#FDAE86',
+                    '#5ECF9B', '#F6D178', '#7C71CF', '#FFC4AD', '#FEFAFF'
+                ]
 
                 # 绘制柱状图
                 fig, ax = plt.subplots()
