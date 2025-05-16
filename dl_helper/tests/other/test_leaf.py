@@ -96,11 +96,14 @@ class LeavesData(Dataset):
     def __getitem__(self, index):
         # 从 image_arr中得到索引对应的文件名
         single_image_name = self.image_arr[index]
+        print(f'single_image_name: {single_image_name}')
 
         # 读取图像文件
         img_as_img = Image.open(self.file_path + single_image_name)
+        print(f'img_as_img: {id(img_as_img)}')
         img_as_img = self.transform(img_as_img)
-        
+        print(f'transform')
+
         if self.mode == 'test':
             return img_as_img
         else:
