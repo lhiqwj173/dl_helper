@@ -20,7 +20,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
-from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save, process_lob_data_extended
+from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save, process_lob_data_extended, filte_no_move
 
 from py_ext.tool import log, share_tensor
 
@@ -178,8 +178,13 @@ class LobExpert_file():
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         lob_data = reset_profit_sell_save(lob_data)
 
-        # 最终数据 action, before_market_close_sec, profit, sell_save
-        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'BASE买1价', 'BASE卖1价']]
+        # no_move filter
+        # 连续 no move 超过阈值个，空仓情况下不进行买入
+        # 会保留最后一个 no move 的买入动作，因为之后价格开始变化(信号变动有效)
+        lob_data = filte_no_move(lob_data)
+
+        # 最终数据 action, before_market_close_sec, profit, sell_save, no_move_len
+        lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'no_move_len', 'BASE买1价', 'BASE卖1价']]
         return lob_data
 
     def prepare_train_data_file(self, date_key, symbol_key=[], dtype=np.float32, _data_file_path=''):

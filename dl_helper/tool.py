@@ -987,6 +987,18 @@ def calculate_sell_save(df, fee=5e-5):
 
     return df
 
+def filte_no_move(df):
+    """创建 no_move_len 列，表示连续无变化的长度"""
+    # 检测 mid_price 是否变化（与前一行比较）
+    changes = df['mid_price'].ne(df['mid_price'].shift(1))
+    # 使用 cumsum() 创建分组，相同值的连续段属于同一组
+    groups = changes.cumsum()
+    # 计算每个组的长度
+    group_lengths = df.groupby(groups).size()
+    # 将每个组的长度映射回原始 DataFrame
+    df['no_move_len'] = groups.map(group_lengths)
+    return df
+
 def reset_profit_sell_save(lob_data):
     """
     剔除掉动作之后下一个点的价格变化带来的优势 (成交价格带来的优势不允许利用)

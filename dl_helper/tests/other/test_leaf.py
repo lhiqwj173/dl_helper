@@ -109,6 +109,7 @@ class LeavesData(Dataset):
             # number label
             number_label = self.class_to_num[label]
 
+            print(f'index: {index}, label: {label}, number_label: {number_label}')
             return img_as_img, number_label  #返回每一个index对应的图片数据和对应的label
 
     def __len__(self):
@@ -116,7 +117,7 @@ class LeavesData(Dataset):
 
 class test(test_base):
     title_base = '20250516_test_leaf'
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
