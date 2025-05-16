@@ -128,13 +128,13 @@ class test(test_base):
             **params_kwargs
         )
 
-        # # 加载数据集
-        # train_path = '../input/classify-leaves/train.csv'
-        # test_path = '../input/classify-leaves/test.csv'
-        # img_path = '../input/classify-leaves/'
-        # self.train_dataset = LeavesData(train_path, img_path, mode='train')
-        # self.val_dataset = LeavesData(train_path, img_path, mode='valid')
-        # self.test_dataset = LeavesData(test_path, img_path, mode='test')
+        # 加载数据集
+        train_path = '../input/classify-leaves/train.csv'
+        test_path = '../input/classify-leaves/test.csv'
+        img_path = '../input/classify-leaves/'
+        self.train_dataset = LeavesData(train_path, img_path, mode='train')
+        self.val_dataset = LeavesData(train_path, img_path, mode='valid')
+        self.test_dataset = LeavesData(test_path, img_path, mode='test')
 
     def get_model(self):
         # # EfficientNet-B0         模型参数量: 11689512
