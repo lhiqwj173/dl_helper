@@ -1068,7 +1068,7 @@ class Tracker():
                 max_test_f1 = max(data["val_f1"])
                 max_train_class_f1s = []
                 max_val_class_f1s = []
-                for i in range(params.y_n):
+                for i in range(min(5, params.y_n)):
                     max_train_class_f1 = max(data[f"train_class_f1_{i}"])
                     max_val_class_f1 = max(data[f"val_class_f1_{i}"])
                     max_train_class_f1s.append(max_train_class_f1)
@@ -1078,7 +1078,7 @@ class Tracker():
                 max_test_f1_x = data["val_f1"].index(max_test_f1)
                 max_train_class_f1_xs = []
                 max_val_class_f1_xs = []
-                for i in range(params.y_n):
+                for i in range(min(5, params.y_n)):
                     max_train_class_f1_x = data[f"train_class_f1_{i}"].index(max_train_class_f1s[i])
                     max_val_class_f1_x = data[f"val_class_f1_{i}"].index(max_val_class_f1s[i])
                     max_train_class_f1_xs.append(max_train_class_f1_x)
@@ -1101,20 +1101,20 @@ class Tracker():
                 # 测试集f1
                 if 'test_f1' in data:
                     t2_handles.append(axs[1].plot(list(range(epochs)), data["test_f1"], label=f'test f1 {last_value(data["test_f1"]):.4f}', c=colors[0][0], linestyle='--')[0])
-                    for i in range(params.y_n):
+                    for i in range(min(5, params.y_n)):
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
 
                 # 绘制f1曲线
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f} ({last_value(data["train_f1"]):.4f})', c=colors[0][0])[0])
-                for i in range(params.y_n):
+                for i in range(min(5, params.y_n)):
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f} ({last_value(data[f"train_class_f1_{i}"]):.4f})', c=colors[i+1][0])[0])
 
                 # 标记f1最高点
                 t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f} ({max_train_f1:.4f})'))
-                for i in range(params.y_n):
+                for i in range(min(5, params.y_n)):
                     t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
                     t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f} ({max_train_class_f1s[i]:.4f})'))
 
@@ -1149,107 +1149,102 @@ class Tracker():
             # 'test_final_class_f1_0': 0.2587284445762634,
             # 'test_final_class_f1_1': 0.2538251578807831,
             score_data = {}
-            try:
-                data_lack = False
-                for _type in ['train', 'val', 'test_best', 'test_final', 'test_dummy']:
-                    if f'{_type}_loss' not in self.data:
+            data_lack = False
+            for _type in ['train', 'val', 'test_best', 'test_final', 'test_dummy']:
+                if f'{_type}_loss' not in self.data:
+                    data_lack = True
+                    break
+
+                score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1].cpu().item()
+
+                if self.params.classify:
+                    if f'{_type}_acc' not in self.data or f'{_type}_f1' not in self.data:
                         data_lack = True
                         break
 
-                    score_data[f'{_type}_loss'] = self.data[f'{_type}_loss'][-1].cpu().item()
+                    score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
+                    score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
 
-                    if self.params.classify:
-                        if f'{_type}_acc' not in self.data or f'{_type}_f1' not in self.data:
+                    for i in range(min(5, params.y_n)):
+                        if f'{_type}_class_f1_{i}' not in self.data:
                             data_lack = True
                             break
+                        score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
 
-                        score_data[f'{_type}_acc'] = self.data[f'{_type}_acc'][-1].cpu().item()
-                        score_data[f'{_type}_f1'] = self.data[f'{_type}_f1'][-1].cpu().item()
+                    self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(min(5, params.y_n))]) / (min(5, params.y_n))
+                else:
+                    if f'{_type}_r2' not in self.data:
+                        data_lack = True
+                        break
 
-                        for i in range(params.y_n):
-                            if f'{_type}_class_f1_{i}' not in self.data:
-                                data_lack = True
-                                break
-                            score_data[f'{_type}_class_f1_{i}'] = self.data[f'{_type}_class_f1_{i}'][-1].cpu().item()
+                    score_data[f'{_type}_r2'] = self.data[f'{_type}_r2'][-1].cpu().item()
 
-                        self.data[f'{_type}_mean_class_f1'] = sum([score_data[f'{_type}_class_f1_{i}'] for i in range(params.y_n)]) / (params.y_n)
-                    else:
-                        if f'{_type}_r2' not in self.data:
-                            data_lack = True
-                            break
-
-                        score_data[f'{_type}_r2'] = self.data[f'{_type}_r2'][-1].cpu().item()
-
-                if not data_lack:
-                    # 计算增强说明文字
-                    tag_texts = {}
-                    for _type in ['train', 'val', 'test_best', 'test_final']:
-                        if self.params.classify:
-                            self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
-                            tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct']:.2f}%)"
-                        else:
-                            self.data[f'{_type}_r2_enhanced_pct'] = 100 * (score_data[f'{_type}_r2'] - self.data['test_dummy_r2']) / self.data['test_dummy_r2']
-                            tag_texts[_type] = f"{score_data[f'{_type}_r2']:.2f}({self.data[f'{_type}_r2_enhanced_pct'].cpu().item():.2f}%)"
-                    
-                    # loss分组
-                    loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
+            if not data_lack:
+                # 计算增强说明文字
+                tag_texts = {}
+                for _type in ['train', 'val', 'test_best', 'test_final']:
                     if self.params.classify:
-                        tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
-
-                        # 按照不同指标分组
-                        acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
-                        f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
-                        
-                        class_f1_score_datas = []
-                        for j in range(params.y_n):
-                            class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
-
+                        self.data[f'{_type}_mean_class_f1_enhanced_pct'] = 100 * (self.data[f'{_type}_mean_class_f1'] - self.data['test_dummy_mean_class_f1']) / self.data['test_dummy_mean_class_f1']
+                        tag_texts[_type] = f"{self.data[f'{_type}_mean_class_f1']:.2f}({self.data[f'{_type}_mean_class_f1_enhanced_pct']:.2f}%)"
                     else:
-                        tag_texts['test_dummy'] = f"{self.data['test_dummy_r2'].cpu().item():.2f}"
-                        # 按照不同指标分组
-                        r2_score_data = [score_data[i] for i in score_data if 'r2' in i]
+                        self.data[f'{_type}_r2_enhanced_pct'] = 100 * (score_data[f'{_type}_r2'] - self.data['test_dummy_r2']) / self.data['test_dummy_r2']
+                        tag_texts[_type] = f"{score_data[f'{_type}_r2']:.2f}({self.data[f'{_type}_r2_enhanced_pct'].cpu().item():.2f}%)"
+                
+                # loss分组
+                loss_score_data = [score_data[i] for i in score_data if 'loss' in i]
+                if self.params.classify:
+                    tag_texts['test_dummy'] = f"{self.data['test_dummy_mean_class_f1']:.2f}"
 
-                    labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
-
-                    # 自定义颜色
-                    colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537', '#2E8B57', '#DAA520', '#483D8B', '#FF8C69', '#E6E6FA']
-
-                    # 绘制柱状图
-                    fig, ax = plt.subplots()
-                    width = 0.15
-                    alpha = 0.6
-
-                    bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
-                    text_bar = None
-                    if self.params.classify:
-                        bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
-                        bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
-
-                        bars = []
-                        for idx, class_f1_score_data in enumerate(class_f1_score_datas):
-                            bars.append(ax.bar([i + (3 + idx)*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
+                    # 按照不同指标分组
+                    acc_score_data = [score_data[i] for i in score_data if 'acc' in i]
+                    f1_score_data = [score_data[i] for i in score_data if 'f1' in i and 'class' not in i]
                     
-                        text_bar = bars[0]
-                    else:
-                        bar2 = ax.bar([i + width for i in range(5)], r2_score_data, width, color=colors[1], label='R2', alpha=alpha)
-                        text_bar = bar2
-                    
-                    # 添加增强说明文字
-                    tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
-                    for i, bar in enumerate(text_bar):
-                        yval = bar.get_height()
-                        ax.text(bar.get_x() + bar.get_width()/2, yval, tag_texts[tag_type[i]], ha='center', va='bottom')
+                    class_f1_score_datas = []
+                    for j in range(min(5, params.y_n)):
+                        class_f1_score_datas.append([score_data[i] for i in score_data if f'class_f1_{j}' in i])
 
-                    ax.set_ylabel('Scores')
-                    ax.set_title('Scores by group')
-                    ax.legend()
+                else:
+                    tag_texts['test_dummy'] = f"{self.data['test_dummy_r2'].cpu().item():.2f}"
+                    # 按照不同指标分组
+                    r2_score_data = [score_data[i] for i in score_data if 'r2' in i]
 
-                    pic_file = os.path.join(params.root, f"Scores_by_group.png")
-                    plt.savefig(pic_file)
+                labels = ['Train', 'Val', 'Best', 'Final', 'Dummy']
 
-            except Exception as e:
-                exception_str = traceback.format_exc()
-                self.printer.print(f'plot score error: \n{exception_str}')
+                # 自定义颜色
+                colors = ['#4B1C62', '#7B618B', '#B1AABF', '#EBE8EC', '#F46537', '#2E8B57', '#DAA520', '#483D8B', '#FF8C69', '#E6E6FA']
+
+                # 绘制柱状图
+                fig, ax = plt.subplots()
+                width = 0.15
+                alpha = 0.6
+
+                bar1 = ax.bar(labels, loss_score_data, width, color=colors[0], label='Loss', alpha=alpha)
+                text_bar = None
+                if self.params.classify:
+                    bar2 = ax.bar([i + width for i in range(5)], acc_score_data, width, color=colors[1], label='Accuracy', alpha=alpha)
+                    bar3 = ax.bar([i + 2*width for i in range(5)], f1_score_data, width, color=colors[2], label='F1', alpha=alpha)
+
+                    bars = []
+                    for idx, class_f1_score_data in enumerate(class_f1_score_datas):
+                        bars.append(ax.bar([i + (3 + idx)*width for i in range(5)], class_f1_score_data, width, color=colors[3+idx], label=f'Class F1 ({idx})', alpha=alpha))
+                
+                    text_bar = bars[0]
+                else:
+                    bar2 = ax.bar([i + width for i in range(5)], r2_score_data, width, color=colors[1], label='R2', alpha=alpha)
+                    text_bar = bar2
+                
+                # 添加增强说明文字
+                tag_type = ['train', 'val', 'test_best', 'test_final', 'test_dummy']
+                for i, bar in enumerate(text_bar):
+                    yval = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, yval, tag_texts[tag_type[i]], ha='center', va='bottom')
+
+                ax.set_ylabel('Scores')
+                ax.set_title('Scores by group')
+                ax.legend()
+
+                pic_file = os.path.join(params.root, f"Scores_by_group.png")
+                plt.savefig(pic_file)
 
         self.accelerator.wait_for_everyone()
         # debug('plot done')
