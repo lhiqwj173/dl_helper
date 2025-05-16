@@ -40,7 +40,7 @@ class SimpleCNN(nn.Module):
 
 class test(test_base):
     title_base = '20250513_test_mnist'
-    def __init__(self, *args, target_type=1, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         params_kwargs = {k: v for k, v in kwargs.items()}

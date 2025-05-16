@@ -568,12 +568,18 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             peak_idx += 1
             continue
 
+        if t1 + 1 == t2:
+            # 波谷与波峰连续，没有留有成交空间
+            # 跳到下一个波峰
+            peak_idx += 1
+            continue
+
         if t1 < pre_t2:
             # 新的波谷肯定药在前一个波峰之后
             valley_idx += 1
             continue
 
-        if mid[t2] <= mid[t1]:
+        if mid[t2] < mid[t1]:
             # 波峰不高于波谷，测试下一个波谷
             valley_idx += 1
             continue
@@ -595,7 +601,10 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 valley_backup = []
                 find_latest_valley = None
 
-            elif ask[_valley_t] == ask[t1]:
+            elif ask[_valley_t] > ask[t1]:
+                pass
+
+            elif mid[_valley_t] == mid[t1]:
                 # 如果ask相等，检查 相同点之间的距离 / 总交易距离 的占比，
                 # 如果占比大于0.2，则用新的点替换之前的波谷
                 # 用于控制 平整 的占比不能过大(买入后很久才开始上涨)
@@ -612,7 +621,8 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
 
             _valley_idx += 1
 
-        # 若当前波谷ask >= 上一个波峰bid, 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
+        # 若 (当前波谷ask >= 上一个波峰bid) 或 (当前波谷与上一个波峰连续，没有留有成交空间)
+        # 且 当前波峰bid >= 上一个波峰bid, 则修改上一个波峰为当前波峰
         # 上一个波峰卖出，当前波谷买入 平添交易费/损失持仓量 
         if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and \
             (
@@ -1075,7 +1085,6 @@ def process_lob_data_extended(df):
     ], inplace=True)
     
     return df
-
 
 def adjust_class_weights_df(predict_df):
     # timestamp,target,0,1,2
