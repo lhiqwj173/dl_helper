@@ -248,7 +248,7 @@ class data_producer:
         if (not self.files) or (self.cur_data_type != self.data_type):
             # 若 文件列表为空，重新准备
             self.files = self._get_data_type_files()
-            log(f'[{self.data_type}] all files: {[os.path.basename(i) for i in self.files]}')
+            # log(f'[{self.data_type}] all files: {[os.path.basename(i) for i in self.files]}')
 
             if self.data_type == 'train':
                 self.np_random.shuffle(self.files)
