@@ -987,16 +987,26 @@ def calculate_sell_save(df, fee=5e-5):
 
     return df
 
-def filte_no_move(df):
-    """创建 no_move_len 列，表示连续无变化的长度"""
+def filte_no_move(df, no_move_threshold=150):
+    """
+    连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
+    会保留最后一个 no move 的买入动作，因为之后价格开始变化(信号变动有效)
+    """
     # 检测 mid_price 是否变化（与前一行比较）
-    changes = df['mid_price'].ne(df['mid_price'].shift(1))
+    mid = df['BASE卖1价'] + df['BASE买1价']
+    changes = mid.ne(mid.shift(1))
     # 使用 cumsum() 创建分组，相同值的连续段属于同一组
     groups = changes.cumsum()
     # 计算每个组的长度
     group_lengths = df.groupby(groups).size()
     # 将每个组的长度映射回原始 DataFrame
-    df['no_move_len'] = groups.map(group_lengths)
+    no_move_len = groups.map(group_lengths)
+    # 标记每组的最后一行 
+    is_last_in_group = mid.ne(mid.shift(-1)) | df.index.isin([len(df)-1])
+    # 将每组最后一个值的 no_move_len 设为 0
+    no_move_len[is_last_in_group] = 0
+    # 超过阈值的索引
+    df.loc[no_move_len > no_move_threshold, 'profit'] = 0
     return df
 
 def reset_profit_sell_save(lob_data):

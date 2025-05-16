@@ -179,8 +179,6 @@ class LobExpert_file():
         lob_data = reset_profit_sell_save(lob_data)
 
         # no_move filter
-        # 连续 no move 超过阈值个，空仓情况下不进行买入
-        # 会保留最后一个 no move 的买入动作，因为之后价格开始变化(信号变动有效)
         lob_data = filte_no_move(lob_data)
 
         # 最终数据 action, before_market_close_sec, profit, sell_save, no_move_len

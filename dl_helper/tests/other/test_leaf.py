@@ -159,6 +159,8 @@ class test(test_base):
     
     def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
+            d, l = self.train_dataset[0]
+            print(f'd: {d.shape}, l: {l}')
             return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True)
         elif _type == 'val':
             return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False)
