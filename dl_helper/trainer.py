@@ -107,6 +107,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         # 预处理
         data, target = trans(batch, train=True)
+        printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}')
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
         if not params.classify and len(target.shape) == 1:
