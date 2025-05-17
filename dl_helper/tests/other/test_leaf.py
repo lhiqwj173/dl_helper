@@ -1,3 +1,6 @@
+import multiprocessing
+multiprocessing.set_start_method('spawn')
+
 import sys, torch, os, copy
 import pandas as pd
 import numpy as np
@@ -101,11 +104,8 @@ class LeavesData(Dataset):
         # 读取图像文件
         img_as_img = Image.open(self.file_path + single_image_name)
         print(f'img_as_img: {id(img_as_img)}')
-        # try:
-        #     img_as_img = self.transform(img_as_img)
-        #     print(f'transform')
-        # except Exception as e:
-        #     print(f'error: {e}')
+        img_as_img = self.transform(img_as_img)
+        print(f'transform')
 
         if self.mode == 'test':
             return img_as_img
