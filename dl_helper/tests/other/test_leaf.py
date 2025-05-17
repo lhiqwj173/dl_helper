@@ -65,9 +65,9 @@ class LeavesData(Dataset):
         if mode == 'train':
             self.transform = transforms.Compose([
                 transforms.Resize((224, 224)),
-                # transforms.RandomHorizontalFlip(),
-                # transforms.RandomRotation(15),
-                # transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(15),
+                transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
@@ -101,8 +101,11 @@ class LeavesData(Dataset):
         # 读取图像文件
         img_as_img = Image.open(self.file_path + single_image_name)
         print(f'img_as_img: {id(img_as_img)}')
-        img_as_img = self.transform(img_as_img)
-        print(f'transform')
+        try:
+            img_as_img = self.transform(img_as_img)
+            print(f'transform')
+        except Exception as e:
+            print(f'error: {e}')
 
         if self.mode == 'test':
             return img_as_img
@@ -172,6 +175,11 @@ class test(test_base):
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False)
         
 if '__main__' == __name__:
+    train_path = '../input/classify-leaves/train.csv'
+    img_path = '../input/classify-leaves/'
+    ds = LeavesData(train_path, img_path, mode='train')
+    d, l = ds[0]
+
     t = test(idx=0)
     model = t.get_model()
     print(f"模型参数量: {model_params_num(model)}")

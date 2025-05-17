@@ -987,7 +987,7 @@ def calculate_sell_save(df, fee=5e-5):
 
     return df
 
-def filte_no_move(df, no_move_threshold=150):
+def filte_no_move(df, no_move_threshold=100):
     """
     连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
     会保留最后一个 no move 的买入动作，因为之后价格开始变化(信号变动有效)
