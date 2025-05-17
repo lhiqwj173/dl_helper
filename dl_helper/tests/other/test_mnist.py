@@ -9,7 +9,7 @@ import functools
 from accelerate.utils import set_seed
 
 from dl_helper.tester import test_base
-from dl_helper.train_param import Params
+from dl_helper.train_param import Params, match_num_processes
 from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
@@ -74,11 +74,11 @@ class test(test_base):
     
     def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
-            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True)
+            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
-            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False)
+            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'test':
-            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False)
+            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
 if '__main__' == __name__:
     model = SimpleCNN()

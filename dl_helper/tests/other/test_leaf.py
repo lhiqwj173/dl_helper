@@ -1,6 +1,3 @@
-import multiprocessing
-multiprocessing.set_start_method('spawn')
-
 import sys, torch, os, copy
 import pandas as pd
 import numpy as np
@@ -17,7 +14,7 @@ import torchvision.models as models
 from accelerate.utils import set_seed
 
 from dl_helper.tester import test_base
-from dl_helper.train_param import Params
+from dl_helper.train_param import Params, match_num_processes
 from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
@@ -137,12 +134,9 @@ class test(test_base):
         )
 
         # 加载数据集
-        train_path = '../input/classify-leaves/train.csv'
-        test_path = '../input/classify-leaves/test.csv'
-        img_path = '../input/classify-leaves/'
-        self.train_dataset = LeavesData(train_path, img_path, mode='train')
-        self.val_dataset = LeavesData(train_path, img_path, mode='valid')
-        # self.test_dataset = LeavesData(test_path, img_path, mode='test')
+        self.train_path = '../input/classify-leaves/train.csv'
+        self.test_path = '../input/classify-leaves/test.csv'
+        self.img_path = '../input/classify-leaves/'
 
     def get_model(self):
         # # EfficientNet-B0         模型参数量: 11689512
@@ -164,22 +158,22 @@ class test(test_base):
         return model
     
     def get_data(self, _type, data_sample_getter_func=None):
+        if not hasattr(self, 'train_dataset'):
+            self.train_dataset = LeavesData(self.train_path, self.img_path, mode='train')
+            self.val_dataset = LeavesData(self.train_path, self.img_path, mode='valid')
+            # self.test_dataset = LeavesData(test_path, img_path, mode='test')
+
         if _type == 'train':
             d, l = self.train_dataset[0]
             print(f'd: {d.shape}, l: {l}')
-            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True)
+            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
-            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False)
+            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'test':
             return None
-            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False)
+            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
 if '__main__' == __name__:
-    train_path = '../input/classify-leaves/train.csv'
-    img_path = '../input/classify-leaves/'
-    ds = LeavesData(train_path, img_path, mode='train')
-    d, l = ds[0]
-
     t = test(idx=0)
     model = t.get_model()
     print(f"模型参数量: {model_params_num(model)}")
