@@ -701,9 +701,9 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         total_log_return += profit
         slope.append((profit/(t2 - t1), diff, t1, t2))
 
-    print(f'slope')
-    for p, d, t1, t2 in slope:
-        print(f'{p}, {d}, {t1}, {t2}, {t2 - t1}')
+    # print(f'slope')
+    # for p, d, t1, t2 in slope:
+    #     print(f'{p}, {d}, {t1}, {t2}, {t2 - t1}')
     return trades, total_log_return
 
 def max_profit_reachable(bid, ask, rep_select='mid', rng=None):
