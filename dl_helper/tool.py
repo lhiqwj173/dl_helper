@@ -653,6 +653,15 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         sell_income = bid[t2] * (1 - fee)
         profit = sell_income - buy_cost
         if profit >= profit_threshold and profit/ask[t1] >= profit_fee_times * fee:
+            # # 检查 t1,t2 范围内的 mid 是否都在 mid[t1], mid[t2] 之间
+            # mid_range = mid[t1:t2+1]
+            # mid_min = mid[t1]
+            # mid_max = mid[t2]
+            # if not ((mid_range >= mid_min) & (mid_range <= mid_max)).all():
+            #     # 若存在超出范围的点,跳过当前交易对
+            #     peak_idx += 1
+            #     continue
+
             # 确认当前交易
             trades.append((t1, t2))
             pre_t2 = t2
@@ -903,8 +912,8 @@ def calculate_sell_save(df, fee=5e-5):
     """
     # 最后一行添加一个买入点，价格为0.0
     new_row = {
-        'BASE买1价': 0.0, 
-        'BASE卖1价': 0.0, 
+        'BASE买1价': 0.001, 
+        'BASE卖1价': 0.002, 
         'before_market_close_sec': 0.0, 
         'valley_peak': 0, 
         'action': 0, 
@@ -989,24 +998,67 @@ def calculate_sell_save(df, fee=5e-5):
 
 def filte_no_move(df, no_move_threshold=100):
     """
-    连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
-    会保留最后一个 no move 的买入动作，因为之后价格开始变化(信号变动有效)
+    功能一：连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
+            会保留最后一个 no move 的买入动作，因为之后价格开始变化（信号变动有效）
+    功能二（修改）：找到超过阈值的每组第一行之前连续的 profit>0 范围，
+            向前至 profit<=0 或前一个超过阈值的组的末尾，
+            若范围内 BASE卖1价 的 min/max 之差 == 0.001，则将这个范围内的 profit 置为 0
     """
     # 检测 mid_price 是否变化（与前一行比较）
     mid = df['BASE卖1价'] + df['BASE买1价']
-    changes = mid.ne(mid.shift(1))
+    changes = mid.ne(mid.shift(1))  # 标记价格变化的位置
     # 使用 cumsum() 创建分组，相同值的连续段属于同一组
     groups = changes.cumsum()
     # 计算每个组的长度
     group_lengths = df.groupby(groups).size()
     # 将每个组的长度映射回原始 DataFrame
     no_move_len = groups.map(group_lengths)
-    # 标记每组的最后一行 
+    # 标记每组的最后一行
     is_last_in_group = mid.ne(mid.shift(-1)) | df.index.isin([len(df)-1])
     # 将每组最后一个值的 no_move_len 设为 0
     no_move_len[is_last_in_group] = 0
-    # 超过阈值的索引
+    
+    # 找到超过阈值的组
+    over_threshold_groups = group_lengths[group_lengths > no_move_threshold].index
+    
+    # 获取所有超过阈值的组的末尾索引
+    group_end_indices = {}
+    for group in over_threshold_groups:
+        group_end_idx = df[groups == group].index[-1]
+        group_end_indices[group] = group_end_idx
+    
+    # 处理功能二：查找连续 profit>0 范围并检查价格波动
+    for group in over_threshold_groups:
+        # 找到该组的起始索引
+        group_start_idx = df[groups == group].index[0]
+        
+        # 向前查找连续 profit>0 的范围
+        current_idx = group_start_idx - 1
+        profit_positive_start = group_start_idx  # 默认设为组开始位置
+        
+        # 获取前一个超过阈值的组的末尾索引（如果存在）
+        prev_group_end_idx = max(
+            [end_idx for g, end_idx in group_end_indices.items() if end_idx < group_start_idx],
+            default=-1
+        )
+        prev_group_end_idx -=1
+        
+        # 向前查找，直到 profit<=0 或到达前一个超过阈值的组的末尾
+        while current_idx > prev_group_end_idx and current_idx >= 0 and df.iloc[current_idx]['profit'] > 0:
+            profit_positive_start = current_idx
+            current_idx -= 1
+            
+        # 如果找到了 profit>0 的范围
+        if profit_positive_start < group_start_idx:
+            # 检查 BASE卖1价 的 min/max 之差
+            price_range = df.loc[profit_positive_start:group_start_idx-1, 'BASE卖1价']
+            if price_range.max() - price_range.min() < 0.0012:
+                # 将范围内 profit 置为 0
+                df.loc[profit_positive_start:group_start_idx-1, 'profit'] = 0
+    
+    # 功能一：超过阈值的组的 profit 置为 0
     df.loc[no_move_len > no_move_threshold, 'profit'] = 0
+    
     return df
 
 def reset_profit_sell_save(lob_data):
