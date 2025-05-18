@@ -516,6 +516,28 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
                 valleys_num_points.append(num_points)
     return peaks, valleys, peaks_num_points, valleys_num_points
 
+def check_stationary_interval_vectorized(mid, pre_t2, t2, min_length=100):
+    # 转换为 NumPy 数组（如果 mid 不是 NumPy 数组）
+    mid = np.asarray(mid)
+    # 提取指定区间
+    mid_range = mid[pre_t2:t2+1]
+    
+    # 计算相邻元素是否相等
+    is_same = np.concatenate(([False], mid_range[1:] == mid_range[:-1]))
+    
+    # 计算连续相同值的长度
+    # 使用 np.where 找到变化点
+    change_points = np.where(~is_same)[0]
+    # 如果没有变化点，整个区间都是相同的
+    if len(change_points) == 0:
+        return len(mid_range) > min_length
+    
+    # 计算每个连续段的长度
+    lengths = np.diff(np.concatenate(([0], change_points, [len(mid_range)])))
+    
+    # 检查是否存在长度 > min_length 的区间
+    return np.any(lengths > min_length)
+
 def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points, valleys_num_points, fee=5e-5, profit_threshold=0.0, profit_fee_times=0):
     """
     寻找所有可盈利的交易对，最大化对数收益率总和，考虑更低波谷的潜在更大利润。
@@ -632,7 +654,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
             ):
 
-            if (t2 - pre_t2 > 100):
+            if check_stationary_interval_vectorized(mid, pre_t2, t2, min_length=100):
                 # 距离太长,认为是一个长时段的平整,不予更新
                 pass
             else:
@@ -688,7 +710,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                     ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
                  ):
 
-                if (t2 - pre_t2 > 100):
+                if check_stationary_interval_vectorized(mid, pre_t2, t2, min_length=100):
                     # 距离太长,认为是一个长时段的平整,不予更新
                     # 尝试下一个波峰
                     peak_idx += 1
@@ -1187,22 +1209,24 @@ def process_lob_data_extended(df):
     2. 对于sell_save<=0连续块，若之间无action=0，只保留最后一个块，其余替换为之前最近的sell_save>0值。
     
     参数:
-    df (pd.DataFrame): 包含'profit'、'sell_save'和'action'列的DataFrame。
+    df (pd.DataFrame): 包含'profit', 'sell_save'和'action'列的DataFrame，'profit'和'sell_save'为浮点数，'action'为0或1，且'profit'和'sell_save'不会同时非零。
     
     返回:
     pd.DataFrame: 处理后的DataFrame。
     """
+    import pandas as pd  # 确保导入pandas
+
     # --- 处理 profit<=0 连续块 ---
-    # 计算每个位置之前最近的profit>0值
+    # 计算每个位置之前最近的profit>0值，使用ffill向前填充
     df['last_pos_profit'] = df['profit'].where(df['profit'] > 0).ffill()
     
-    # 定义分组，遇到action=1时组号递增
+    # 定义分组，遇到action=1时组号递增，标记profit<=0块的分组
     df['group_profit'] = (df['action'] == 1).cumsum()
     
-    # 标记profit<=0的行
-    df['is_neg_profit'] = (df['profit'] <= 0)
+    # 标记profit<=0且action!=1的行，这些行属于需要处理的profit<=0块
+    df['is_neg_profit'] = (df['profit'] <= 0) & (df['action'] != 1)
     
-    # 在每个group内，计算连续块的编号
+    # 在每个group内，计算连续块的编号，基于is_neg_profit的变化
     df['block_profit'] = df.groupby('group_profit')['is_neg_profit'].transform(
         lambda x: (x != x.shift()).cumsum()
     )
@@ -1211,21 +1235,21 @@ def process_lob_data_extended(df):
     temp_profit = df[df['is_neg_profit']].groupby('group_profit')['block_profit'].max()
     df['group_max_neg_block_profit'] = df['group_profit'].map(temp_profit)
     
-    # 替换：profit<=0且非最后一个块的行
+    # 替换：profit<=0且非最后一个块的行，用last_pos_profit替换
     mask_profit = df['is_neg_profit'] & (df['block_profit'] < df['group_max_neg_block_profit'])
     df.loc[mask_profit, 'profit'] = df.loc[mask_profit, 'last_pos_profit']
 
     # --- 处理 sell_save<=0 连续块 ---
-    # 计算每个位置之前最近的sell_save>0值
+    # 计算每个位置之前最近的sell_save>0值，使用ffill向前填充
     df['last_pos_sell_save'] = df['sell_save'].where(df['sell_save'] > 0).ffill()
     
-    # 定义分组，遇到action=0时组号递增
+    # 定义分组，遇到action=0时组号递增，标记sell_save<=0块的分组
     df['group_sell_save'] = (df['action'] == 0).cumsum()
     
-    # 标记sell_save<=0的行
-    df['is_neg_sell_save'] = (df['sell_save'] <= 0)
+    # 标记sell_save<=0且action!=0的行，这些行属于需要处理的sell_save<=0块
+    df['is_neg_sell_save'] = (df['sell_save'] <= 0) & (df['action'] != 0)
     
-    # 在每个group内，计算连续块的编号
+    # 在每个group内，计算连续块的编号，基于is_neg_sell_save的变化
     df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
         lambda x: (x != x.shift()).cumsum()
     )
@@ -1234,7 +1258,7 @@ def process_lob_data_extended(df):
     temp_sell_save = df[df['is_neg_sell_save']].groupby('group_sell_save')['block_sell_save'].max()
     df['group_max_neg_block_sell_save'] = df['group_sell_save'].map(temp_sell_save)
     
-    # 替换：sell_save<=0且非最后一个块的行
+    # 替换：sell_save<=0且非最后一个块的行，用last_pos_sell_save替换
     mask_sell_save = df['is_neg_sell_save'] & (df['block_sell_save'] < df['group_max_neg_block_sell_save'])
     df.loc[mask_sell_save, 'sell_save'] = df.loc[mask_sell_save, 'last_pos_sell_save']
 
