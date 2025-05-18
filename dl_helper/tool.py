@@ -485,11 +485,11 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
         if num_points > 1:
             rep = max(start + 1, rep)
 
-        # 如果平台期的点数 == 1
-        # 则 rep 应该为 start + 1
-        if num_points == 1:
-            if i < n - 1 and abs(plateaus[i + 1][2] - value) < 0.0013:
-                rep = start + 1
+        # # 如果平台期的点数 == 1
+        # # 则 rep 应该为 start + 1
+        # if num_points == 1:
+        #     if i < n - 1 and abs(plateaus[i + 1][2] - value) < 0.0013:
+        #         rep = start + 1
 
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:
@@ -631,23 +631,28 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
                 ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
             ):
-            # print(f'前一个波峰卖出损失')
-            trades[-1] = (trades[-1][0], t2)
 
-            # 遍历计算 平整 的占比
-            for _t1, _valley_idx in pre_valley_backup:
-                _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
-                no_up_distance = _find_latest_valley - _t1
-                total_distance = t2 - _t1
-                if no_up_distance / total_distance <= 0.2:
-                    # 更新 trades[-1]
-                    trades[-1] = (_t1, t2)
-                    break
+            if (t2 - pre_t2 > 100):
+                # 距离太长,认为是一个长时段的平整,不予更新
+                pass
+            else:
+                # print(f'前一个波峰卖出损失')
+                trades[-1] = (trades[-1][0], t2)
 
-            pre_t2 = t2
-            peak_idx += 1
-            valley_idx += 1
-            continue
+                # 遍历计算 平整 的占比
+                for _t1, _valley_idx in pre_valley_backup:
+                    _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
+                    no_up_distance = _find_latest_valley - _t1
+                    total_distance = t2 - _t1
+                    if no_up_distance / total_distance <= 0.2:
+                        # 更新 trades[-1]
+                        trades[-1] = (_t1, t2)
+                        break
+
+                pre_t2 = t2
+                peak_idx += 1
+                valley_idx += 1
+                continue
 
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
@@ -682,23 +687,30 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                     # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
                     ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
                  ):
-                # print(f'当前波峰波谷不盈利，合并到上一个交易对')
-                # 修改上一个交易对的波峰为当前波峰
-                trades[-1] = (trades[-1][0], t2)
 
-                # 遍历计算 平整 的占比
-                for _t1, _valley_idx in pre_valley_backup:
-                    _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
-                    no_up_distance = _find_latest_valley - _t1
-                    total_distance = t2 - _t1
-                    if no_up_distance / total_distance <= 0.2:
-                        # 更新 trades[-1]
-                        trades[-1] = (_t1, t2)
-                        break
+                if (t2 - pre_t2 > 100):
+                    # 距离太长,认为是一个长时段的平整,不予更新
+                    # 尝试下一个波峰
+                    peak_idx += 1
 
-                pre_t2 = t2
-                valley_idx += 1
-                peak_idx += 1
+                else:
+                    # print(f'当前波峰波谷不盈利，合并到上一个交易对')
+                    # 修改上一个交易对的波峰为当前波峰
+                    trades[-1] = (trades[-1][0], t2)
+
+                    # 遍历计算 平整 的占比
+                    for _t1, _valley_idx in pre_valley_backup:
+                        _find_latest_valley = pre_find_latest_valley if pre_find_latest_valley else trades[-1][0]
+                        no_up_distance = _find_latest_valley - _t1
+                        total_distance = t2 - _t1
+                        if no_up_distance / total_distance <= 0.2:
+                            # 更新 trades[-1]
+                            trades[-1] = (_t1, t2)
+                            break
+
+                    pre_t2 = t2
+                    valley_idx += 1
+                    peak_idx += 1
             else:
                 # 尝试下一个波峰
                 peak_idx += 1
@@ -1097,7 +1109,7 @@ def reset_profit_sell_save(lob_data):
     
     return lob_data
 
-def process_lob_data_extended(df):
+def process_lob_data_extended_0(df):
     """
     处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
     
@@ -1143,6 +1155,75 @@ def process_lob_data_extended(df):
     
     # 标记sell_save<=0且profit=0的行
     df['is_neg_sell_save'] = (df['sell_save'] <= 0) & (df['profit'] == 0)
+    
+    # 在每个group内，计算连续块的编号
+    df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    
+    # 计算每个group内sell_save<=0的最大块编号
+    temp_sell_save = df[df['is_neg_sell_save']].groupby('group_sell_save')['block_sell_save'].max()
+    df['group_max_neg_block_sell_save'] = df['group_sell_save'].map(temp_sell_save)
+    
+    # 替换：sell_save<=0且非最后一个块的行
+    mask_sell_save = df['is_neg_sell_save'] & (df['block_sell_save'] < df['group_max_neg_block_sell_save'])
+    df.loc[mask_sell_save, 'sell_save'] = df.loc[mask_sell_save, 'last_pos_sell_save']
+
+    # --- 清理辅助列 ---
+    df.drop(columns=[
+        'last_pos_profit', 'group_profit', 'is_neg_profit', 'block_profit', 'group_max_neg_block_profit',
+        'last_pos_sell_save', 'group_sell_save', 'is_neg_sell_save', 'block_sell_save', 
+        'group_max_neg_block_sell_save'
+    ], inplace=True)
+    
+    return df
+
+def process_lob_data_extended(df):
+    """
+    处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
+    
+    规则:
+    1. 对于profit<=0连续块，若之间无action=1，只保留最后一个块，其余替换为之前最近的profit>0值。
+    2. 对于sell_save<=0连续块，若之间无action=0，只保留最后一个块，其余替换为之前最近的sell_save>0值。
+    
+    参数:
+    df (pd.DataFrame): 包含'profit'、'sell_save'和'action'列的DataFrame。
+    
+    返回:
+    pd.DataFrame: 处理后的DataFrame。
+    """
+    # --- 处理 profit<=0 连续块 ---
+    # 计算每个位置之前最近的profit>0值
+    df['last_pos_profit'] = df['profit'].where(df['profit'] > 0).ffill()
+    
+    # 定义分组，遇到action=1时组号递增
+    df['group_profit'] = (df['action'] == 1).cumsum()
+    
+    # 标记profit<=0的行
+    df['is_neg_profit'] = (df['profit'] <= 0)
+    
+    # 在每个group内，计算连续块的编号
+    df['block_profit'] = df.groupby('group_profit')['is_neg_profit'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    
+    # 计算每个group内profit<=0的最大块编号
+    temp_profit = df[df['is_neg_profit']].groupby('group_profit')['block_profit'].max()
+    df['group_max_neg_block_profit'] = df['group_profit'].map(temp_profit)
+    
+    # 替换：profit<=0且非最后一个块的行
+    mask_profit = df['is_neg_profit'] & (df['block_profit'] < df['group_max_neg_block_profit'])
+    df.loc[mask_profit, 'profit'] = df.loc[mask_profit, 'last_pos_profit']
+
+    # --- 处理 sell_save<=0 连续块 ---
+    # 计算每个位置之前最近的sell_save>0值
+    df['last_pos_sell_save'] = df['sell_save'].where(df['sell_save'] > 0).ffill()
+    
+    # 定义分组，遇到action=0时组号递增
+    df['group_sell_save'] = (df['action'] == 0).cumsum()
+    
+    # 标记sell_save<=0的行
+    df['is_neg_sell_save'] = (df['sell_save'] <= 0)
     
     # 在每个group内，计算连续块的编号
     df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
