@@ -1,4 +1,5 @@
 import sys, torch, os, pickle
+from torch.nn.init import xavier_uniform_, zeros_
 import torchvision
 import torchvision.transforms as transforms 
 import torch.nn as nn
@@ -44,9 +45,20 @@ class MlpLob(nn.Module):
         self.layer3 = nn.Linear(hidden_dim2, output_dim)  # 隐藏层2 -> 输出层
         self.relu = nn.ReLU()  # ReLU 激活函数
 
-    def forward(self, x):
+    def initialize_weights(self):
+        """
+        初始化模型的权重和偏置
+        - 嵌入层和线性层权重使用Xavier初始化
+        - 偏置初始化为0
+        """
+        xavier_uniform_(self.id_embedding.weight)  # 嵌入层权重
+        for layer in [self.layer1, self.layer2, self.layer3]:
+            xavier_uniform_(layer.weight)  # 线性层权重
+            zeros_(layer.bias)  # 线性层偏置
+
+    def forward(self, _x):
         # 分离时间序列和静态特征
-        x = x[:, :-1]  # 最后一维是日期信息
+        x = _x[:, :-1]  # 最后一维是日期信息
         extra_x = x[:, -self.extra_input_dims:]
         x = x[:, :-self.extra_input_dims]
         
@@ -63,6 +75,18 @@ class MlpLob(nn.Module):
         x = self.relu(self.layer1(x))  # 第一层 + 激活
         x = self.relu(self.layer2(x))  # 第二层 + 激活
         x = self.layer3(x)  # 输出层
+
+        # 数值检查
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            model_sd = self.state_dict()
+            model_sd = {k: v.cpu() for k, v in model_sd.items()}
+            with open('debug_nan_data.pkl', 'wb') as f:
+                pickle.dump({
+                    'state_dict': model_sd,
+                    'observations': _x.detach().cpu(),
+                }, f)
+            raise ValueError("output contains nan or inf")
+
         return x
 
 class CausalConv1d(nn.Module):
@@ -136,6 +160,37 @@ class TCNLob(nn.Module):
             nn.ReLU(),
             nn.Linear(fusion_dim, output_dim)
         )
+
+    def initialize_weights(self):
+        """
+        初始化模型的权重和偏置
+        - 嵌入层、卷积层和线性层权重使用Xavier初始化
+        - 偏置初始化为0
+        """
+        # 嵌入层初始化
+        xavier_uniform_(self.id_embedding.weight)
+
+        # 输入投影层
+        xavier_uniform_(self.input_proj.weight)
+        zeros_(self.input_proj.bias)
+
+        # TCN块中的卷积层
+        for block in self.tcn_blocks:
+            for layer in block:
+                if isinstance(layer, nn.Conv1d):
+                    xavier_uniform_(layer.weight)
+                    if layer.bias is not None:
+                        zeros_(layer.bias)
+
+        # 静态特征处理层
+        xavier_uniform_(self.static_net.weight)
+        zeros_(self.static_net.bias)
+
+        # 融合层
+        for layer in self.fusion:
+            if isinstance(layer, nn.Linear):
+                xavier_uniform_(layer.weight)
+                zeros_(layer.bias)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         # 分离时间序列和静态特征
