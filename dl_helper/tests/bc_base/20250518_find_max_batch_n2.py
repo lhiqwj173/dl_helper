@@ -261,7 +261,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250518_find_max_batch_n'
+    title_base = '20250518_find_max_batch_n2'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -270,7 +270,7 @@ class test(test_base):
         self.params_kwargs['epochs'] = 10
         self.params_kwargs['no_better_stop'] = 0
 
-        batch_ns = [64*2**(i+1) for i in range(4)] * 2
+        batch_ns = [64*2**(i) for i in range(4)] * 2
         models = [MlpLob] * 4 + [TCNLob] * 4
         self.batch_n = batch_ns[self.idx]
         self.model_cls = models[self.idx]
