@@ -270,7 +270,7 @@ class test(test_base):
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
-        self.params_kwargs['batch_n'] = 256
+        self.params_kwargs['batch_n'] = 128
 
         # 实例化 参数对象
         self.para = Params(

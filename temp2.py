@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import LambdaLR
 from accelerate import Accelerator
+from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, blank_scheduler
 
 # 初始化 Accelerator
 accelerator = Accelerator()
@@ -14,7 +15,7 @@ model = nn.Linear(10, 1)
 optimizer = optim.SGD(model.parameters(), lr=0.001)
 
 # 定义调度器（简单线性衰减）
-_scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 1.0 / (epoch + 1))
+_scheduler = blank_scheduler(optimizer)
 
 # 使用 Accelerator 准备模型、优化器和调度器
 model, optimizer, scheduler = accelerator.prepare(model, optimizer, _scheduler)
@@ -34,13 +35,11 @@ scheduler.step()
 checkpoint_folder = "./checkpoint"
 accelerator.save_state(checkpoint_folder)
 # print("Initial LR:", [group['lr'] for group in optimizer.param_groups])
-# print("Scheduler LR:", scheduler.get_last_lr())
 
 # 调用 step() 确保调度器更新
 scheduler.step()
 # 检查学习率是否正确修改
 print("before modified Optimizer LR:", [group['lr'] for group in optimizer.param_groups])
-print("before modified Scheduler LR:", scheduler.get_last_lr())
 
 # 恢复检查点
 accelerator.load_state(checkpoint_folder)
@@ -64,7 +63,6 @@ scheduler.step()
 print("Modified Optimizer LR:", [group['lr'] for group in optimizer.param_groups])
 print(id(_scheduler), id(scheduler.scheduler))
 print("Modified Optimizer LR:", _scheduler.optimizer.param_groups[0]["lr"])
-print("Modified Scheduler LR:", scheduler.get_last_lr())
 
 # 保存新检查点（可选）
 accelerator.save_state("./new_checkpoint")
