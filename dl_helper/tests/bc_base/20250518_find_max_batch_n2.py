@@ -269,7 +269,7 @@ class test(test_base):
 
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
-        self.params_kwargs['epochs'] = 10
+        # self.params_kwargs['epochs'] = 10
         self.params_kwargs['no_better_stop'] = 0
 
         # batch_ns = [64*2**(i) for i in range(4)] * 2
