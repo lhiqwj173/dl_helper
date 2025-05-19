@@ -268,6 +268,7 @@ class test(test_base):
 
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
+        self.params_kwargs['no_better_stop'] = 0
 
         # 实例化 参数对象
         self.para = Params(
@@ -279,6 +280,10 @@ class test(test_base):
         self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=True, data_config = data_config)
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=True, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=True, data_config = data_config, data_type='test')
+
+    def get_title_suffix(self):
+        """获取后缀"""
+        return f'MlpLob' if self.idx == 0 else 'TCNLob'
 
     def get_model(self):
         if self.idx == 0:
