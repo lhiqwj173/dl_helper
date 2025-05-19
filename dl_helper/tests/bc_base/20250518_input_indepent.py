@@ -25,6 +25,10 @@ from dl_helper.tool import model_params_num
 订单簿 bc 数据集
 目标: 输入无关的基准性能 (判断模型是否可以从数据中学习到有用的信息)
 结论: 
+    val_f1                  0.6853
+    val_macro_mcc           0
+    test_final_f1           0.667
+    test_final_macro_mcc    0
 """
 # 简单的 mlp 网络
 # 模型参数量: 10762
