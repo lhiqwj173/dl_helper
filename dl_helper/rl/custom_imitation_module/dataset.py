@@ -104,7 +104,7 @@ class IndexMapper:
         self.__init__(new_data_dict)
 
 class LobTrajectoryDataset(Dataset):
-    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False, sample_num_limit:int=None):
+    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False, sample_num_limit:int=None, data_type:str='train'):
         """
         data_config:
             {
@@ -126,19 +126,21 @@ class LobTrajectoryDataset(Dataset):
 
         键为 symbol_id/symbol, 值为字典, 字典的键为特征名, 值为 numpy 数组
         """
-        if data_dict:
-            fix_data_dict = {}
-            # 修改键为 symbol > symbol_id
-            for k in list(data_dict.keys()):
-                if isinstance(k, str):
-                    new_key = USE_CODES.index(k)
-                    fix_data_dict[new_key] = data_dict[k]
-                else:
-                    fix_data_dict[k] = data_dict[k]
+        # 是否是训练集
+        # 控制样本均衡
+        self.data_type = data_type
 
-            self.data_dict = fix_data_dict
-        else:
-            self.data_dict = self._load_data_dict(data_folder)
+        if not data_dict:
+            data_dict = self._load_data_dict(data_folder)
+        fix_data_dict = {}
+        # 修改键为 symbol > symbol_id
+        for k in list(data_dict.keys()):
+            if isinstance(k, str):
+                new_key = USE_CODES.index(k)
+                fix_data_dict[new_key] = data_dict[k]
+            else:
+                fix_data_dict[k] = data_dict[k]
+        self.data_dict = fix_data_dict
 
         # 如果设置了样本数限制，按照顺序采样
         self.sample_num_limit = sample_num_limit
@@ -259,6 +261,14 @@ class LobTrajectoryDataset(Dataset):
             # 首先遍历一遍所有文件，获取每个键值和子键值的总长度
             key_shape = {}  # 记录数据结构
             key_lengths = {}    # 记录每个键值的总长度
+
+            # 最后40个日期文件作为 val/ test
+            if self.data_type == 'train':
+                file_paths = file_paths[:-40]
+            elif self.data_type == 'val':
+                file_paths = file_paths[-40:-20]
+            elif self.data_type == 'test':
+                file_paths = file_paths[-20:]
             
             # 第一遍遍历：了解数据结构和计算总长度
             for file_path in file_paths:
@@ -271,10 +281,14 @@ class LobTrajectoryDataset(Dataset):
                         for k, v in value.items():
                             key_shape[key][k] = v.shape
                     
-                    key_lengths[key] += value['obs'].shape[0]  # 累加长度
+                    # 累加样本长度
+                    key_lengths[key] += value['obs'].shape[0]
 
-                    for k, v in value.items():
-                        assert value['obs'].shape[0] == v.shape[0], "数据长度不一致"
+                    # 训练集需要均衡
+                    if self.data_type == 'train':
+                        key_lengths[key] -= value['balance_del_idx'].shape[0]
+
+                    assert value['obs'].shape[0] == value['acts'].shape[0], f"obs/acts 数据长度不一致: {value['obs'].shape[0]} != {value['acts'].shape[0]}"
             
             # 创建最终数据字典并预分配空间
             data_dict = {}
@@ -291,13 +305,23 @@ class LobTrajectoryDataset(Dataset):
                 _data_dict = pickle.load(open(file_path, 'rb'))
                 
                 for key, value in _data_dict.items():
-                    for k, v in value.items():
+                    # 待填充数据长度
+                    length = value['obs'].shape[0]
+
+                    # 训练集需要均衡
+                    if self.data_type == 'train':
+                        wait_del_idx = value['balance_del_idx']
+                        length -= wait_del_idx.shape[0]
+                        # 删除数据
+                        value['obs'] = np.delete(value['obs'], wait_del_idx, axis=0)
+                        value['acts'] = np.delete(value['acts'], wait_del_idx, axis=0)
+
+                    for k in ['obs', 'acts']:
                         # 当前位置
                         current_pos = position[key][k]
-                        length = v.shape[0]
-                        
+
                         # 拷贝数据到预分配的数组中
-                        data_dict[key][k][current_pos:current_pos + length] = v
+                        data_dict[key][k][current_pos:current_pos + length] = value[k]
                         
                         # 更新位置
                         position[key][k] += length

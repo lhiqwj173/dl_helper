@@ -28,6 +28,14 @@ class test_base():
         self.para = None
         self.findbest_lr = findbest_lr
 
+        # 实例化参数 的 kwargs
+        self.params_kwargs = {k: v for k, v in kwargs.items()}
+        self.params_kwargs['data_folder'] = data_folder
+        self.params_kwargs['amp'] = amp
+        self.params_kwargs['debug'] = debug
+        self.params_kwargs['test'] = test
+        self.params_kwargs['findbest_lr'] = findbest_lr
+
     # 获取训练参数
     def get_param(self):
         assert self.para, 'should init param in __init__()'

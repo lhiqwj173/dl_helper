@@ -89,13 +89,14 @@ RESULT_OPEN, RESULT_CLOSE, RESULT_HOLD = range(3)
 # 本地训练数据文件夹
 # TRAIN_DATA_LOCAL_FOLDER_NAME = 'RL_10level_20250404'
 # TRAIN_DATA_LOCAL_FOLDER_NAME = 'RL_10level_20250427_train'
-TRAIN_DATA_LOCAL_FOLDER_NAME = 'RL_10level_20250508_train'
+# TRAIN_DATA_LOCAL_FOLDER_NAME = 'RL_10level_20250508_train'
+TRAIN_DATA_LOCAL_FOLDER_NAME = 'BC_train_data_20250518'
 
 # 本地 win 数据文件夹
-LOCAL_DATA_FOLDER = rf'D:\L2_DATA_T0_ETF\train_data\RAW\{TRAIN_DATA_LOCAL_FOLDER_NAME}'
+LOCAL_DATA_FOLDER = rf'D:\L2_DATA_T0_ETF\train_data\RAW\{TRAIN_DATA_LOCAL_FOLDER_NAME}\train_data'
 
 # kaggle 数据文件夹 r'/kaggle/input'
-KAGGLE_DATA_FOLDER = rf"/kaggle/input/{TRAIN_DATA_LOCAL_FOLDER_NAME.replace('_', '-').lower()}"
+KAGGLE_DATA_FOLDER = rf"/kaggle/input/{TRAIN_DATA_LOCAL_FOLDER_NAME.replace('_', '-').lower()}/train_data"
 
 # 数据文件夹
 if in_kaggle:
