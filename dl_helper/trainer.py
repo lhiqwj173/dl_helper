@@ -112,8 +112,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}',main=False)
 
         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-        if not params.classify and len(target.shape) == 1:
-            target = target.unsqueeze(1)
+        if not params.classify:
+            target = target.long()
+            if len(target.shape) == 1:
+                target = target.unsqueeze(1)
         printer.print(f'batch unsqueeze',main=False)
             
         optimizer.zero_grad()
@@ -183,8 +185,10 @@ def test_train_func(data_file_path, id, test_class):
     batch = [i.unsqueeze(0).float() for i in batch]
 
     data, target = trans(batch, train=True)
-    if not params.classify and len(target.shape) == 1:
-        target = target.unsqueeze(1)
+    if not params.classify:
+        target = target.long()
+        if len(target.shape) == 1:
+            target = target.unsqueeze(1)
     output = model(data)
     batch_indices = _check_nan(output)
 
@@ -211,13 +215,15 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
     with torch.no_grad():
         for batch in active_dataloader:
             data, target = trans(batch)
+            
+            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
+            if not params.classify:
+                target = target.long()
+                if len(target.shape) == 1:
+                    target = target.unsqueeze(1)
 
             if None is first_batch_data and accelerator.is_local_main_process:
                 first_batch_data = (data.clone(), target.clone())
-            
-            # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-            if not params.classify and len(target.shape) == 1:
-                target = target.unsqueeze(1)
 
             output = model(data)
             loss = criterion(output, target)
@@ -293,8 +299,10 @@ def test_fn(params, model, blank_model, criterion, test_data, accelerator, track
                 data, target = trans(batch)
 
                 # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                if not params.classify and len(target.shape) == 1:
-                    target = target.unsqueeze(1)
+                if not params.classify:
+                    target = target.long()
+                    if len(target.shape) == 1:
+                        target = target.unsqueeze(1)
 
                 output = model(data)
                 loss = criterion(output, target)
@@ -341,8 +349,10 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
                         data, target = trans(batch)
 
                         # 如果是  torch.Size([512]) 则调整为 torch.Size([512, 1])
-                        if not params.classify and len(target.shape) == 1:
-                            target = target.unsqueeze(1)
+                        if not params.classify:
+                            target = target.long()
+                            if len(target.shape) == 1:
+                                target = target.unsqueeze(1)
 
                         output = model(data)
 
