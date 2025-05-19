@@ -767,6 +767,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
                 kwargs['findbest_lr'] = True
             elif arg == 'test':
                 kwargs['test'] = True
+            elif arg.startswith('lr='):
+                kwargs['learning_rate'] = float(arg.split('=')[1])
             elif '=' in arg:
                 # 其他参数
                 k, v = arg.split('=')
