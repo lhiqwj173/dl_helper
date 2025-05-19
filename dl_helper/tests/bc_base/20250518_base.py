@@ -278,7 +278,7 @@ class test(test_base):
         )
 
         # 准备数据集
-        data_dict_folder = DATA_FOLDER.replace('train_data', 'data_dict')
+        data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
         self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config)
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')

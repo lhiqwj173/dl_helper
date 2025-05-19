@@ -1,7 +1,7 @@
 from dl_helper.train_param import match_num_processes, is_colab, is_kaggle
 from dl_helper.tracker import Tracker, Tracker_None
 from dl_helper.tracker import MODEL_FINAL, MODEL_BEST, MODEL_DUMMY, TEST_FINAL, TEST_BEST, TEST_DUMMY
-from dl_helper.tool import report_memory_usage, check_nan, check_gradients
+from dl_helper.tool import report_memory_usage, check_nan, check_gradients, in_windows
 from dl_helper.acc.data_loader import skip_first_batches
 from dl_helper.idx_manager import get_idx
 from dl_helper.models.dummy import m_dummy
@@ -411,7 +411,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
         init_logger(params.train_title, home=params.root, timestamp=False)
 
         # 检查下载训练文件
-        if (not params.debug) and accelerator.is_local_main_process:
+        if (not params.debug) and accelerator.is_local_main_process and not in_windows():
             p.print('check alist download')
             
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
@@ -512,6 +512,8 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
             # 检查是否需要调整 lr
             if params.learning_rate != scheduler.scheduler.base_lrs[0]:
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = params.learning_rate
                 scheduler.scheduler.base_lrs = [params.learning_rate] * len(scheduler.scheduler.base_lrs)
 
             # 输出
