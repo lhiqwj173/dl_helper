@@ -23,6 +23,8 @@ from dl_helper.tool import model_params_num
 
 """
 订单簿 bc 数据集
+目标: 最简单的模型基准 (检验模型复杂度对性能的正向提升)
+结论: 
 """
 # 简单的 mlp 网络
 # 模型参数量: 10762
@@ -268,6 +270,7 @@ class test(test_base):
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['batch_n'] = 256
 
         # 实例化 参数对象
         self.para = Params(

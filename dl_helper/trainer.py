@@ -510,6 +510,10 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
             accelerator.load_state(checkpoint_folder)
 
+            # 检查是否需要调整 lr
+            if params.learning_rate != scheduler.scheduler.base_lrs[0]:
+                scheduler.scheduler.base_lrs = [params.learning_rate] * len(scheduler.scheduler.base_lrs)
+
             # 输出
             tracker.print_state()
 

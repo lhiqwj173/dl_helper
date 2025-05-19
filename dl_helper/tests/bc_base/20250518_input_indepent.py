@@ -23,6 +23,8 @@ from dl_helper.tool import model_params_num
 
 """
 订单簿 bc 数据集
+目标: 输入无关的基准性能 (判断模型是否可以从数据中学习到有用的信息)
+结论: 
 """
 # 简单的 mlp 网络
 # 模型参数量: 10762
@@ -269,6 +271,7 @@ class test(test_base):
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['batch_n'] = 256
 
         # 实例化 参数对象
         self.para = Params(

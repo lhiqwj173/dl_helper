@@ -23,6 +23,8 @@ from dl_helper.tool import model_params_num
 
 """
 订单簿 bc 数据集
+目标: 找到最大 batch_n
+结果: 256
 """
 # 简单的 mlp 网络
 # 模型参数量: 10762
