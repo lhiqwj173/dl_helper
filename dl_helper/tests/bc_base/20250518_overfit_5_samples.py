@@ -45,6 +45,9 @@ class MlpLob(nn.Module):
         self.layer3 = nn.Linear(hidden_dim2, output_dim)  # 隐藏层2 -> 输出层
         self.relu = nn.ReLU()  # ReLU 激活函数
 
+        # 初始化权重
+        self.initialize_weights()
+
     def initialize_weights(self):
         """
         初始化模型的权重和偏置
@@ -160,6 +163,9 @@ class TCNLob(nn.Module):
             nn.ReLU(),
             nn.Linear(fusion_dim, output_dim)
         )
+
+        # 初始化权重
+        self.initialize_weights()
 
     def initialize_weights(self):
         """
