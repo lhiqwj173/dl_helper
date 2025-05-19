@@ -5,7 +5,7 @@ import functools
 
 from dl_helper.data import read_data, Dataset_cahce, DistributedSampler, DataLoaderDevice
 from dl_helper.transforms.base import transform
-from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, blank_scheduler
+from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, ConstantLRScheduler
 from py_ext.tool import log
 
 import torch
@@ -127,10 +127,10 @@ class test_base():
             elif 'WarmupReduceLROnPlateau' == lr_scheduler_class:
                 lr_scheduler_class = WarmupReduceLROnPlateau
             else:
-                lr_scheduler_class = blank_scheduler
+                lr_scheduler_class = ConstantLRScheduler
         elif isinstance(lr_scheduler_class, type) or isinstance(lr_scheduler_class, functools.partial):
             lr_scheduler_class = lr_scheduler_class
         else:
-            lr_scheduler_class = blank_scheduler
+            lr_scheduler_class = ConstantLRScheduler
 
         return lr_scheduler_class(optimizer, *args, **kwargs)

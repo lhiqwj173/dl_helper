@@ -95,21 +95,21 @@ def checkpoint(epoch, accelerator, params, printer, need_check=True):
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
-    printer.print(f'train_fn step_count: {skip_steps}',main=False)
+    # printer.print(f'train_fn step_count: {skip_steps}',main=False)
 
     active_dataloader = train_loader
-    printer.print(f'train_fn active_dataloader: {id(active_dataloader)}',main=False)
+    # printer.print(f'train_fn active_dataloader: {id(active_dataloader)}',main=False)
     # if skip_steps > 0:
     #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
     #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
     model.train()
     for batch in active_dataloader:
-        printer.print(f'batch begin',main=False)
+        # printer.print(f'batch begin',main=False)
 
         # 预处理
         data, target = trans(batch, train=True)
-        printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}',main=False)
+        # printer.print(f'batch data shape: {data.shape}, target shape: {target.shape}',main=False)
 
         if params.classify:
             target = target.long()
@@ -117,9 +117,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         optimizer.zero_grad()
         output = model(data)
         loss = criterion(output, target)
-        printer.print(f'batch loss',main=False)
+        # printer.print(f'batch loss',main=False)
 
-        # 检查梯度
         if accelerator.is_local_main_process:
             if check_nan(output):
                 pickle.dump((data, target, output), open('error_data.pkl', 'wb'))
@@ -128,29 +127,39 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
                 raise Exception('训练数据异常 nan/inf')
 
         accelerator.backward(loss)
-        printer.print(f'batch backward',main=False)
+        # printer.print(f'batch backward',main=False)
         optimizer.step()
-        printer.print(f'batch step',main=False)
+        # printer.print(f'batch step',main=False)
 
         # 追踪器 记录数据
         with torch.no_grad():
             tracker.track('train', output, data, target, loss)
-        printer.print(f'batch track',main=False)
+        # printer.print(f'batch track',main=False)
+
+    # 检查最后batch的输出
+    printer.print(f"Output mean: {output.mean().item()}, std: {output.std().item()}") 
 
     # 检查最后一个 batch 的梯度，并记录
     if accelerator.is_local_main_process:
         total_grad_norm = check_gradients(model)
         tracker.record('total_grad_norm', total_grad_norm)
-        printer.print(f'batch check_gradients',main=False)
+        # printer.print(f'batch check_gradients',main=False)
+
+    # 检查是否存在NaN
+    for name, param in model.named_parameters():
+        if torch.isnan(param).any():
+            msg = f"NaN detected in {name}"
+            wx.send_message(msg)
+            raise Exception(msg)
 
     # 追踪器，计算必要的数据
     tracker.update()
-    printer.print(f'batch update')
+    # printer.print(f'batch update')
 
     # 缓存checkpoint
     if need_checkpoint:
         checkpoint(epoch, accelerator, params, printer, False)
-    printer.print(f'batch checkpoint')
+    # printer.print(f'batch checkpoint')
 
 def record_grad(idx, model, rank):
     with open(f'grad_{rank}.txt', 'a') as f:

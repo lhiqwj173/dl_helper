@@ -141,7 +141,7 @@ class Params:
   #############################
   epochs = 100
 
-  batch_size = 64
+  batch_size = 32
   batch_n = 1
 
   # learning_rate

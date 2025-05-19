@@ -84,6 +84,46 @@ def class_accuracy(y_pred, y_true, y_n):
     
     return torch.tensor(class_acc, device=y_pred.device)
 
+def class_acc_score(y_pred, y_true, y_n):
+    """
+    计算每个类别的准确率。
+    
+    参数:
+    y_pred (array-like): 预测的类别标签
+    y_true (array-like): 真实的类别标签
+    y_n (int): 类别数量
+    
+    返回:
+    list: 每个类别的准确率列表
+    """
+    # 将输入转换为 NumPy 数组，便于处理
+    y_pred = y_pred.cpu().numpy()
+    y_true = y_true.cpu().numpy()
+    
+    # 检查 y_pred 和 y_true 的长度是否一致
+    if len(y_pred) != len(y_true):
+        raise ValueError("y_pred 和 y_true 的长度必须相同")
+    
+    # 初始化存储每个类别准确率的列表
+    accuracies = []
+    
+    # 遍历每个类别
+    for class_label in range(y_n):
+        # 找出真实标签中属于当前类别的索引
+        class_indices = np.where(y_true == class_label)[0]
+        
+        # 如果该类别没有样本，准确率为 0
+        if len(class_indices) == 0:
+            accuracies.append(0.0)
+        else:
+            # 计算该类别中预测正确的样本数
+            correct_predictions = np.sum(y_pred[class_indices] == y_true[class_indices])
+            # 计算准确率：正确预测数 / 该类别总样本数
+            accuracy = correct_predictions / len(class_indices)
+            accuracies.append(accuracy)
+    
+    return torch.tensor(accuracies)
+
 def class_mcc_score(y_pred, y_true, y_n):
     # 转换为numpy计算
     y_pred_np = y_pred.cpu().numpy()
@@ -624,6 +664,9 @@ class Tracker():
                 class_mcc = class_mcc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
                 # print('class_mcc', flush=True)
 
+                # 计算各个类别的 acc
+                class_acc = class_acc_score(self.temp['_y_pred'], self.temp['_y_true'], self.params.y_n).cpu()
+
                 # # 各个类别按照 code 分类计数 f1 score
                 # # train/val 不需要计算
                 # if self.track_update not in TYPES_NO_NEED_SYMBOL_SCORE:
@@ -656,6 +699,7 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = weighted_f1
                     self.data[f'{self.track_update}_recall'] = torch.tensor([recall_dict['recall']])
                     for i in range(len(class_f1)):
+                        self.data[f'{self.track_update}_class_acc_{i}'] = class_acc[i].unsqueeze(0)
                         self.data[f'{self.track_update}_class_mcc_{i}'] = class_mcc[i].unsqueeze(0)
                         self.data[f'{self.track_update}_class_f1_{i}'] = class_f1[i].unsqueeze(0)
                         self.data[f'{self.track_update}_class_recall_{i}'] = torch.tensor([recall_dict[f'class_recall_{i}']])
@@ -675,6 +719,7 @@ class Tracker():
                     self.data[f'{self.track_update}_f1'] = torch.cat([self.data[f'{self.track_update}_f1'], weighted_f1])
                     self.data[f'{self.track_update}_recall'] = torch.cat([self.data[f'{self.track_update}_recall'], torch.tensor([recall_dict['recall']])])
                     for i in range(len(class_f1)):
+                        self.data[f'{self.track_update}_class_acc_{i}'] = torch.cat([self.data[f'{self.track_update}_class_acc_{i}'], class_acc[i].unsqueeze(0)])
                         self.data[f'{self.track_update}_class_mcc_{i}'] = torch.cat([self.data[f'{self.track_update}_class_mcc_{i}'], class_mcc[i].unsqueeze(0)])
                         self.data[f'{self.track_update}_class_f1_{i}'] = torch.cat([self.data[f'{self.track_update}_class_f1_{i}'], class_f1[i].unsqueeze(0)])
                         self.data[f'{self.track_update}_class_recall_{i}'] = torch.cat([self.data[f'{self.track_update}_class_recall_{i}'], torch.tensor([recall_dict[f'class_recall_{i}']])])
@@ -956,6 +1001,8 @@ class Tracker():
             # print(data)
             # 将 data 作为 csv 全量保存
             df = move_numbered_columns_to_end(pd.DataFrame(data))
+            # 删除以 mean_class_f1 结尾的列名
+            df = df.drop([col for col in df.columns if col.endswith('mean_class_f1')], axis=1)
             df.to_csv(os.path.join(params.root, f'all_data.csv'), index=False)
 
             # 创建图形和坐标轴

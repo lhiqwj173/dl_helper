@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from py_ext.tool import debug, log
 from torch.optim.lr_scheduler import ReduceLROnPlateau as _ReduceLROnPlateau
 from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import _LRScheduler
 
 from dl_helper.train_param import tpu_available
 if tpu_available():
@@ -48,9 +49,24 @@ class LRFinder:
         for i, param_group in enumerate(self.optimizer.param_groups):
             param_group['lr'] = lr   
 
-class blank_scheduler(LRScheduler):
-    def step(self, epoch: Optional[int] = None):
-        pass
+class ConstantLRScheduler(_LRScheduler):
+    """在整个训练过程中保持恒定的学习率。
+    
+    参数:
+        optimizer (torch.optim.Optimizer): 被包装的优化器。
+        last_epoch (int): 最后一个epoch的索引。默认值: -1
+    """
+    
+    def __init__(self, optimizer, last_epoch=-1):
+        super(ConstantLRScheduler, self).__init__(optimizer, last_epoch)
+    
+    def get_lr(self):
+        """返回每个参数组的恒定学习率。"""
+        return [base_lr for base_lr in self.base_lrs]
+    
+    def _get_closed_form_lr(self):
+        """返回恒定学习率(与get_lr相同)。"""
+        return self.base_lrs
 
 class ReduceLROnPlateau(_ReduceLROnPlateau):
     def step(self, loss_array):

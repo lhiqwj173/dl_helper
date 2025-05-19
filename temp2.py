@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import LambdaLR
 from accelerate import Accelerator
-from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, blank_scheduler
+from dl_helper.scheduler import OneCycle, ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder, ConstantLRScheduler
 
 # 初始化 Accelerator
 accelerator = Accelerator()
@@ -15,7 +15,7 @@ model = nn.Linear(10, 1)
 optimizer = optim.SGD(model.parameters(), lr=0.001)
 
 # 定义调度器（简单线性衰减）
-_scheduler = blank_scheduler(optimizer)
+_scheduler = ConstantLRScheduler(optimizer)
 
 # 使用 Accelerator 准备模型、优化器和调度器
 model, optimizer, scheduler = accelerator.prepare(model, optimizer, _scheduler)
@@ -61,7 +61,6 @@ scheduler.scheduler.base_lrs = [new_lr] * len(scheduler.scheduler.base_lrs)
 scheduler.step()
 # 检查学习率是否正确修改
 print("Modified Optimizer LR:", [group['lr'] for group in optimizer.param_groups])
-print(id(_scheduler), id(scheduler.scheduler))
 print("Modified Optimizer LR:", _scheduler.optimizer.param_groups[0]["lr"])
 
 # 保存新检查点（可选）
