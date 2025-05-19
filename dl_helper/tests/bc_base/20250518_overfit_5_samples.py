@@ -267,10 +267,14 @@ class test(test_base):
 
         self.params_kwargs['y_n'] = 2
         self.params_kwargs['classify'] = True
-        self.params_kwargs['epochs'] = 5000
         self.params_kwargs['batch_size'] = 5
         self.params_kwargs['no_better_stop'] = 0
-        self.params_kwargs['learning_rate'] = 3e-4
+
+        # 若在命令行指定，以命令行为准
+        if 'epochs' not in self.params_kwargs:
+            self.params_kwargs['epochs'] = 5000
+        if 'learning_rate' not in self.params_kwargs:
+            self.params_kwargs['learning_rate'] = 3e-4
 
         seeds = range(4)
         self.seed = seeds[self.idx]
