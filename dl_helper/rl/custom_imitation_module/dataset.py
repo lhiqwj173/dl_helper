@@ -142,22 +142,51 @@ class LobTrajectoryDataset(Dataset):
                 fix_data_dict[k] = data_dict[k]
         self.data_dict = fix_data_dict
 
-        # 如果设置了样本数限制，按照顺序采样
+        # 如果设置了样本数限制，尽可能的均衡symbol采样
         self.sample_num_limit = sample_num_limit
         if self.sample_num_limit:
-            wait_nums = self.sample_num_limit
             _new_data_dict = {}
-            while wait_nums > 0:
-                for k, v in self.data_dict.items():
-                    use_num = min(wait_nums, len(v['obs']))
+            keys = list(self.data_dict.keys())
+            num_keys = len(keys)
+            if num_keys > 0:
+                # 计算每个 key 的基本采样数和剩余样本
+                base_samples_per_key = self.sample_num_limit // num_keys
+                extra_samples = self.sample_num_limit % num_keys
+                total_used = 0
+                
+                # 第一次分配，尽量均匀
+                for i, k in enumerate(keys):
+                    v = self.data_dict[k]
+                    # 分配基本采样数，额外样本按顺序分配给前 extra_samples 个 key
+                    use_num = min(base_samples_per_key + (1 if i < extra_samples else 0), len(v['obs']))
                     if use_num > 0:
                         _new_data_dict[k] = {
                             'obs': v['obs'][:use_num],
                             'acts': v['acts'][:use_num],
                         }
-                        wait_nums -= use_num
-                    if wait_nums == 0:
+                        total_used += use_num
+                
+                # 如果总采样数不足 sample_num_limit，重新分配剩余样本
+                remaining_samples = self.sample_num_limit - total_used
+                while remaining_samples > 0:
+                    allocated = 0
+                    for k in keys:
+                        if k in _new_data_dict:
+                            v = self.data_dict[k]
+                            current_used = len(_new_data_dict[k]['obs'])
+                            # 尝试为该 key 额外分配一个样本
+                            if current_used < len(v['obs']):
+                                _new_data_dict[k]['obs'].append(v['obs'][current_used])
+                                _new_data_dict[k]['acts'].append(v['acts'][current_used])
+                                allocated += 1
+                                total_used += 1
+                                remaining_samples -= 1
+                                if remaining_samples == 0:
+                                    break
+                    # 如果没有分配到任何样本，退出循环以避免死循环
+                    if allocated == 0:
                         break
+                        
             self.data_dict = _new_data_dict
 
         self.mapper = IndexMapper({i: len(v['obs']) for i, v in self.data_dict.items()})

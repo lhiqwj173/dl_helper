@@ -261,7 +261,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250518_input_indepent'
+    title_base = '20250518_overfit_5_samples'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
