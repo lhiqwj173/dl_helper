@@ -512,8 +512,9 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
             # 检查是否需要调整 lr
             if params.learning_rate != scheduler.scheduler.base_lrs[0]:
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = params.learning_rate
+                p.print(f'change lr: {scheduler.scheduler.base_lrs[0]} -> {params.learning_rate}')
+                # for param_group in optimizer.param_groups:
+                #     param_group['lr'] = params.learning_rate
                 scheduler.scheduler.base_lrs = [params.learning_rate] * len(scheduler.scheduler.base_lrs)
 
             # 输出

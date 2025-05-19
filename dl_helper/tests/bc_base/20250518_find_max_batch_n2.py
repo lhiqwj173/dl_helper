@@ -272,10 +272,13 @@ class test(test_base):
         self.params_kwargs['epochs'] = 10
         self.params_kwargs['no_better_stop'] = 0
 
-        batch_ns = [64*2**(i) for i in range(4)] * 2
-        models = [MlpLob] * 4 + [TCNLob] * 4
-        self.batch_n = batch_ns[self.idx]
-        self.model_cls = models[self.idx]
+        # batch_ns = [64*2**(i) for i in range(4)] * 2
+        # models = [MlpLob] * 4 + [TCNLob] * 4
+        # self.batch_n = batch_ns[self.idx]
+        # self.model_cls = models[self.idx]
+
+        self.batch_n = 256
+        self.model_cls = TCNLob
         self.params_kwargs['batch_n'] = self.batch_n
 
         # 实例化 参数对象
