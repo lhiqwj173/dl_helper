@@ -528,7 +528,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
         checkpoint_folder = os.path.join(params.root, 'checkpoint')
         resume_from_checkpoint = os.path.exists(checkpoint_folder)
         if resume_from_checkpoint:
-            accelerator.print(f"Resumed from checkpoint: {checkpoint_folder}")
+            p.print(f"Resumed from checkpoint: {checkpoint_folder}")
             accelerator.load_state(checkpoint_folder)
 
             # 检查是否需要调整 lr
@@ -540,6 +540,8 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
             # 输出
             tracker.print_state()
+
+        sys.exit()
 
         os.makedirs(os.path.join(params.root, MODEL_BEST), exist_ok=True)
         os.makedirs(os.path.join(params.root, MODEL_FINAL), exist_ok=True)
@@ -568,7 +570,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
                 # 计算平均评价指标
                 _max_mean_score_list = tracker.get_mean_socre_important()
-                p.print(f'_max_mean_score_list:\n{_max_mean_score_list}')
+                # p.print(f'_max_mean_score_list:\n{_max_mean_score_list}')
                 need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
                 if len(_max_mean_score_list) > 0:
                     _max_mean_f1 = max(_max_mean_score_list)
