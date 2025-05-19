@@ -275,7 +275,7 @@ class test(test_base):
         seeds = range(4)
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
-        
+
         # 实例化 参数对象
         self.para = Params(
             **self.params_kwargs
@@ -292,7 +292,7 @@ class test(test_base):
         return f'TCNLob_seed{self.seed}'
 
     def get_model(self):
-        TCNLob()
+        return TCNLob()
     
     def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
