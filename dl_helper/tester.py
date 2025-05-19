@@ -36,6 +36,10 @@ class test_base():
         self.params_kwargs['test'] = test
         self.params_kwargs['findbest_lr'] = findbest_lr
 
+    def get_title_suffix(self):
+        """获取后缀"""
+        return f''
+
     # 获取训练参数
     def get_param(self):
         assert self.para, 'should init param in __init__()'

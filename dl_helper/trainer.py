@@ -403,8 +403,9 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
         p = printer(lock, accelerator)
         
         # 在root/title中添加 idx
-        params.train_title = f'{params.train_title}_IDX{test.idx}'
-        params.root = f'{params.root}_IDX{test.idx}'
+        title_suffix = test.get_title_suffix()
+        params.train_title = f'{params.train_title}_IDX{test.idx}' if not title_suffix else f'{params.train_title}_{title_suffix}_IDX{test.idx}'
+        params.root = f'{params.root}_IDX{test.idx}' if not title_suffix else f'{params.root}_{title_suffix}_IDX{test.idx}'
 
         # 初始化日志
         init_logger(params.train_title, home=params.root, timestamp=False)

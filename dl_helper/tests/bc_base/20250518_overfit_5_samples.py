@@ -279,6 +279,10 @@ class test(test_base):
         self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, sample_num_limit=5, data_config = data_config)
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, sample_num_limit=5, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, sample_num_limit=5, data_config = data_config, data_type='test')
+    
+    def get_title_suffix(self):
+        """获取后缀"""
+        return f'MlpLob' if self.idx == 0 else 'TCNLob'
 
     def get_model(self):
         if self.idx == 0:
