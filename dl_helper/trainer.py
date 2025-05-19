@@ -92,6 +92,33 @@ def checkpoint(epoch, accelerator, params, printer, need_check=True):
         accelerator.save_state(os.path.join(params.root, 'checkpoint'))
         package_root(accelerator, params)
 
+def save_batch_confidence(data_type, params, model, first_batch_data):
+    with torch.no_grad():
+        data, target = first_batch_data
+        # 前向传播，获取模型输出
+        output = model(data)
+        # 对输出应用softmax，获取概率分布
+        probabilities = F.softmax(output, dim=1)
+        # 获取正确类别的预测置信度
+        # torch.gather 从 probabilities 中提取对应 target 的概率值
+        confidence_scores = torch.gather(probabilities, 1, target.unsqueeze(1)).squeeze()
+        # 获取模型预测的类别（概率最大的类别）
+        predicted_labels = torch.argmax(probabilities, dim=1)
+        # 将结果转换为列表形式
+        confidence_scores = confidence_scores.detach().cpu().numpy().tolist()
+        predicted_labels = predicted_labels.detach().cpu().numpy().tolist()
+        true_labels = target.detach().cpu().numpy().tolist()
+        # 追加输出到 csv
+        file = os.path.join(params.root, f'{data_type}_batch_confidence.csv')
+        if not os.path.exists(file):
+            # 写入表头
+            with open(file, 'w') as f:
+                f.write('time,id,confidence,predicted_label,true_label\n')
+        t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(file, 'a') as f:
+            for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
+                f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
+
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
@@ -103,6 +130,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     #     printer.print(f"[{epoch}] skipping train {skip_steps} steps.")
     #     active_dataloader = skip_first_batches(train_loader, skip_steps)
 
+    first_batch_data = None
+
     model.train()
     for batch in active_dataloader:
         # printer.print(f'batch begin',main=False)
@@ -113,6 +142,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         if params.classify:
             target = target.long()
+
+        if None is first_batch_data and accelerator.is_local_main_process:
+            first_batch_data = (data.clone(), target.clone())
             
         optimizer.zero_grad()
         output = model(data)
@@ -160,6 +192,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     if need_checkpoint:
         checkpoint(epoch, accelerator, params, printer, False)
     # printer.print(f'batch checkpoint')
+
+    # 固定第一个 train batch 统计正确类别的预测置信度 
+    if accelerator.is_local_main_process:
+        save_batch_confidence('train', params, model, first_batch_data)
 
 def record_grad(idx, model, rank):
     with open(f'grad_{rank}.txt', 'a') as f:
@@ -238,31 +274,7 @@ def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, prin
 
     # 固定第一个 val batch 统计正确类别的预测置信度 
     if accelerator.is_local_main_process:
-        with torch.no_grad():
-            data, target = first_batch_data
-            # 前向传播，获取模型输出
-            output = model(data)
-            # 对输出应用softmax，获取概率分布
-            probabilities = F.softmax(output, dim=1)
-            # 获取正确类别的预测置信度
-            # torch.gather 从 probabilities 中提取对应 target 的概率值
-            confidence_scores = torch.gather(probabilities, 1, target.unsqueeze(1)).squeeze()
-            # 获取模型预测的类别（概率最大的类别）
-            predicted_labels = torch.argmax(probabilities, dim=1)
-            # 将结果转换为列表形式
-            confidence_scores = confidence_scores.detach().cpu().numpy().tolist()
-            predicted_labels = predicted_labels.detach().cpu().numpy().tolist()
-            true_labels = target.detach().cpu().numpy().tolist()
-            # 追加输出到 csv
-            file = os.path.join(params.root, 'batch_confidence.csv')
-            if not os.path.exists(file):
-                # 写入表头
-                with open(file, 'w') as f:
-                    f.write('time,id,confidence,predicted_label,true_label\n')
-            t = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            with open(file, 'a') as f:
-                for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
-                    f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
+        save_batch_confidence('val', params, model, first_batch_data)
 
     # # for debug
     # accelerator.wait_for_everyone()
