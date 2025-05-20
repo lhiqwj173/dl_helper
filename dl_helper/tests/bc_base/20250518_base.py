@@ -24,7 +24,7 @@ from dl_helper.tool import model_params_num
 
 """
 订单簿 bc 数据集
-目标: 最简单的模型基准 (检验模型复杂度对性能的正向提升)
+目标: 检验模型复杂度对性能的正向提升
 结论: 
 """
 class CausalConv1d(nn.Module):
@@ -500,11 +500,16 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 64
+        self.params_kwargs['epochs'] = 100
         self.params_kwargs['learning_rate'] = 1e-4
 
+        # 每个模型 3 个随机种子
         model_clss = [TCNLob_0, TCNLob_1, TCNLob_2]
         seeds = range(2)
         train_args = list(product(model_clss, seeds))
+        for _model_cls in model_clss:
+            train_args.append((_model_cls, 2))
+
         self.model_cls, self.seed = train_args[self.idx]
         self.params_kwargs['seed'] = self.seed
 

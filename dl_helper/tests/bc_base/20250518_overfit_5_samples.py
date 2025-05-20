@@ -25,9 +25,7 @@ from dl_helper.tool import model_params_num
 订单簿 bc 数据集
 
 目标: 通过增加模型容量，验证模型是否可以过完美拟合
-结论: 
-    hidden_dim = 26  模型参数量: 10221          loss: 0.1985
-
+结论: loss可以到达最低 ~ 0
 """
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation=1):

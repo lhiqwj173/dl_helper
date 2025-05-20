@@ -1300,91 +1300,151 @@ class Tracker():
         self.accelerator.wait_for_everyone()
         # debug('plot done')
 
+    def _format_value(self, value):
+        """格式化值以写入CSV"""
+        if isinstance(value, (list, tuple)):
+            return "@".join([str(i) for i in value])
+        elif isinstance(value, float):
+            return f"{value:.6f}"
+        elif isinstance(value, torch.Tensor):
+            return f"{value.item():.6f}" if value.numel() == 1 else "@".join([str(i) for i in value.tolist()])
+        elif ',' in str(value):
+            return str(value).replace(',', '_')
+        return str(value)
+
     def _save_result(self):
+        """将结果写入CSV文件"""
         if self.accelerator.is_main_process:
             ## 记录结果
             result_file = os.path.join(self.params.root, 'result.csv')
 
-            # 初始化列名
-            with open(result_file, 'w') as f:
-                # 训练参数
-                for key in self.params.__dict__:
-                    if key != 'y_func':
-                        f.write(f'{key},')
-                # 数据标签分布
-                for i in self.label_counts:
-                    f.write(f'label_{i},')
-                # 模型
-                f.write('model,')
-                # 训练结果
-                for i in self.data:
-                    if i == 'lr':
-                        continue
-                    f.write(f'{i},')
-                f.write('each_epoch_cost,cost\n')
+            # # 初始化列名
+            # with open(result_file, 'w') as f:
+            #     # 训练参数
+            #     for key in self.params.__dict__:
+            #         if key != 'y_func':
+            #             f.write(f'{key},')
+            #     # 数据标签分布
+            #     for i in self.label_counts:
+            #         f.write(f'label_{i},')
+            #     # 模型
+            #     f.write('model,')
+            #     # 训练结果
+            #     for i in self.data:
+            #         if i == 'lr':
+            #             continue
+            #         f.write(f'{i},')
+            #     f.write('each_epoch_cost,cost\n')
 
-            def write_values(f, values):
-                if isinstance(values, list) or isinstance(values, tuple):
-                    f.write(f'{"@".join([str(i) for i in values])},')
+            # def write_values(f, values):
+            #     if isinstance(values, list) or isinstance(values, tuple):
+            #         f.write(f'{"@".join([str(i) for i in values])},')
 
-                elif ',' in str(values):
-                    f.write(f'{values},'.replace(',', '_'))
+            #     elif ',' in str(values):
+            #         f.write(f'{values},'.replace(',', '_'))
                     
-                else:
-                    f.write(f'{values},')
+            #     else:
+            #         f.write(f'{values},')
 
-            # 写入结果
-            with open(result_file, 'a') as f:
-                # 训练参数
-                for key in self.params.__dict__:
-                    if key != 'y_func':
-                        write_values(f, self.params.__dict__[key])
+            # # 写入结果
+            # with open(result_file, 'a') as f:
+            #     # 训练参数
+            #     for key in self.params.__dict__:
+            #         if key != 'y_func':
+            #             write_values(f, self.params.__dict__[key])
 
-                # 数据标签分布
-                for i in self.label_counts:
-                    # debug(self.label_counts[i])
-                    label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
-                    label_pct /= torch.min(label_pct)
-                    label_counts = self.label_counts[i].to('cpu').tolist()
-                    strs = [f'{int(i)}' for i in label_pct.to('cpu').tolist()]
-                    strs = [f'{strs[i]}({label_counts[i]})' for i in range(len(strs))]
-                    write_values(f, strs)
-                # 模型
-                f.write(f'{self.model_name},')
-                # 训练结果
-                # 选择val_loss 最小的点
-                best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
-                if best_idx.shape[0] > 1:
-                    best_idx = best_idx[-1]
-                # log(f'loss {self.data["val_loss"]}')
-                # log(f'min {min(self.data["val_loss"])}')
-                # log(f'min {min(self.data["val_loss"]).shape}')
-                # log(f'best_idx {best_idx.shape}')
-                # log(f'best_idx {best_idx}')
-                for i in self.data:
-                    print(f'{i} {type(self.data[i])}')
-                    print(f'{self.data[i]}')
-                    if i == 'lr':
-                        continue
-                    if not None is self.data[i]:
-                        if (isinstance(self.data[i], (list, tuple, torch.Tensor))):
-                            if len(self.data[i]) >= best_idx+1:
-                                d = self.data[i][best_idx]
-                            else:
-                                d = self.data[i][-1]
-                        else:
-                            d = self.data[i]
+            #     # 数据标签分布
+            #     for i in self.label_counts:
+            #         # debug(self.label_counts[i])
+            #         label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
+            #         label_pct /= torch.min(label_pct)
+            #         label_counts = self.label_counts[i].to('cpu').tolist()
+            #         strs = [f'{int(i)}' for i in label_pct.to('cpu').tolist()]
+            #         strs = [f'{strs[i]}({label_counts[i]})' for i in range(len(strs))]
+            #         write_values(f, strs)
+            #     # 模型
+            #     f.write(f'{self.model_name},')
+            #     # 训练结果
+            #     # 选择val_loss 最小的点
+            #     best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
+            #     if best_idx.shape[0] > 1:
+            #         best_idx = best_idx[-1]
+            #     # log(f'loss {self.data["val_loss"]}')
+            #     # log(f'min {min(self.data["val_loss"])}')
+            #     # log(f'min {min(self.data["val_loss"]).shape}')
+            #     # log(f'best_idx {best_idx.shape}')
+            #     # log(f'best_idx {best_idx}')
+            #     for i in self.data:
+            #         print(f'{i} {type(self.data[i])}')
+            #         print(f'{self.data[i]}')
+            #         if i == 'lr':
+            #             continue
+            #         if not None is self.data[i]:
+            #             if (isinstance(self.data[i], (list, tuple, torch.Tensor))):
+            #                 if len(self.data[i]) >= best_idx+1:
+            #                     d = self.data[i][best_idx]
+            #                 else:
+            #                     d = self.data[i][-1]
+            #             else:
+            #                 d = self.data[i]
 
-                        if isinstance(d, torch.Tensor):
-                            d = d.item()
+            #             if isinstance(d, torch.Tensor):
+            #                 d = d.item()
 
-                        if isinstance(d, float):
-                            f.write(f'{d:.4f},')
-                        else:
-                            f.write(f'{d},')
+            #             if isinstance(d, float):
+            #                 f.write(f'{d:.4f},')
+            #             else:
+            #                 f.write(f'{d},')
+            #         else:
+            #             f.write(f',')
+            #     f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
+        
+            # 初始化结果字典
+            result_dict = {}
+
+            # 训练参数
+            for key in self.params.__dict__:
+                if key != 'y_func':
+                    result_dict[key] = self._format_value(self.params.__dict__[key])
+
+            # 数据标签分布
+            for i in self.label_counts:
+                label_pct = (self.label_counts[i] / self.label_counts[i].sum()) * 100
+                label_pct /= torch.min(label_pct)
+                label_counts = self.label_counts[i].to('cpu').tolist()
+                strs = [f'{int(pct)}({count})' for pct, count in zip(label_pct.to('cpu').tolist(), label_counts)]
+                result_dict[f'label_{i}'] = self._format_value(strs)
+
+            # 模型名称
+            result_dict['model'] = self.model_name
+
+            # 训练结果（选择val_loss最小的点）
+            best_idx = torch.where(self.data['val_loss'] == min(self.data['val_loss']))[0]
+            if best_idx.shape[0] > 1:
+                best_idx = best_idx[-1]
+
+            for key in self.data:
+                if key == 'lr':
+                    continue
+                if self.data[key] is not None:
+                    if isinstance(self.data[key], (list, tuple, torch.Tensor)):
+                        data_len = len(self.data[key]) if isinstance(self.data[key], (list, tuple)) else self.data[key].shape[0]
+                        if data_len > best_idx:
+                            result_dict[key + '_best'] = self._format_value(self.data[key][best_idx])
+                        result_dict[key] = self._format_value(self.data[key][-1])
                     else:
-                        f.write(f',')
-                f.write(f"{self.each_epoch_time_cost:.2f}h,{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h\n")
+                        result_dict[key] = self._format_value(self.data[key])
+                else:
+                    result_dict[key] = ''
+
+            # 时间成本
+            result_dict['each_epoch_cost'] = f"{self.each_epoch_time_cost:.2f}h"
+            result_dict['cost'] = f"{(self.cost_hour + self.cur_notebook_cost_hour):.2f}h"
+
+            # 写入CSV
+            with open(result_file, 'w') as f:
+                f.write(','.join(result_dict.keys()) + '\n')
+                f.write(','.join(str(result_dict[key]) for key in result_dict) + '\n')
         
         self.accelerator.wait_for_everyone()
         # debug('save_result done')
