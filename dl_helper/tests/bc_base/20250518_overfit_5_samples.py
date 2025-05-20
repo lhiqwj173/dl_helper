@@ -509,11 +509,7 @@ class test(test_base):
         if 'learning_rate' not in self.params_kwargs:
             self.params_kwargs['learning_rate'] = 3e-4
 
-        self.model_cls = TCNLob_1 if self.idx == 0 else TCNLob_2
-
-        seeds = range(4)
-        self.seed = seeds[self.idx]
-        self.params_kwargs['seed'] = self.seed
+        self.model_cls = [TCNLob_0, TCNLob_1, TCNLob_2][self.idx]
 
         # 实例化 参数对象
         self.para = Params(
@@ -528,7 +524,7 @@ class test(test_base):
     
     def get_title_suffix(self):
         """获取后缀"""
-        return f'{self.model_cls.__name__}_seed{self.seed}'
+        return f'{self.model_cls.__name__}'
 
     def get_model(self):
         return self.model_cls()
