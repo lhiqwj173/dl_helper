@@ -73,6 +73,7 @@ class test(test_base):
         params_kwargs['classify'] = True
         params_kwargs['batch_size'] = 5
         params_kwargs['no_better_stop'] = 0
+        params_kwargs['label_smoothing'] = 0
 
         # 实例化 参数对象
         self.para = Params(
