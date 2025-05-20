@@ -161,7 +161,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         # 检查batch的标签分布
         inspect_batch(target, params.y_n, printer)
 
-        if None is first_batch_data and accelerator.is_local_main_process:
+        if None is first_batch_data and target.shape[0]<10 and accelerator.is_local_main_process:
             first_batch_data = (data.clone(), target.clone())
             
         optimizer.zero_grad()
@@ -212,7 +212,7 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
     # printer.print(f'batch checkpoint')
 
     # 固定第一个 train batch 统计正确类别的预测置信度 
-    if accelerator.is_local_main_process:
+    if accelerator.is_local_main_process and first_batch_data:
         save_batch_confidence('train', params, model, first_batch_data)
 
 def record_grad(idx, model, rank):
@@ -587,17 +587,17 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
                 tracker.save_result()
 
                 # 计算平均评价指标
-                _max_mean_score_list = tracker.get_mean_socre_important()
+                _score_list, compare_func = tracker.get_mean_socre_important()
                 # p.print(f'_max_mean_score_list:\n{_max_mean_score_list}')
                 need_save_best_model, no_better_need_stop = torch.tensor(0, device=accelerator.device), torch.tensor(0, device=accelerator.device)
-                if len(_max_mean_score_list) > 0:
-                    _max_mean_f1 = max(_max_mean_score_list)
-                    max_idx = _max_mean_score_list.index(_max_mean_f1)
-                    if max_idx == len(_max_mean_score_list) - 1:
+                if len(_score_list) > 0:
+                    _best_score = compare_func(_score_list)
+                    best_idx = _score_list.index(_best_score)
+                    if best_idx == len(_score_list) - 1:
                         # 当前的模型版本最优
                         need_save_best_model += 1
 
-                    if params.no_better_stop > 0 and (len(_max_mean_score_list) - 1 - max_idx) >= params.no_better_stop:
+                    if params.no_better_stop > 0 and (len(_score_list) - 1 - best_idx) >= params.no_better_stop:
                         # 长时间无优化，停止训练
                         no_better_need_stop += 1
 

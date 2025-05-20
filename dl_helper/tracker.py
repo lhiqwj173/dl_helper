@@ -947,21 +947,14 @@ class Tracker():
     def get_mean_socre_important(self):
         if self.accelerator.is_main_process:
             if self.params.classify:
-                # val_class_f1 = pd.Series(self.data[f'val_class_f1_0'].cpu().numpy().copy())
-                # self.printer.print(f'val_class_f1_0:\n{val_class_f1}')
-                # for i in range(1, self.params.y_n):
-                #     _f1 = pd.Series(self.data[f'val_class_f1_{i}'].cpu().numpy())
-                #     val_class_f1 += _f1
-                #     self.printer.print(f'val_class_f1_{i}:\n{_f1}')
-
-                # return (val_class_f1 / (self.params.y_n)).tolist()
-                return self.data[f'val_f1'].cpu().numpy().tolist()
+                return self.data[f'val_loss'].cpu().numpy().tolist(), min
+                return self.data[f'val_f1'].cpu().numpy().tolist(), max
             else:
                 # 返回r2列表
-                return self.data[f'val_r2'].cpu().numpy().tolist()
+                return self.data[f'val_r2'].cpu().numpy().tolist(), max
 
         else:
-            return []
+            return [], None
 
     def save_result(self):
         self._plot()
