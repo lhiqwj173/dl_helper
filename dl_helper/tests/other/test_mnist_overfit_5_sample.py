@@ -58,7 +58,7 @@ class mini_dataset(torchvision.datasets.MNIST):
 
     def __getitem__(self, index):
         # Fetch item using the filtered indices
-        return super().__getitem__(self.indices[index])[0]
+        return super().__getitem__(self.indices[index])
 
     def __len__(self):
         return self.limit_num
