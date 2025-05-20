@@ -119,6 +119,21 @@ def save_batch_confidence(data_type, params, model, first_batch_data):
             for idx, (confidence, predicted_label, true_label) in enumerate(zip(confidence_scores, predicted_labels, true_labels)):
                 f.write(f'{t},{idx},{confidence},{predicted_label},{true_label}\n')
 
+def inspect_batch(y, num_classes, printer):
+    """
+    y: Tensor of shape (batch_size,) 的标签，取值范围 [0, num_classes)
+    num_classes: 类别总数
+    """
+    # 直接用 torch.bincount 统计
+    # 如果 y 有可能不包含所有类别，需要指定 minlength
+    counts = torch.bincount(y, minlength=num_classes)
+    total = y.size(0)
+    cls_counts = {int(cls): int(counts[cls].item()) for cls in range(num_classes)}
+
+    for cls, cnt in cls_counts.items():
+        printer.print(f" Class {cls}: {cnt} samples({100*cnt/total:.2%}%)", main=False)
+    printer.print(f" Total: {total}", main=False)
+
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
     # 检查是否存在 step 记录
     skip_steps = tracker.step_count
@@ -142,6 +157,9 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         if params.classify:
             target = target.long()
+
+        # 检查batch的标签分布
+        inspect_batch(target, params.y_n, printer)
 
         if None is first_batch_data and accelerator.is_local_main_process:
             first_batch_data = (data.clone(), target.clone())
@@ -542,8 +560,6 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
             # 输出
             tracker.print_state()
-
-        sys.exit()
 
         os.makedirs(os.path.join(params.root, MODEL_BEST), exist_ok=True)
         os.makedirs(os.path.join(params.root, MODEL_FINAL), exist_ok=True)
