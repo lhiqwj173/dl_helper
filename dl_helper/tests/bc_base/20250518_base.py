@@ -504,6 +504,7 @@ class test(test_base):
         self.params_kwargs['learning_rate'] = 1e-4
 
         # 每个模型 3 个随机种子
+        # 共 6 个实验
         model_clss = [TCNLob_0, TCNLob_1, TCNLob_2]
         seeds = range(2)
         train_args = list(product(model_clss, seeds))
