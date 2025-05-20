@@ -502,6 +502,7 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['batch_size'] = 5
         self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['label_smoothing'] = 0
 
         # 若在命令行指定，以命令行为准
         if 'epochs' not in self.params_kwargs:
