@@ -178,7 +178,7 @@ class Params:
       train_title='test', 
 
       # 训练参数
-      batch_size=64, 
+      batch_size=32, 
       batch_n=1,
       learning_rate = 3e-4, 
       abs_learning_rate = 0,# 绝对学习率，如果设置，则无视learning_rate，也不会基于设备数量再进行调整
