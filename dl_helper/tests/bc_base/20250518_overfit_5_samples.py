@@ -26,7 +26,7 @@ from dl_helper.tool import model_params_num
 
 目标: 通过增加模型容量，验证模型是否可以过完美拟合
 结论: 
-    模型参数量: 10221          loss: 0.1985
+    hidden_dim = 26  模型参数量: 10221          loss: 0.1985
 
 """
 class CausalConv1d(nn.Module):
@@ -338,7 +338,7 @@ class TCNLob_1(nn.Module):
 
         return output
 
-# 模型参数量: 59754
+# 模型参数量: 33882
 class TCNLob_2(nn.Module):
     def __init__(
             self,
@@ -352,7 +352,7 @@ class TCNLob_2(nn.Module):
         self.extra_input_dims = extra_input_dims
         
         # 核心模型参数
-        hidden_dim = 64
+        hidden_dim = 48
 
         # 嵌入维度
         embedding_dim = 8
