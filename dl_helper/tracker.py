@@ -1429,7 +1429,7 @@ class Tracker():
                 if self.data[key] is not None:
                     if isinstance(self.data[key], (list, tuple, torch.Tensor)):
                         data_len = len(self.data[key]) if isinstance(self.data[key], (list, tuple)) else self.data[key].shape[0]
-                        if data_len > best_idx:
+                        if 'test_' not in key and data_len > best_idx:
                             result_dict[key + '_best'] = self._format_value(self.data[key][best_idx])
                         result_dict[key] = self._format_value(self.data[key][-1])
                     else:

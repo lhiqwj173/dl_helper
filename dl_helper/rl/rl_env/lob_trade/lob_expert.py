@@ -29,7 +29,7 @@ class LobExpert_file():
     专家策略
     通过 文件 准备数据
     """
-    def __init__(self, env=None, rng=None, pre_cache=False, data_folder=DATA_FOLDER):
+    def __init__(self, env=None, rng=None, pre_cache=False, data_folder=DATA_FOLDER, cache_debug=False):
         """
         pre_cache: 是否缓存数据 
 
@@ -44,6 +44,9 @@ class LobExpert_file():
 
         # 数据文件夹
         self.data_folder = data_folder
+
+        # 是否写入文件，用于debug
+        self.cache_debug = cache_debug
 
         self.all_file_paths = []
         self.all_file_names = []
@@ -102,15 +105,16 @@ class LobExpert_file():
             lob_data['before_market_close_sec'] = lob_data['before_market_close_sec'].astype(np.float32)
 
         # 区分上午下午
-        # 12:00 - 15:00 》 10800
-        noon_before_market_close_sec = 10800 / MAX_SEC_BEFORE_CLOSE
+        # 11:30:00 - 13:00:00
+        am_close_sec = np.float64(12600 / MAX_SEC_BEFORE_CLOSE)
+        pm_begin_sec = np.float64(7200 / MAX_SEC_BEFORE_CLOSE)
         # 处理 before_market_close_sec nan
         # 使用 其后第一个非nan + 1/MAX_SEC_BEFORE_CLOSE, 来填充
         filled = lob_data['before_market_close_sec'].bfill()
         mask = lob_data['before_market_close_sec'].isna()
         lob_data['before_market_close_sec'] = np.where(mask, filled + 1/MAX_SEC_BEFORE_CLOSE, lob_data['before_market_close_sec'])
-        am = lob_data.loc[lob_data['before_market_close_sec'] > noon_before_market_close_sec]
-        pm = lob_data.loc[lob_data['before_market_close_sec'] < noon_before_market_close_sec]
+        am = lob_data.loc[lob_data['before_market_close_sec'] >= am_close_sec]
+        pm = lob_data.loc[lob_data['before_market_close_sec'] <= pm_begin_sec]
 
         lob_data['valley_peak'] = np.nan
         lob_data['action'] = np.nan
@@ -151,10 +155,10 @@ class LobExpert_file():
         self.full_lob_data.iloc[lob_data_begin: lob_data_end, -2:] = lob_data.loc[:, ['action', 'valley_peak']].values
 
         # 区分上午下午填充
-        am_cond = lob_data['before_market_close_sec'] > noon_before_market_close_sec
+        am_cond = lob_data['before_market_close_sec'] >= am_close_sec
         lob_data.loc[am_cond, 'action'] = lob_data.loc[am_cond, 'action'].ffill()
         lob_data.loc[am_cond, 'action'] = lob_data.loc[am_cond, 'action'].fillna(ACTION_SELL)
-        pm_cond = lob_data['before_market_close_sec'] < noon_before_market_close_sec
+        pm_cond = lob_data['before_market_close_sec'] <= pm_begin_sec
         lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].ffill()
         lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].fillna(ACTION_SELL)
 
@@ -180,6 +184,14 @@ class LobExpert_file():
 
         # no_move filter
         lob_data = filte_no_move(lob_data)
+
+        if self.cache_debug:
+            try:
+                # 写入文件
+                _file_path = os.path.join(os.getenv('TEMP'), 'lob_data.csv')
+                lob_data.to_csv(_file_path, encoding='gbk')
+            except Exception as e:
+                log(f'cache_debug error: {e}')
 
         # 最终数据 action, before_market_close_sec, profit, sell_save, no_move_len
         lob_data = lob_data.loc[:, ['action', 'before_market_close_sec', 'profit', 'sell_save', 'BASE买1价', 'BASE卖1价']]
@@ -271,56 +283,49 @@ class LobExpert_file():
         # 查找 action
         # 向后多取 future_act_num 个数据
         future_act_num = 10
-        data = lob_data[lob_data['before_market_close_sec'] <= before_market_close_sec].iloc[:future_act_num]
+        data = lob_data[(lob_data['before_market_close_sec'] <= before_market_close_sec) & (lob_data['before_market_close_sec'] >= (before_market_close_sec - 0.1))].iloc[:future_act_num]
         assert len(data) > 0, f'len(data): {len(data)}'# 至少有一个数据
 
-        if pos == 0:
-            # 当前空仓
-            # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
-            if len(data[\
-                # 有买入动作
-                (data['action']==ACTION_BUY) & \
-                    # 潜在收益为正
-                    (data['profit'] > 0) & \
-                        # 价格与当前一致
-                        (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
-                            # 与 第一行数据之间没有发生 BASE卖1价 的下跌
-                            (data['BASE卖1价'].lt(data['BASE卖1价'].cummax()).cumsum() == 0)
-                            ]) > 0:
-                res = ACTION_BUY
-            else:
-                res = ACTION_SELL
+        # 是否马上收盘/休盘 （30s）
+        noon_need_close = np.float32(12630 / MAX_SEC_BEFORE_CLOSE) >= before_market_close_sec and np.float32(12565 / MAX_SEC_BEFORE_CLOSE) < before_market_close_sec
+        pm_need_close = np.float32(30 / MAX_SEC_BEFORE_CLOSE) >= before_market_close_sec
+        if noon_need_close or pm_need_close:
+            res = ACTION_SELL
         else:
-            # 当前有持仓
-            # 是否马上收盘/休盘 （30s）
-            noon_need_close = (np.float32(12630 / MAX_SEC_BEFORE_CLOSE) >= data['before_market_close_sec']) & (np.float32(12565 / MAX_SEC_BEFORE_CLOSE) < data['before_market_close_sec'])
-            pm_need_close = (np.float32(30 / MAX_SEC_BEFORE_CLOSE) >= data['before_market_close_sec'])
-            # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
-            if len(data[\
-                (data['action']==ACTION_SELL) & \
-                    # 潜在收益为正 或 中午/下午收盘
-                    ((data['sell_save'] > 0) | (noon_need_close | pm_need_close)) & \
-                        (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
-                            # 与 第一行数据之间没有发生 BASE买1价 的上涨
-                            (data['BASE买1价'].gt(data['BASE买1价'].cummin()).cumsum() == 0)
-                            ]) > 0:
-                res = ACTION_SELL
+            if pos == 0:
+                # 当前空仓
+                # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
+                if len(data[\
+                    # 有买入动作
+                    (data['action']==ACTION_BUY) & \
+                        # 潜在收益为正
+                        (data['profit'] > 0) & \
+                            # 价格与当前一致
+                            (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
+                            (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
+                                # 与 第一行数据之间没有发生 BASE卖1价 的下跌
+                                (data['BASE卖1价'].lt(data['BASE卖1价'].cummax()).cumsum() == 0) & \
+                                (data['BASE买1价'].lt(data['BASE买1价'].cummax()).cumsum() == 0)
+                                ]) > 0:
+                    res = ACTION_BUY
+                else:
+                    res = ACTION_SELL
             else:
-                res = ACTION_BUY
-
-        # data = data.iloc[0]
-        # res = data['action']
-        # if res == ACTION_BUY:
-        #     if pos == 0 and data['profit'] <= 0:
-        #         # 若当前位置无持仓且买入收益为负
-        #         # 维持卖出动作
-        #         res = ACTION_SELL
-
-        # elif res == ACTION_SELL:
-        #     if pos == 1 and data['sell_save'] < 0:
-        #         # 若当前位置有持仓且卖出收益为负
-        #         # 维持买入动作
-        #         res = ACTION_BUY
+                # 当前有持仓
+                # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
+                if len(data[\
+                    (data['action']==ACTION_SELL) & \
+                        # 潜在收益为正
+                        (data['sell_save'] > 0) & \
+                            (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
+                            (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
+                                # 与 第一行数据之间没有发生 BASE买1价 的上涨
+                                (data['BASE买1价'].gt(data['BASE买1价'].cummin()).cumsum() == 0) & \
+                                (data['BASE卖1价'].gt(data['BASE卖1价'].cummin()).cumsum() == 0)
+                                ]) > 0:
+                    res = ACTION_SELL
+                else:
+                    res = ACTION_BUY
 
         return res
     

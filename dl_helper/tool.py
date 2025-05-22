@@ -414,6 +414,47 @@ def calc_volatility(returns, num_per_year=250, annualize=True):
     else:
         return std
 
+def smooth_price_series(prices):
+    """
+    更优化的版本，完全向量化实现
+    prices: ndarray 价格序列
+    Returns:
+        smoothed: ndarray 平滑后的价格序列
+    """
+    n = len(prices)
+    
+    if n < 3:
+        return prices.copy(), [], []
+    
+    smoothed = prices.copy()
+    
+    # 计算相邻差值
+    left_diff = prices[1:-1] - prices[:-2]   # p[i] - p[i-1]
+    right_diff = prices[2:] - prices[1:-1]   # p[i+1] - p[i]
+    
+    # 找到峰值和谷值的掩码
+    peak_mask = (left_diff > 0) & (right_diff < 0)
+    valley_mask = (left_diff < 0) & (right_diff > 0)
+    
+    # 获取索引
+    peak_indices = np.where(peak_mask)[0] + 1
+    valley_indices = np.where(valley_mask)[0] + 1
+    
+    # 向量化处理峰值和谷值
+    if len(peak_indices) > 0:
+        # 峰值替换为相邻两点的最大值
+        left_vals = prices[peak_indices - 1]
+        right_vals = prices[peak_indices + 1]
+        smoothed[peak_indices] = np.maximum(left_vals, right_vals)
+    
+    if len(valley_indices) > 0:
+        # 谷值替换为相邻两点的最小值
+        left_vals = prices[valley_indices - 1]
+        right_vals = prices[valley_indices + 1]
+        smoothed[valley_indices] = np.minimum(left_vals, right_vals)
+    
+    return smoothed
+
 def _find_plateaus(prices):
     """
     识别价格序列中的平台期。
@@ -484,12 +525,6 @@ def _identify_peaks_valleys(plateaus, rep_select, rng=None):
         # 则 rep 应该为 start + 1 之后的点
         if num_points > 1:
             rep = max(start + 1, rep)
-
-        # # 如果平台期的点数 == 1
-        # # 则 rep 应该为 start + 1
-        # if num_points == 1:
-        #     if i < n - 1 and abs(plateaus[i + 1][2] - value) < 0.0013:
-        #         rep = start + 1
 
         if i == 0:  # 第一个平台期
             if n > 1 and value < plateaus[1][2]:
@@ -592,9 +627,22 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
 
         if t1 + 1 == t2:
             # 波谷与波峰连续，没有留有成交空间
-            # 跳到下一个波峰
-            peak_idx += 1
-            continue
+            # 1. 尝试使用 t2 + 1 作为 t2
+            # 需要检查 mid[t2+ 1] > mid[t1]
+            if t2 + 1 < len(mid) and mid[t2 + 1] > mid[t1]:
+                peaks[peak_idx] = t2 + 1
+                t2 = t2 + 1
+            
+            # 2. 尝试使用 t1 - 1 作为 t1
+            # 需要检查 mid[t1 - 1] < mid[t2] 且 t1-1 > pre_t2
+            elif mid[t1 - 1] < mid[t2] and t1 - 1 > pre_t2:
+                valleys[valley_idx] = t1 - 1
+                t1 = t1 - 1
+
+            # 3. 跳到下一个波峰
+            else:
+                peak_idx += 1
+                continue
 
         if t1 < pre_t2:
             # 新的波谷肯定药在前一个波峰之后
@@ -617,7 +665,7 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         while _valley_idx < len(valleys) and valleys[_valley_idx] < t2:
             # 时间药满足小于 t2
             _valley_t = valleys[_valley_idx]
-            if ask[_valley_t] < ask[t1]:
+            if ask[_valley_t] < ask[t1] or mid[_valley_t] < mid[t1]:
                 t1 = _valley_t
                 valley_idx = _valley_idx
                 valley_backup = []
@@ -649,9 +697,9 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
         if pre_t2 > 0 and ask[t1] >= bid[pre_t2] and \
             (
                 # 当前波峰更高
-                ((bid[t2] >= bid[pre_t2]) and mid[t2] >= mid[pre_t2]) or \
-                # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
-                ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
+                ((bid[t2] > bid[pre_t2]) and mid[t2] > mid[pre_t2]) or \
+                # 当前波峰是多点，且数值相等，切换到当前波峰会更优
+                ((peaks_num_points[peak_idx] > 1) and ((bid[t2] == bid[pre_t2]) and mid[t2] == mid[pre_t2]))
             ):
 
             if check_stationary_interval_vectorized(mid, pre_t2, t2, min_length=100):
@@ -677,8 +725,25 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
                 valley_idx += 1
                 continue
 
+        # # 计算买入成本：检查 t1 是否为突刺价格（非首尾索引）
+        # if 0 < t1 < len(ask) - 1 and ask[t1-1] > ask[t1] < ask[t1+1]:
+        #     # 如果 t1 是突刺价格（ask[t1-1] > ask[t1] < ask[t1+1]），
+        #     buy_cost = ask[t1+1] * (1 + fee)
+        # else:
+        #     # 否则使用当前时刻的ask价格
+        #     buy_cost = ask[t1] * (1 + fee)
+
+        # # 计算卖出收入：检查 t2 是否为突刺价格（非首尾索引）
+        # if 0 < t2 < len(bid) - 1 and bid[t2-1] < bid[t2] > bid[t2+1]:
+        #     # 如果 t2 是突刺价格（bid[t2-1] > bid[t2] < bid[t2+1]），使用下一时刻的bid价格
+        #     sell_income = bid[t2+1] * (1 - fee)
+        # else:
+        #     # 否则使用当前时刻的bid价格
+        #     sell_income = bid[t2] * (1 - fee)
         buy_cost = ask[t1] * (1 + fee)
         sell_income = bid[t2] * (1 - fee)
+
+        # 计算利润：卖出收入减去买入成本
         profit = sell_income - buy_cost
         if profit >= profit_threshold and profit/ask[t1] >= profit_fee_times * fee:
             # # 检查 t1,t2 范围内的 mid 是否都在 mid[t1], mid[t2] 之间
@@ -706,9 +771,9 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             if pre_t2 > 0 and \
                 (
                     # 当前波峰更高
-                    (bid[t2] >= bid[pre_t2]) or \
-                    # 当前波峰是多点，上一个波峰是单点的， 且数值相等，切换到当前波峰会更优
-                    ((peaks_num_points[peaks.index(pre_t2)] == 1 and peaks_num_points[peak_idx] > 1) and (bid[t2] == bid[pre_t2]))
+                    ((bid[t2] > bid[pre_t2]) and mid[t2] > mid[pre_t2]) or \
+                    # 当前波峰是多点，且数值相等，切换到当前波峰会更优
+                    ((peaks_num_points[peak_idx] > 1) and ((bid[t2] == bid[pre_t2]) and mid[t2] == mid[pre_t2]))
                  ):
 
                 if check_stationary_interval_vectorized(mid, pre_t2, t2, min_length=100):
@@ -839,7 +904,7 @@ def plot_trades(mid, trades, valleys, peaks):
     # 在浏览器中显示图表
     fig.show(renderer='browser')
 
-def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10, 4), plot_vps=True):
+def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10, 4), plot_vps=True, begin_diff=0):
     """
     使用 Matplotlib 可视化 mid-price 序列和交易机会。
     
@@ -852,6 +917,12 @@ def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10
     # 创建时间轴
     time = list(range(len(mid)))
     
+    # 根据 begin_diff 调整时间轴
+    time = [t + begin_diff for t in time]
+    trades = [(t1 + begin_diff, t2 + begin_diff) for t1, t2 in trades]
+    valleys = [v + begin_diff for v in valleys]
+    peaks = [p + begin_diff for p in peaks]
+
     # 创建图表
     plt.figure(figsize=figsize)
     
@@ -871,18 +942,18 @@ def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10
     # 添加波谷点并标注索引号
     for i, valley in enumerate(valleys):
         if plot_vps or valley in trade_points:
-            plt.scatter(valley, mid[valley], color='red', label='Valleys' if i == 0 else None, s=50)
-            plt.text(valley, mid[valley]-0.0001, f'{valley}', fontsize=10, ha='center', va='top', color='red')
+            plt.scatter(valley, mid[valley-begin_diff], color='red', label='Valleys' if i == 0 else None, s=50)
+            plt.text(valley, mid[valley-begin_diff]-0.0001, f'{valley}', fontsize=10, ha='center', va='top', color='red')
 
     # 添加波峰点并标注索引号
     for i, peak in enumerate(peaks):
         if plot_vps or peak in trade_points:
-            plt.scatter(peak, mid[peak], color='green', label='Peaks' if i == 0 else None, s=50)
-            plt.text(peak, mid[peak]+0.0001, f'{peak}', fontsize=10, ha='center', va='bottom', color='green')
+            plt.scatter(peak, mid[peak-begin_diff], color='green', label='Peaks' if i == 0 else None, s=50)
+            plt.text(peak, mid[peak-begin_diff]+0.0001, f'{peak}', fontsize=10, ha='center', va='bottom', color='green')
 
     # 添加交易对的连接线
     for t1, t2 in trades:
-        plt.plot([t1, t2], [mid[t1], mid[t2]], color='green', linestyle='--', label=f'Trade {t1}-{t2}')
+        plt.plot([t1, t2], [mid[t1-begin_diff], mid[t2-begin_diff]], color='green', linestyle='--', label=f'Trade {t1}-{t2}')
     
     # 设置图表标题和标签
     plt.title('Mid Price with Trading Opportunities')
@@ -898,7 +969,7 @@ def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10
     # 显示图表
     plt.show()
 
-def calculate_profit(df, fee=5e-5):
+def calculate_profit_0(df, fee=5e-5):
     """
     完全向量化的高效实现
     参数:
@@ -950,6 +1021,99 @@ def calculate_profit(df, fee=5e-5):
     
     return df
 
+def calculate_profit(df, fee=5e-5):
+    """
+    完全向量化的高效实现
+    参数:
+    df: 包含 'BASE买1价', 'BASE卖1价', 'action' 列的DataFrame
+    
+    返回:
+    添加了 'profit' 列的DataFrame
+    所有action==0的行, 用BASE卖1价买入，下一个action==1时用BASE买1价卖出，的收益
+    """
+    # 初始化profit列为0
+    df['profit'] = 0.0
+    
+    # 创建信号变化标记，找到买入卖出配对
+    # 1. 标记每个信号的索引位置
+    buy_idx = np.where(df['action'] == 0)[0]
+    sell_idx = np.where(df['action'] == 1)[0]
+    
+    if len(buy_idx) == 0 or len(sell_idx) == 0:
+        return df
+    
+    # 2. 使用searchsorted一次性找到所有买入位置对应的下一个卖出位置
+    # searchsorted找到每个buy_idx在sell_idx中应该插入的位置
+    # 这个位置就是第一个大于buy_idx的sell_idx的索引
+    next_sell_indices = np.searchsorted(sell_idx, buy_idx, side='right')
+    
+    # 3. 过滤掉没有对应卖出信号的买入位置
+    valid_mask = next_sell_indices < len(sell_idx)
+    valid_buy_positions = buy_idx[valid_mask]
+    valid_sell_positions = sell_idx[next_sell_indices[valid_mask]]
+
+    # 4. 检查与 valid_sell_positions+1 处连续且BASE买1价相同的个数
+    # 若个数 == 1, 则将 valid_sell_positions 向后推延/先前提前
+    if len(valid_sell_positions) > 0:
+        # 获取 valid_sell_positions+1 处的 BASE买1价
+        sell_price = df.loc[valid_sell_positions + 1, 'BASE买1价'].values
+        # 获取 valid_sell_positions 处的 BASE买1价
+        pre_price = df.loc[valid_sell_positions, 'BASE买1价'].values
+        pre_same_price_mask = pre_price == sell_price # 与前一个数据的价格相同，说明连续且数值相同的数据至少2个
+        # 初始化 same_price_mask 为全 False，长度与 valid_sell_positions 一致
+        next_same_price_mask = np.zeros_like(pre_same_price_mask, dtype=bool)
+        # 获取 valid_sell_positions+2 处的 BASE买1价（可能越界，需检查）
+        next_indices = valid_sell_positions + 2
+        next_indices = next_indices[next_indices < len(df)]  # 确保不越界
+
+        # 检查向前是否越界
+        valid_mask = valid_sell_positions > 0  # 确保不会向前越界到负数索引
+        if len(next_indices) > 0:
+            next_price = df.loc[next_indices, 'BASE买1价'].values
+            # 向量化的价格比较，检查 sell_price 和 next_price 是否相等
+            same_price_mask = sell_price[:len(next_price)] == next_price # 与后一个数据的价格相同，说明连续且数值相同的数据至少2个
+            # 将结果放回对应位置
+            next_same_price_mask[:len(same_price_mask)] = same_price_mask
+            # 个数 == 1, 则将 valid_sell_positions += 1， 向后推延
+            # 两个mask都不满足 > 个数 == 1
+            need_push_mask = (~next_same_price_mask) & (~pre_same_price_mask)
+
+            # next_price >= pre_price 时 或 valid_mask不合法时，向后推延 (+1)
+            forward_mask = need_push_mask[:len(next_price)] & ((next_price >= pre_price[:len(next_price)]) | ~valid_mask[:len(next_price)])
+            # 初始化最终的 mask
+            final_mask = np.zeros_like(pre_same_price_mask, dtype=bool)
+            final_mask[:len(next_price)] = forward_mask
+            valid_sell_positions[final_mask] += 1
+            
+            # next_price < pre_price 时，向前推延 (-1)
+            adjust_mask = need_push_mask & valid_mask# 只有向前推的需要 valid_mask 过滤
+            backward_mask = (next_price < pre_price[:len(next_price)]) & adjust_mask[:len(next_price)]
+            final_mask[:len(next_price)] = backward_mask
+            valid_sell_positions[final_mask] -= 1
+
+        else:
+            # 只判断 pre_same_price_mask
+            need_push_mask = ~pre_same_price_mask
+            # 向后的数据不存在，只能向前
+            adjust_mask = need_push_mask & valid_mask
+            valid_sell_positions[adjust_mask] -= 1
+
+    # 5. 批量计算所有利润
+    if len(valid_buy_positions) > 0:
+        # 获取价格数组（避免逐个loc访问）
+        buy_prices = df.loc[valid_buy_positions+1, 'BASE卖1价'].values
+        sell_prices = df.loc[valid_sell_positions+1, 'BASE买1价'].values
+        
+        # 向量化计算利润
+        buy_cost = buy_prices * (1 + fee)
+        sell_income = sell_prices * (1 - fee)
+        profits = np.log(sell_income / buy_cost)
+        
+        # 一次性更新利润
+        df.loc[valid_buy_positions, 'profit'] = profits
+    
+    return df
+
 def calculate_sell_save(df, fee=5e-5):
     """
     真正的完全向量化实现，不使用任何循环：
@@ -958,10 +1122,10 @@ def calculate_sell_save(df, fee=5e-5):
     2. 在下一个 action==0 后的下一行的 BASE卖1价 买入
     3. 计算对数收益，考虑交易费用 fee=5e-5
     """
-    # 最后一行添加一个买入点，价格为0.0
+    # 最后一行添加一个买入点，价格为最后一个数据的 BASE买1价 - 0.001
     new_row = {
-        'BASE买1价': 0.001, 
-        'BASE卖1价': 0.002, 
+        'BASE买1价': df['BASE买1价'].iloc[-1], 
+        'BASE卖1价': df['BASE卖1价'].iloc[-1], 
         'before_market_close_sec': 0.0, 
         'valley_peak': 0, 
         'action': 0, 
@@ -1026,6 +1190,52 @@ def calculate_sell_save(df, fee=5e-5):
     # 如果没有有效匹配，直接返回
     if len(final_sell_positions) == 0:
         return df
+
+    # 检查与 final_buy_positions+1 处连续且BASE卖1价相同的个数
+    # 若个数 == 1, 则将 final_buy_positions 向后推延/先前提前
+    if len(final_buy_positions) > 0:
+        # 获取 final_buy_positions+1 处的 BASE卖1价
+        buy_price = df['BASE卖1价'].values[final_buy_positions + 1]
+        # 获取 final_buy_positions 处的 BASE卖1价
+        pre_price = df['BASE卖1价'].values[final_buy_positions]
+        pre_same_price_mask = pre_price == buy_price  # 与前一个数据的价格相同，说明连续且数值相同的数据至少2个
+
+        # 初始化 next_same_price_mask 为全 False，长度与 final_buy_positions 一致
+        next_same_price_mask = np.zeros_like(pre_same_price_mask, dtype=bool)
+        # 获取 final_buy_positions+2 处的 BASE卖1价（可能越界，需检查）
+        next_indices = final_buy_positions + 2
+        next_indices = next_indices[next_indices < len(df)]  # 确保不越界
+
+        # 检查向前是否越界
+        valid_mask = final_buy_positions > 0  # 确保不会向前越界到负数索引
+        if len(next_indices) > 0:
+            next_price = df['BASE卖1价'].values[next_indices]
+            # 向量化的价格比较，检查 buy_price 和 next_price 是否相等
+            same_price_mask = buy_price[:len(next_price)] == next_price  # 与后一个数据的价格相同
+            # 将结果放回对应位置
+            next_same_price_mask[:len(same_price_mask)] = same_price_mask
+            # 个数 == 1 时，需调整 final_buy_positions
+            # 两个 mask 都不满足 > 个数 == 1
+            need_push_mask = (~next_same_price_mask) & (~pre_same_price_mask)
+
+            # next_price <= pre_price 时 或 valid_mask 不合法时，向后推延 (+1)
+            forward_mask = need_push_mask[:len(next_price)] & ((next_price <= pre_price[:len(next_price)]) | ~valid_mask[:len(next_price)])
+            # 初始化最终的 mask
+            final_mask = np.zeros_like(pre_same_price_mask, dtype=bool)
+            final_mask[:len(next_price)] = forward_mask
+            final_buy_positions[final_mask] += 1
+
+            # next_price > pre_price 时，向前推延 (-1)
+            adjust_mask = need_push_mask & valid_mask  # 只有向前推的需要 valid_mask 过滤
+            backward_mask = (next_price > pre_price[:len(next_price)]) & adjust_mask[:len(next_price)]
+            final_mask[:len(next_price)] = backward_mask
+            final_buy_positions[final_mask] -= 1
+        else:
+            # 只判断 pre_same_price_mask
+            need_push_mask = ~pre_same_price_mask
+            # 向后的数据不存在，只能向前
+            adjust_mask = need_push_mask & valid_mask
+            final_buy_positions[adjust_mask] -= 1
     
     # 获取卖出价格（下一行的BASE买1价）和买入价格（下一行的BASE卖1价）
     sell_prices = df['BASE买1价'].values[final_sell_positions + 1]
@@ -1129,6 +1339,7 @@ def reset_profit_sell_save(lob_data):
     # 将满足条件1的行的 profit 置为 0
     lob_data.loc[profit_cond1, 'profit'] = 0
     # 条件2：profit <= 0, 前一行 profit > 0, 且下一个 BASE卖1价 > 当前 BASE卖1价
+    prev_profit = lob_data['profit'].shift(1) #需要重新更新, 可能被 cond1 修改
     profit_cond2 = (lob_data['profit'] <= 0) & (prev_profit > 0) & (next_sell_price > lob_data['BASE卖1价'])
     # 将前一行的profit值赋给当前行
     lob_data.loc[profit_cond2, 'profit'] = prev_profit.loc[profit_cond2]
@@ -1139,6 +1350,7 @@ def reset_profit_sell_save(lob_data):
     # 将满足条件1的行的 sell_save 置为 0
     lob_data.loc[sell_save_cond1, 'sell_save'] = 0
     # 条件2：sell_save <= 0, 前一行 sell_save > 0, 且下一个 BASE买1价 < 当前 BASE买1价
+    prev_sell_save = lob_data['sell_save'].shift(1) #需要重新更新, 可能被 cond1 修改
     sell_save_cond2 = (lob_data['sell_save'] <= 0) & (prev_sell_save > 0) & (next_buy_price < lob_data['BASE买1价'])    
     # 将前一行的sell_save值赋给当前行
     lob_data.loc[sell_save_cond2, 'sell_save'] = prev_sell_save.loc[sell_save_cond2]
@@ -1146,75 +1358,6 @@ def reset_profit_sell_save(lob_data):
     return lob_data
 
 def process_lob_data_extended_0(df):
-    """
-    处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
-    
-    规则:
-    1. 对于profit<=0连续块，若之间无sell_save>0，只保留最后一个块，其余替换为之前最近的profit>0值。
-    2. 对于sell_save<=0连续块，若之间无profit>0，只保留最后一个块，其余替换为之前最近的sell_save>0值。
-    
-    参数:
-    df (pd.DataFrame): 包含'profit'和'sell_save'列的DataFrame，浮点数值，'profit'和'sell_save'不会同时非零。
-    
-    返回:
-    pd.DataFrame: 处理后的DataFrame。
-    """
-    # --- 处理 profit<=0 连续块 ---
-    # 计算每个位置之前最近的profit>0值
-    df['last_pos_profit'] = df['profit'].where(df['profit'] > 0).ffill()
-    
-    # 定义分组，遇到sell_save>0时组号递增
-    df['group_profit'] = (df['sell_save'] > 0).cumsum()
-    
-    # 标记profit<=0且sell_save=0的行
-    df['is_neg_profit'] = (df['profit'] <= 0) & (df['sell_save'] == 0)
-    
-    # 在每个group内，计算连续块的编号
-    df['block_profit'] = df.groupby('group_profit')['is_neg_profit'].transform(
-        lambda x: (x != x.shift()).cumsum()
-    )
-    
-    # 计算每个group内profit<=0的最大块编号
-    temp_profit = df[df['is_neg_profit']].groupby('group_profit')['block_profit'].max()
-    df['group_max_neg_block_profit'] = df['group_profit'].map(temp_profit)
-    
-    # 替换：profit<=0且非最后一个块的行
-    mask_profit = df['is_neg_profit'] & (df['block_profit'] < df['group_max_neg_block_profit'])
-    df.loc[mask_profit, 'profit'] = df.loc[mask_profit, 'last_pos_profit']
-
-    # --- 处理 sell_save<=0 连续块 ---
-    # 计算每个位置之前最近的sell_save>0值
-    df['last_pos_sell_save'] = df['sell_save'].where(df['sell_save'] > 0).ffill()
-    
-    # 定义分组，遇到profit>0时组号递增
-    df['group_sell_save'] = (df['profit'] > 0).cumsum()
-    
-    # 标记sell_save<=0且profit=0的行
-    df['is_neg_sell_save'] = (df['sell_save'] <= 0) & (df['profit'] == 0)
-    
-    # 在每个group内，计算连续块的编号
-    df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
-        lambda x: (x != x.shift()).cumsum()
-    )
-    
-    # 计算每个group内sell_save<=0的最大块编号
-    temp_sell_save = df[df['is_neg_sell_save']].groupby('group_sell_save')['block_sell_save'].max()
-    df['group_max_neg_block_sell_save'] = df['group_sell_save'].map(temp_sell_save)
-    
-    # 替换：sell_save<=0且非最后一个块的行
-    mask_sell_save = df['is_neg_sell_save'] & (df['block_sell_save'] < df['group_max_neg_block_sell_save'])
-    df.loc[mask_sell_save, 'sell_save'] = df.loc[mask_sell_save, 'last_pos_sell_save']
-
-    # --- 清理辅助列 ---
-    df.drop(columns=[
-        'last_pos_profit', 'group_profit', 'is_neg_profit', 'block_profit', 'group_max_neg_block_profit',
-        'last_pos_sell_save', 'group_sell_save', 'is_neg_sell_save', 'block_sell_save', 
-        'group_max_neg_block_sell_save'
-    ], inplace=True)
-    
-    return df
-
-def process_lob_data_extended(df):
     """
     处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
     
@@ -1283,6 +1426,72 @@ def process_lob_data_extended(df):
         'group_max_neg_block_sell_save'
     ], inplace=True)
     
+    return df
+
+def process_lob_data_extended(df):
+    """
+    处理lob_data DataFrame，根据规则调整'profit'和'sell_save'列。
+    
+    规则:
+    1. 对于profit<=0连续块，若之间无action=1，只保留最后一个与action=1相连的块（若无则全不保留），其余替换为之前最近的profit>0值；若无profit>0值，替换为0。
+    2. 对于sell_save<=0连续块，若之间无action=0，只保留最后一个与action=0相连的块（若无则全不保留），其余替换为之前最近的sell_save>0值；若无sell_save>0值，替换为0。
+    
+    参数:
+    df (pd.DataFrame): 包含'profit', 'sell_save'和'action'列的DataFrame，'profit'和'sell_save'为浮点数，'action'为0或1，且'profit'和'sell_save'不会同时非零。
+    
+    返回:
+    pd.DataFrame: 处理后的DataFrame。
+    """
+
+    # --- 处理 profit<=0 连续块 ---
+    df['last_pos_profit'] = df['profit'].where(df['profit'] > 0).ffill().fillna(0)
+    df['is_neg_profit'] = (df['profit'] <= 0) & (df['action'] == 0)# 同时需要action=0
+    df['group_profit'] = (df['action'] == 1).cumsum()
+    df['block_profit'] = df.groupby('group_profit')['is_neg_profit'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    df['next_action'] = df['action'].shift(-1).fillna(0)
+    
+    # 标记最后一个profit<=0块是否与action=1相连
+    df['is_last_block_with_action1'] = False
+    last_blocks = df[df['is_neg_profit']].groupby('group_profit')['block_profit'].max()
+    for group, last_block in last_blocks.items():
+        last_block_rows = df[(df['group_profit'] == group) & (df['block_profit'] == last_block) & (df['is_neg_profit'])]
+        if not last_block_rows.empty:
+            last_row_idx = last_block_rows.index[-1]
+            if df.loc[last_row_idx, 'next_action'] == 1:
+                df.loc[last_block_rows.index, 'is_last_block_with_action1'] = True
+    
+    mask_profit = df['is_neg_profit'] & (~df['is_last_block_with_action1'])
+    df.loc[mask_profit, 'profit'] = df.loc[mask_profit, 'last_pos_profit']
+
+    # --- 处理 sell_save<=0 连续块 ---
+    df['last_pos_sell_save'] = df['sell_save'].where(df['sell_save'] > 0).ffill().fillna(0)
+    df['is_neg_sell_save'] = (df['sell_save'] <= 0) & (df['action'] == 1)# 同时需要action=1
+    df['group_sell_save'] = (df['action'] == 0).cumsum()
+    df['block_sell_save'] = df.groupby('group_sell_save')['is_neg_sell_save'].transform(
+        lambda x: (x != x.shift()).cumsum()
+    )
+    df['is_last_block_with_action0'] = False
+    last_blocks = df[df['is_neg_sell_save']].groupby('group_sell_save')['block_sell_save'].max()
+    for group, last_block in last_blocks.items():
+        last_block_rows = df[(df['group_sell_save'] == group) & (df['block_sell_save'] == last_block) & (df['is_neg_sell_save'])]
+        if not last_block_rows.empty:
+            last_row_idx = last_block_rows.index[-1]
+            if df.loc[last_row_idx, 'next_action'] == 0:
+                df.loc[last_block_rows.index, 'is_last_block_with_action0'] = True
+    
+    mask_sell_save = df['is_neg_sell_save'] & (~df['is_last_block_with_action0'])
+    df.loc[mask_sell_save, 'sell_save'] = df.loc[mask_sell_save, 'last_pos_sell_save']
+
+    # 清理辅助列
+    df.drop(columns=[
+        'last_pos_profit', 'group_profit', 'is_neg_profit', 'block_profit', 
+        'next_action', 'is_last_block_with_action1',
+        'last_pos_sell_save', 'group_sell_save', 'is_neg_sell_save', 'block_sell_save', 
+        'is_last_block_with_action0'
+    ], inplace=True)
+
     return df
 
 def adjust_class_weights_df(predict_df):

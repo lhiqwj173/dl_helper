@@ -26,6 +26,12 @@ from dl_helper.tool import model_params_num
 订单簿 bc 数据集
 目标: 检验模型复杂度对性能的正向提升
 结论: 
+    TCNLob_4 训练爆炸
+    
+    TCNLob_3 最优
+    train_loss	train_acc	train_f1	train_recall
+    0.629298	0.654283	0.654325667	0.654357333
+
 """
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, dilation=1):
