@@ -3,6 +3,7 @@ from pathlib import Path
 import time
 import threading
 from tqdm import tqdm
+import tarfile
 
 from py_ext.alist import alist
 from py_ext.lzma import decompress, compress_folder
@@ -275,7 +276,9 @@ def bt_transfer():
         # 将视频后缀的文件再增加后缀 'file'
         # 避免kaggle识别到视频播放
         for file in os.listdir(local_folder):
-            shutil.move(os.path.join(local_folder, file), os.path.join(output_folder, file + 'file'))
+            shutil.move(os.path.join(local_folder, file), os.path.join(output_folder, file))
+            with tarfile.open(os.path.join(output_folder, file + '.tar'), "w") as tar:
+                tar.add(os.path.join(output_folder, file), arcname=file)
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:
