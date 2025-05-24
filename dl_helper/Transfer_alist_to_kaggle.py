@@ -254,6 +254,7 @@ def bt_transfer():
     alist_folder = r'/completed/'
     local_folder = r'/completed'
     output_folder = r'completed'
+    os.makedirs(output_folder, exist_ok=True)
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156')
 
     files = alist_client.listdir(alist_folder)
