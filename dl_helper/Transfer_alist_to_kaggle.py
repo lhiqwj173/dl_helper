@@ -252,7 +252,8 @@ def bt_transfer():
     """
     # 下载压缩文件
     alist_folder = r'/completed/'
-    local_folder = r'completed'
+    local_folder = r'/completed'
+    output_folder = r'completed'
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156')
 
     files = alist_client.listdir(alist_folder)
@@ -269,11 +270,11 @@ def bt_transfer():
         # 若是视频文件，执行一边压缩脚本
         process_folder(local_folder, 2500)
 
-    # 将视频后缀的文件再增加后缀 '.file'
-    # 避免kaggle识别到视频播放
-    for file in os.listdir(local_folder):
-        if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
-            os.rename(os.path.join(local_folder, file), os.path.join(local_folder, file + 'file'))
+        # 移动到 output_folder
+        # 将视频后缀的文件再增加后缀 'file'
+        # 避免kaggle识别到视频播放
+        for file in os.listdir(local_folder):
+            shutil.move(os.path.join(local_folder, file), os.path.join(output_folder, file + 'file'))
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:

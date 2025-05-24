@@ -177,6 +177,11 @@ class LobExpert_file():
         lob_data.loc[pm_cond, 'sell_save'] = pm_res['sell_save'].values
 
         # 处理非最后一个的 profit <= 0/ sell_save <= 0 块
+        # TODO 对比是性能是否有差异，若无明显差异则不应该使用过滤代码
+        # 使用理由: 合理推测 非最后一个 profit<=0 的时点，应该无法预测之后的盈利点位（可能距离很远，中间还有下跌存在 profit>0 的时点）
+        # 预期: 
+        #   使用代码,模型的评价指标应该会上升，但在实盘中可能导致在无法盈利的点位买进，在无法节省盈利的点位卖出
+        #   不使用代码,模型可能无法很好的预测，因为可能使用了很长的未来数据，而模型凭当下的input无法做出对应的预测
         lob_data = process_lob_data_extended(lob_data)
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
@@ -303,9 +308,12 @@ class LobExpert_file():
                             # 价格与当前一致
                             (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
                             (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
-                                # 与 第一行数据之间没有发生 BASE卖1价 的下跌
-                                (data['BASE卖1价'].lt(data['BASE卖1价'].cummax()).cumsum() == 0) & \
-                                (data['BASE买1价'].lt(data['BASE买1价'].cummax()).cumsum() == 0)
+                                # 与 第一行数据之间没有发生 BASE卖1价 的下跌(小于第一行 BASE卖1价 的个数为0)
+                                # TODO 需要实验测试
+                                # 1. 不允许下跌
+                                # 2. 不允许仍和的变化
+                                ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
+                                ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
                                 ]) > 0:
                     res = ACTION_BUY
                 else:
@@ -319,9 +327,9 @@ class LobExpert_file():
                         (data['sell_save'] > 0) & \
                             (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
                             (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
-                                # 与 第一行数据之间没有发生 BASE买1价 的上涨
-                                (data['BASE买1价'].gt(data['BASE买1价'].cummin()).cumsum() == 0) & \
-                                (data['BASE卖1价'].gt(data['BASE卖1价'].cummin()).cumsum() == 0)
+                                # 与 第一行数据之间没有发生 BASE买1价 的上涨(小于第一行 BASE买1价 的个数为0)
+                                ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
+                                ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
                                 ]) > 0:
                     res = ACTION_SELL
                 else:
