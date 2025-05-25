@@ -279,6 +279,8 @@ def bt_transfer():
             shutil.move(os.path.join(local_folder, file), os.path.join(output_folder, file))
             with tarfile.open(os.path.join(output_folder, file + '.tar'), "w") as tar:
                 tar.add(os.path.join(output_folder, file), arcname=file)
+            # 删除原文件
+            os.remove(os.path.join(output_folder, file))
 
 if __name__ == '__main__':
     for arg in sys.argv[1:]:
