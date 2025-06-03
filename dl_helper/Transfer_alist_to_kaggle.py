@@ -239,7 +239,7 @@ def only_transfer():
     # 下载压缩文件
     alist_folder = r'/only_transfer/'
     local_folder = r'transfer'
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244')
     files = alist_client.listdir(alist_folder)
 
     for file in files:

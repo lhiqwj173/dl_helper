@@ -1,4 +1,4 @@
-import os, gc, time, datetime
+import os, gc, time, datetime, shutil
 import pandas as pd
 import pytz 
 import pickle
@@ -130,8 +130,15 @@ class LobTrajectoryDataset(Dataset):
         # 控制样本均衡
         self.data_type = data_type
 
-        if not data_dict:
-            data_dict = self._load_data_dict(data_folder)
+        if data_dict:
+            # 先储存到tmp 目录，在读取
+            data_folder = os.path.join(os.getenv('TEMP'), 'lob_data')
+            if os.path.exists(data_folder):
+                shutil.rmtree(data_folder)
+            os.makedirs(data_folder)
+            pickle.dump(data_dict, open(os.path.join(data_folder, 'data_dict.pkl'), 'wb'))
+
+        data_dict = self._load_data_dict(data_folder)
         fix_data_dict = {}
         # 修改键为 symbol > symbol_id
         for k in list(data_dict.keys()):
@@ -278,82 +285,185 @@ class LobTrajectoryDataset(Dataset):
             for _file in _files:
                 if _file.endswith('.pkl'):
                     file_paths.append(os.path.join(root, _file))
+        file_paths.sort()
 
         if len(file_paths) == 0:
             raise ValueError(f"没有找到任何 pkl 文件")
 
-        elif len(file_paths) == 1:
-            data_dict = pickle.load(open(file_paths[0], 'rb'))
+        elif len(file_paths) >= 3:
+            # 多文件情况, 分割 训练/验证/测试集
+            if len(file_paths) >= 60:
+                # 最后40个日期文件作为 val/ test
+                if self.data_type == 'train':
+                    file_paths = file_paths[:-40]
+                elif self.data_type == 'val':
+                    file_paths = file_paths[-40:-20]
+                elif self.data_type == 'test':
+                    file_paths = file_paths[-20:]
+            else:
+                if self.data_type == 'train':
+                    file_paths = file_paths[:-2]
+                elif self.data_type == 'val':
+                    file_paths = [file_paths[-2]]
+                elif self.data_type == 'test':
+                    file_paths = [file_paths[-1]]
 
-        else:
-            # 多文件情况
-            # 首先遍历一遍所有文件，获取每个键值和子键值的总长度
-            key_shape = {}  # 记录数据结构
-            key_lengths = {}    # 记录每个键值的总长度
+        # 首先遍历一遍所有文件，获取每个键值和子键值的总长度
+        key_shape = {}  # 记录数据结构
+        key_lengths = {}    # 记录每个键值的总长度
 
-            # 最后40个日期文件作为 val/ test
-            if self.data_type == 'train':
-                file_paths = file_paths[:-40]
-            elif self.data_type == 'val':
-                file_paths = file_paths[-40:-20]
-            elif self.data_type == 'test':
-                file_paths = file_paths[-20:]
+        # 统计各个标的下 样本 obs[-2] == 0 / 1 下， acts 的 0/1 数量
+        key_type_sample_idxs = {}
+        key_total_cur_length = {}
+        
+        # 第一遍遍历：了解数据结构和计算总长度
+        for file_path in file_paths:
+            _data_dict = pickle.load(open(file_path, 'rb'))
             
-            # 第一遍遍历：了解数据结构和计算总长度
-            for file_path in file_paths:
-                _data_dict = pickle.load(open(file_path, 'rb'))
+            for key, value in _data_dict.items():
+                if key not in key_lengths:
+                    # 初始化
+                    key_lengths[key] = 0
+                    key_shape[key] = {}
+                    for k, v in value.items():
+                        key_shape[key][k] = v.shape
+                    key_type_sample_idxs[key] = {
+                        'obs_0_act_0': np.array([], dtype=np.int32),
+                        'obs_0_act_1': np.array([], dtype=np.int32),
+                        'obs_1_act_0': np.array([], dtype=np.int32),
+                        'obs_1_act_1': np.array([], dtype=np.int32),
+                    }
+                    key_total_cur_length[key] = 0
+
+                # 累加样本长度
+                key_lengths[key] += value['obs'].shape[0]
+
+                # 统计样本 obs[-2] == 0 / 1 下， acts 的 0/1 数量
+                obs_feature = value['obs'][:, -2]
+                act = value['acts']
+                obs_0_mask = obs_feature == 0
+                obs_1_mask = obs_feature == 1
+
+                # 获取各类样本的索引
+                # 若类型的样本不存在，返回空数组
+                obs_0_act_0_idx = np.where((act == 0) & obs_0_mask)[0]
+                obs_0_act_0_idx = (obs_0_act_0_idx + key_total_cur_length[key]) if len(obs_0_act_0_idx) > 0 else np.array([], dtype=np.int32)
+                obs_0_act_1_idx = np.where((act == 1) & obs_0_mask)[0]
+                obs_0_act_1_idx = (obs_0_act_1_idx + key_total_cur_length[key]) if len(obs_0_act_1_idx) > 0 else np.array([], dtype=np.int32)
+                obs_1_act_0_idx = np.where((act == 0) & obs_1_mask)[0]
+                obs_1_act_0_idx = (obs_1_act_0_idx + key_total_cur_length[key]) if len(obs_1_act_0_idx) > 0 else np.array([], dtype=np.int32)
+                obs_1_act_1_idx = np.where((act == 1) & obs_1_mask)[0]
+                obs_1_act_1_idx = (obs_1_act_1_idx + key_total_cur_length[key]) if len(obs_1_act_1_idx) > 0 else np.array([], dtype=np.int32)
+                key_total_cur_length[key] += value['obs'].shape[0]
+
+                # 合并索引
+                key_type_sample_idxs[key]['obs_0_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_0'], obs_0_act_0_idx])
+                key_type_sample_idxs[key]['obs_0_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_1'], obs_0_act_1_idx])
+                key_type_sample_idxs[key]['obs_1_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_0'], obs_1_act_0_idx])
+                key_type_sample_idxs[key]['obs_1_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_1'], obs_1_act_1_idx])
+
+                assert value['obs'].shape[0] == value['acts'].shape[0], f"obs/acts 数据长度不一致: {value['obs'].shape[0]} != {value['acts'].shape[0]}"
+        
+        # 计算均衡后的样本数
+        if self.data_type == 'train':
+            for key in key_type_sample_idxs:
+                total_samples = key_lengths[key]
+                # pos 0/1 分类的最小样本数
+                pos_0_min_sampel_length = min(key_type_sample_idxs[key]['obs_0_act_0'].shape[0], key_type_sample_idxs[key]['obs_0_act_1'].shape[0])
+                pos_1_min_sampel_length = min(key_type_sample_idxs[key]['obs_1_act_0'].shape[0], key_type_sample_idxs[key]['obs_1_act_1'].shape[0])
+                # 随机打乱
+                np.random.shuffle(key_type_sample_idxs[key]['obs_0_act_0'])
+                np.random.shuffle(key_type_sample_idxs[key]['obs_0_act_1'])
+                np.random.shuffle(key_type_sample_idxs[key]['obs_1_act_0'])
+                np.random.shuffle(key_type_sample_idxs[key]['obs_1_act_1'])
+                # 截取最小样本数
+                key_type_sample_idxs[key]['obs_0_act_0'] = key_type_sample_idxs[key]['obs_0_act_0'][:pos_0_min_sampel_length]
+                key_type_sample_idxs[key]['obs_0_act_1'] = key_type_sample_idxs[key]['obs_0_act_1'][:pos_0_min_sampel_length]
+                key_type_sample_idxs[key]['obs_1_act_0'] = key_type_sample_idxs[key]['obs_1_act_0'][:pos_1_min_sampel_length]
+                key_type_sample_idxs[key]['obs_1_act_1'] = key_type_sample_idxs[key]['obs_1_act_1'][:pos_1_min_sampel_length]
+                # 再排序，用于最后的读取
+                key_type_sample_idxs[key]['obs_0_act_0'].sort()
+                key_type_sample_idxs[key]['obs_0_act_1'].sort()
+                key_type_sample_idxs[key]['obs_1_act_0'].sort()
+                key_type_sample_idxs[key]['obs_1_act_1'].sort()
+                # 修正样本数
+                key_lengths[key] = (pos_0_min_sampel_length + pos_1_min_sampel_length) * 2
                 
-                for key, value in _data_dict.items():
-                    if key not in key_lengths:
-                        key_lengths[key] = 0
-                        key_shape[key] = {}
-                        for k, v in value.items():
-                            key_shape[key][k] = v.shape
-                    
-                    # 累加样本长度
-                    key_lengths[key] += value['obs'].shape[0]
-
-                    # 训练集需要均衡
-                    if self.data_type == 'train':
-                        key_lengths[key] -= value['balance_del_idx'].shape[0]
-
-                    assert value['obs'].shape[0] == value['acts'].shape[0], f"obs/acts 数据长度不一致: {value['obs'].shape[0]} != {value['acts'].shape[0]}"
+        # 创建最终数据字典并预分配空间
+        data_dict = {}
+        for key, length in key_lengths.items():
+            data_dict[key] = {}
+            for k in ['obs', 'acts']:
+                # 为每个子键值预分配空间
+                data_dict[key][k] = np.empty([key_lengths[key]] + list(key_shape[key][k][1:]), dtype=np.float32)
+        
+        # 第二遍遍历：填充数据
+        position = {key: {k: 0 for k in sub_keys} for key, sub_keys in key_shape.items()}
+        
+        key_total_cur_length = {}
+        for file_path in file_paths:
+            _data_dict = pickle.load(open(file_path, 'rb'))
             
-            # 创建最终数据字典并预分配空间
-            data_dict = {}
-            for key, length in key_lengths.items():
-                data_dict[key] = {}
+            for key, value in _data_dict.items():
+                # 待填充数据长度
+                length = value['obs'].shape[0]
+
+                # 初始化 key_total_cur_length
+                if key not in key_total_cur_length:
+                    key_total_cur_length[key] = 0
+
+                # 训练集需要均衡
+                if self.data_type == 'train':
+                    # 截取范围 key_total_cur_length[key]开始的 length 个索引
+                    begin = key_total_cur_length[key]
+                    end = begin + length
+
+                    # 合并所有索引
+                    keep_sample_idx = np.concatenate([
+                        key_type_sample_idxs[key]['obs_0_act_0'],
+                        key_type_sample_idxs[key]['obs_0_act_1'], 
+                        key_type_sample_idxs[key]['obs_1_act_0'],
+                        key_type_sample_idxs[key]['obs_1_act_1']
+                    ])
+
+                    cur_file_use_idx = keep_sample_idx[(keep_sample_idx >= begin) & (keep_sample_idx < end)]
+                    # 截取数据
+                    local_idx = cur_file_use_idx - begin
+                    value['obs'] = value['obs'][local_idx]
+                    value['acts'] = value['acts'][local_idx]
+
+                # 更新位置
+                key_total_cur_length[key] += length
+
+                # 更新 length
+                length = value['obs'].shape[0]
+
                 for k in ['obs', 'acts']:
-                    # 为每个子键值预分配空间
-                    data_dict[key][k] = np.empty([key_lengths[key]] + list(key_shape[key][k][1:]), dtype=np.float32)
-            
-            # 第二遍遍历：填充数据
-            position = {key: {k: 0 for k in sub_keys} for key, sub_keys in key_shape.items()}
-            
-            for file_path in file_paths:
-                _data_dict = pickle.load(open(file_path, 'rb'))
-                
-                for key, value in _data_dict.items():
-                    # 待填充数据长度
-                    length = value['obs'].shape[0]
+                    # 当前位置
+                    current_pos = position[key][k]
 
-                    # 训练集需要均衡
-                    if self.data_type == 'train':
-                        wait_del_idx = value['balance_del_idx']
-                        length -= wait_del_idx.shape[0]
-                        # 删除数据
-                        value['obs'] = np.delete(value['obs'], wait_del_idx, axis=0)
-                        value['acts'] = np.delete(value['acts'], wait_del_idx, axis=0)
+                    # 拷贝数据到预分配的数组中
+                    data_dict[key][k][current_pos:current_pos + length] = value[k]
+                    
+                    # 更新位置
+                    position[key][k] += length
 
-                    for k in ['obs', 'acts']:
-                        # 当前位置
-                        current_pos = position[key][k]
-
-                        # 拷贝数据到预分配的数组中
-                        data_dict[key][k][current_pos:current_pos + length] = value[k]
-                        
-                        # 更新位置
-                        position[key][k] += length
+        # 检查是否样本均衡
+        if self.data_type == 'train':
+            for key in data_dict:
+                # 获取样本数
+                obs_feature = data_dict[key]['obs'][:, -2]
+                act = data_dict[key]['acts']
+                obs_0_mask = obs_feature == 0
+                obs_1_mask = obs_feature == 1
+                # 获取各类样本数量
+                obs_0_act_0_num = len(np.where((act == 0) & obs_0_mask)[0])
+                obs_0_act_1_num = len(np.where((act == 1) & obs_0_mask)[0])
+                obs_1_act_0_num = len(np.where((act == 0) & obs_1_mask)[0])
+                obs_1_act_1_num = len(np.where((act == 1) & obs_1_mask)[0])
+                # 检查是否均衡
+                assert obs_0_act_0_num == obs_0_act_1_num and obs_1_act_0_num == obs_1_act_1_num, \
+                    f"样本不均衡: {obs_0_act_0_num} != {obs_0_act_1_num} or {obs_1_act_0_num} != {obs_1_act_1_num}"
 
         return data_dict
 
@@ -416,6 +526,11 @@ class LobTrajectoryDataset(Dataset):
         # 返回 final_obs(x), act(y)
         return final_obs, act
     
+def test_trajectory_dataset():
+    data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data_20250518'
+    dataset = LobTrajectoryDataset(data_folder=data_folder)
+    print(len(dataset))
+
 def test_lob_trajectory_dataset_num_limit():
     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data'
     dataset = LobTrajectoryDataset(data_folder=data_folder, sample_num_limit=5)
@@ -517,9 +632,9 @@ def test_lob_trajectory_dataset_correct():
         assert np.array_equal(dataset_obs, real_obs)
 
 if __name__ == "__main__":
-    # test_trajectory_dataset()
+    test_trajectory_dataset()
     # test_lob_trajectory_dataset()
     # test_lob_trajectory_dataset_correct()
     # test_lob_trajectory_dataset_multi_file()
     # test_lob_trajectory_dataset_dataloader()
-    test_lob_trajectory_dataset_num_limit()
+    # test_lob_trajectory_dataset_num_limit()

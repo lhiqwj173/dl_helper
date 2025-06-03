@@ -671,6 +671,10 @@ def _find_max_profitable_trades(bid, ask, mid, peaks, valleys, peaks_num_points,
             continue
 
         if t1 + 1 == t2:
+            if t2 == len(mid) - 1:
+                # 波峰波谷连接，且是最后一个点
+                # 直接跳出
+                break
             raise Exception(f't1 + 1 == t2')
 
             # 波谷与波峰连续，没有留有成交空间
@@ -993,58 +997,6 @@ def plot_trades_plt(mid, trades, valleys, peaks, bid=None, ask=None, figsize=(10
     # 显示图表
     plt.show()
 
-def calculate_profit_0(df, fee=5e-5):
-    """
-    完全向量化的高效实现
-    参数:
-    df: 包含 'BASE买1价', 'BASE卖1价', 'action' 列的DataFrame
-    
-    返回:
-    添加了 'profit' 列的DataFrame
-    所有action==0的行, 用BASE卖1价买入，下一个action==1时用BASE买1价卖出，的收益
-    """
-    # 初始化profit列为0
-    df['profit'] = 0.0
-    
-    # 创建信号变化标记，找到买入卖出配对
-    # 1. 标记每个信号的索引位置
-    buy_idx = np.where(df['action'] == 0)[0]
-    sell_idx = np.where(df['action'] == 1)[0]
-    
-    if len(buy_idx) == 0 or len(sell_idx) == 0:
-        return df
-    
-    # 2. 对每个买入位置，找到后面第一个卖出位置
-    next_sell_positions = {}
-    sell_pos = 0
-    
-    for buy_pos in buy_idx:
-        # 找到第一个大于当前买入位置的卖出位置
-        while sell_pos < len(sell_idx) and sell_idx[sell_pos] <= buy_pos:
-            sell_pos += 1
-            
-        if sell_pos < len(sell_idx):
-            next_sell_positions[buy_pos] = sell_idx[sell_pos]
-    
-    # 3. 批量计算所有利润
-    buy_positions = np.array(list(next_sell_positions.keys()))
-    sell_positions = np.array(list(next_sell_positions.values()))
-    
-    if len(buy_positions) > 0:
-        # 获取价格数组（避免逐个loc访问）
-        buy_prices = df.loc[buy_positions+1, 'BASE卖1价'].values
-        sell_prices = df.loc[sell_positions+1, 'BASE买1价'].values
-        
-        # 向量化计算利润
-        buy_cost = buy_prices* (1 + fee)
-        sell_income = sell_prices * (1 - fee)
-        profits = np.log(sell_income / buy_cost)
-        
-        # 一次性更新利润
-        df.loc[buy_positions, 'profit'] = profits
-    
-    return df
-
 def calculate_profit(df, fee=5e-5):
     """
     完全向量化的高效实现
@@ -1284,15 +1236,15 @@ def calculate_sell_save(df, fee=5e-5):
 
     return df
 
-def filte_no_move(df, no_move_threshold=50):
+def filte_no_move_profit(df, no_move_threshold=50):
     """
     去除超过阈值价格没有波动的连续块
     功能一：连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
             会保留最后一个 no move 的买入动作，因为之后价格开始变化（信号变动有效）
-    功能二（修改）：去除剩余的 profit>0 且时点价格波动小于 0.001 的连续块
+    功能二（修改）：去除剩余的 profit>0 且时点价格波动小于 0.0012 的连续块
             找到超过阈值的每组第一行之前连续的 profit>0 范围，
             向前至 profit<=0 或前一个超过阈值的组的末尾，
-            若范围内 BASE卖1价 的 min/max 之差 == 0.001，则将这个范围内的 profit 置为 0
+            若范围内 BASE卖1价 的 min/max 之差 < 0.0012，则将这个范围内的 profit 置为 0
     """
     # 检测 mid_price 是否变化（与前一行比较）
     mid = df['BASE卖1价'] + df['BASE买1价']
@@ -1348,6 +1300,182 @@ def filte_no_move(df, no_move_threshold=50):
     
     # 功能一：超过阈值的组的 profit 置为 0
     df.loc[no_move_len > no_move_threshold, 'profit'] = 0
+    
+    return df
+
+def filte_no_move(df, no_move_threshold=50):
+    """
+    去除超过阈值价格没有波动的连续块，处理 profit 和 sell_save 两列
+    功能一（profit）：连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
+                     会保留最后一个 no move 的买入动作，因为之后价格开始变化（信号变动有效）
+    功能二（profit）：去除剩余的 profit>0 且时点价格波动小于 0.0012 的连续块
+                     找到超过阈值的每组第一行之前连续的 profit>0 范围，
+                     向前至 profit<=0 或前一个超过阈值的组的末尾，
+                     若范围内 BASE卖1价 的 min/max 之差 < 0.0012，则将这个范围内的 profit 置为 0
+    功能一（sell_save）：连续 no move 超过阈值个，持仓情况下不进行卖出（sell_save=0）
+                        会保留最后一个 no move 的卖出动作，因为之后价格开始变化（信号变动有效）
+    功能二（sell_save）：去除剩余的 sell_save>0 且时点价格波动小于 0.0012 的连续块
+                        找到超过阈值的每组第一行之前连续的 sell_save>0 范围，
+                        向前至 sell_save<=0 或前一个超过阈值的组的末尾，
+                        若范围内 BASE买1价 的 min/max 之差 < 0.0012，则将这个范围内的 sell_save 置为 0
+    """
+    # 检测 mid_price 是否变化（与前一行比较）
+    mid = df['BASE卖1价'] + df['BASE买1价']
+    changes = mid.ne(mid.shift(1))  # 标记价格变化的位置
+    # 使用 cumsum() 创建分组，相同值的连续段属于同一组
+    groups = changes.cumsum()
+    # 计算每个组的长度
+    group_lengths = df.groupby(groups).size()
+    # 将每个组的长度映射回原始 DataFrame
+    no_move_len = groups.map(group_lengths)
+    # 标记每组的最后一行
+    is_last_in_group = mid.ne(mid.shift(-1)) | df.index.isin([len(df)-1])
+    # 将每组最后一个值的 no_move_len 设为 0
+    no_move_len[is_last_in_group] = 0
+    
+    # 找到超过阈值的组
+    over_threshold_groups = group_lengths[group_lengths > no_move_threshold].index
+    
+    # 获取所有超过阈值的组的末尾索引
+    group_end_indices = {}
+    for group in over_threshold_groups:
+        group_end_idx = df[groups == group].index[-1]
+        group_end_indices[group] = group_end_idx
+    
+    def find_max_mid_value(range_data):
+        range_mid = (range_data['BASE卖1价'] + range_data['BASE买1价']) / 2
+        mid_set = range_mid.drop_duplicates().sort_values(ascending=False)
+        # 遍历 mid_set，连续的最大值的最后一个
+        max_idx = -1
+        max_mid_value = 0
+        range_mid = range_mid.values
+        for max_v in mid_set:
+            _idx = np.where(range_mid == max_v)[0]
+            for _i in _idx[::-1]:
+                if range_mid[_i] == range_mid[_i-1]:
+                    max_idx = _i
+                    max_mid_value = max_v
+                    break
+            if max_mid_value != 0:
+                break
+        return max_idx, max_mid_value
+    
+    def find_min_mid_value(range_data):
+        """
+        找到最后一个正值索引 last_idx，
+        last_idx 之前的数据，若正值保留，若非正值用向前最近的正值替换
+        """
+        range_mid = (range_data['BASE卖1价'] + range_data['BASE买1价']) / 2
+        mid_set = range_mid.drop_duplicates().sort_values()
+        # 遍历 mid_set，连续的最小值的最后一个
+        min_idx = -1
+        min_mid_value = 0
+        range_mid = range_mid.values
+        for min_v in mid_set:
+            _idx = np.where(range_mid == min_v)[0]
+            for _i in _idx[::-1]:
+                if range_mid[_i] == range_mid[_i-1]:
+                    min_idx = _i
+                    min_mid_value = min_v
+                    break
+            if min_mid_value != 0:
+                break
+        return min_idx, min_mid_value
+        
+    def fill_with_last_positive(arr):
+        arr = arr.copy()
+        pos_indices = np.where(arr > 0)[0]
+        if len(pos_indices) == 0:
+            return arr
+
+        last_idx = pos_indices[-1]
+        prefix = arr[:last_idx]
+
+        # 标记正值的位置，其它为 False
+        is_pos = prefix > 0
+        # 创建索引数组，用于跟踪每个位置上一个正值的索引
+        last_pos_idx = np.where(is_pos, np.arange(len(prefix)), -1)
+        last_pos_idx = np.maximum.accumulate(last_pos_idx)
+
+        # 替换 <= 0 的位置
+        replace_mask = (prefix <= 0) & (last_pos_idx != -1)
+        arr[:last_idx][replace_mask] = prefix[last_pos_idx[replace_mask]]
+
+        return arr
+
+    # 处理功能二：查找连续 profit>0 和 sell_save>0 的范围并检查价格波动
+    for group in over_threshold_groups:
+        # 找到该组的起始索引
+        group_start_idx = df[groups == group].index[0]
+        
+        # 获取前一个超过阈值的组的末尾索引（如果存在）
+        prev_group_end_idx = max(
+            [end_idx for g, end_idx in group_end_indices.items() if end_idx < group_start_idx],
+            default=-1
+        )
+        prev_group_end_idx -= 1
+        
+        # --- 处理 profit ---
+        # 向前查找连续 profit>0 的范围
+        current_idx = group_start_idx - 1
+        profit_positive_start = group_start_idx  # 默认设为组开始位置
+        while current_idx > prev_group_end_idx and current_idx >= 0 and df.iloc[current_idx]['action'] == 0:
+            profit_positive_start = current_idx
+            current_idx -= 1
+        # 如果找到了 profit>0 的范围
+        if profit_positive_start < group_start_idx:
+            # 检查 BASE卖1价 的 min/max 之差
+            range_data = df.loc[profit_positive_start:group_start_idx+1, :]
+            price_range = range_data['BASE卖1价']
+            if price_range.max() - price_range.min() < 0.0012:
+                # 将范围内 profit 置为 0
+                df.loc[profit_positive_start:group_start_idx+1, 'profit'] = 0
+            else:
+                # 检查 这个区间是否也满足可盈利 TODO
+                # 按照区间最后一个最高价格作为卖出价（必须是连续的，数量>1）
+                max_idx, max_mid_value = find_max_mid_value(range_data)
+                # 时间大于等于卖出价时刻-1的 profit 置为 0
+                df.loc[range_data.iloc[max_idx-1:].index, 'profit'] = 0
+                # 时间早于卖出时刻-1的 profit 重新计算: 下一个时刻卖1价买入成交， 卖出价时刻的买1价卖出成交，计算 profit
+                buy_cost = range_data.iloc[1:max_idx]['BASE卖1价'] * (1 + 5e-5)
+                sell_gain = range_data.iloc[max_idx]['BASE买1价'] * (1 - 5e-5)
+                profit = np.log(sell_gain / buy_cost)
+                profit = fill_with_last_positive(profit.values)
+                df.loc[range_data.iloc[:max_idx-1].index, 'profit'] = profit
+
+        # --- 处理 sell_save ---
+        # 向前查找连续 sell_save>0 的范围
+        current_idx = group_start_idx - 1
+        sell_save_positive_start = group_start_idx  # 默认设为组开始位置
+        while current_idx > prev_group_end_idx and current_idx >= 0 and df.iloc[current_idx]['action'] == 1:
+            sell_save_positive_start = current_idx
+            current_idx -= 1
+        # 如果找到了 sell_save>0 的范围
+        if sell_save_positive_start < group_start_idx:
+            # 检查 BASE买1价 的 min/max 之差
+            range_data = df.iloc[sell_save_positive_start:group_start_idx+1, :]
+            print(sell_save_positive_start, group_start_idx, len(df))
+            range_data.to_csv(r"C:\Users\lh\Desktop\temp\range_data.csv", encoding='gbk')
+            price_range = range_data['BASE买1价']
+            if price_range.max() - price_range.min() < 0.0012:
+                # 将范围内 sell_save 置为 0
+                df.loc[sell_save_positive_start:group_start_idx+1, 'sell_save'] = 0
+            else:
+                # 检查 这个区间是否也满足可节省 TODO
+                # 按照区间最后一个最低价格作为买入价（必须是连续的，数量>1）
+                min_idx, min_mid_value = find_min_mid_value(range_data)
+                # 时间大于等于买入价时刻-1的 sell_save 置为 0
+                df.loc[range_data.iloc[min_idx-1:].index, 'sell_save'] = 0
+                # 时间早于买入时刻-1的 sell_save 重新计算: 下一个时刻买1价卖出成交， 买入价时刻的卖1价买入成交，计算 sell_save
+                buy_cost = range_data.iloc[min_idx]['BASE卖1价'] * (1 + 5e-5)
+                sell_gain = range_data.iloc[1:min_idx]['BASE买1价'] * (1 - 5e-5)
+                sell_save = np.log(sell_gain / buy_cost)
+                sell_save = fill_with_last_positive(sell_save.values)
+                df.loc[range_data.iloc[:min_idx-1].index, 'sell_save'] = sell_save
+
+    
+    # 功能一：超过阈值的组的 profit 和 sell_save 置为 0
+    df.loc[no_move_len > no_move_threshold, ['profit', 'sell_save']] = 0
     
     return df
 
