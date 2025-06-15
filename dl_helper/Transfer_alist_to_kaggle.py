@@ -342,7 +342,7 @@ def compress_video_gpu_0(file_path, target_size_gb=1.90, audio_bitrate_kbps=128)
     shutil.move(temp_output, file_path)
     print(f"✅ GPU压缩完成，原文件已替换")
 
-def compress_with_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
+def compress_video_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
     import tempfile
 
     target_size_bytes = int(target_size_gb * 1024 ** 3)
@@ -389,7 +389,6 @@ def compress_with_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
             attempt += 1
 
     raise RuntimeError("多次尝试后仍未压缩到目标体积内")
-
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
