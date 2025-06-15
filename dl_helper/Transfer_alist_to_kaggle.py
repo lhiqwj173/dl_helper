@@ -327,8 +327,10 @@ def compress_video_gpu(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     # 使用 hevc_nvenc 编码
     cmd_nvenc = [
         "ffmpeg", "-y", "-hwaccel", "cuda", "-i", file_path,
-        "-c:v", "hevc_nvenc", "-b:v", f"{video_bitrate}", "-maxrate", f"{video_bitrate}",
-        "-rc", "vbr_hq", "-cq", "19", "-preset", "slow",
+        "-c:v", "hevc_nvenc", "-rc", "vbr",
+        "-b:v", f"{video_bitrate}", "-maxrate", f"{video_bitrate}",
+        "-bufsize", f"{video_bitrate * 2}",
+        "-preset", "p4", "-multipass", "fullres",
         "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
         temp_output
     ]
