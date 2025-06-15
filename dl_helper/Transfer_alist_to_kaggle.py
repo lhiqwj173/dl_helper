@@ -4,6 +4,7 @@ import time
 import threading
 from tqdm import tqdm
 import tarfile
+import tempfile
 
 from py_ext.alist import alist
 from py_ext.lzma import decompress, compress_folder
@@ -343,7 +344,6 @@ def compress_video_gpu_0(file_path, target_size_gb=1.90, audio_bitrate_kbps=128)
     print(f"✅ GPU压缩完成，原文件已替换")
 
 def compress_video_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
-    import tempfile
 
     target_size_bytes = int(target_size_gb * 1024 ** 3)
     temp_output = tempfile.mktemp(suffix=".mp4")
@@ -389,6 +389,64 @@ def compress_video_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
             attempt += 1
 
     raise RuntimeError("多次尝试后仍未压缩到目标体积内")
+
+def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
+    """
+    使用 NVIDIA GPU 压缩视频为 H.265，目标为 720p 分辨率，控制在指定体积以内。
+    使用 CRF-like cq 参数动态调节质量（使用原视频多次尝试，不重复压缩已压缩结果）。
+    """
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    audio_bitrate = audio_bitrate_kbps * 1000  # bps
+
+    # 获取视频时长
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    result = subprocess.run(cmd_duration, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("无法获取视频时长")
+    duration = float(result.stdout.strip())
+
+    temp_output = tempfile.mktemp(suffix=".mp4")
+
+    # 动态调整 CQ 值（类似 CRF，范围建议 23~35）
+    cq = 23
+    max_cq = 35
+    attempt = 0
+
+    while cq <= max_cq:
+        print(f"🎬 尝试 CRF (cq) = {cq} ...")
+
+        cmd = [
+            "ffmpeg", "-y", "-hwaccel", "cuda", "-i", file_path,
+            "-vf", "scale=-2:720",
+            "-c:v", "hevc_nvenc",
+            "-rc", "vbr", "-cq", str(cq),
+            "-preset", "p4",
+            "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+            temp_output
+        ]
+
+        subprocess.run(cmd, check=True)
+
+        if not os.path.exists(temp_output):
+            raise RuntimeError("压缩失败")
+
+        final_size = os.path.getsize(temp_output)
+        print(f"📦 文件大小：{final_size / 1024 ** 3:.2f} GB")
+
+        if final_size <= target_size_bytes:
+            shutil.move(temp_output, file_path)
+            print(f"✅ 成功压缩并替换原文件（cq={cq}）")
+            return
+        else:
+            print(f"⚠️ 超出体积，尝试更高 CRF（更低画质）...")
+            cq += 1
+            attempt += 1
+
+    raise RuntimeError("❌ 多次尝试后仍无法压缩至目标体积内")
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
