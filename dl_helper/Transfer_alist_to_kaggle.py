@@ -229,7 +229,7 @@ def compress_video_1(file_path, target_bitrate=None, codec='h264'):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
-def compress_video(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+def compress_video_2(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     """
     压缩视频到指定大小（默认1.95GB）并保留最大质量（H.265双遍编码）
     使用 subprocess.Popen 调用 ffmpeg，压缩完成后替换原文件
@@ -294,6 +294,53 @@ def compress_video(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     shutil.move(file_path, backup_path)
     shutil.move(temp_output, file_path)
     print(f"✅ 压缩完成，原文件已替换（备份: {backup_path}）")
+
+def compress_video(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+    """
+    使用 NVIDIA GPU 压缩视频（hevc_nvenc），目标体积不超过 target_size_gb（默认1.95GB）
+    """
+
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    temp_output = file_path + ".temp_compressed.mp4"
+
+    # 获取视频时长（秒）
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    duration_result = subprocess.run(cmd_duration, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        duration = float(duration_result.stdout.strip())
+    except ValueError:
+        raise RuntimeError("无法获取视频时长")
+
+    total_bitrate = target_size_bytes * 8 / duration
+    audio_bitrate = audio_bitrate_kbps * 1000
+    video_bitrate = int(total_bitrate - audio_bitrate)
+
+    print(f"🎯 Using NVIDIA GPU: hevc_nvenc")
+    print(f"⏱ Duration: {duration:.2f}s")
+    print(f"🎥 Video Bitrate: {video_bitrate / 1000:.2f} kbps")
+    print(f"🔊 Audio Bitrate: {audio_bitrate_kbps} kbps")
+
+    # 使用 hevc_nvenc 编码
+    cmd_nvenc = [
+        "ffmpeg", "-y", "-hwaccel", "cuda", "-i", file_path,
+        "-c:v", "hevc_nvenc", "-b:v", f"{video_bitrate}", "-maxrate", f"{video_bitrate}",
+        "-rc", "vbr_hq", "-cq", "19", "-preset", "slow",
+        "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+        temp_output
+    ]
+    subprocess.Popen(cmd_nvenc).wait()
+
+    # 替换原文件
+    if not os.path.exists(temp_output):
+        raise RuntimeError("压缩失败，未生成输出文件")
+    backup_path = file_path + ".bak"
+    shutil.move(file_path, backup_path)
+    shutil.move(temp_output, file_path)
+    print(f"✅ GPU压缩完成，原文件已替换（备份: {backup_path}）")
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
