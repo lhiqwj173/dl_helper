@@ -405,7 +405,7 @@ def process_folder_1(folder_path, target_bitrate=None, codec='h264'):
             else:
                 print(f"跳过文件: {file_path}")
 
-def process_folder(folder_path, codec='h264'):
+def process_folder(folder_path):
     """递归遍历文件夹并处理视频文件"""
     video_files = []
     for root, _, files in os.walk(folder_path):
@@ -520,7 +520,7 @@ def bt_transfer():
         print(f'下载完成 {file["name"]}')
 
         # 若是视频文件，执行一边压缩脚本
-        process_folder(local_folder, 2500, codec)
+        process_folder(local_folder)
 
         # 移动到 output_folder
         # 将视频后缀的文件再增加后缀 'file'
