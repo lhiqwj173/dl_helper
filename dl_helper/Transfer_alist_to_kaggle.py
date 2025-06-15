@@ -295,7 +295,7 @@ def compress_video_2_pass(file_path, target_size_gb=1.90, audio_bitrate_kbps=128
     shutil.move(temp_output, file_path)
     print(f"✅ 压缩完成，原文件已替换（备份: {backup_path}）")
 
-def compress_video_gpu(file_path, target_size_gb=1.90, audio_bitrate_kbps=128):
+def compress_video_gpu_0(file_path, target_size_gb=1.90, audio_bitrate_kbps=128):
     """
     使用 NVIDIA GPU 压缩视频（hevc_nvenc），目标体积不超过 target_size_gb（默认1.95GB）
     """
@@ -341,6 +341,55 @@ def compress_video_gpu(file_path, target_size_gb=1.90, audio_bitrate_kbps=128):
         raise RuntimeError("压缩失败，未生成输出文件")
     shutil.move(temp_output, file_path)
     print(f"✅ GPU压缩完成，原文件已替换")
+
+def compress_with_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
+    import tempfile
+
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    temp_output = tempfile.mktemp(suffix=".mp4")
+
+    # 获取视频时长
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    duration = float(subprocess.run(cmd_duration, capture_output=True, text=True).stdout.strip())
+    audio_bitrate = audio_bitrate_kbps * 1000
+
+    attempt = 0
+    factor = 1.0
+    while True:
+        total_bitrate = target_size_bytes * 8 / duration * factor
+        video_bitrate = int(total_bitrate - audio_bitrate)
+
+        cmd_nvenc = [
+            "ffmpeg", "-y", "-hwaccel", "cuda", "-i", file_path,
+            "-c:v", "hevc_nvenc", "-rc", "cbr",
+            "-b:v", f"{video_bitrate}", "-maxrate", f"{video_bitrate}",
+            "-bufsize", f"{video_bitrate * 2}",
+            "-preset", "p4",
+            "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+            temp_output
+        ]
+        subprocess.Popen(cmd_nvenc).wait()
+
+        if not os.path.exists(temp_output):
+            raise RuntimeError("压缩失败")
+
+        final_size = os.path.getsize(temp_output)
+        print(f"🎯 Attempt {attempt+1}: {final_size / 1024**3:.2f} GB")
+        if final_size <= target_size_bytes:
+            shutil.move(temp_output, file_path)
+            print(f"✅ 成功压缩并替换原文件")
+            return
+        else:
+            print("⚠️ 超出体积，降低码率重试")
+            factor *= 0.9
+            attempt += 1
+
+    raise RuntimeError("多次尝试后仍未压缩到目标体积内")
+
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
