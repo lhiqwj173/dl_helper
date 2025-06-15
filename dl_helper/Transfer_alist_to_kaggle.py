@@ -229,7 +229,7 @@ def compress_video_1(file_path, target_bitrate=None, codec='h264'):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
-def compress_video_2(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+def compress_video_2_pass(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     """
     压缩视频到指定大小（默认1.95GB）并保留最大质量（H.265双遍编码）
     使用 subprocess.Popen 调用 ffmpeg，压缩完成后替换原文件
@@ -295,7 +295,7 @@ def compress_video_2(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     shutil.move(temp_output, file_path)
     print(f"✅ 压缩完成，原文件已替换（备份: {backup_path}）")
 
-def compress_video(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+def compress_video_gpu(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     """
     使用 NVIDIA GPU 压缩视频（hevc_nvenc），目标体积不超过 target_size_gb（默认1.95GB）
     """
@@ -375,7 +375,7 @@ def process_folder_0(folder_path, target_bitrate=None):
             else:
                 print(f"跳过文件: {file_path}")
 
-def process_folder(folder_path, target_bitrate=None, codec='h264'):
+def process_folder_1(folder_path, target_bitrate=None, codec='h264'):
     """递归遍历文件夹并处理视频文件"""
     video_files = []
     for root, _, files in os.walk(folder_path):
@@ -424,7 +424,10 @@ def process_folder(folder_path, codec='h264'):
     for file_path in tqdm(video_files):
         size = get_file_size(file_path)
         if size > SIZE_LIMIT:
-            compress_video(file_path)
+            if gpu_available():
+                compress_video_gpu(file_path)
+            else:
+                compress_video_2_pass(file_path)
         else:
             print(f"跳过文件: {file_path}")
 
