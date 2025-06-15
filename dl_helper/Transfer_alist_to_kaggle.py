@@ -339,10 +339,8 @@ def compress_video_gpu(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
     # 替换原文件
     if not os.path.exists(temp_output):
         raise RuntimeError("压缩失败，未生成输出文件")
-    backup_path = file_path + ".bak"
-    shutil.move(file_path, backup_path)
     shutil.move(temp_output, file_path)
-    print(f"✅ GPU压缩完成，原文件已替换（备份: {backup_path}）")
+    print(f"✅ GPU压缩完成，原文件已替换")
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
