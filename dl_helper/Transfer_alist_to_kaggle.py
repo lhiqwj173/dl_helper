@@ -78,7 +78,7 @@ def read_stream(stream, name, total_duration):
             except:
                 pass
 
-def compress_video(file_path, target_bitrate=None):
+def compress_video_0(file_path, target_bitrate=None):
     """使用 FFmpeg 压缩视频文件，根据 GPU 可用性选择加速方式并实时显示输出"""
     temp_output = file_path + '.temp.mp4'
     
@@ -148,7 +148,88 @@ def compress_video(file_path, target_bitrate=None):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
-def process_folder(folder_path, target_bitrate=None):
+def compress_video(file_path, target_bitrate=None, codec='h264'): 
+    """使用 FFmpeg 压缩视频文件，根据 GPU 和 codec 参数选择编码器"""
+    temp_output = file_path + '.temp.mp4'
+
+    # 如果未指定目标码率，则动态计算
+    if target_bitrate is None:
+        target_bitrate = calculate_target_bitrate(file_path, SIZE_LIMIT)
+    else:
+        target_bitrate = max(target_bitrate, 1000)
+
+    # 获取视频总时长
+    total_duration = get_video_duration(file_path)
+
+    # 选择编码器
+    device = 'CPU'
+    if codec == 'h264':
+        encoder = 'h264_nvenc' if gpu_available() else 'libx264'
+        device = 'GPU' if 'nvenc' in encoder else 'CPU'
+    elif codec == 'h265':
+        encoder = 'hevc_nvenc' if gpu_available() else 'libx265'
+        device = 'GPU' if 'nvenc' in encoder else 'CPU'
+    elif codec == 'av1':
+        encoder = 'libaom-av1'  # AV1 仅 CPU 编码
+        device = 'CPU'
+    else:
+        raise ValueError(f"不支持的编码格式: {codec}")
+
+    # 构建 FFmpeg 命令
+    cmd = [
+        'ffmpeg', '-i', file_path,
+        '-c:v', encoder,
+        '-b:v', f'{target_bitrate}k',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-progress', '-', '-y', temp_output
+    ]
+
+    try:
+        # 启动 FFmpeg 进程
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            bufsize=1,
+        )
+
+        # 如果使用 CPU，限制 CPU 使用率到 80%
+        if device == 'CPU':
+            pid = process.pid
+            cpulimit_cmd = ['cpulimit', '-p', str(pid), '-l', str(LIMIT)]
+            cpulimit_process = subprocess.Popen(cpulimit_cmd)
+
+        # 启动读取线程
+        stdout_thread = threading.Thread(target=read_stream, args=(process.stdout, "STDOUT", total_duration))
+        stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, "STDERR", total_duration))
+
+        stdout_thread.start()
+        stderr_thread.start()
+
+        process.wait()
+
+        if device == 'CPU':
+            cpulimit_process.terminate()
+
+        stdout_thread.join()
+        stderr_thread.join()
+
+        if process.returncode == 0:
+            shutil.move(temp_output, file_path)
+            print(f"\n成功压缩并覆盖: {file_path} (目标码率: {target_bitrate}kbps, 使用 {device}, 编码器: {codec})")
+        else:
+            raise subprocess.CalledProcessError(process.returncode, cmd)
+
+    except subprocess.CalledProcessError as e:
+        print(f"压缩失败: {file_path}, 错误: {e}")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+
+def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
     # 收集所有视频文件路径
     video_files = []
@@ -178,6 +259,36 @@ def process_folder(folder_path, target_bitrate=None):
             if size > SIZE_LIMIT or original_bitrate > 5000:
                 print(f"发现需要压缩的视频文件: {file_path} ({size / 1024 / 1024:.2f}MB, {original_bitrate}kbps)")
                 compress_video(file_path)
+            else:
+                print(f"跳过文件: {file_path}")
+
+def process_folder(folder_path, target_bitrate=None, codec='h264'):
+    """递归遍历文件夹并处理视频文件"""
+    video_files = []
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if '.temp.mp4' in file:
+                continue
+            file_path = os.path.join(root, file)
+            if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
+                video_files.append(file_path)
+
+    if not video_files:
+        print(f"在 {folder_path} 中未找到视频文件")
+        return
+
+    print(f"共找到 {len(video_files)} 个视频文件")
+    for file_path in tqdm(video_files):
+        size = get_file_size(file_path)
+        original_bitrate = get_original_bitrate(file_path)
+        if target_bitrate is not None:
+            if original_bitrate > target_bitrate * 1.1:
+                compress_video(file_path, target_bitrate, codec)
+            else:
+                print(f"跳过文件（码率已足够低）: {file_path}")
+        else:
+            if size > SIZE_LIMIT or original_bitrate > 5000:
+                compress_video(file_path, codec=codec)
             else:
                 print(f"跳过文件: {file_path}")
 
@@ -270,7 +381,7 @@ def bt_transfer():
         print(f'下载完成 {file["name"]}')
 
         # 若是视频文件，执行一边压缩脚本
-        process_folder(local_folder, 2500)
+        process_folder(local_folder, 2500, codec)
 
         # 移动到 output_folder
         # 将视频后缀的文件再增加后缀 'file'
@@ -283,6 +394,8 @@ def bt_transfer():
             os.remove(os.path.join(output_folder, file))
 
 if __name__ == '__main__':
+    # h264/h265/av1
+    codec = 'h264'
     for arg in sys.argv[1:]:
         if arg == 'bc_train_data_wait':
             bc_train_data_wait()
@@ -290,3 +403,6 @@ if __name__ == '__main__':
             only_transfer()
         elif arg == 'bt_transfer':
             bt_transfer()
+        elif arg.startswith('codec='):
+            codec = arg.split('=')[1]
+            print(f'使用编码器: {codec}')

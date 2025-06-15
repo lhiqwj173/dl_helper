@@ -20,7 +20,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
-from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save, process_lob_data_extended, filte_no_move
+from dl_helper.tool import calculate_profit, calculate_sell_save, reset_profit_sell_save, process_lob_data_extended, process_lob_data_extended_sell_save, filte_no_move, fix_profit_sell_save
 
 from py_ext.tool import log, share_tensor
 
@@ -176,19 +176,25 @@ class LobExpert_file():
         lob_data.loc[am_cond, 'sell_save'] = am_res['sell_save'].values
         lob_data.loc[pm_cond, 'sell_save'] = pm_res['sell_save'].values
 
-        # 处理非最后一个的 profit <= 0/ sell_save <= 0 块
-        # TODO 对比是性能是否有差异，若无明显差异则不应该使用过滤代码
-        # 使用理由: 合理推测 非最后一个 profit<=0 的时点，应该无法预测之后的盈利点位（可能距离很远，中间还有下跌存在 profit>0 的时点）
-        # 预期: 
-        #   使用代码,模型的评价指标应该会上升，但在实盘中可能导致在无法盈利的点位买进，在无法节省盈利的点位卖出
-        #   不使用代码,模型可能无法很好的预测，因为可能使用了很长的未来数据，而模型凭当下的input无法做出对应的预测
-        lob_data = process_lob_data_extended(lob_data)
+        # 保存 profit / sell_save
+        lob_data['raw_sell_save'] = lob_data['sell_save']
+        lob_data['raw_profit'] = lob_data['profit']
+
+        # 对多个 profit<=0 / sell_save<=0 的连续块的处理 
+        # 1. 无
+        # 2. 第一个 <= 0 后都赋值0
+        # 3. 最后一个 <= 0 前都赋值 > 0 
+        # lob_data = process_lob_data_extended(lob_data)
+        lob_data = process_lob_data_extended_sell_save(lob_data)
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         lob_data = reset_profit_sell_save(lob_data)
 
         # no_move filter
         lob_data = filte_no_move(lob_data)
+
+        # fix profit / sell_save
+        lob_data = fix_profit_sell_save(lob_data)
 
         if self.cache_debug:
             try:
