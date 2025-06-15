@@ -229,7 +229,7 @@ def compress_video_1(file_path, target_bitrate=None, codec='h264'):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
-def compress_video_2_pass(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+def compress_video_2_pass(file_path, target_size_gb=1.90, audio_bitrate_kbps=128):
     """
     压缩视频到指定大小（默认1.95GB）并保留最大质量（H.265双遍编码）
     使用 subprocess.Popen 调用 ffmpeg，压缩完成后替换原文件
@@ -295,7 +295,7 @@ def compress_video_2_pass(file_path, target_size_gb=1.95, audio_bitrate_kbps=128
     shutil.move(temp_output, file_path)
     print(f"✅ 压缩完成，原文件已替换（备份: {backup_path}）")
 
-def compress_video_gpu(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+def compress_video_gpu(file_path, target_size_gb=1.90, audio_bitrate_kbps=128):
     """
     使用 NVIDIA GPU 压缩视频（hevc_nvenc），目标体积不超过 target_size_gb（默认1.95GB）
     """
