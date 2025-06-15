@@ -148,7 +148,7 @@ def compress_video_0(file_path, target_bitrate=None):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
-def compress_video(file_path, target_bitrate=None, codec='h264'): 
+def compress_video_1(file_path, target_bitrate=None, codec='h264'): 
     """使用 FFmpeg 压缩视频文件，根据 GPU 和 codec 参数选择编码器"""
     temp_output = file_path + '.temp.mp4'
 
@@ -229,6 +229,72 @@ def compress_video(file_path, target_bitrate=None, codec='h264'):
         if os.path.exists(temp_output):
             os.remove(temp_output)
 
+def compress_video(file_path, target_size_gb=1.95, audio_bitrate_kbps=128):
+    """
+    压缩视频到指定大小（默认1.95GB）并保留最大质量（H.265双遍编码）
+    使用 subprocess.Popen 调用 ffmpeg，压缩完成后替换原文件
+    """
+    # 转换大小
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    temp_output = file_path + ".temp_compressed.mp4"
+    passlog_file = "ffmpeg2pass"
+
+    # 获取视频时长（单位：秒）
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    duration_result = subprocess.run(cmd_duration, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        duration = float(duration_result.stdout.strip())
+    except ValueError:
+        raise RuntimeError("无法获取视频时长")
+
+    # 计算目标总码率（bps）
+    total_bitrate = target_size_bytes * 8 / duration  # bits per second
+    audio_bitrate = audio_bitrate_kbps * 1000  # audio bitrate in bps
+    video_bitrate = int(total_bitrate - audio_bitrate)
+
+    print(f"⏱ Duration: {duration:.2f}s")
+    print(f"🎯 Target Size: {target_size_gb} GB")
+    print(f"🎥 Video Bitrate: {video_bitrate / 1000:.2f} kbps")
+    print(f"🔊 Audio Bitrate: {audio_bitrate / 1000:.2f} kbps")
+
+    # 第1遍（无音频）
+    cmd_pass1 = [
+        "ffmpeg", "-y", "-i", file_path,
+        "-c:v", "libx265", "-b:v", str(video_bitrate), "-pass", "1",
+        "-preset", "slow", "-x265-params", "aq-mode=3",
+        "-an", "-f", "null", os.devnull
+    ]
+    subprocess.Popen(cmd_pass1).wait()
+
+    # 第2遍（带音频）
+    cmd_pass2 = [
+        "ffmpeg", "-y", "-i", file_path,
+        "-c:v", "libx265", "-b:v", str(video_bitrate), "-pass", "2",
+        "-preset", "slow", "-x265-params", "aq-mode=3",
+        "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+        temp_output
+    ]
+    subprocess.Popen(cmd_pass2).wait()
+
+    # 清理2-pass日志文件
+    for f in [passlog_file + ext for ext in ["-0.log", "-0.log.mbtree"]]:
+        if os.path.exists(f):
+            os.remove(f)
+
+    # 检查输出文件是否存在
+    if not os.path.exists(temp_output):
+        raise RuntimeError("压缩失败，未生成输出文件")
+
+    # 替换原始文件
+    backup_path = file_path + ".bak"
+    shutil.move(file_path, backup_path)
+    shutil.move(temp_output, file_path)
+    print(f"✅ 压缩完成，原文件已替换（备份: {backup_path}）")
+
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
     # 收集所有视频文件路径
@@ -291,6 +357,29 @@ def process_folder(folder_path, target_bitrate=None, codec='h264'):
                 compress_video(file_path, codec=codec)
             else:
                 print(f"跳过文件: {file_path}")
+
+def process_folder(folder_path, codec='h264'):
+    """递归遍历文件夹并处理视频文件"""
+    video_files = []
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if '.temp.mp4' in file:
+                continue
+            file_path = os.path.join(root, file)
+            if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
+                video_files.append(file_path)
+
+    if not video_files:
+        print(f"在 {folder_path} 中未找到视频文件")
+        return
+
+    print(f"共找到 {len(video_files)} 个视频文件")
+    for file_path in tqdm(video_files):
+        size = get_file_size(file_path)
+        if size > SIZE_LIMIT:
+            compress_video(file_path)
+        else:
+            print(f"跳过文件: {file_path}")
 
 def batch_tar_and_remove(local_folder, batch_size=20):
     """
