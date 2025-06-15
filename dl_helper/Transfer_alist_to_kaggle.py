@@ -531,7 +531,8 @@ def process_folder(folder_path):
         size = get_file_size(file_path)
         if size > SIZE_LIMIT:
             if gpu_available():
-                compress_video_gpu(file_path)
+                # compress_video_gpu(file_path)
+                compress_video_crf_based(file_path)
             else:
                 compress_video_2_pass(file_path)
         else:
