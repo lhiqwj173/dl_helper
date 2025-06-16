@@ -585,16 +585,18 @@ def compress_video_crf_based_1(file_path, target_size_gb=1.98, audio_bitrate_kbp
     if os.path.exists(concat_file):
         os.remove(concat_file)
 
-def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=128, cq=26):
+def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=128, cq=27):
     """
     使用 NVIDIA GPU 压缩视频为 H.265，目标为 720p 分辨率，控制在指定体积以内。
-    若 cq=26 超出目标大小，则分割成最少数量的文件，每个文件不超过 target_size_gb。
+    若 cq=27 超出目标大小，则分割成最少数量的文件，每个文件不超过 target_size_gb。
     
     参数:
         file_path: 输入视频文件路径
         target_size_gb: 目标文件大小（GB，默认为 1.98）
         audio_bitrate_kbps: 音频比特率（kbps）
-        cq: 固定的 CQ 值（默认 26）
+        cq: 固定的 CQ 值（默认 27）
+
+    返回最终的文件列表
     """
     target_size_bytes = int(target_size_gb * 1024 ** 3)
     audio_bitrate = audio_bitrate_kbps * 1000  # bps
@@ -633,7 +635,7 @@ def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=
     if final_size <= target_size_bytes:
         shutil.move(temp_output, file_path)
         print(f"✅ 成功压缩并替换原文件（cq={cq}）")
-        return
+        return [file_path]
     else:
         print(f"⚠️ 超出体积，准备分割视频...")
         if os.path.exists(temp_output):
@@ -700,6 +702,12 @@ def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=
     for seg in segment_files:
         if not os.path.exists(seg):
             raise RuntimeError(f"❌ 分段文件 {seg} 不存在")
+
+    # 删除原文件
+    os.remove(file_path)
+
+    return segment_files
+
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
@@ -892,6 +900,48 @@ def bt_transfer():
             # 删除原文件
             os.remove(os.path.join(output_folder, file))
 
+def bt_process_inplace():
+    """
+    1. 下载 bt下载主机 alist 文件到本地
+    2. 压缩视频文件
+    3. 将压缩后的文件上传到 alist 文件夹 processed 下
+    4. 删除 alist 原文件
+    """
+    # 下载压缩文件
+    alist_folder = r'/completed/'
+    local_folder = r'/completed'
+    output_folder = r'completed'
+    os.makedirs(output_folder, exist_ok=True)
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244')
+
+    files = alist_client.listdir(alist_folder)
+    VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv']
+    for file in files:
+        # 判断文件是否为视频文件
+        if not any(file['name'].lower().endswith(ext) for ext in VIDEO_EXTENSIONS):
+            continue
+
+        print(f'开始下载 {file["name"]}')
+        alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
+        print(f'下载完成 {file["name"]}')
+
+        # 执行gpu压缩
+        local_file = os.path.join(local_folder, file['name'])
+        size = get_file_size(local_file)
+        if size <= SIZE_LIMIT:
+            return
+        # compress_video_gpu(file_path)
+        done_files = compress_video_crf_based(local_file)
+
+        # 删除本地文件
+        for file in done_files:
+            # 上传到 alist 文件夹 processed 下
+            alist_client.upload(file, alist_folder + 'processed/')
+            os.remove(file)
+
+        # 删除 alist 原文件
+        alist_client.remove(alist_folder + file['name'])
+
 if __name__ == '__main__':
     # h264/h265/av1
     codec = 'h264'
@@ -902,6 +952,8 @@ if __name__ == '__main__':
             only_transfer()
         elif arg == 'bt_transfer':
             bt_transfer()
+        elif arg == 'bt_process_inplace':
+            bt_process_inplace()
         elif arg.startswith('codec='):
             codec = arg.split('=')[1]
             print(f'使用编码器: {codec}')
