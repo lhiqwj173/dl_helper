@@ -1,6 +1,6 @@
 import os, shutil, sys, subprocess
 from pathlib import Path
-import time
+import time, math
 import threading
 from tqdm import tqdm
 import tarfile
@@ -390,7 +390,7 @@ def compress_video_gpu(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
 
     raise RuntimeError("多次尝试后仍未压缩到目标体积内")
 
-def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
+def compress_video_crf_based_0(file_path, target_size_gb=1.98, audio_bitrate_kbps=128):
     """
     使用 NVIDIA GPU 压缩视频为 H.265，目标为 720p 分辨率，控制在指定体积以内。
     使用 CRF-like cq 参数动态调节质量（使用原视频多次尝试，不重复压缩已压缩结果）。
@@ -447,6 +447,259 @@ def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=
             attempt += 1
 
     raise RuntimeError("❌ 多次尝试后仍无法压缩至目标体积内")
+
+def compress_video_crf_based_1(file_path, target_size_gb=1.98, audio_bitrate_kbps=128, max_cq=26, split_duration=600):
+    """
+    使用 NVIDIA GPU 压缩视频为 H.265，目标为 720p 分辨率，控制在指定体积以内。
+    使用 CRF-like cq 参数动态调节质量，若无法满足体积要求则分割视频。
+    
+    参数:
+        file_path: 输入视频文件路径
+        target_size_gb: 目标文件大小（GB）
+        audio_bitrate_kbps: 音频比特率（kbps）
+        max_cq: 最大 CQ 值（默认 30）
+        split_duration: 分割时每段的时长（秒，默认 600 秒即 10 分钟）
+    """
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    audio_bitrate = audio_bitrate_kbps * 1000  # bps
+
+    # 获取视频时长
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    result = subprocess.run(cmd_duration, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("无法获取视频时长")
+    duration = float(result.stdout.strip())
+
+    def try_compress(input_file, output_file, cq):
+        """尝试压缩单个视频文件"""
+        cmd = [
+            "ffmpeg", "-y", "-hwaccel", "cuda", "-i", input_file,
+            "-vf", "scale=-2:720",
+            "-c:v", "hevc_nvenc",
+            "-rc", "vbr", "-cq", str(cq),
+            "-preset", "p4",
+            "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+            output_file
+        ]
+        subprocess.run(cmd, check=True)
+        return os.path.getsize(output_file) if os.path.exists(output_file) else float('inf')
+
+    # 尝试整体压缩
+    cq = 26
+    temp_output = tempfile.mktemp(suffix=".mp4")
+    
+    while cq <= max_cq:
+        print(f"🎬 尝试 CRF (cq) = {cq} ...")
+        final_size = try_compress(file_path, temp_output, cq)
+        print(f"📦 文件大小：{final_size / 1024 ** 3:.2f} GB")
+
+        if final_size <= target_size_bytes:
+            shutil.move(temp_output, file_path)
+            print(f"✅ 成功压缩并替换原文件（cq={cq}）")
+            return
+        else:
+            print(f"⚠️ 超出体积，尝试更高 CRF（更低画质）...")
+            cq += 1
+
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+
+    # 如果整体压缩失败，尝试分割视频
+    print("❌ 无法压缩至目标体积，尝试分割视频...")
+    
+    # 计算需要分割的段数
+    num_segments = math.ceil(duration / split_duration)
+    segment_files = []
+    base_name = os.path.splitext(file_path)[0]
+
+    for i in range(num_segments):
+        segment_output = f"{base_name}_part{i+1}.mp4"
+        temp_segment = tempfile.mktemp(suffix=".mp4")
+        
+        # 分割视频
+        cmd_segment = [
+            "ffmpeg", "-y", "-i", file_path,
+            "-ss", str(i * split_duration),
+            "-t", str(split_duration),
+            "-c", "copy", temp_segment
+        ]
+        subprocess.run(cmd_segment, check=True)
+
+        # 压缩每个片段
+        cq = 26
+        while cq <= max_cq:
+            print(f"🎬 压缩第 {i+1}/{num_segments} 段，cq = {cq} ...")
+            final_size = try_compress(temp_segment, segment_output, cq)
+            print(f"📦 第 {i+1} 段大小：{final_size / 1024 ** 3:.2f} GB")
+
+            if final_size <= target_size_bytes / num_segments:
+                print(f"✅ 第 {i+1} 段压缩成功（cq={cq}）")
+                segment_files.append(segment_output)
+                break
+            else:
+                print(f"⚠️ 第 {i+1} 段超出体积，尝试更高 CRF...")
+                cq += 1
+                if os.path.exists(segment_output):
+                    os.remove(segment_output)
+
+            if cq > max_cq:
+                if os.path.exists(temp_segment):
+                    os.remove(temp_segment)
+                raise RuntimeError(f"❌ 第 {i+1} 段无法压缩至目标体积内")
+
+        if os.path.exists(temp_segment):
+            os.remove(temp_segment)
+
+    # 合并压缩后的片段
+    concat_file = tempfile.mktemp(suffix=".txt")
+    with open(concat_file, 'w') as f:
+        for seg in segment_files:
+            f.write(f"file '{seg}'\n")
+
+    final_output = f"{base_name}_compressed.mp4"
+    cmd_concat = [
+        "ffmpeg", "-y", "-f", "concat",
+        "-safe", "0", "-i", concat_file,
+        "-c", "copy", final_output
+    ]
+    subprocess.run(cmd_concat, check=True)
+
+    # 验证最终文件大小
+    final_size = os.path.getsize(final_output)
+    print(f"📦 最终合并文件大小：{final_size / 1024 ** 3:.2f} GB")
+    
+    if final_size <= target_size_bytes:
+        shutil.move(final_output, file_path)
+        print(f"✅ 成功压缩并替换原文件（分割方式）")
+    else:
+        raise RuntimeError("❌ 合并后的文件仍超出目标体积")
+
+    # 清理临时文件
+    for seg in segment_files:
+        if os.path.exists(seg):
+            os.remove(seg)
+    if os.path.exists(concat_file):
+        os.remove(concat_file)
+
+def compress_video_crf_based(file_path, target_size_gb=1.98, audio_bitrate_kbps=128, cq=26):
+    """
+    使用 NVIDIA GPU 压缩视频为 H.265，目标为 720p 分辨率，控制在指定体积以内。
+    若 cq=26 超出目标大小，则分割成最少数量的文件，每个文件不超过 target_size_gb。
+    
+    参数:
+        file_path: 输入视频文件路径
+        target_size_gb: 目标文件大小（GB，默认为 1.98）
+        audio_bitrate_kbps: 音频比特率（kbps）
+        cq: 固定的 CQ 值（默认 26）
+    """
+    target_size_bytes = int(target_size_gb * 1024 ** 3)
+    audio_bitrate = audio_bitrate_kbps * 1000  # bps
+
+    # 获取视频时长
+    cmd_duration = [
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", file_path
+    ]
+    result = subprocess.run(cmd_duration, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("无法获取视频时长")
+    duration = float(result.stdout.strip())
+
+    def try_compress(input_file, output_file, cq):
+        """尝试压缩单个视频文件"""
+        cmd = [
+            "ffmpeg", "-y", "-hwaccel", "cuda", "-i", input_file,
+            "-vf", "scale=-2:720",
+            "-c:v", "hevc_nvenc",
+            "-rc", "vbr", "-cq", str(cq),
+            "-preset", "p4",
+            "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
+            output_file
+        ]
+        subprocess.run(cmd, check=True)
+        return os.path.getsize(output_file) if os.path.exists(output_file) else float('inf')
+
+    # 尝试整体压缩
+    temp_output = tempfile.mktemp(suffix=".mp4")
+    print(f"🎬 尝试 CRF (cq) = {cq} 压缩整个视频...")
+    final_size = try_compress(file_path, temp_output, cq)
+    print(f"📦 文件大小：{final_size / 1024 ** 3:.2f} GB")
+
+    if final_size <= target_size_bytes:
+        shutil.move(temp_output, file_path)
+        print(f"✅ 成功压缩并替换原文件（cq={cq}）")
+        return
+    else:
+        print(f"⚠️ 超出体积，准备分割视频...")
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+
+    # 估算最小分割数量
+    size_ratio = final_size / target_size_bytes
+    num_segments = math.ceil(size_ratio)
+    if num_segments - size_ratio < 0.2:
+        num_segments += 1
+    segment_files = []
+    base_name = os.path.splitext(file_path)[0]
+
+    while True:
+        print(f"❌ 尝试分割成 {num_segments} 个文件...")
+        segment_duration = duration / num_segments
+        segment_files = []
+        success = True
+
+        for i in range(num_segments):
+            segment_output = f"{base_name}_{i+1}.mp4"
+            temp_segment = tempfile.mktemp(suffix=".mp4")
+            
+            # 分割视频
+            cmd_segment = [
+                "ffmpeg", "-y", "-i", file_path,
+                "-ss", str(i * segment_duration),
+                "-t", str(segment_duration),
+                "-c", "copy", temp_segment
+            ]
+            subprocess.run(cmd_segment, check=True)
+
+            # 压缩每个片段
+            print(f"🎬 压缩第 {i+1}/{num_segments} 段，cq = {cq} ...")
+            final_size = try_compress(temp_segment, segment_output, cq)
+            print(f"📦 第 {i+1} 段大小：{final_size / 1024 ** 3:.2f} GB")
+
+            if final_size <= target_size_bytes:
+                print(f"✅ 第 {i+1} 段压缩成功（cq={cq}）")
+                segment_files.append(segment_output)
+            else:
+                print(f"⚠️ 第 {i+1} 段超出 {target_size_gb} GB")
+                success = False
+                if os.path.exists(temp_segment):
+                    os.remove(temp_segment)
+                if os.path.exists(segment_output):
+                    os.remove(segment_output)
+                break
+
+            if os.path.exists(temp_segment):
+                os.remove(temp_segment)
+
+        if success:
+            print(f"✅ 成功分割并压缩为 {num_segments} 个文件：{', '.join(segment_files)}")
+            break
+        else:
+            print(f"❌ 分割成 {num_segments} 个文件失败，增加分割数量...")
+            num_segments += 1
+            for seg in segment_files:
+                if os.path.exists(seg):
+                    os.remove(seg)
+
+    # 验证所有分段文件存在
+    for seg in segment_files:
+        if not os.path.exists(seg):
+            raise RuntimeError(f"❌ 分段文件 {seg} 不存在")
 
 def process_folder_0(folder_path, target_bitrate=None):
     """递归遍历文件夹并处理视频文件"""
