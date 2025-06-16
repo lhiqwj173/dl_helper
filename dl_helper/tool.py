@@ -1730,47 +1730,47 @@ def fix_profit_sell_save(df):
     action==0 中间若有多段 profit>0, 需要对每段重新计算 profit
     action==1 中间若有多段 sell_save>0, 需要对每段重新计算 sell_save
     """
-    def find_last_max_mid_value(range_data):
-        range_mid = (range_data['BASE卖1价'] + range_data['BASE买1价']) / 2
-        mid_set = range_mid.drop_duplicates().sort_values(ascending=False)
+    def find_last_max_b1_value(range_data):
+        range_b1 = range_data['BASE买1价']
+        b1_set = range_b1.drop_duplicates().sort_values(ascending=False)
         # 遍历 mid_set，连续的最大值的最后一个
         max_idx = -1
-        max_mid_value = 0
-        range_mid = range_mid.values
-        for max_v in mid_set:
-            _idx = np.where(range_mid == max_v)[0]
+        max_b1_value = 0
+        range_b1 = range_b1.values
+        for max_v in b1_set:
+            _idx = np.where(range_b1 == max_v)[0]
             for _i in _idx[::-1]:
                 if _i == 0:
                     # 第一个值了
                     break
-                if range_mid[_i] == range_mid[_i-1]:
+                if range_b1[_i] == range_b1[_i-1]:
                     max_idx = _i
-                    max_mid_value = max_v
+                    max_b1_value = max_v
                     break
-            if max_mid_value != 0:
+            if max_b1_value != 0:
                 break
-        return max_idx, max_mid_value
+        return max_idx, max_b1_value
     
-    def find_last_min_mid_value(range_data):
-        range_mid = (range_data['BASE卖1价'] + range_data['BASE买1价']) / 2
-        mid_set = range_mid.drop_duplicates().sort_values()
+    def find_last_min_a1_value(range_data):
+        range_a1 = range_data['BASE卖1价']
+        a1_set = range_a1.drop_duplicates().sort_values()
         # 遍历 mid_set，连续的最小值的最后一个
         min_idx = -1
-        min_mid_value = 0
-        range_mid = range_mid.values
-        for min_v in mid_set:
-            _idx = np.where(range_mid == min_v)[0]
+        min_a1_value = 0
+        range_a1 = range_a1.values
+        for min_v in a1_set:
+            _idx = np.where(range_a1 == min_v)[0]
             for _i in _idx[::-1]:
                 if _i == 0:
                     # 第一个值了
                     break
-                if range_mid[_i] == range_mid[_i-1]:
+                if range_a1[_i] == range_a1[_i-1]:
                     min_idx = _i
-                    min_mid_value = min_v
+                    min_a1_value = min_v
                     break
-            if min_mid_value != 0:
+            if min_a1_value != 0:
                 break
-        return min_idx, min_mid_value
+        return min_idx, min_a1_value
         
     def find_equal_begin_last_mid_idx(range_data):
         """
@@ -1892,7 +1892,7 @@ def fix_profit_sell_save(df):
                         range_data = df.loc[to_0_indexs[-1]+1:end, :]
                 
             # 按照区间最后一个最高价格作为卖出价（必须是连续的，数量>1）
-            max_idx, max_mid_value = find_last_max_mid_value(range_data)
+            max_idx, max_mid_value = find_last_max_b1_value(range_data)
             # 时间大于等于卖出价时刻-1的 profit 置为 0
             df.loc[range_data.iloc[max_idx-1:].index, 'profit'] = 0
             # 时间早于卖出时刻-1的 profit 重新计算: 下一个时刻卖1价买入成交， 卖出价时刻的买1价卖出成交，计算 profit
@@ -1916,7 +1916,7 @@ def fix_profit_sell_save(df):
         else:
             # 检查 这个区间是否也满足可节省 TODO
             # 按照区间最后一个最低价格作为买入价（必须是连续的，数量>1）
-            min_idx, min_mid_value = find_last_min_mid_value(range_data)
+            min_idx, min_mid_value = find_last_min_a1_value(range_data)
             # 时间大于等于买入价时刻-1的 sell_save 置为 0
             df.loc[range_data.iloc[min_idx-1:].index, 'sell_save'] = 0
             # 时间早于买入时刻-1的 sell_save 重新计算: 下一个时刻买1价卖出成交， 买入价时刻的卖1价买入成交，计算 sell_save

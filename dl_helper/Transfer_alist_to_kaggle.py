@@ -925,7 +925,7 @@ def bt_process_inplace():
         alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
         print(f'下载完成 {file["name"]}')
 
-        # 执行gpu压缩
+        print(f'开始压缩 {file["name"]}')
         local_file = os.path.join(local_folder, file['name'])
         size = get_file_size(local_file)
         if size <= SIZE_LIMIT:
@@ -933,13 +933,13 @@ def bt_process_inplace():
         # compress_video_gpu(file_path)
         done_files = compress_video_crf_based(local_file)
 
-        # 删除本地文件
-        for file in done_files:
-            # 上传到 alist 文件夹 processed 下
-            alist_client.upload(file, alist_folder + 'processed/')
-            os.remove(file)
+        for done_file in done_files:
+            print(f'开始上传 {done_file}')
+            alist_client.upload(done_file, alist_folder + 'processed/')
+            print(f'上传完成 {done_file}, 删除本地文件')
+            os.remove(done_file)
 
-        # 删除 alist 原文件
+        print(f'删除 alist 原文件 {file["name"]}')
         alist_client.remove(alist_folder + file['name'])
 
 if __name__ == '__main__':
