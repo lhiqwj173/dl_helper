@@ -40,7 +40,7 @@ class StaticFeatureProcessor(nn.Module):
         num_features: int = 2,             # 数值特征的数量
         output_dim: int = 32,              # 输出维度
         static_hidden: tuple = (64, 32),   # 静态特征融合网络的隐藏层维度
-        use_regularization: bool = True,   # 是否使用正则化组件
+        use_regularization: bool = False,   # 是否使用正则化组件
         dropout_rate: float = 0.1,         # Dropout概率（仅当use_regularization=True时生效）
     ):
         """
@@ -147,8 +147,6 @@ class StaticFeatureProcessor(nn.Module):
         Returns:
             处理后的静态特征，形状为 [batch_size, output_dim]
         """
-        batch_size = static_features.size(0)
-        
         # 输入验证
         if static_features.size(1) != (1 + self.num_features):
             raise ValueError(f"输入特征维度不匹配，期望 {1 + self.num_features}，实际 {static_features.size(1)}")
@@ -167,9 +165,9 @@ class StaticFeatureProcessor(nn.Module):
         if self.num_features > 0:
             num_feat = static_features[:, 1:]
             
-            # 检查数值特征中的异常值
-            if torch.isnan(num_feat).any() or torch.isinf(num_feat).any():
-                raise ValueError("数值特征中包含NaN或Inf值")
+            # # 检查数值特征中的异常值
+            # if torch.isnan(num_feat).any() or torch.isinf(num_feat).any():
+            #     raise ValueError("数值特征中包含NaN或Inf值")
             
             # 应用批标准化（如果启用）
             num_feat = self.num_feature_norm(num_feat)
@@ -183,9 +181,9 @@ class StaticFeatureProcessor(nn.Module):
         # 通过静态特征处理网络
         output = self.static_net(static_input)
         
-        # 输出验证
-        if torch.isnan(output).any() or torch.isinf(output).any():
-            raise ValueError("模型输出包含NaN或Inf值")
+        # # 输出验证
+        # if torch.isnan(output).any() or torch.isinf(output).any():
+        #     raise ValueError("模型输出包含NaN或Inf值")
         
         return output
     
@@ -300,28 +298,36 @@ class TemporalConvNet(nn.Module):
         return self.network(x)
 
 class deeplob(nn.Module):
-    """DeepLOB模型，使用TCN替代LSTM进行序列建模"""
+    """
+    DeepLOB模型，使用TCN替代LSTM进行序列建模
+    模型参数量: 333842
+    """
     def __init__(
             self, 
-            input_dims: tuple = (10, 4),  # 时间维度和特征维度
+            input_dims: tuple = (50, 4),  # 时间维度和特征维度
             extra_input_dims: int = 3,
             output_dim=2,
-            use_regularization=True
+            use_regularization=False,
+            preserve_seq_len: bool = True  # 新增：是否在CNN中保留时序长度
         ):
         super().__init__()
         self.input_dims = input_dims
         self.extra_input_dims = extra_input_dims
         self.use_regularization = use_regularization
+        self.y_len = output_dim
 
+        static_out_dim = 32
         self.static_feature_processor = StaticFeatureProcessor(
             num_categories=5,
             embedding_dim=16,
             num_features=2,
-            output_dim=32,
+            output_dim=static_out_dim,
             static_hidden=(64, 32),
+            use_regularization=use_regularization,
         )
 
         # 卷积块1：使用LeakyReLU激活函数
+        # 用于提取每个买卖档位价量之间的关系
         conv1_layers = [
             nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(1,2), stride=(1,2)),
             nn.LeakyReLU(negative_slope=0.01),
@@ -343,6 +349,7 @@ class deeplob(nn.Module):
         self.conv1 = nn.Sequential(*conv1_layers)
         
         # 卷积块2：使用Tanh激活函数
+        # 用于提取每个档位 买卖盘之间的关系
         conv2_layers = [
             nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(1,2), stride=(1,2)),
             nn.Tanh(),
@@ -364,25 +371,30 @@ class deeplob(nn.Module):
         self.conv2 = nn.Sequential(*conv2_layers)
         
         # 卷积块3：使用LeakyReLU激活函数
-        conv3_layers = [
-            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(1,10)),
-            nn.LeakyReLU(negative_slope=0.01),
-        ]
-        if self.use_regularization:
-            conv3_layers.append(nn.BatchNorm2d(32))
-        conv3_layers.extend([
-            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
-            nn.LeakyReLU(negative_slope=0.01),
-        ])
-        if self.use_regularization:
-            conv3_layers.append(nn.BatchNorm2d(32))
-        conv3_layers.extend([
-            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
-            nn.LeakyReLU(negative_slope=0.01),
-        ])
-        if self.use_regularization:
-            conv3_layers.append(nn.BatchNorm2d(32))
-        self.conv3 = nn.Sequential(*conv3_layers)
+        # 用于处理多个档位之间的关系
+        if input_dims[1] > 4:
+            # 如果特征维度大于4，意味着有多个档位的数据
+            conv3_layers = [
+                nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(1,10)),
+                nn.LeakyReLU(negative_slope=0.01),
+            ]
+            if self.use_regularization:
+                conv3_layers.append(nn.BatchNorm2d(32))
+            conv3_layers.extend([
+                nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
+                nn.LeakyReLU(negative_slope=0.01),
+            ])
+            if self.use_regularization:
+                conv3_layers.append(nn.BatchNorm2d(32))
+            conv3_layers.extend([
+                nn.Conv2d(in_channels=32, out_channels=32, kernel_size=(4,1)),
+                nn.LeakyReLU(negative_slope=0.01),
+            ])
+            if self.use_regularization:
+                conv3_layers.append(nn.BatchNorm2d(32))
+            self.conv3 = nn.Sequential(*conv3_layers)
+        else:
+            self.conv3 = None
         
         # Inception模块1：3x1卷积分支
         inp1_layers = [
@@ -424,7 +436,7 @@ class deeplob(nn.Module):
             inp3_layers.append(nn.BatchNorm2d(64))
         self.inp3 = nn.Sequential(*inp3_layers)
         
-        # TCN网络替代LSTM
+        # TCN网络
         # TCN的通道数配置：从192输入逐渐减少到64
         tcn_channels = [128, 96, 64]
         dropout_rate = 0.2 if self.use_regularization else 0.0
@@ -434,55 +446,113 @@ class deeplob(nn.Module):
                                    dropout=dropout_rate,
                                    use_regularization=self.use_regularization)
         
-        # 全连接输出层
-        self.fc1 = nn.Linear(64, self.y_len)
+        # 融合网络
+        fusion_dim = 64 + static_out_dim
+        self.fusion = nn.Sequential(
+            nn.Linear(fusion_dim, fusion_dim),
+            nn.ReLU(),
+            nn.Linear(fusion_dim, self.y_len)
+        )
         
         # 如果使用正则化，添加dropout层
         if self.use_regularization:
             self.dropout_final = nn.Dropout(0.3)
     
-    def forward(self, x):
+        # 应用统一的权重初始化
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        """统一的权重初始化函数"""
+        if isinstance(module, nn.Linear):
+            xavier_uniform_(module.weight)
+            if module.bias is not None:
+                zeros_(module.bias)
+        elif isinstance(module, nn.Conv2d) or isinstance(module, nn.Conv1d):
+            xavier_uniform_(module.weight)
+            if module.bias is not None:
+                zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            xavier_uniform_(module.weight)
+        elif isinstance(module, nn.BatchNorm1d) or isinstance(module, nn.BatchNorm2d):
+            nn.init.constant_(module.weight, 1)
+            nn.init.constant_(module.bias, 0)
+        # TCN的特殊初始化可以单独处理
+        if isinstance(module, TemporalBlock):
+            normal_(module.net[0].weight, 0, 0.01) # conv1
+            normal_(module.net[4 if self.use_regularization else 2].weight, 0, 0.01) # conv2
+            if module.downsample is not None:
+                normal_(module.downsample.weight, 0, 0.01)
+
+    def forward(self, observations):
+        # 分离时间序列和静态特征
+        use_obs = observations[:, :-1]  # 最后一维是日期信息, 训练时不使用
+        extra_x = use_obs[:, -self.extra_input_dims:]
+        # 直接将原始时间序列数据重塑为TCN所需的格式
+        # 从 [..., time*features+extra] 到 [..., time, features]
+        batch_size = observations.size(0)
+        time_dim, feature_dim = self.input_dims
+
+        # 提取非静态特征部分并重塑
+        x = use_obs[:, :-self.extra_input_dims].reshape(batch_size, time_dim, feature_dim)
+        # 增加一个维度 [batch_size, time_length, num_rows] -> [batch_size, 1, time_length, num_rows]
+        x = x.unsqueeze(1)# [B, 1, 50, 4]
+
+        # 处理静态特征
+        static_out = self.static_feature_processor(extra_x)
+
         # 卷积特征提取
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
+        x = self.conv1(x)# [B, 32, 44, 2]
+        x = self.conv2(x)# [B, 32, 38, 1]
+        if self.conv3 is not None:
+            x = self.conv3(x)
         
         # Inception模块进行多尺度特征提取
-        x_inp1 = self.inp1(x)  # 3x1卷积分支
-        x_inp2 = self.inp2(x)  # 5x1卷积分支
-        x_inp3 = self.inp3(x)  # 池化分支
+        x_inp1 = self.inp1(x)  # 3x1卷积分支 [B, 64, 38, 1]
+        x_inp2 = self.inp2(x)  # 5x1卷积分支 [B, 64, 38, 1]
+        x_inp3 = self.inp3(x)  # 池化分支 [B, 64, 38, 1]
         
         # 连接所有Inception分支 (batch_size, 192, height, width)
-        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1)
+        x = torch.cat((x_inp1, x_inp2, x_inp3), dim=1) # [B, 192, 38, 1]
         
         # 调整维度适配TCN：(batch_size, channels, sequence_length)
         # 将高度维度作为序列长度，宽度维度压缩到通道中
-        x = x.permute(0, 2, 1, 3)  # (batch_size, height, channels, width)
-        x = torch.reshape(x, (-1, x.shape[1], x.shape[2] * x.shape[3]))  # (batch_size, seq_len, features)
-        x = x.permute(0, 2, 1)  # (batch_size, features, seq_len) - TCN需要的格式
+        x = x.permute(0, 2, 1, 3)  # (batch_size, height, channels, width)[B, 38, 192, 1]
+        x = torch.reshape(x, (-1, x.shape[1], x.shape[2] * x.shape[3]))  # (batch_size, seq_len, features)[B, 38, 192]
+        x = x.permute(0, 2, 1)  # (batch_size, features, seq_len) - TCN需要的格式[B, 192, 38]
         
         # TCN进行时序建模
-        x = self.tcn(x)  # (batch_size, 64, seq_len)
+        x = self.tcn(x)  # (batch_size, 64, seq_len)[B, 64, 38]
         
         # 取最后一个时间步的输出
-        x = x[:, :, -1]  # (batch_size, 64)
+        x = x[:, :, -1]  # (batch_size, 64)[B, 64]
+
+        # 融合静态特征
+        x = torch.cat((x, static_out), dim=1)# [B, 96]
         
         # 应用最终的dropout（如果启用正则化）
         if self.use_regularization:
             x = self.dropout_final(x)
         
-        # 全连接层输出预测结果
-        x = self.fc1(x)
+        # 融合网络
+        output = self.fusion(x)# [B, 2]
         
-        # Softmax激活得到概率分布
-        forecast_y = torch.softmax(x, dim=1)
+        # 数值检查
+        if torch.isnan(output).any() or torch.isinf(output).any():
+            model_sd = self.state_dict()
+            model_sd = {k: v.cpu() for k, v in model_sd.items()}
+            with open('debug_nan_data.pkl', 'wb') as f:
+                pickle.dump({
+                    'state_dict': model_sd,
+                    'observations': observations.detach().cpu(),
+                }, f)
+            raise ValueError("output contains nan or inf")
         
-        return forecast_y
+        return output
 
 # 简单的数据结构
-# 10 * 4 的矩阵
+# 50 * 4 的矩阵
 data_config = {
-    'his_len': 10,# 每个样本的 历史数据长度
+    'his_len': 50,# 每个样本的 历史数据长度
     'need_cols': [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
 }
 
@@ -498,15 +568,9 @@ class test(test_base):
         self.params_kwargs['epochs'] = 200
         self.params_kwargs['learning_rate'] = 1e-4
 
-        # 每个模型 3 个随机种子
-        # 共 5 * 3 = 15 个实验
-        model_clss = [TCNLob_0, TCNLob_1, TCNLob_2, TCNLob_3, TCNLob_4]
-        seeds = range(2)
-        train_args = list(product(model_clss, seeds))
-        for _model_cls in model_clss:
-            train_args.append((_model_cls, 2))
-
-        self.model_cls, self.seed = train_args[self.idx]
+        seeds = range(5)
+        self.model_cls = deeplob
+        self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象
@@ -536,29 +600,18 @@ class test(test_base):
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
 if '__main__' == __name__:
-    # model = MlpLob()
-    # x = torch.randn(10, 44)
-    # x[:, -4] = 0
-    # print(model(x).shape)
-    # print(f"模型参数量: {model_params_num(model)}")
-
-    # model = TCNLob_3()
-    # x = torch.randn(10, 44)
-    # x[:, -4] = 0
-    # print(model(x).shape)
-    # print(f"模型参数量: {model_params_num(model)}")
-
-    # model = TCNLob_4()
-    # x = torch.randn(10, 44)
-    # x[:, -4] = 0
-    # print(model(x).shape)
-    # print(f"模型参数量: {model_params_num(model)}")
+    # 测试模型
+    model = deeplob()
+    x = torch.randn(10, 50*4+4)
+    x[:, -4] = 0
+    print(model(x).shape)
+    print(f"模型参数量: {model_params_num(model)}")
 
     # input_folder = r'/kaggle/input'
     # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
     # data_folder_name = os.listdir(input_folder)[0]
     # data_folder = os.path.join(input_folder, data_folder_name)
 
-    run(
-        test, 
-    )
+    # run(
+    #     test, 
+    # )
