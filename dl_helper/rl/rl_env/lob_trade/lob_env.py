@@ -134,11 +134,6 @@ class data_producer:
         # 需要的特征列名
         self.need_cols = need_cols
         self.need_cols_idx = []
-        # 添加必须的列
-        # if self.need_cols:
-        #     for must_col in ['mid_pct', 'mid_price', 'mid_vol']:
-        #         if must_col not in self.need_cols:
-        #             self.need_cols.append(must_col)
 
         self.cols_num = 130 if not self.need_cols else len(self.need_cols)
 
@@ -480,7 +475,10 @@ class data_producer:
         # 数据标准化
         std_data = self.mean_std[self.idxs[0][0]]
         # 未实现收益率 使用 zscore
-        unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
+        if 'unrealized_log_return' not in std_data:
+            unrealized_log_return_std_data = None
+        else:   
+            unrealized_log_return_std_data = std_data['unrealized_log_return']['zscore']
 
         ###################################
         # 价格量 使用 robust
@@ -1451,6 +1449,8 @@ class LOB_trade_env(gym.Env):
         self.dump_bid_ask_accnet = dump_bid_ask_accnet
 
         # 保存文件夹
+        if os.path.exists(config['train_folder']):
+            config['train_folder'] = ''
         self.save_folder = os.path.join(config['train_folder'], 'env_output')
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder)
@@ -1793,8 +1793,9 @@ class LOB_trade_env(gym.Env):
             out_text2 += f",{info.get('max_drawdown_bm', '')},{info.get('max_drawdown_ticks_bm', '')},{info.get('max_drawup_ticks_bm', '')},{info.get('drawup_ticks_bm_count', '')},{info.get('trade_return_bm', '')},{info.get('step_return_bm', '')}"
 
             # 标准化 未实现收益率
-            unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
-            inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+            if unrealized_log_return_std_data is not None:
+                unrealized_return = (unrealized_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
+                inday_return = (inday_return - unrealized_log_return_std_data[0]) / unrealized_log_return_std_data[1]
 
             # 添加 静态特征
             # 20250406 取消收益率
