@@ -1390,18 +1390,19 @@ def _merge_price_segments_logout(logout, merge_start_row, merge_end_row, df):
         'BASE卖1价': df.loc[merge_start_row:merge_end_row, 'BASE卖1价'].values,
     }
     plot_file_path = logout(title=title, plot=True)
-    # 输出图片，前后排除 extra_len 个数据的中间区域，使用淡蓝色填充底色
-    df = pd.DataFrame(plot_dict)
-    ax = df.plot()
-    # 计算填充区域
-    n = len(df)
-    start = extra_len
-    end = n - extra_len
-    if end > start:
-        ax.axvspan(start, end-1, color='#b3e5fc', alpha=0.3, zorder=0)  # 淡蓝色填充
-    plt.tight_layout()
-    plt.savefig(plot_file_path)
-    plt.close()
+    if plot_file_path is not None:
+        # 输出图片，前后排除 extra_len 个数据的中间区域，使用淡蓝色填充底色
+        df = pd.DataFrame(plot_dict)
+        ax = df.plot()
+        # 计算填充区域
+        n = len(df)
+        start = extra_len
+        end = n - extra_len
+        if end > start:
+            ax.axvspan(start, end-1, color='#b3e5fc', alpha=0.3, zorder=0)  # 淡蓝色填充
+        plt.tight_layout()
+        plt.savefig(plot_file_path)
+        plt.close()
 
 def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=blank_logout) -> pd.DataFrame:
     """
@@ -2845,8 +2846,9 @@ def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_nam
     plot_file_path = logout(
         title=f'{_type_name}_{extra_name}_plot' if extra_name else f'{_type_name}_plot', 
         plot=True)
-    plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
-    plt.close(fig) # 关闭图形，释放内存
+    if plot_file_path is not None:
+        plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
+        plt.close(fig) # 关闭图形，释放内存
 
 def fix_profit_sell_save(df, logout=blank_logout):
     """ 
