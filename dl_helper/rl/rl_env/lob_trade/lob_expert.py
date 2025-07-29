@@ -4,7 +4,7 @@
 通过透视未来数据, 给出最佳的交易决策
 最大化收益率
 """
-
+import tempfile
 import os, pickle, shutil
 import inspect
 import datetime
@@ -580,7 +580,7 @@ class LobExpert_file():
         self.rng = rng
 
         # 日志
-        self.log_folder = os.path.join(os.getenv('TEMP'), 'lob_expert_log')
+        self.log_folder = os.path.join(tempfile.gettempdir(), 'lob_expert_log')
         self.log_item_name = 'test'
         os.makedirs(self.log_folder, exist_ok=True)
         self.logout = logout
@@ -802,7 +802,7 @@ class LobExpert_file():
         if self.cache_debug:
             try:
                 # 写入文件
-                _file_path = os.path.join(os.getenv('TEMP'), 'lob_data.csv')
+                _file_path = os.path.join(tempfile.gettempdir(), 'lob_data.csv')
                 lob_data.to_csv(_file_path, encoding='gbk')
             except Exception as e:
                 log(f'cache_debug error: {e}')
