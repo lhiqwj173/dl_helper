@@ -627,7 +627,9 @@ class LobExpert_file():
             for _file in _files:
                 if _file.endswith('.pkl'):
                     _file_path = os.path.join(root, _file)
-                    self.prepare_train_data_file(date2days(_file.split('.')[0]), _data_file_path=_file_path)
+                    date = _file.split('.')[0]
+                    log(date)
+                    self.prepare_train_data_file(date2days(date), _data_file_path=_file_path)
 
         log(f'cache_all done, cache_data: {len(self.cache_data)} dates')
 
