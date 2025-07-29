@@ -195,7 +195,7 @@ def _plot_df_delay(b, e, idx, df, _type_name='profit', extra_name='', logout=bla
         plot=True)
     if plot_file_path is not None:
         plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
-        plt.close(fig) # 关闭图形，释放内存
+    plt.close(fig) # 关闭图形，释放内存
 
 def delay_profit_start(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
     """

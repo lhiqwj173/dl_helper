@@ -1711,7 +1711,7 @@ def _find_last_max_b1_value(range_data, _type='strict'):
     # range_b1[:] = _smooth_price_series(range_b1.values)
     b1_set = range_b1.drop_duplicates().sort_values(ascending=False).to_list()
     # 遍历 mid_set，连续的最大值的最后一个
-    max_idx = -1
+    max_idx = len(range_b1) - 1
     max_b1_value = 0
     range_b1 = range_b1.values
     for i_v, max_v in enumerate(b1_set):
@@ -1763,7 +1763,7 @@ def _find_last_min_a1_value(range_data, _type='strict'):
     # range_a1[:] = _smooth_price_series(range_a1.values)
     a1_set = range_a1.drop_duplicates().sort_values().to_list()
     # 遍历 mid_set，连续的最小值的最后一个
-    min_idx = -1
+    min_idx = len(range_a1) - 1
     min_a1_value = 0
     range_a1 = range_a1.values
     for i_v, min_v in enumerate(a1_set):
@@ -2848,7 +2848,7 @@ def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_nam
         plot=True)
     if plot_file_path is not None:
         plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
-        plt.close(fig) # 关闭图形，释放内存
+    plt.close(fig) # 关闭图形，释放内存
 
 def fix_profit_sell_save(df, logout=blank_logout):
     """ 
@@ -3969,8 +3969,8 @@ def check_gradients(
         plt.xlabel("Gradient Norm")
         plt.ylabel("Frequency (Log Scale)")
         plt.savefig("gradient_norm_histogram.png")
-        plt.close()
         log("Gradient norm histogram saved as 'gradient_norm_histogram.png'")
+    plt.close()
 
     return total_grad_norm
 
