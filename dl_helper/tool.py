@@ -2143,17 +2143,18 @@ def fix_profit(df, begin, end):
 
         # 时间大于等于卖出价时刻-1的 profit 置为 0
         df.loc[range_data.iloc[max_idx-1:].index, 'profit'] = 0
-        # 时间早于卖出时刻-1的 profit 重新计算: 下一个时刻卖1价买入成交， 卖出价时刻的买1价卖出成交，计算 profit
-        buy_cost = range_data.iloc[1:max_idx]['BASE卖1价'] * (1 + 5e-5)
-        sell_gain = max_mid_value * (1 - 5e-5)
-        profit = np.log(sell_gain / buy_cost)
-        # 过滤不稳定的 +- 点
-        not_stable_mask_profit = find_not_stable_sign(profit.values)
-        buy_cost_b1_diff = (range_data.iloc[1:max_idx]['BASE买1价'] + 0.001) * (1 + 5e-5)
-        profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
-        profit = update_non_positive_blocks(profit, profit_b1_diff)
-        profit.loc[not_stable_mask_profit] = 0
-        df.loc[range_data.iloc[:max_idx-1].index, 'profit'] = profit.values
+        if max_idx > 1:
+            # 时间早于卖出时刻-1的 profit 重新计算: 下一个时刻卖1价买入成交， 卖出价时刻的买1价卖出成交，计算 profit
+            buy_cost = range_data.iloc[1:max_idx]['BASE卖1价'] * (1 + 5e-5)
+            sell_gain = max_mid_value * (1 - 5e-5)
+            profit = np.log(sell_gain / buy_cost)
+            # 过滤不稳定的 +- 点
+            not_stable_mask_profit = find_not_stable_sign(profit.values)
+            buy_cost_b1_diff = (range_data.iloc[1:max_idx]['BASE买1价'] + 0.001) * (1 + 5e-5)
+            profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
+            profit = update_non_positive_blocks(profit, profit_b1_diff)
+            profit.loc[not_stable_mask_profit] = 0
+            df.loc[range_data.iloc[:max_idx-1].index, 'profit'] = profit.values
         
     # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     range_data = reset_profit(df.loc[new_begin:end, :].copy())
@@ -2288,18 +2289,19 @@ def fix_sell_save(df, begin, end):
         min_idx, min_mid_value = find_last_min_a1_value(range_data)
         # 时间大于等于买入价时刻-1的 sell_save 置为 0
         df.loc[range_data.iloc[min_idx-1:].index, 'sell_save'] = 0
-        # 时间早于买入时刻-1的 sell_save 重新计算: 下一个时刻买1价卖出成交， 买入价时刻的卖1价买入成交，计算 sell_save
-        buy_cost = min_mid_value * (1 + 5e-5)
-        sell_gain = range_data.iloc[1:min_idx]['BASE买1价'] * (1 - 5e-5)
-        sell_save = np.log(sell_gain / buy_cost)
-        # 过滤不稳定的 +- 点
-        not_stable_mask_sell_save = find_not_stable_sign(sell_save.values)
-        sell_gain_a1_diff = (range_data.iloc[1:min_idx]['BASE卖1价'] - 0.001) * (1 - 5e-5)
-        sell_save_a1_diff = np.log(sell_gain_a1_diff / buy_cost)
-        sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff)
-        # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
-        sell_save.loc[not_stable_mask_sell_save] = 0
-        df.loc[range_data.iloc[:min_idx-1].index, 'sell_save'] = sell_save.values
+        if min_idx > 1:
+            # 时间早于买入时刻-1的 sell_save 重新计算: 下一个时刻买1价卖出成交， 买入价时刻的卖1价买入成交，计算 sell_save
+            buy_cost = min_mid_value * (1 + 5e-5)
+            sell_gain = range_data.iloc[1:min_idx]['BASE买1价'] * (1 - 5e-5)
+            sell_save = np.log(sell_gain / buy_cost)
+            # 过滤不稳定的 +- 点
+            not_stable_mask_sell_save = find_not_stable_sign(sell_save.values)
+            sell_gain_a1_diff = (range_data.iloc[1:min_idx]['BASE卖1价'] - 0.001) * (1 - 5e-5)
+            sell_save_a1_diff = np.log(sell_gain_a1_diff / buy_cost)
+            sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff)
+            # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
+            sell_save.loc[not_stable_mask_sell_save] = 0
+            df.loc[range_data.iloc[:min_idx-1].index, 'sell_save'] = sell_save.values
 
     # 第一个 sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     range_data = reset_sell_save(df.loc[new_begin:end, :].copy())
