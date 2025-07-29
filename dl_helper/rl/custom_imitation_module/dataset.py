@@ -104,7 +104,16 @@ class IndexMapper:
         self.__init__(new_data_dict)
 
 class LobTrajectoryDataset(Dataset):
-    def __init__(self, data_folder:str='', data_config={}, data_dict: Dict[int, Dict[str, np.ndarray]]=None, input_zero:bool=False, sample_num_limit:int=None, data_type:str='train'):
+    def __init__(
+        self, 
+        data_folder:str='', 
+        data_config={}, 
+        data_dict: Dict[int, Dict[str, np.ndarray]]=None, 
+        input_zero:bool=False, 
+        sample_num_limit:int=None, 
+        data_type:str='train',
+        std:bool=True
+    ):
         """
         data_config:
             {
@@ -124,11 +133,18 @@ class LobTrajectoryDataset(Dataset):
                 },
             }
 
+        std: 是否标准化，默认True
+            若为False,返回 (x, y, (std_data_mean, std_data_std))
+            若为True,返回 (x, y), x为标准化后的数据
+
         键为 symbol_id/symbol, 值为字典, 字典的键为特征名, 值为 numpy 数组
         """
         # 是否是训练集
         # 控制样本均衡
         self.data_type = data_type
+
+        # 是否标准化
+        self.std = std
 
         if data_dict:
             # 先储存到tmp 目录，在读取
@@ -228,14 +244,16 @@ class LobTrajectoryDataset(Dataset):
             dt = pytz.timezone('Asia/Shanghai').localize(dt)
             close_ts = int(dt.timestamp())
             before_market_close_sec = ((close_ts - np.array([int(i.split('_')[1]) for i in _ids])) / MAX_SEC_BEFORE_CLOSE).astype(np.float32)
+
             # 列过滤
-            if self.need_cols:
-                if not self.need_cols_idx:
-                    self.need_cols_idx = [_all_raw_data.columns.get_loc(col) for col in self.need_cols]
-                # 只保留需要的列
-                _all_raw_data = _all_raw_data.loc[:, self.need_cols]
-            else:
-                _all_raw_data = _all_raw_data.iloc[:, :-6]
+            if not self.need_cols:
+                # 默认保留所有列(除 时间 列)
+                self.need_cols = [i for i in _all_raw_data.columns.tolist() if i != '时间']
+            if not self.need_cols_idx:
+                self.need_cols_idx = [_all_raw_data.columns.get_loc(col) for col in self.need_cols]
+            # 只保留需要的列
+            _all_raw_data = _all_raw_data.loc[:, self.need_cols]
+
             # fix raw data
             _all_raw_data = fix_raw_data(_all_raw_data)
             # 储存日raw_data
@@ -258,15 +276,14 @@ class LobTrajectoryDataset(Dataset):
                 if symbol_id not in self.all_data:
                     self.all_data[symbol_id] = {}
 
-                # 一天内的 mean_std 是相同的，只取第一个
-                if self.need_cols:
-                    ms = pd.DataFrame(symbol_mean_std[0]['price_vol_each']['robust'], dtype=np.float32).iloc[self.need_cols_idx, :].values
-                else:
-                    ms = pd.DataFrame(symbol_mean_std[0]['price_vol_each']['robust'], dtype=np.float32).values
+                # 提前标准化数据
+                if self.std:
+                    # 一天内的 mean_std 是相同的，只取第一个
+                    self.cur_ms = pd.DataFrame(symbol_mean_std[0]['all_std']['all'], dtype=np.float32).iloc[self.need_cols_idx, :].values
 
-                # 直接标准化标的的数据
-                self.raw_data[days][x_a:x_b] -= ms[:, 0]
-                self.raw_data[days][x_a:x_b] /= ms[:, 1]
+                    # 直接标准化标的的数据
+                    self.raw_data[days][x_a:x_b] -= self.cur_ms[:, 0]
+                    self.raw_data[days][x_a:x_b] /= self.cur_ms[:, 1]
 
                 # 构建查找表，加速后续检索
                 close_sec_to_idx = {sec: i for i, sec in enumerate(symbol_before_market_close_sec)}
@@ -502,10 +519,7 @@ class LobTrajectoryDataset(Dataset):
             order_book_obs = raw_data[x_b-self.his_len:x_b]
         else:
             order_book_obs = raw_data[x_a:x_b]
-        # 在载入数据时就已经标准化了
-        # # 标准化
-        # order_book_obs -= _data_dict['mean_std'][:, 0]
-        # order_book_obs /= _data_dict['mean_std'][:, 1]
+            
         # 打平
         order_book_obs = order_book_obs.reshape(-1)
 
@@ -521,10 +535,16 @@ class LobTrajectoryDataset(Dataset):
         if self.input_zero and not hasattr(self, 'obs_shape'):
             # 记录 obs_shape
             self.obs_shape = final_obs.shape
-            return np.zeros(self.obs_shape, dtype=np.float32), act
+            if self.std:
+                return np.zeros(self.obs_shape, dtype=np.float32), act
+            else:
+                return np.zeros(self.obs_shape, dtype=np.float32), act, self.cur_ms
 
-        # 返回 final_obs(x), act(y)
-        return final_obs, act
+        if self.std:
+            # 返回 final_obs(x), act(y)
+            return final_obs, act
+        else:
+            return final_obs, act, self.cur_ms
     
 def test_trajectory_dataset():
     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data_20250518'
