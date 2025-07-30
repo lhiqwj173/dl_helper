@@ -3799,7 +3799,8 @@ def cal_symbol_y_idx_thresholds(train_folder, y_len=3):
     _,_, _, y, _ = pickle.load(open(os.path.join(train_folder, train_files[0]), 'rb'))
     y_idxs = [i for i in range(len(y[0]))]
 
-    for file in tqdm(train_files):
+    # for file in tqdm(train_files):
+    for file in train_files:
         file = os.path.join(train_folder, file)
         ids,_, _, y, _ = pickle.load(open(file, 'rb'))
 
@@ -3853,7 +3854,8 @@ def cal_symbol_class_pct(train_folder, y_len=3, thresholds=[-0.5, 0.5], min_clas
     _,_, _, y, _ = pickle.load(open(os.path.join(train_folder, train_files[0]), 'rb'))
     y_idxs = [i for i in range(len(y[0]))]
 
-    for file in tqdm(train_files):
+    # for file in tqdm(train_files):
+    for file in train_files:
         file = os.path.join(train_folder, file)
         ids,_, _, y, _ = pickle.load(open(file, 'rb'))
 
