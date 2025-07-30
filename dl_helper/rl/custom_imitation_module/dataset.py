@@ -276,14 +276,14 @@ class LobTrajectoryDataset(Dataset):
                 if symbol_id not in self.all_data:
                     self.all_data[symbol_id] = {}
 
+                # 一天内的 mean_std 是相同的，只取第一个
+                ms = pd.DataFrame(symbol_mean_std[0]['all_std']['all'], dtype=np.float32).iloc[self.need_cols_idx, :].values
+                
                 # 提前标准化数据
                 if self.std:
-                    # 一天内的 mean_std 是相同的，只取第一个
-                    self.cur_ms = pd.DataFrame(symbol_mean_std[0]['all_std']['all'], dtype=np.float32).iloc[self.need_cols_idx, :].values
-
                     # 直接标准化标的的数据
-                    self.raw_data[days][x_a:x_b] -= self.cur_ms[:, 0]
-                    self.raw_data[days][x_a:x_b] /= self.cur_ms[:, 1]
+                    self.raw_data[days][x_a:x_b] -= ms[:, 0]
+                    self.raw_data[days][x_a:x_b] /= ms[:, 1]
 
                 # 构建查找表，加速后续检索
                 close_sec_to_idx = {sec: i for i, sec in enumerate(symbol_before_market_close_sec)}
@@ -292,11 +292,12 @@ class LobTrajectoryDataset(Dataset):
                 self.all_data[symbol_id][days] = {
                     'x': symbol_x,
                     'close_sec_to_idx': close_sec_to_idx,
-                    # # for debug
-                    # 'ms': ms,
                 }
 
-    def _load_data_dict(self, data_folder:str):
+                if not self.std:
+                    self.all_data[symbol_id][days]['ms'] = ms
+
+    def _load_data_dict_0(self, data_folder:str):
         file_paths = []
         for root, dirs, _files in os.walk(data_folder):
             for _file in _files:
@@ -484,6 +485,229 @@ class LobTrajectoryDataset(Dataset):
 
         return data_dict
 
+    def _load_data_dict(self, data_folder: str) -> Dict[str, Dict[str, np.ndarray]]:
+        """
+        从数据文件夹加载、合并并均衡化样本数据。
+
+        - 每个标的的训练样本数量均衡                                        -> 保证每个标的都得到充分的训练
+        - 每个标的不同持仓条件下的训练样本数量均衡                            -> 保证每种持仓状态下都得到充分的训练
+        - 每个标的，相同持仓条件(持仓/空仓)下act类别(未来持仓/空仓)数量均衡     -> 避免模型偏向某一种act类别
+
+        该方法采用内存高效的两遍式处理策略：
+        1. 第一遍：扫描所有文件，收集元数据和每个类别样本的全局索引，不加载实际数据。
+        2. 计算均衡点：基于第一遍收集的信息，计算出一个全局统一的、最严格的样本数，
+           以实现标的间、持仓状态间、行动间的“三级均衡”。
+        3. 第二遍：根据计算出的均衡索引，高效地从文件中加载所需数据到预分配的内存中。
+
+        Args:
+            data_folder (str): 包含 .pkl 数据文件的文件夹路径。
+
+        Returns:
+            Dict[str, Dict[str, np.ndarray]]: 处理和均衡化后的数据字典。
+        """
+        file_paths = []
+        for root, _, files in os.walk(data_folder):
+            for file in files:
+                if file.endswith('.pkl'):
+                    file_paths.append(os.path.join(root, file))
+        file_paths.sort()
+
+        if not file_paths:
+            raise ValueError(f"在目录 {data_folder} 中没有找到任何 .pkl 文件")
+
+        # 根据数据集类型（训练/验证/测试）分割文件
+        if len(file_paths) >= 3:
+            if len(file_paths) >= 60:
+                if self.data_type == 'train':
+                    file_paths = file_paths[:-40]
+                elif self.data_type == 'val':
+                    file_paths = file_paths[-40:-20]
+                elif self.data_type == 'test':
+                    file_paths = file_paths[-20:]
+            else:
+                if self.data_type == 'train':
+                    file_paths = file_paths[:-2]
+                elif self.data_type == 'val':
+                    file_paths = [file_paths[-2]]
+                elif self.data_type == 'test':
+                    file_paths = [file_paths[-1]]
+
+        # --- 第一遍：收集元数据和样本索引 ---
+        key_shape = {}          # 存储数据结构 e.g., {'symbol': {'obs': (len, 3), 'acts': (len,)}}
+        key_category_indices = {} # 存储每个标的下四种分类的全局索引
+        key_total_length = {}   # 记录每个标的在合并前累积的样本长度
+
+        print(f"[{self.data_type}] Pass 1/2: 正在扫描 {len(file_paths)} 个文件以收集元数据...")
+        for file_path in file_paths:
+            with open(file_path, 'rb') as f:
+                _data_dict = pickle.load(f)
+
+            for key, value in _data_dict.items():
+                if key not in key_category_indices:
+                    key_shape[key] = {k: v.shape for k, v in value.items()}
+                    key_total_length[key] = 0
+                    key_category_indices[key] = {
+                        'obs_0_act_0': [], 'obs_0_act_1': [],
+                        'obs_1_act_0': [], 'obs_1_act_1': [],
+                    }
+
+                current_offset = key_total_length[key]
+                obs_feature = value['obs'][:, -2]
+                acts = value['acts']
+                
+                # 计算各类样本在当前文件中的局部索引
+                obs_0_mask = (obs_feature == 0)
+                obs_1_mask = (obs_feature == 1)
+                
+                # 将局部索引转换为全局索引并追加
+                key_category_indices[key]['obs_0_act_0'].extend(
+                    np.where((acts == 0) & obs_0_mask)[0] + current_offset
+                )
+                key_category_indices[key]['obs_0_act_1'].extend(
+                    np.where((acts == 1) & obs_0_mask)[0] + current_offset
+                )
+                key_category_indices[key]['obs_1_act_0'].extend(
+                    np.where((acts == 0) & obs_1_mask)[0] + current_offset
+                )
+                key_category_indices[key]['obs_1_act_1'].extend(
+                    np.where((acts == 1) & obs_1_mask)[0] + current_offset
+                )
+                
+                key_total_length[key] += len(value['obs'])
+
+        # --- 计算全局均衡点 (仅对训练集) ---
+        final_indices_to_keep = {}
+        final_key_lengths = {}
+
+        if self.data_type == 'train':
+            print(f"[{self.data_type}] 正在计算全局样本均衡点...")
+            # 找到所有标的、所有类别中样本数量的最小值，作为全局均衡的目标
+            min_samples_per_category = float('inf')
+            
+            # 必须保证参与均衡的标的在所有四种类别下都有样本
+            valid_keys_for_balancing = []
+            for key, categories in key_category_indices.items():
+                if all(len(indices) > 0 for indices in categories.values()):
+                    min_samples_per_category = min(min_samples_per_category, 
+                                                   *[len(indices) for indices in categories.values()])
+                    valid_keys_for_balancing.append(key)
+                else:
+                    print(f"警告: 标的 '{key}' 因缺少某些类别的样本，将不参与训练集的均衡。")
+            
+            if not valid_keys_for_balancing:
+                raise ValueError("没有一个标的拥有全部四种样本类别，无法进行均衡训练。")
+            
+            if min_samples_per_category == float('inf') or min_samples_per_category == 0:
+                raise ValueError("计算出的最小样本数为0，无法创建训练集。请检查数据。")
+
+            print(f"[{self.data_type}] 全局均衡目标：每个标的、每个类别取 {min_samples_per_category} 个样本。")
+
+            # 为每个有效的标的，随机抽取并合并索引
+            for key in valid_keys_for_balancing:
+                all_indices_for_key = []
+                for category, indices in key_category_indices[key].items():
+                    # 随机打乱索引并截取
+                    np.random.shuffle(indices)
+                    all_indices_for_key.extend(indices[:min_samples_per_category])
+                
+                # 排序索引，以便在第二遍加载时进行高效查找
+                all_indices_for_key.sort()
+                final_indices_to_keep[key] = np.array(all_indices_for_key, dtype=np.int64)
+                final_key_lengths[key] = len(all_indices_for_key)
+        else:
+            # 对于验证集和测试集，不进行均衡，使用所有数据
+            for key, categories in key_category_indices.items():
+                all_indices_for_key = np.concatenate(list(categories.values()))
+                all_indices_for_key.sort()
+                final_indices_to_keep[key] = np.array(all_indices_for_key, dtype=np.int64)
+                final_key_lengths[key] = len(all_indices_for_key)
+        
+        # --- 预分配内存 ---
+        data_dict = {}
+        for key, length in final_key_lengths.items():
+            if length == 0: continue
+            data_dict[key] = {}
+            for k, shape_info in key_shape[key].items():
+                # e.g., shape_info for 'obs' is (original_len, 3)
+                # new shape is (final_len, 3)
+                final_shape = [length] + list(shape_info[1:])
+                data_dict[key][k] = np.empty(final_shape, dtype=np.float32)
+
+        # --- 第二遍：填充数据 ---
+        print(f"[{self.data_type}] Pass 2/2: 正在加载均衡后的数据...")
+        position = {key: 0 for key in data_dict.keys()}
+        key_total_length = {key: 0 for key in key_shape.keys()} # 重置累积长度计数器
+
+        for file_path in file_paths:
+            with open(file_path, 'rb') as f:
+                _data_dict = pickle.load(f)
+
+            for key, value in _data_dict.items():
+                if key not in data_dict:  # 如果此标的因均衡被排除，则跳过
+                    continue
+
+                file_chunk_len = len(value['obs'])
+                # 当前文件块对应的全局索引范围
+                global_start_idx = key_total_length[key]
+                global_end_idx = global_start_idx + file_chunk_len
+
+                # 从已排序的最终索引列表中，高效查找属于当前文件块的索引
+                # `searchsorted` 可以在有序数组中进行二分查找，非常快
+                indices_to_load_from_final_list_start = np.searchsorted(
+                    final_indices_to_keep[key], global_start_idx, side='left'
+                )
+                indices_to_load_from_final_list_end = np.searchsorted(
+                    final_indices_to_keep[key], global_end_idx, side='right'
+                )
+                
+                # 获取这些全局索引值
+                global_indices_in_this_chunk = final_indices_to_keep[key][
+                    indices_to_load_from_final_list_start:indices_to_load_from_final_list_end
+                ]
+
+                if len(global_indices_in_this_chunk) > 0:
+                    # 将全局索引转换为相对于当前文件块的局部索引
+                    local_indices = global_indices_in_this_chunk - global_start_idx
+                    
+                    # 待填充的数据量
+                    num_to_fill = len(local_indices)
+                    current_pos = position[key]
+
+                    # 从文件数据中提取所需样本并填充到预分配的数组中
+                    for k in ['obs', 'acts']:
+                        data_dict[key][k][current_pos : current_pos + num_to_fill] = value[k][local_indices]
+                    
+                    position[key] += num_to_fill
+
+                key_total_length[key] += file_chunk_len
+
+        # --- 最终检查 (仅对训练集) ---
+        if self.data_type == 'train':
+            print(f"[{self.data_type}] 正在验证样本均衡结果...")
+            for key in data_dict:
+                obs_feature = data_dict[key]['obs'][:, -2]
+                acts = data_dict[key]['acts']
+                
+                counts = {
+                    'obs_0_act_0': np.sum((obs_feature == 0) & (acts == 0)),
+                    'obs_0_act_1': np.sum((obs_feature == 0) & (acts == 1)),
+                    'obs_1_act_0': np.sum((obs_feature == 1) & (acts == 0)),
+                    'obs_1_act_1': np.sum((obs_feature == 1) & (acts == 1)),
+                }
+                
+                # 所有类别的样本数都应该等于我们计算出的全局均衡点
+                first_count = next(iter(counts.values()))
+                assert all(c == first_count for c in counts.values()), \
+                    f"标的 '{key}' 训练集样本均衡失败! 类别数量: {counts}"
+
+                print(f"[{self.data_type}] 标的 '{key}' 样本共 {sum(counts.values())} 条")
+                for k, v in counts.items():
+                    print(f"    {k}: {v} 条")
+
+            print(f"[{self.data_type}] 样本均衡验证通过。")
+
+        return data_dict
+
     def __len__(self):
         return self.length
 
@@ -509,6 +733,8 @@ class LobTrajectoryDataset(Dataset):
         days = int(obs[2])
         symbol_id = int(key)
         _data_dict = self.all_data[symbol_id][days]
+        # 当前数据的 ms
+        ms = _data_dict.get('ms', None)
         # 使用预计算的查找表直接获取索引
         latest_idx = _data_dict['close_sec_to_idx'][before_market_close_sec]
         # 获取订单簿数据
@@ -538,13 +764,13 @@ class LobTrajectoryDataset(Dataset):
             if self.std:
                 return np.zeros(self.obs_shape, dtype=np.float32), act
             else:
-                return np.zeros(self.obs_shape, dtype=np.float32), act, self.cur_ms
+                return np.zeros(self.obs_shape, dtype=np.float32), act, ms
 
         if self.std:
             # 返回 final_obs(x), act(y)
             return final_obs, act
         else:
-            return final_obs, act, self.cur_ms
+            return final_obs, act, ms
     
 def test_trajectory_dataset():
     data_folder = r'D:\L2_DATA_T0_ETF\train_data\RAW\BC_train_data_20250518'
