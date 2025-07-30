@@ -65,8 +65,8 @@ def fix_raw_data(all_raw_data):
             # 卖价
             all_raw_data.loc[:, f'BASE卖{i}价'] = all_raw_data[f'BASE卖{i}价'].fillna(all_raw_data[f'BASE卖{i-1}价'] + 0.001)
 
-        # 量nan用0填充
+        # 量nan与0都用1填充
         vol_cols = [i for i in list(all_raw_data) if i.startswith('BASE') and '价' not in i]
-        all_raw_data[vol_cols] = all_raw_data[vol_cols].fillna(0)
+        all_raw_data[vol_cols] = all_raw_data[vol_cols].replace(0, np.nan).fillna(1)
 
     return all_raw_data

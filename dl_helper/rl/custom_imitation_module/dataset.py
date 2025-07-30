@@ -277,7 +277,10 @@ class LobTrajectoryDataset(Dataset):
                     self.all_data[symbol_id] = {}
 
                 # 一天内的 mean_std 是相同的，只取第一个
-                ms = pd.DataFrame(symbol_mean_std[0]['all_std']['all'], dtype=np.float32).iloc[self.need_cols_idx, :].values
+                try:
+                    ms = pd.DataFrame(symbol_mean_std[0]['all_std']['all'], dtype=np.float32).iloc[self.need_cols_idx, :].values
+                except:
+                    ms = pd.DataFrame(symbol_mean_std[0]['price_vol_each']['robust'], dtype=np.float32).iloc[self.need_cols_idx, :].values
                 
                 # 提前标准化数据
                 if self.std:

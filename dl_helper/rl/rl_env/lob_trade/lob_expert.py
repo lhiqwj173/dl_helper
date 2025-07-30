@@ -629,7 +629,7 @@ class LobExpert_file():
                 if _file.endswith('.pkl'):
                     _file_path = os.path.join(root, _file)
                     date = _file.split('.')[0]
-                    log(date)
+                    log(f'准备数据: {date}')
                     self.prepare_train_data_file(date2days(date), _data_file_path=_file_path)
 
         log(f'cache_all done, cache_data: {len(self.cache_data)} dates')
@@ -854,6 +854,7 @@ class LobExpert_file():
             begin_idx = symbol_indices[0]
             end_idx = symbol_indices[-1] + 1
 
+            log(f'准备数据: {date} {s}')
             lob_data = self._prepare_data(begin_idx, end_idx, x, before_market_close_sec, dtype)
             self.cache_data[date_key][USE_CODES.index(s)] = lob_data
 

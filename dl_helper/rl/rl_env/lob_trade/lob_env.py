@@ -482,7 +482,10 @@ class data_producer:
 
         ###################################
         # 价格量 使用 robust
-        ms = pd.DataFrame(std_data['all_std']['all'], dtype=np.float32)
+        try:
+            ms = pd.DataFrame(std_data['all_std']['all'], dtype=np.float32)
+        except:
+            ms = pd.DataFrame(std_data['price_vol_each']['robust'], dtype=np.float32)
         x, ms = self.use_data_split(raw, ms)
 
         if self.data_std:

@@ -1578,25 +1578,26 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
                     if all_idxs.any():
                         unique_mid_price_idxs.append((all_idxs[all_idxs].index[0]-ext_merge_start_row, all_idxs[all_idxs].index[-1]-ext_merge_start_row))
 
-                if unique_mid_price_idxs[0][0] <= int(ext_total_len * 0.3)\
-                    and unique_mid_price_idxs[0][1] >= ext_total_len - int(ext_total_len * 0.3)\
-                    and unique_mid_price_idxs[-1][0] <= int(ext_total_len * 0.3)\
-                    and unique_mid_price_idxs[-1][1] >= ext_total_len - int(ext_total_len * 0.3):
+                if len(unique_mid_price_idxs) >= 2:
+                    if unique_mid_price_idxs[0][0] <= int(ext_total_len * 0.3)\
+                        and unique_mid_price_idxs[0][1] >= ext_total_len - int(ext_total_len * 0.3)\
+                        and unique_mid_price_idxs[-1][0] <= int(ext_total_len * 0.3)\
+                        and unique_mid_price_idxs[-1][1] >= ext_total_len - int(ext_total_len * 0.3):
 
-                    # 满足条件，执行合并
-                    # 将合并后的长度填充到结果数组的相应位置
-                    # merged_lengths_2price[ext_merge_start_row : ext_merge_end_row + 1] = ext_total_len
-                    merged_lengths[ext_merge_start_row : ext_merge_end_row + 1] = ext_total_len
+                        # 满足条件，执行合并
+                        # 将合并后的长度填充到结果数组的相应位置
+                        # merged_lengths_2price[ext_merge_start_row : ext_merge_end_row + 1] = ext_total_len
+                        merged_lengths[ext_merge_start_row : ext_merge_end_row + 1] = ext_total_len
 
-                    # 更新循环变量 i，跳过所有已寻找的段
-                    i = potential_merge_end_segment_idx + 1
+                        # 更新循环变量 i，跳过所有已寻找的段
+                        i = potential_merge_end_segment_idx + 1
 
-                    # 日志
-                    if ext_total_len > NO_MOVE_THRESHOLD:
-                        logout(f'[2price_merge] merge_start_row={ext_merge_start_row}, merge_end_row={ext_merge_end_row}, total_len={ext_total_len}, max_border={int(ext_total_len * 0.3)}, [0]={[int(i) for i in unique_mid_price_idxs[0]]}, [-1]={[int(i) for i in unique_mid_price_idxs[-1]]}')
-                        _merge_price_segments_logout(logout, ext_merge_start_row, ext_merge_end_row, df)
-                    
-                    continue # 继续下一次 while 循环
+                        # 日志
+                        if ext_total_len > NO_MOVE_THRESHOLD:
+                            logout(f'[2price_merge] merge_start_row={ext_merge_start_row}, merge_end_row={ext_merge_end_row}, total_len={ext_total_len}, max_border={int(ext_total_len * 0.3)}, [0]={[int(i) for i in unique_mid_price_idxs[0]]}, [-1]={[int(i) for i in unique_mid_price_idxs[-1]]}')
+                            _merge_price_segments_logout(logout, ext_merge_start_row, ext_merge_end_row, df)
+                        
+                        continue # 继续下一次 while 循环
 
             # elif diff_total_len > 0 and (diff_total_len / total_len) < 0.4:
             #     # same_price 占大多数, 但不满足合并条件
