@@ -297,6 +297,8 @@ class LobTrajectoryDataset(Dataset):
                 if not self.std:
                     self.all_data[symbol_id][days]['ms'] = ms
 
+        print(f"[{self.data_type}] 样本数量: {self.length}")
+
     def _load_data_dict_0(self, data_folder:str):
         file_paths = []
         for root, dirs, _files in os.walk(data_folder):
@@ -705,7 +707,7 @@ class LobTrajectoryDataset(Dataset):
                     print(f"    {k}: {v} 条")
 
             print(f"[{self.data_type}] 样本均衡验证通过。")
-
+            
         return data_dict
 
     def __len__(self):
