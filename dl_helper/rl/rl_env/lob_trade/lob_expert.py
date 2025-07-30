@@ -882,7 +882,10 @@ class LobExpert_file():
         date_key = int(obs_date)
         symbol_key = int(obs_symbol)
         if date_key not in self.cache_data or symbol_key not in self.cache_data[date_key]:
-            log(f'prepare data for {date_key} {symbol_key}, cache_data: {len(self.cache_data)} dates')
+            if not self.pre_cache:
+                # 不预缓存数据
+                # 清理之前的缓存，可以减少内存占用
+                self.cache_data = {}
             self.prepare_train_data_file(date_key, symbol_key, dtype=obs.dtype)
             self.need_add_potential_data_to_env = True
 
