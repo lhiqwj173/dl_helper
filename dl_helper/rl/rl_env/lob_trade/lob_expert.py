@@ -22,6 +22,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DA
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
 from dl_helper.tool import find_not_stable_sign, _extend_sell_save_start, blank_logout, _extend_profit_start, calculate_profit, calculate_sell_save, reset_profit_sell_save, clear_folder, process_lob_data_extended_sell_save, filte_no_move, fix_profit_sell_save
+from dl_helper.tool import report_memory_usage
 
 from py_ext.tool import log, share_tensor, export_df_to_image_dft
 
@@ -885,7 +886,10 @@ class LobExpert_file():
             if not self.pre_cache:
                 # 不预缓存数据
                 # 清理之前的缓存，可以减少内存占用
-                self.cache_data = {}
+                report_memory_usage('before clear cache_data')
+                self.cache_data.clear()
+                report_memory_usage('after clear cache_data')
+
             self.prepare_train_data_file(date_key, symbol_key, dtype=obs.dtype)
             self.need_add_potential_data_to_env = True
 
