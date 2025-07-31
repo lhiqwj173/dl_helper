@@ -206,5 +206,5 @@ if '__main__' == __name__:
 
     sys.argv.append("idx=0")
     run(
-        test, mode='simple'
+        test# , mode='simple'
     )
