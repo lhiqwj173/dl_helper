@@ -23,7 +23,6 @@ from dl_helper.tool import model_params_num
 from torch.utils.data import DataLoader, Dataset
 
 # CNN Model Architecture
-# 模型参数量: 6797834
 class MNISTNet(nn.Module):
     def __init__(self, num_classes=10):
         super(MNISTNet, self).__init__()
@@ -72,55 +71,19 @@ class MNISTNet(nn.Module):
         
         return x
 
-# 模型参数量: 28938
-class MinimalMNISTNet(nn.Module):
-    def __init__(self, num_classes=10):
-        super(MinimalMNISTNet, self).__init__()
-        # 第一个卷积块
-        # 输入: (B, 1, 28, 28)
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2) # 输出: (B, 16, 28, 28)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)                 # 输出: (B, 16, 14, 14)
-        
-        # 第二个卷积块
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2)# 输出: (B, 32, 14, 14)
-        # 再次池化后, 输出: (B, 32, 7, 7)
-        
-        # 全连接层
-        # 展平后的大小为 32 * 7 * 7 = 1568
-        self.fc1 = nn.Linear(32 * 7 * 7, num_classes)
-
-    def forward(self, x):
-        # 卷积 -> 激活 -> 池化
-        x = self.pool(F.relu(self.conv1(x)))
-        
-        # 再次 卷积 -> 激活 -> 池化
-        x = self.pool(F.relu(self.conv2(x)))
-        
-        # 展平张量以输入全连接层
-        # x.size(0) 是 batch size, -1 会自动计算剩余维度的大小
-        x = x.view(x.size(0), -1) 
-        
-        # 全连接层输出 logits
-        x = self.fc1(x)
-        
-        return x
-
 class MNISTDataset(Dataset):
     def __init__(self, filename='/kaggle/input/digit-recognizer/train.csv', _type='train'):
         df = pd.read_csv(filename)
 
         # 分割数据集，使用固定的随机种子，保证每次分割结果相同
         rng = np.random.default_rng(seed=42)
-        df_train = df.sample(frac=0.7, random_state=rng)
-        df_else = df.drop(df_train.index)
-        df_val = df_else.sample(frac=0.5, random_state=rng)
-        df_test = df_else.drop(df_val.index)
-        if _type == 'train':
-            df = df_train.reset_index(drop=True)
-        elif _type == 'val':
-            df = df_val.reset_index(drop=True)
-        elif _type == 'test':
-            df = df_test.reset_index(drop=True)
+        if _type in ['train', 'val']:
+            df_train = df.sample(frac=0.8, random_state=rng)
+            df_val = df.drop(df_train.index)
+            if _type == 'train':
+                df = df_train.reset_index(drop=True)
+            else:
+                df = df_val.reset_index(drop=True)
         
         pixel_cols = [col for col in df.columns if col.startswith('pixel')]
         pixel_data = df[pixel_cols].values
@@ -129,7 +92,7 @@ class MNISTDataset(Dataset):
         pixel_tensor = pixel_tensor / 255.               # Normalize [0,1]
         
         self.pixels = pixel_tensor
-        self.labels = torch.tensor(df['label'].values, dtype=torch.long)
+        self.labels = torch.tensor(df['label'].values, dtype=torch.long) if 'label' in df.columns else None
 
         self.transform_all = transforms.Compose([
             transforms.Normalize((0.1307,), (0.3081,))  # MINST Dataset Normalization Values
@@ -157,7 +120,7 @@ class MNISTDataset(Dataset):
             return image, -1  # Return dummy label for test set
 
 class test(test_base):
-    title_base = '20250731_process_test '
+    title_base = 'bad_run'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -165,13 +128,12 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 32
-        self.params_kwargs['epochs'] = 300
+        self.params_kwargs['epochs'] = 100
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
-        # self.model_cls = MinimalMNISTNet
         self.model_cls = MNISTNet
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
@@ -182,9 +144,9 @@ class test(test_base):
         )
 
         # 准备数据集
-        self.train_dataset = MNISTDataset(_type='train')
-        self.val_dataset   = MNISTDataset(_type='val')
-        self.test_dataset  = MNISTDataset(_type='test')
+        self.train_dataset = MNISTDataset('/kaggle/input/digit-recognizer/train.csv', _type='train')
+        self.val_dataset   = MNISTDataset('/kaggle/input/digit-recognizer/train.csv', _type='val')
+        self.test_dataset  = MNISTDataset('/kaggle/input/digit-recognizer/test.csv', _type='test')
 
     def get_title_suffix(self):
         """获取后缀"""
@@ -203,12 +165,6 @@ class test(test_base):
         
 if '__main__' == __name__:
 
-    # 测试模型
-    # model = MNISTNet()
-    # model = MinimalMNISTNet()
-    # print(f"模型参数量: {model_params_num(model)}")
-
-    sys.argv.append("idx=0")
     run(
-        test# , mode='simple'
+        test, 
     )
