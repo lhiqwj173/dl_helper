@@ -720,8 +720,8 @@ def run_fn_gpu_simple(lock, num_processes, test_class, args, kwargs, train_param
         scheduler = test.get_lr_scheduler(optimizer)
         criterion = test.get_criterion()
         accelerator.register_for_checkpointing(scheduler)
-        model, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(
-            model, optimizer, scheduler, train_loader, val_loader
+        model, optimizer, scheduler, train_loader = accelerator.prepare(
+            model, optimizer, scheduler, train_loader
         )
 
         # 训练循环
