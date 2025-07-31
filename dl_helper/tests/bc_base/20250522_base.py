@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, random_split
 import functools
 from math import prod
 from itertools import product
+import numpy as np
 
 from accelerate.utils import set_seed
 
@@ -566,7 +567,9 @@ class test(test_base):
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 64
         self.params_kwargs['epochs'] = 200
-        self.params_kwargs['learning_rate'] = 1e-4
+        self.params_kwargs['learning_rate'] = 3e-4
+        self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
         self.model_cls = deeplob
@@ -580,7 +583,8 @@ class test(test_base):
 
         # 准备数据集
         data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
-        self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config)
+        train_split_rng = np.random.default_rng(seed=self.seed)
+        self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, train_split_rng=train_split_rng)
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')
     
@@ -607,11 +611,11 @@ if '__main__' == __name__:
     print(model(x).shape)
     print(f"模型参数量: {model_params_num(model)}")
 
-    # input_folder = r'/kaggle/input'
-    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-    # data_folder_name = os.listdir(input_folder)[0]
-    # data_folder = os.path.join(input_folder, data_folder_name)
+    input_folder = r'/kaggle/input'
+    # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
+    data_folder_name = os.listdir(input_folder)[0]
+    data_folder = os.path.join(input_folder, data_folder_name)
 
-    # run(
-    #     test, 
-    # )
+    run(
+        test, 
+    )
