@@ -165,13 +165,14 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 32
-        self.params_kwargs['epochs'] = 10
+        self.params_kwargs['epochs'] = 300
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
-        self.model_cls = MinimalMNISTNet
+        # self.model_cls = MinimalMNISTNet
+        self.model_cls = MNISTNet
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
 
