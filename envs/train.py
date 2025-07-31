@@ -1,3 +1,5 @@
+raise Exception('统一使用rl.py')
+
 import subprocess
 import importlib.metadata
 import os

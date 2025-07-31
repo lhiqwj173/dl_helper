@@ -50,5 +50,6 @@ if '__main__' == __name__:
             'pip install requests_toolbelt',
             'pip install torchstat',
             'pip install torchinfo',
+            'pip install dataframe_image',
         ]:
         subprocess.call(cmd, shell=True)#, stdout=subprocess.DEVNULL)
