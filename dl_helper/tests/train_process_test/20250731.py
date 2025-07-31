@@ -111,13 +111,16 @@ class MNISTDataset(Dataset):
 
         # 分割数据集，使用固定的随机种子，保证每次分割结果相同
         rng = np.random.default_rng(seed=42)
-        if _type in ['train', 'val']:
-            df_train = df.sample(frac=0.8, random_state=rng)
-            df_val = df.drop(df_train.index)
-            if _type == 'train':
-                df = df_train.reset_index(drop=True)
-            else:
-                df = df_val.reset_index(drop=True)
+        df_train = df.sample(frac=0.7, random_state=rng)
+        df_else = df.drop(df_train.index)
+        df_val = df_else.sample(frac=0.5, random_state=rng)
+        df_test = df_else.drop(df_val.index)
+        if _type == 'train':
+            df = df_train.reset_index(drop=True)
+        elif _type == 'val':
+            df = df_val.reset_index(drop=True)
+        elif _type == 'test':
+            df = df_test.reset_index(drop=True)
         
         pixel_cols = [col for col in df.columns if col.startswith('pixel')]
         pixel_data = df[pixel_cols].values
@@ -126,7 +129,7 @@ class MNISTDataset(Dataset):
         pixel_tensor = pixel_tensor / 255.               # Normalize [0,1]
         
         self.pixels = pixel_tensor
-        self.labels = torch.tensor(df['label'].values, dtype=torch.long) if 'label' in df.columns else None
+        self.labels = torch.tensor(df['label'].values, dtype=torch.long)
 
         self.transform_all = transforms.Compose([
             transforms.Normalize((0.1307,), (0.3081,))  # MINST Dataset Normalization Values
@@ -178,9 +181,9 @@ class test(test_base):
         )
 
         # 准备数据集
-        self.train_dataset = MNISTDataset('/kaggle/input/digit-recognizer/train.csv', _type='train')
-        self.val_dataset   = MNISTDataset('/kaggle/input/digit-recognizer/train.csv', _type='val')
-        self.test_dataset  = MNISTDataset('/kaggle/input/digit-recognizer/test.csv', _type='test')
+        self.train_dataset = MNISTDataset(_type='train')
+        self.val_dataset   = MNISTDataset(_type='val')
+        self.test_dataset  = MNISTDataset(_type='test')
 
     def get_title_suffix(self):
         """获取后缀"""

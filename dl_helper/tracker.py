@@ -1145,17 +1145,17 @@ class Tracker():
                         t2_handles.append(axs[1].plot(list(range(epochs)), data[f"test_class_f1_{i}"], label=f'test class {i} f1 {last_value(data[f"test_class_f1_{i}"]):.4f}', c=colors[i+1][0], linestyle='--')[0])
 
                 # 绘制f1曲线
-                t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
+                # t2_handles.append(axs[1].plot(list(range(epochs)), data["train_f1"], c=colors[0][1])[0])
                 t2_handles.append(axs[1].plot(list(range(epochs)), data["val_f1"], label=f'val f1 {last_value(data["val_f1"]):.4f} ({last_value(data["train_f1"]):.4f})', c=colors[0][0])[0])
                 for i in range(min(3, params.y_n)):
-                    t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
+                    # t2_handles.append(axs[1].plot(list(range(epochs)), data[f"train_class_f1_{i}"], c=colors[i+1][1])[0])
                     t2_handles.append(axs[1].plot(list(range(epochs)), data[f"val_class_f1_{i}"], label=f'val class {i} f1 {last_value(data[f"val_class_f1_{i}"]):.4f} ({last_value(data[f"train_class_f1_{i}"]):.4f})', c=colors[i+1][0])[0])
 
                 # 标记f1最高点
-                t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
+                # t2_handles.append(axs[1].scatter(max_train_f1_x, max_train_f1, c=colors[0][1]))
                 t2_handles.append(axs[1].scatter(max_test_f1_x, max_test_f1, c=colors[0][0],label=f'val f1 max: {max_test_f1:.4f} ({max_train_f1:.4f})'))
                 for i in range(min(3, params.y_n)):
-                    t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
+                    # t2_handles.append(axs[1].scatter(max_train_class_f1_xs[i], max_train_class_f1s[i], c=colors[i+1][1]))
                     t2_handles.append(axs[1].scatter(max_val_class_f1_xs[i], max_val_class_f1s[i], c=colors[i+1][0],label=f'val class {i} f1 max: {max_val_class_f1s[i]:.4f} ({max_train_class_f1s[i]:.4f})'))
 
                 # 启用次刻度
