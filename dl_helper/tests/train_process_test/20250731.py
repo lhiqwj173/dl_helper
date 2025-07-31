@@ -23,6 +23,7 @@ from dl_helper.tool import model_params_num
 from torch.utils.data import DataLoader, Dataset
 
 # CNN Model Architecture
+# 模型参数量: 6797834
 class MNISTNet(nn.Module):
     def __init__(self, num_classes=10):
         super(MNISTNet, self).__init__()
@@ -68,6 +69,39 @@ class MNISTNet(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.dropout2(x)
         x = self.fc2(x)
+        
+        return x
+
+# 模型参数量: 28938
+class MinimalMNISTNet(nn.Module):
+    def __init__(self, num_classes=10):
+        super(MinimalMNISTNet, self).__init__()
+        # 第一个卷积块
+        # 输入: (B, 1, 28, 28)
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2) # 输出: (B, 16, 28, 28)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)                 # 输出: (B, 16, 14, 14)
+        
+        # 第二个卷积块
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2)# 输出: (B, 32, 14, 14)
+        # 再次池化后, 输出: (B, 32, 7, 7)
+        
+        # 全连接层
+        # 展平后的大小为 32 * 7 * 7 = 1568
+        self.fc1 = nn.Linear(32 * 7 * 7, num_classes)
+
+    def forward(self, x):
+        # 卷积 -> 激活 -> 池化
+        x = self.pool(F.relu(self.conv1(x)))
+        
+        # 再次 卷积 -> 激活 -> 池化
+        x = self.pool(F.relu(self.conv2(x)))
+        
+        # 展平张量以输入全连接层
+        # x.size(0) 是 batch size, -1 会自动计算剩余维度的大小
+        x = x.view(x.size(0), -1) 
+        
+        # 全连接层输出 logits
+        x = self.fc1(x)
         
         return x
 
@@ -128,13 +162,13 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 32
-        self.params_kwargs['epochs'] = 100
+        self.params_kwargs['epochs'] = 10
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
-        self.model_cls = MNISTNet
+        self.model_cls = MinimalMNISTNet
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
 
@@ -165,6 +199,12 @@ class test(test_base):
         
 if '__main__' == __name__:
 
+    # 测试模型
+    # model = MNISTNet()
+    # model = MinimalMNISTNet()
+    # print(f"模型参数量: {model_params_num(model)}")
+
+    sys.argv.append("idx=0")
     run(
-        test, 
+        test, mode='simple'
     )

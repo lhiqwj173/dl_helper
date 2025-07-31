@@ -702,6 +702,103 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         raise e
 
+def run_fn_gpu_simple(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
+
+    # 训练实例
+    test = test_class(*args, **kwargs)
+    try:
+        # 训练参数
+        params = test.get_param()
+        set_seed(params.seed)
+
+        accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no', kwargs_handlers=[InitProcessGroupKwargs(timeout=timedelta(seconds=3600))])
+
+        model = test.get_model()
+        train_loader = test.get_data('train')
+
+        optimizer = test.get_optimizer(model)
+        scheduler = test.get_lr_scheduler(optimizer)
+        criterion = test.get_criterion()
+        accelerator.register_for_checkpointing(scheduler)
+        model, optimizer, scheduler, train_loader, val_loader = accelerator.prepare(
+            model, optimizer, scheduler, train_loader, val_loader
+        )
+
+        # 训练循环
+        for epoch in range(params.epochs):
+            # 统计
+            total_loss = 0.0
+            total_correct = 0
+            total_samples = 0
+
+            for source, targets in train_loader:
+                optimizer.zero_grad()
+                output = model(source)
+                loss = criterion(output, targets)
+
+                # 1. 累计loss
+                # loss.item() 会将loss从计算图中分离出来，并返回一个标量，防止内存累积
+                total_loss += loss.item()
+
+                # 2. 计算准确率
+                # 假设模型输出是logits，需要用argmax获取预测类别
+                predictions = torch.argmax(output, dim=1)
+                # 累计正确预测的数量和总样本数
+                total_correct += (predictions == targets).sum().item()
+                total_samples += targets.size(0)
+
+                accelerator.backward(loss)
+                optimizer.step()
+
+            # 新增：在epoch结束后计算并打印平均loss和准确率
+            # 计算整个epoch的平均loss和准确率
+            avg_loss = total_loss / len(train_loader)
+            accuracy = total_correct / total_samples
+
+            # 使用accelerator.is_main_process确保只在主进程打印，避免分布式训练时重复输出
+            if accelerator.is_main_process:
+                print(f"Epoch {epoch+1}/{params.epochs} | Train Loss: {avg_loss:.4f} | Train Acc: {accuracy:.4f}")
+                
+    except Exception as e:
+        exception_str = traceback.format_exc()
+        wx.send_message(f'[{params.train_title}] 训练异常:\n{exception_str}')
+
+        print(f'[{params.train_title}] 训练异常:\n{exception_str}', flush=True)
+
+        print('pkill -f jupyter', flush=True)
+        os.system('pkill -f jupyter')
+
+        # # 方法1：停止当前cell的运行
+        # print('sys.exit()', flush=True)
+        # import sys
+        # sys.exit()
+
+        # # 方法2：中断内核
+        # print('os._exit(0)', flush=True)
+        # os._exit(0)
+
+        torch.cuda.empty_cache()
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
+        os._exit(0)
+
+        # 方法3：直接退出notebook
+        print('HTML("<script>window.close();</script>")', flush=True)
+        from IPython.core.display import HTML
+        HTML("<script>window.close();</script>")
+
+        # 方法4：重启内核
+        print('kill_kernel()', flush=True)
+        from IPython.kernel import kill_kernel
+        kill_kernel()
+
+        # 方法5：
+        import IPython
+        IPython.Application.instance().kernel.do_shutdown(False)
+
+        raise e
+
+
 def test_func():
     acc = Accelerator()
     
@@ -760,7 +857,7 @@ def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwar
 
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: normal
+    mode: normal / simple
     args / kwargs 为tester构造参数
 
     可增加字典参数(都可在命令行添加):
@@ -820,5 +917,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
 
     if mode == 'normal':
         notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+    elif mode == 'simple':
+        notebook_launcher(run_fn_gpu_simple, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     else:
         raise Exception(f'mode error: {mode}, must be normal')
