@@ -2948,6 +2948,8 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
         original_plot = False
 
+        report_memory_usage(f'fix_profit {pic_type_name} 0')
+
         # 对第一段 profit 进行修正
         _original_profit_segs = [i for i in profit_segs]
         _original_act_0_data_begin_idx = _act_0_data_begin_idx
@@ -2963,6 +2965,8 @@ def fix_profit_sell_save(df, logout=blank_logout):
             original_plot = True
             # 检查第一段后的调整图片
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
+
+        report_memory_usage(f'fix_profit {pic_type_name} 1')
 
         # 对最后一段 profit 进行修正
         _old_profit_segs = [i for i in profit_segs]
@@ -2982,6 +2986,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, _original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                 original_plot = True
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
+
+        report_memory_usage(f'fix_profit {pic_type_name} 2')
+        print(profit_segs)
 
         # 需要对除了最后一段的 profit 进行修正
         idx = 0
@@ -3069,6 +3076,8 @@ def fix_profit_sell_save(df, logout=blank_logout):
                         _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, _original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                         original_plot = True
                     _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, all, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
+
+            report_memory_usage(f'fix_profit {pic_type_name} 3 {idx}')
 
             idx += 1
     report_memory_usage(f'fix_profit end')
