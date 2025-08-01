@@ -43,6 +43,10 @@ class MNISTNet(nn.Module):
         self.fc1 = nn.Linear(256 * 7 * 7, 512)  # After pooling: 28->14->7
         self.fc2 = nn.Linear(512, num_classes)
         # self.to(device)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, x):
         # Add channel dimension if needed
