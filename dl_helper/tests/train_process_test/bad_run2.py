@@ -168,7 +168,7 @@ class test(test_base):
         self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
-        self.model_cls = MinimalMNISTNet
+        self.model_cls = [MinimalMNISTNet, MNISTNet][self.idx]
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
 
@@ -199,7 +199,7 @@ class test(test_base):
         
 if '__main__' == __name__:
 
-    sys.argv.append("idx=0")
+    # sys.argv.append("idx=0")
     run(
         test, 
     )
