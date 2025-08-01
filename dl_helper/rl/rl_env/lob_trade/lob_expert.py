@@ -784,10 +784,12 @@ class LobExpert_file():
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         # self._logout_switch_file('reset_profit_sell_save')
         lob_data = reset_profit_sell_save(lob_data)
+        report_memory_usage(f'prepare_data 4.1')
 
         # no_move filter
         self._logout_switch_file('filte_no_move')
         lob_data = filte_no_move(lob_data, logout=self._logout)
+        report_memory_usage(f'prepare_data 4.2')
 
         # fix profit / sell_save
         self._logout_switch_file('fix_profit_sell_save')
