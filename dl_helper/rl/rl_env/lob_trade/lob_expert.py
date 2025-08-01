@@ -793,6 +793,7 @@ class LobExpert_file():
 
         # fix profit / sell_save
         self._logout_switch_file('fix_profit_sell_save')
+        lob_data.to_csv(f"fix_profit_sell_save_before.csv", encoding='gbk',index=True)
         lob_data = fix_profit_sell_save(lob_data, logout=self._logout)
         report_memory_usage(f'prepare_data 5')
 
