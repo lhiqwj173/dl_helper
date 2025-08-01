@@ -2935,7 +2935,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
     act_segs = find_segments(df['action'] == 0)
     # 对中午的数据进行拆分
     act_segs = split_segments_at_midday(df, act_segs)
-    #report_memory_usage(f'fix_profit begin')
+    print(f'fix_profit begin')
     for b, e in act_segs:
         pic_type_name = f'profit_{b}-{e}'
 
@@ -2948,7 +2948,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
         original_plot = False
 
-        #report_memory_usage(f'fix_profit {pic_type_name} 0')
+        print(f'fix_profit {pic_type_name} 0')
 
         # 对第一段 profit 进行修正
         _original_profit_segs = [i for i in profit_segs]
@@ -2966,7 +2966,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
             # 检查第一段后的调整图片
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
 
-        #report_memory_usage(f'fix_profit {pic_type_name} 1')
+        print(f'fix_profit {pic_type_name} 1')
 
         # 对最后一段 profit 进行修正
         _old_profit_segs = [i for i in profit_segs]
@@ -2987,7 +2987,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 original_plot = True
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
 
-        #report_memory_usage(f'fix_profit {pic_type_name} 2')
+        print(f'fix_profit {pic_type_name} 2')
         print(profit_segs)
 
         # 需要对除了最后一段的 profit 进行修正
@@ -3079,16 +3079,16 @@ def fix_profit_sell_save(df, logout=blank_logout):
                         original_plot = True
                     _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, all, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
-            #report_memory_usage(f'fix_profit {pic_type_name} 3 {idx}')
+            print(f'fix_profit {pic_type_name} 3 {idx}')
 
             idx += 1
-    report_memory_usage(f'fix_profit end')
+    print(f'fix_profit end')
 
     # 向量化处理 sell_save 段
     act_segs = find_segments(df['action'] == 1)
     # 对中午的数据进行拆分
     act_segs = split_segments_at_midday(df, act_segs)
-    report_memory_usage(f'fix_sell_save begin')
+    print(f'fix_sell_save begin')
     for b, e in act_segs:
         pic_type_name = f'sell_save_{b}-{e}'
 
@@ -3225,7 +3225,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
                     _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, sell_save_segs + dones, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
             idx += 1
-    report_memory_usage(f'fix_sell_save end')
+    print(f'fix_sell_save end')
 
     return df
 
