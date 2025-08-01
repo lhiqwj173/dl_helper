@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader, Dataset
 
 # CNN Model Architecture
 class MNISTNet(nn.Module):
-    def __init__(self, num_classes=10):
+    def __init__(self, num_classes=10, use_bn=True):
         super(MNISTNet, self).__init__()
         
         # Convolutional layers
@@ -48,6 +48,9 @@ class MNISTNet(nn.Module):
         # Fully connected layers
         self.fc1 = nn.Linear(256 * 7 * 7, 512)  # After pooling: 28->14->7
         self.fc2 = nn.Linear(512, num_classes)
+        
+        # 是否使用BatchNorm的开关
+        self.use_bn = use_bn
         # self.to(device)
 
         # for m in self.modules():
@@ -61,19 +64,22 @@ class MNISTNet(nn.Module):
         
         # First conv block
         x = self.conv1(x)
-        x = self.bn1(x)
+        if self.use_bn:
+            x = self.bn1(x)
         x = F.relu(x)
         x = self.pool(x)  # 28x28 -> 14x14
         
         # Second conv block
         x = self.conv2(x)
-        x = self.bn2(x)
+        if self.use_bn:
+            x = self.bn2(x)
         x = F.relu(x)
         x = self.pool(x)  # 14x14 -> 7x7
         
         # Third conv block
         x = self.conv3(x)
-        x = self.bn3(x)
+        if self.use_bn:
+            x = self.bn3(x)
         x = F.relu(x)
         # x = self.dropout1(x)
         
@@ -82,7 +88,8 @@ class MNISTNet(nn.Module):
         
         # Fully connected layers
         x = self.fc1(x)
-        x = self.bn_fc(x)
+        if self.use_bn:
+            x = self.bn_fc(x)
         x = F.relu(x)
         # x = self.dropout2(x)
         x = self.fc2(x)
@@ -151,9 +158,13 @@ class test(test_base):
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
 
-        seeds = range(5)
+        run_args = []
+        for seed in [0,1]:
+            for use_bn in [True, False]:
+                run_args.append((seed, use_bn))
+
         self.model_cls = MNISTNet
-        self.seed = seeds[self.idx]
+        self.seed, self.use_bn = run_args[self.idx]
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象
@@ -168,10 +179,10 @@ class test(test_base):
 
     def get_title_suffix(self):
         """获取后缀"""
-        return f'{self.model_cls.__name__}_seed{self.seed}'
+        return f'{self.model_cls.__name__}_seed{self.seed}_bn{self.use_bn}'
 
     def get_model(self):
-        return self.model_cls()
+        return self.model_cls(use_bn=self.use_bn)
     
     def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
