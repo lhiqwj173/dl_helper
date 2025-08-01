@@ -44,9 +44,9 @@ class MNISTNet(nn.Module):
         self.fc2 = nn.Linear(512, num_classes)
         # self.to(device)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        # for m in self.modules():
+        #     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+        #         nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, x):
         # Add channel dimension if needed
@@ -63,14 +63,14 @@ class MNISTNet(nn.Module):
         
         # Third conv block
         x = F.relu(self.conv3(x))
-        x = self.dropout1(x)
+        # x = self.dropout1(x)
         
         # Flatten for fully connected layers
         x = x.view(x.size(0), -1)  # Flatten: (batch, 128*7*7)
         
         # Fully connected layers
         x = F.relu(self.fc1(x))
-        x = self.dropout2(x)
+        # x = self.dropout2(x)
         x = self.fc2(x)
         
         return x
