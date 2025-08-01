@@ -32,6 +32,12 @@ class MNISTNet(nn.Module):
         self.conv2 = nn.Conv2d( 64,128, kernel_size=3, padding=1)  # 14x14 -> 14x14 
         self.conv3 = nn.Conv2d(128,256, kernel_size=3, padding=1)  #  7x7  ->  7x7 
         
+        # Batch Normalization layers
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.bn3 = nn.BatchNorm2d(256)
+        self.bn_fc = nn.BatchNorm1d(512)
+        
         # Pooling
         self.pool = nn.MaxPool2d(2, 2)  # 2x2 pooling
         
@@ -54,22 +60,30 @@ class MNISTNet(nn.Module):
             x = x.unsqueeze(1)  # (batch, 28, 28) -> (batch, 1, 28, 28)
         
         # First conv block
-        x = F.relu(self.conv1(x))
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x)
         x = self.pool(x)  # 28x28 -> 14x14
         
         # Second conv block
-        x = F.relu(self.conv2(x))
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
         x = self.pool(x)  # 14x14 -> 7x7
         
         # Third conv block
-        x = F.relu(self.conv3(x))
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = F.relu(x)
         # x = self.dropout1(x)
         
         # Flatten for fully connected layers
-        x = x.view(x.size(0), -1)  # Flatten: (batch, 128*7*7)
+        x = x.view(x.size(0), -1)  # Flatten: (batch, 256*7*7)
         
         # Fully connected layers
-        x = F.relu(self.fc1(x))
+        x = self.fc1(x)
+        x = self.bn_fc(x)
+        x = F.relu(x)
         # x = self.dropout2(x)
         x = self.fc2(x)
         
@@ -124,7 +138,7 @@ class MNISTDataset(Dataset):
             return image, -1  # Return dummy label for test set
 
 class test(test_base):
-    title_base = 'bad_run_large_model'
+    title_base = 'bad_run_large_model_bn'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
