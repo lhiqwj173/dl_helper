@@ -120,7 +120,7 @@ class MNISTDataset(Dataset):
             return image, -1  # Return dummy label for test set
 
 class test(test_base):
-    title_base = 'bad_run'
+    title_base = 'bad_run_large_model'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
