@@ -2935,7 +2935,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
     act_segs = find_segments(df['action'] == 0)
     # 对中午的数据进行拆分
     act_segs = split_segments_at_midday(df, act_segs)
-    report_memory_usage(f'fix_profit begin')
+    #report_memory_usage(f'fix_profit begin')
     for b, e in act_segs:
         pic_type_name = f'profit_{b}-{e}'
 
@@ -2948,7 +2948,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
         original_plot = False
 
-        report_memory_usage(f'fix_profit {pic_type_name} 0')
+        #report_memory_usage(f'fix_profit {pic_type_name} 0')
 
         # 对第一段 profit 进行修正
         _original_profit_segs = [i for i in profit_segs]
@@ -2966,7 +2966,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
             # 检查第一段后的调整图片
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
 
-        report_memory_usage(f'fix_profit {pic_type_name} 1')
+        #report_memory_usage(f'fix_profit {pic_type_name} 1')
 
         # 对最后一段 profit 进行修正
         _old_profit_segs = [i for i in profit_segs]
@@ -2987,7 +2987,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 original_plot = True
             _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
 
-        report_memory_usage(f'fix_profit {pic_type_name} 2')
+        #report_memory_usage(f'fix_profit {pic_type_name} 2')
         print(profit_segs)
 
         # 需要对除了最后一段的 profit 进行修正
@@ -3067,6 +3067,8 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 # _new_profit_segs 为空
                 # 需要把 _last 加回来
                 profit_segs.append(_last)
+                # 手动调整 _last 的起点（至old[0]），避免重新计算
+                profit_segs[-1] = (old[0], profit_segs[-1][1])
                 change = True
 
             if change:
@@ -3077,7 +3079,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
                         original_plot = True
                     _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, all, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
-            report_memory_usage(f'fix_profit {pic_type_name} 3 {idx}')
+            #report_memory_usage(f'fix_profit {pic_type_name} 3 {idx}')
 
             idx += 1
     report_memory_usage(f'fix_profit end')
@@ -3210,6 +3212,8 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 # _new_sell_save_segs 为空
                 # 需要把 _last 加回来
                 sell_save_segs.append(_last)
+                # 手动调整 _last 的起点（至old[0]），避免重新计算
+                sell_save_segs[-1] = (old[0], sell_save_segs[-1][1])
                 change = True
 
             if change:
