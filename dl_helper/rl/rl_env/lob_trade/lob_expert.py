@@ -4,6 +4,7 @@
 通过透视未来数据, 给出最佳的交易决策
 最大化收益率
 """
+import tracemalloc
 import tempfile
 import os, pickle, shutil
 import inspect
