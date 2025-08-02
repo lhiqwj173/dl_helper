@@ -920,7 +920,7 @@ class LobExpert_file():
 
         # 是否马上收盘/休盘 （30s）
         noon_need_close = np.float32(12630 / MAX_SEC_BEFORE_CLOSE) >= before_market_close_sec and np.float32(12565 / MAX_SEC_BEFORE_CLOSE) < before_market_close_sec
-        pm_need_close = np.float32(30 / MAX_SEC_BEFORE_CLOSE) >= before_market_close_sec
+        pm_need_close = np.float32(210 / MAX_SEC_BEFORE_CLOSE) >= before_market_close_sec # 暂时修正到 14:56:30
         if noon_need_close or pm_need_close:
             res = ACTION_SELL
         else:
