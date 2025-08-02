@@ -3082,7 +3082,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
             print(f'fix_profit {pic_type_name} 3 {idx}')
 
             idx += 1
-    print(f'fix_profit end')
+    # report_memory_usage(f'fix_profit end')
 
     # 向量化处理 sell_save 段
     act_segs = find_segments(df['action'] == 1)
@@ -3225,7 +3225,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
                     _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, sell_save_segs + dones, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
             idx += 1
-    print(f'fix_sell_save end')
+    # report_memory_usage(f'fix_sell_save end')
 
     return df
 

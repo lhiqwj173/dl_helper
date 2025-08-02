@@ -676,7 +676,7 @@ class LobExpert_file():
             os.makedirs(os.path.join(self.log_folder, self.log_item_name), exist_ok=True)
 
     def _prepare_data(self, begin_idx, end_idx, x, before_market_close_sec, dtype):
-        report_memory_usage(f'prepare_data 0')
+        # report_memory_usage(f'prepare_data 0')
         # 清空日志
         if self.logout:
             clear_folder(self.log_folder)
@@ -695,7 +695,7 @@ class LobExpert_file():
         lob_data['before_market_close_sec'] = np.nan
         lob_data.loc[sample_idxs,'before_market_close_sec'] = [i for i in before_market_close_sec[begin_idx:end_idx]]
         lob_data['before_market_close_sec'] /= MAX_SEC_BEFORE_CLOSE
-        report_memory_usage(f'prepare_data 1')
+        # report_memory_usage(f'prepare_data 1')
 
         lob_data = lob_data.reset_index(drop=True)
 
@@ -713,7 +713,7 @@ class LobExpert_file():
         lob_data['before_market_close_sec'] = np.where(mask, filled + 1/MAX_SEC_BEFORE_CLOSE, lob_data['before_market_close_sec'])
         am = lob_data.loc[lob_data['before_market_close_sec'] >= am_close_sec]
         pm = lob_data.loc[lob_data['before_market_close_sec'] <= pm_begin_sec]
-        report_memory_usage(f'prepare_data 2')
+        # report_memory_usage(f'prepare_data 2')
 
         lob_data['valley_peak'] = np.nan
         lob_data['action'] = np.nan
@@ -752,7 +752,7 @@ class LobExpert_file():
         self.full_lob_data['action'] = np.nan
         self.full_lob_data['valley_peak'] = np.nan
         self.full_lob_data.iloc[lob_data_begin: lob_data_end, -2:] = lob_data.loc[:, ['action', 'valley_peak']].values
-        report_memory_usage(f'prepare_data 3')
+        # report_memory_usage(f'prepare_data 3')
 
         # 区分上午下午填充
         am_cond = lob_data['before_market_close_sec'] >= am_close_sec
@@ -779,23 +779,31 @@ class LobExpert_file():
         # 保存 profit / sell_save
         lob_data['raw_sell_save'] = lob_data['sell_save']
         lob_data['raw_profit'] = lob_data['profit']
-        report_memory_usage(f'prepare_data 4')
+        # report_memory_usage(f'prepare_data 4')
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         # self._logout_switch_file('reset_profit_sell_save')
         lob_data = reset_profit_sell_save(lob_data)
-        report_memory_usage(f'prepare_data 4.1')
+        # report_memory_usage(f'prepare_data 4.1')
 
         # no_move filter
         self._logout_switch_file('filte_no_move')
         lob_data = filte_no_move(lob_data, logout=self._logout)
-        report_memory_usage(f'prepare_data 4.2')
+        # report_memory_usage(f'prepare_data 4.2')
 
         # fix profit / sell_save
         self._logout_switch_file('fix_profit_sell_save')
         lob_data.to_csv(f"fix_profit_sell_save_before.csv", encoding='gbk',index=True)
+        snapshot1 = tracemalloc.take_snapshot()
         lob_data = fix_profit_sell_save(lob_data, logout=self._logout)
-        report_memory_usage(f'prepare_data 5')
+        snapshot2 = tracemalloc.take_snapshot()
+        stats = snapshot2.compare_to(snapshot1, 'traceback')
+        for stat in stats[:10]:
+            print(stat)
+            # 打印调用堆栈以定位泄漏来源
+            print("\n".join(stat.traceback.format()))
+        os.exit()
+        # report_memory_usage(f'prepare_data 5')
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         self._logout_switch_file('reset_profit_sell_save2')
@@ -807,7 +815,7 @@ class LobExpert_file():
 
         # 推迟 sell_save start
         lob_data = delay_sell_save_start(lob_data, logout=self._logout)
-        report_memory_usage(f'prepare_data 6')
+        # report_memory_usage(f'prepare_data 6')
 
         # 推迟平台起点
         self._logout_switch_file('delay_start_platform')
@@ -865,10 +873,10 @@ class LobExpert_file():
             begin_idx = symbol_indices[0]
             end_idx = symbol_indices[-1] + 1
 
-            report_memory_usage(f'准备数据: {date} {s}')
+            # report_memory_usage(f'准备数据: {date} {s}')
             lob_data = self._prepare_data(begin_idx, end_idx, x, before_market_close_sec, dtype)
             self.cache_data[date_key][USE_CODES.index(s)] = lob_data
-            report_memory_usage(f'准备数据完成: {date} {s}')
+            # report_memory_usage(f'准备数据完成: {date} {s}')
 
     def add_potential_data_to_env(self, env):
         if self.need_add_potential_data_to_env:
