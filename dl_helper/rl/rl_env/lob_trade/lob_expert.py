@@ -798,7 +798,7 @@ class LobExpert_file():
         snapshot1 = tracemalloc.take_snapshot()
         lob_data = fix_profit_sell_save(lob_data, logout=self._logout)
         snapshot2 = tracemalloc.take_snapshot()
-        stats = snapshot2.compare_to(snapshot1, 'traceback')
+        stats = snapshot2.compare_to(snapshot1, 'lineno')
         for stat in stats[:10]:
             print(stat)
             # 打印调用堆栈以定位泄漏来源
