@@ -4,7 +4,9 @@
 通过透视未来数据, 给出最佳的交易决策
 最大化收益率
 """
-import tracemalloc
+# import tracemalloc
+
+
 import tempfile
 import os, pickle, shutil
 import inspect
@@ -795,16 +797,17 @@ class LobExpert_file():
         # fix profit / sell_save
         self._logout_switch_file('fix_profit_sell_save')
         lob_data.to_csv(f"fix_profit_sell_save_before.csv", encoding='gbk',index=True)
-        snapshot1 = tracemalloc.take_snapshot()
+        # snapshot1 = tracemalloc.take_snapshot()
+        # report_memory_usage(f'fix_profit_sell_save begin')
         lob_data = fix_profit_sell_save(lob_data, logout=self._logout)
-        snapshot2 = tracemalloc.take_snapshot()
-        stats = snapshot2.compare_to(snapshot1, 'lineno')
-        for stat in stats[:10]:
-            print(stat)
-            # 打印调用堆栈以定位泄漏来源
-            print("\n".join(stat.traceback.format()))
-        os.exit()
-        # report_memory_usage(f'prepare_data 5')
+        # report_memory_usage(f'fix_profit_sell_save end')
+        # snapshot2 = tracemalloc.take_snapshot()
+        # stats = snapshot2.compare_to(snapshot1, 'lineno')
+        # for stat in stats[:10]:
+        #     print(stat)
+        #     # 打印调用堆栈以定位泄漏来源
+        #     print("\n".join(stat.traceback.format()))
+        # os._exit()
 
         # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
         self._logout_switch_file('reset_profit_sell_save2')
