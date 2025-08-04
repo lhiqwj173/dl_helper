@@ -1629,7 +1629,7 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
                     potential_merge_start_segment_idx = j
 
                 # 若有向前扩展
-                if _start_begin_idx != potential_merge_start_segment_idx:
+                if _start_begin_idx + 1 != potential_merge_start_segment_idx:
                     ext_merge_start_row = int(segment_info.iloc[potential_merge_start_segment_idx]['start_index'])
                 else:
                     ext_merge_start_row = merge_start_row
@@ -1649,11 +1649,19 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
                         unique_mid_price_idxs.append((all_idxs[all_idxs].index[0]-ext_merge_start_row, all_idxs[all_idxs].index[-1]-ext_merge_start_row))
 
                 if len(unique_mid_price_idxs) >= 2:
-                    if unique_mid_price_idxs[0][0] <= int(ext_total_len * 0.3)\
-                        and unique_mid_price_idxs[0][1] >= ext_total_len - int(ext_total_len * 0.3)\
-                        and unique_mid_price_idxs[-1][0] <= int(ext_total_len * 0.3)\
-                        and unique_mid_price_idxs[-1][1] >= ext_total_len - int(ext_total_len * 0.3):
+                    assert len(unique_mid_price_idxs) in [2, 3], f"Unexpected number of unique mid price segments found: {len(unique_mid_price_idxs)}"
 
+                    # 最大最小值在首尾都存在
+                    # if unique_mid_price_idxs[0][0] <= int(ext_total_len * 0.3)\
+                    #     and unique_mid_price_idxs[0][1] >= ext_total_len - int(ext_total_len * 0.3)\
+                    #     and unique_mid_price_idxs[-1][0] <= int(ext_total_len * 0.3)\
+                    #     and unique_mid_price_idxs[-1][1] >= ext_total_len - int(ext_total_len * 0.3):
+
+                    # 不同值在首尾都存在
+                    limit_length = int(ext_total_len * 0.3)
+                    begin_satisfys = [i[0]<=limit_length for i in unique_mid_price_idxs]
+                    end_satisfys = [i[1]>=(ext_total_len - limit_length) for i in unique_mid_price_idxs]
+                    if sum(begin_satisfys) >= 2 and sum(end_satisfys) >= 2:
                         # 满足条件，执行合并
                         # 将合并后的长度填充到结果数组的相应位置
                         # merged_lengths_2price[ext_merge_start_row : ext_merge_end_row + 1] = ext_total_len
@@ -1746,8 +1754,8 @@ def filte_no_move(df, no_move_threshold=NO_MOVE_THRESHOLD, logout=blank_logout):
                         会保留最后一个 no move 的卖出动作，因为之后价格开始变化（信号变动有效）
     """
     # 检测 mid_price 是否变化（与前一行比较）
-    df['mid_price_raw'] = (df['BASE卖1价'] + df['BASE买1价']) / 2
-    df['mid_price'] = pd.Series(_smooth_price_series(df['mid_price_raw'].values))
+    df['mid_price_raw'] = ((df['BASE卖1价'] + df['BASE买1价']) / 2).round(4)
+    df['mid_price'] = _smooth_price_series(df['mid_price_raw'].values).round(4)
 
     df = merge_price_segments(df, logout=logout)
 
@@ -2848,7 +2856,7 @@ def split_segments_at_midday(
 
     return processed_segs
 
-def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_name='', logout=blank_logout):
+def _plot_df_with_segs_0(extra_len, b, e, df, segs, _type_name='profit', extra_name='', logout=blank_logout):
     """
     绘制带有高亮分段区域和边界垂直线的 DataFrame 图表。
 
@@ -2923,6 +2931,71 @@ def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_nam
         plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
     plt.close(fig) # 关闭图形，释放内存
 
+def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_name='', logout=blank_logout):
+    """
+    绘制带有高亮分段区域和边界垂直线的 DataFrame 图表。（健壮版）
+
+    Args:
+        extra_len (int): 在主要范围 b-e 前后额外扩展的数据点数。
+        b (int): 主要绘图范围的起始索引。
+        e (int): 主要绘图范围的结束索引。
+        df (pd.DataFrame): 包含价格数据的 DataFrame。
+        segs (list of tuples): 需要高亮的分段区域列表，每个元组为 (start, end)。
+        _type_name (str, optional): 日志文件名的类型前缀。默认为 'profit'。
+        logout (function, optional): 用于记录日志和获取文件路径的函数。
+    """
+    if len(segs) == 0:
+        return
+
+    # 创建图表和坐标轴
+    fig, ax = plt.subplots(figsize=(15, 6))
+    
+    try:
+        # 准备绘图所需的数据
+        plot_df = df.loc[b - extra_len: e + extra_len, ['mid_price', 'BASE买1价', 'BASE卖1价']].copy()
+
+        # 绘制价格曲线
+        ax.plot(plot_df.index, plot_df['mid_price'], color='C0', label='mid_price')
+        ax.plot(plot_df.index, plot_df['BASE买1价'], color='C1', alpha=0.3, label='BASE买1价')
+        ax.plot(plot_df.index, plot_df['BASE卖1价'], color='C2', alpha=0.3, label='BASE卖1价')
+
+        # 绘制垂直线
+        ax.axvline(x=b, color='red', linestyle='--', linewidth=1.5, label=f'范围起始 (b={b})')
+        ax.axvline(x=e, color='red', linestyle='--', linewidth=1.5, label=f'范围结束 (e={e})')
+        ax.axvline(x=e + 2, color='red', linestyle='--', linewidth=1.5, label=f'延申部分 (e={e+2})')
+
+        # 初始化一个集合，用于存储所有自定义的X轴刻度
+        custom_x_ticks = {b, e, e + 2}
+
+        # 填充 segs 区域，并收集刻度
+        for _b, _e in segs:
+            ax.axvspan(_b + b, _e + b, color='#b3e5fc', alpha=0.4, zorder=0)
+            custom_x_ticks.add(_b + b)
+            custom_x_ticks.add(_e + b)
+
+        # 设置X轴的刻度
+        ax.set_xticks(sorted(list(custom_x_ticks)))
+        ax.tick_params(axis='x', rotation=45, labelsize=10)
+
+        # 添加图表标题和坐标轴标签
+        ax.set_title(f'价格走势与分析区间 ({_type_name})', fontsize=16)
+        ax.set_xlabel('数据索引', fontsize=12)
+        ax.set_ylabel('价格', fontsize=12)
+        ax.legend()
+        ax.grid(True, linestyle=':', alpha=0.6)
+        plt.tight_layout()
+
+        # 保存图表
+        plot_file_path = logout(
+            title=f'{_type_name}_{extra_name}_plot' if extra_name else f'{_type_name}_plot',
+            plot=True)
+        if plot_file_path is not None:
+            plt.savefig(plot_file_path, dpi=150)
+            
+    finally:
+        # 无论 try 块中是否发生异常，都确保关闭 figure，防止内存泄漏
+        plt.close(fig)
+
 def fix_profit_sell_save(df, logout=blank_logout):
     """ 
     df 列字段: action, profit, sell_save, BASE卖1价, BASE买1价
@@ -2994,6 +3067,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
         idx = 0
         dones = []
         while len(profit_segs) > 1:
+            assert idx < 30, '异常的 profit_segs 长度，可能是死循环'
             # print(f'profit_segs length: {len(profit_segs)}')
             # 从最后一段开始，向前处理
             _b, _e = profit_segs[-2]
@@ -3142,6 +3216,7 @@ def fix_profit_sell_save(df, logout=blank_logout):
         idx = 0
         dones = []
         while len(sell_save_segs) > 1:
+            assert idx < 30, '异常的 sell_save_segs 长度，可能是死循环'
             # print(f'sell_save_segs length: {len(sell_save_segs)}')
             # 从最后一段开始，向前处理
             _b, _e = sell_save_segs[-2]
