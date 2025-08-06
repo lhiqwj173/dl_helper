@@ -2110,7 +2110,7 @@ def _extend_sell_save_start(df: pd.DataFrame, start_idx: int, end_idx: int, sell
     return new_start_idx if new_start_idx is not None else start_idx
 
 def update_non_positive_blocks(
-    a: pd.Series, 
+    a: pd.Series,
     b: pd.Series,
     valid_mask: pd.Series
 ) -> pd.Series:
@@ -2145,30 +2145,33 @@ def update_non_positive_blocks(
         return a_updated # 如果没有非正值，直接返回副本
 
     # 步骤 2: 识别连续的非正值块
-    # 当值从 True->False 或 False->True 变化时，.ne().cumsum() 会增加计数，从而为每个连续块分配一个唯一的 ID
     block_ids = is_non_positive.ne(is_non_positive.shift()).cumsum()
     non_positive_block_ids = block_ids[is_non_positive]
 
     # --- **主要修改点** ---
     # 步骤 3: 检查每个非正值块是否满足组合条件
-    # 新的条件是：b 必须为正 AND valid_mask 必须为 True
     block_condition = (b > 0) & valid_mask
 
-    # 对 block_condition 按块 ID 分组，并检查每个块是否所有值都为 True。
-    # transform 的结果将是一个与 block_condition 等长的 Series。
-    # 对于原始 a > 0 的位置，此结果将为 NaN，这在下一步中会被妥善处理。
-    is_block_condition_met = block_condition.groupby(non_positive_block_ids).transform('all')
+    # --- 修复开始 ---
+    # 仅对非正值块内的条件进行分组，以避免索引不对齐导致 NaN 分组键
+    # 1. 筛选出与 non_positive_block_ids 索引相同的 relevant_conditions
+    relevant_conditions = block_condition[non_positive_block_ids.index]
+
+    # 2. 对这个索引对齐的子集进行 groupby 和 transform。
+    #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
+    block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+
+    # 3. 将部分结果 reindex 回完整的索引，并将所有其他位置（即 a > 0 的位置）填充为 False。
+    #    这样 is_block_condition_met 就是一个完整的、纯布尔的 Series。
+    is_block_condition_met = block_met_partial.reindex(a.index, fill_value=False)
+    # --- 修复结束 ---
 
     # 步骤 4: 创建最终的替换掩码
-    # 最终掩码需要同时满足两个条件：
-    # 1. 原始 a 的值是非正的 (is_non_positive is True)
-    # 2. 它所在的块满足组合条件 (is_block_condition_met is True)
-    # 使用逻辑与 (&) 操作。Pandas 中 `False & NaN` 的结果是 `False`，
-    # 这完美地处理了 is_block_condition_met 中的 NaN 值（即原始 a 为正值的位置）。
+    # 现在的 is_block_condition_met 是一个纯布尔 Series，
+    # final_update_mask 的计算更安全、更清晰。
     final_update_mask = is_non_positive & is_block_condition_met
-    
+
     # 步骤 5: 执行替换
-    # final_update_mask 现在是一个纯布尔值的 Series，可以安全地用于索引
     a_updated.loc[final_update_mask] = b[final_update_mask]
 
     return a_updated

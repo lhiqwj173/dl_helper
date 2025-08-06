@@ -378,15 +378,19 @@ class LobTrajectoryDataset(Dataset):
 
                 # 获取各类样本的索引
                 # 若类型的样本不存在，返回空数组
-                obs_0_act_0_idx = np.where((act == 0) & obs_0_mask)[0]
-                obs_0_act_0_idx = (obs_0_act_0_idx + key_total_cur_length[key]) if len(obs_0_act_0_idx) > 0 else np.array([], dtype=np.int32)
-                obs_0_act_1_idx = np.where((act == 1) & obs_0_mask)[0]
-                obs_0_act_1_idx = (obs_0_act_1_idx + key_total_cur_length[key]) if len(obs_0_act_1_idx) > 0 else np.array([], dtype=np.int32)
-                obs_1_act_0_idx = np.where((act == 0) & obs_1_mask)[0]
-                obs_1_act_0_idx = (obs_1_act_0_idx + key_total_cur_length[key]) if len(obs_1_act_0_idx) > 0 else np.array([], dtype=np.int32)
-                obs_1_act_1_idx = np.where((act == 1) & obs_1_mask)[0]
-                obs_1_act_1_idx = (obs_1_act_1_idx + key_total_cur_length[key]) if len(obs_1_act_1_idx) > 0 else np.array([], dtype=np.int32)
-                key_total_cur_length[key] += value['obs'].shape[0]
+                try:
+                    obs_0_act_0_idx = np.where((act == 0) & obs_0_mask)[0]
+                    obs_0_act_0_idx = (obs_0_act_0_idx + key_total_cur_length[key]) if len(obs_0_act_0_idx) > 0 else np.array([], dtype=np.int32)
+                    obs_0_act_1_idx = np.where((act == 1) & obs_0_mask)[0]
+                    obs_0_act_1_idx = (obs_0_act_1_idx + key_total_cur_length[key]) if len(obs_0_act_1_idx) > 0 else np.array([], dtype=np.int32)
+                    obs_1_act_0_idx = np.where((act == 0) & obs_1_mask)[0]
+                    obs_1_act_0_idx = (obs_1_act_0_idx + key_total_cur_length[key]) if len(obs_1_act_0_idx) > 0 else np.array([], dtype=np.int32)
+                    obs_1_act_1_idx = np.where((act == 1) & obs_1_mask)[0]
+                    obs_1_act_1_idx = (obs_1_act_1_idx + key_total_cur_length[key]) if len(obs_1_act_1_idx) > 0 else np.array([], dtype=np.int32)
+                    key_total_cur_length[key] += value['obs'].shape[0]
+                except Exception as e:
+                    print(f'{file_path} 数据异常')
+                    raise e
 
                 # 合并索引
                 key_type_sample_idxs[key]['obs_0_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_0'], obs_0_act_0_idx])
