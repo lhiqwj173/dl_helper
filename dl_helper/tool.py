@@ -2111,25 +2111,30 @@ def _extend_sell_save_start(df: pd.DataFrame, start_idx: int, end_idx: int, sell
 
 def update_non_positive_blocks(
     a: pd.Series, 
-    b: pd.Series
+    b: pd.Series,
+    valid_mask: pd.Series
 ) -> pd.Series:
     """
-    检查 a 中的连续非正值块，若对应位置的 b 值全为正，
+    检查 a 中的连续非正值块，若对应位置的 b 值全为正 且 valid_mask 全为 True，
     则将 a 的这些值替换为 b 的值。
 
     Args:
         a (pd.Series): 原始的 a series。
         b (pd.Series): 用于条件检查和提供替换值的 series。
-                                       必须与 a 具有相同的索引。
+                       必须与 a 具有相同的索引。
+        valid_mask (pd.Series): 用于条件检查的布尔掩码。
+                                必须与 a 具有相同的索引。
 
     Returns:
         pd.Series: 更新后的 a series。
     """
     # 确保输入是 Series 且索引一致
-    if not isinstance(a, pd.Series) or not isinstance(b, pd.Series):
-        raise TypeError("输入必须是 pandas Series 类型。")
-    if not a.index.equals(b.index):
-        raise ValueError("两个 Series 的索引必须完全相同。")
+    if not all(isinstance(s, pd.Series) for s in [a, b, valid_mask]):
+        raise TypeError("输入 a, b, valid_mask 都必须是 pandas Series 类型。")
+    if not a.index.equals(b.index) or not a.index.equals(valid_mask.index):
+        raise ValueError("三个 Series (a, b, valid_mask) 的索引必须完全相同。")
+    if not valid_mask.dtype == 'bool':
+        raise TypeError("valid_mask 必须是布尔类型的 Series。")
 
     # 创建 a 的副本以避免修改原始数据
     a_updated = a.copy()
@@ -2137,28 +2142,30 @@ def update_non_positive_blocks(
     # 步骤 1: 标记所有非正值的位置
     is_non_positive = a <= 0
     if not is_non_positive.any():
-        return a_updated
+        return a_updated # 如果没有非正值，直接返回副本
 
     # 步骤 2: 识别连续的非正值块
+    # 当值从 True->False 或 False->True 变化时，.ne().cumsum() 会增加计数，从而为每个连续块分配一个唯一的 ID
     block_ids = is_non_positive.ne(is_non_positive.shift()).cumsum()
     non_positive_block_ids = block_ids[is_non_positive]
 
-    # 步骤 3: 检查每个非正值块对应的 diff 值是否全为正
-    is_diff_positive = b > 0
-    
-    # 对 is_diff_positive 按块 ID 分组，并检查每个块是否所有值都为 True。
-    # transform 的结果将是一个与 is_diff_positive 等长的 Series。
-    # 对于原始 sell_save > 0 的位置，此结果将为 NaN。
-    block_condition_met = is_diff_positive.groupby(non_positive_block_ids).transform('all')
+    # --- **主要修改点** ---
+    # 步骤 3: 检查每个非正值块是否满足组合条件
+    # 新的条件是：b 必须为正 AND valid_mask 必须为 True
+    block_condition = (b > 0) & valid_mask
 
-    # --- **修正点** ---
+    # 对 block_condition 按块 ID 分组，并检查每个块是否所有值都为 True。
+    # transform 的结果将是一个与 block_condition 等长的 Series。
+    # 对于原始 a > 0 的位置，此结果将为 NaN，这在下一步中会被妥善处理。
+    is_block_condition_met = block_condition.groupby(non_positive_block_ids).transform('all')
+
     # 步骤 4: 创建最终的替换掩码
     # 最终掩码需要同时满足两个条件：
-    # 1. 原始值是非正的 (is_non_positive is True)
-    # 2. 它所在的块满足条件 (block_condition_met is True)
+    # 1. 原始 a 的值是非正的 (is_non_positive is True)
+    # 2. 它所在的块满足组合条件 (is_block_condition_met is True)
     # 使用逻辑与 (&) 操作。Pandas 中 `False & NaN` 的结果是 `False`，
-    # 这完美地处理了 block_condition_met 中的 NaN 值。
-    final_update_mask = is_non_positive & block_condition_met
+    # 这完美地处理了 is_block_condition_met 中的 NaN 值（即原始 a 为正值的位置）。
+    final_update_mask = is_non_positive & is_block_condition_met
     
     # 步骤 5: 执行替换
     # final_update_mask 现在是一个纯布尔值的 Series，可以安全地用于索引
@@ -2231,13 +2238,18 @@ def fix_profit(df, begin, end):
             not_stable_mask_profit = find_not_stable_sign(profit.values)
             buy_cost_b1_diff = (range_data.iloc[1:max_idx]['BASE买1价'] + 0.001) * (1 + 5e-5)
             profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
-            profit = update_non_positive_blocks(profit, profit_b1_diff)
+            diff_valid_mask = (range_data.iloc[1:max_idx]['BASE卖1价'] - range_data.iloc[1:max_idx]['BASE买1价']) < 0.0022
+            profit = update_non_positive_blocks(profit, profit_b1_diff, diff_valid_mask)
             profit.loc[not_stable_mask_profit] = 0
             df.loc[range_data.iloc[:max_idx-1].index, 'profit'] = profit.values
         
     # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
-    range_data = reset_profit(df.loc[new_begin:end, :].copy())
-    df.loc[new_begin:end, 'profit'] = range_data['profit']
+    data_0 = df.loc[new_begin-1, 'profit'] if new_begin > 0 else None
+    _begin = new_begin - 1 if new_begin > 0 else new_begin
+    data_m1 = df.loc[end+1, 'profit'] if end < len(df) - 1 else None
+    _end = end + 1 if end < len(df) - 1 else end
+    range_data = reset_profit(df.loc[_begin:_end, :].copy(), data_0, data_m1)
+    df.loc[_begin:_end, 'profit'] = range_data['profit']
 
     # 恢复额外的 profit
     df.loc[end-1:end, 'profit'] = backup_profit
@@ -2257,13 +2269,31 @@ def fix_profit_segs(begin_idx, df, profit_segs, close_price):
     # 2. 遍历 real_segs, 更新 profit
     for seg in real_segs:
         sell_gain = close_price * (1 - 5e-5)
-        buy_cost = df.loc[seg[0]:seg[1], 'BASE卖1价'] * (1 + 5e-5)
+        buy_cost = df.loc[seg[0]+1:seg[1]+1, 'BASE卖1价'] * (1 + 5e-5)
         profit = np.log(sell_gain / buy_cost)
+        # 过滤不稳定的 +- 点
+        not_stable_mask_profit = find_not_stable_sign(profit.values)
+        buy_cost_b1_diff = (df.loc[seg[0]+1:seg[1]+1, 'BASE买1价']+0.001) * (1 + 5e-5)
+        profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
+        diff_valid_mask = (df.loc[seg[0]+1:seg[1]+1, 'BASE卖1价'] - df.loc[seg[0]+1:seg[1]+1, 'BASE买1价']) < 0.0022
+        profit = update_non_positive_blocks(profit, profit_b1_diff, diff_valid_mask)
+        profit.loc[not_stable_mask_profit] = 0
         df.loc[seg[0]:seg[1], 'profit'] = profit.values
+
+    # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
+    data_0 = df.loc[begin_idx-1, 'profit'] if begin_idx > 0 else None   
+    _begin = begin_idx - 1 if begin_idx > 0 else begin_idx
+    data_m1 = df.loc[real_segs[-1][1]+1, 'profit'] if real_segs[-1][1] < len(df) - 1 else None
+    _end = real_segs[-1][1] + 1 if real_segs[-1][1] < len(df) - 1 else real_segs[-1][1]
+    range_data = reset_profit(df.loc[_begin:_end, :].copy(), data_0, data_m1)
+    df.loc[_begin:_end, 'profit'] = range_data['profit']
+
     # 3. 获取新的 profit_segs
     new_profit_segs = find_segments(df.loc[begin_idx:real_segs[-1][1], 'profit'] > 0)
+
     # 4. 删除之间只有一个间隔的分组（合并成一个大的分组）
     skip_1_point(begin_idx, df, new_profit_segs, 'profit')
+    
     return new_profit_segs
 
 def process_non_positive_blocks(series: Union[pd.Series, np.ndarray]) -> pd.Series:
@@ -2377,14 +2407,19 @@ def fix_sell_save(df, begin, end):
             not_stable_mask_sell_save = find_not_stable_sign(sell_save.values)
             sell_gain_a1_diff = (range_data.iloc[1:min_idx]['BASE卖1价'] - 0.001) * (1 - 5e-5)
             sell_save_a1_diff = np.log(sell_gain_a1_diff / buy_cost)
-            sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff)
+            diff_valid_mask = (range_data.iloc[1:min_idx]['BASE卖1价'] - range_data.iloc[1:min_idx]['BASE买1价']) < 0.0022
+            sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff, diff_valid_mask)
             # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
             sell_save.loc[not_stable_mask_sell_save] = 0
             df.loc[range_data.iloc[:min_idx-1].index, 'sell_save'] = sell_save.values
 
     # 第一个 sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
-    range_data = reset_sell_save(df.loc[new_begin:end, :].copy())
-    df.loc[new_begin:end, 'sell_save'] = range_data['sell_save']
+    data_0 = df.loc[new_begin-1, 'sell_save'] if new_begin > 0 else None
+    _begin = new_begin - 1 if new_begin > 0 else new_begin
+    data_m1 = df.loc[end+1, 'sell_save'] if end < len(df) - 1 else None
+    _end = end + 1 if end < len(df) - 1 else end
+    range_data = reset_sell_save(df.loc[_begin:_end, :].copy(), data_0, data_m1)
+    df.loc[_begin:_end, 'sell_save'] = range_data['sell_save']
 
     # 恢复额外的 sell_save
     df.loc[end-1:end, 'sell_save'] = backup_sell_save
@@ -2403,10 +2438,26 @@ def fix_sell_save_segs(begin_idx, df, sell_save_segs, close_price):
     # 2. 遍历 real_segs, 更新 sell_save
     for seg in real_segs:
         buy_cost = close_price * (1 + 5e-5)
-        sell_gain = df.loc[seg[0]:seg[1], 'BASE买1价'] * (1 - 5e-5)
+        sell_gain = df.loc[seg[0]+1:seg[1]+1, 'BASE买1价'] * (1 - 5e-5)
         sell_save = np.log(sell_gain / buy_cost)
-        sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
+        # 过滤不稳定的 +- 点
+        not_stable_mask_sell_save = find_not_stable_sign(sell_save.values)
+        sell_gain_a1_diff = (df.loc[seg[0]+1:seg[1]+1, 'BASE卖1价'] - 0.001) * (1 - 5e-5)
+        sell_save_a1_diff = np.log(sell_gain_a1_diff / buy_cost)
+        diff_valid_mask = (df.loc[seg[0]+1:seg[1]+1, 'BASE卖1价'] - df.loc[seg[0]+1:seg[1]+1, 'BASE买1价']) < 0.0022
+        sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff, diff_valid_mask)
+        # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
+        sell_save.loc[not_stable_mask_sell_save] = 0
         df.loc[seg[0]:seg[1], 'sell_save'] = sell_save.values
+
+    # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
+    data_0 = df.loc[begin_idx-1, 'sell_save'] if begin_idx > 0 else None
+    _begin = begin_idx - 1 if begin_idx > 0 else begin_idx
+    data_m1 = df.loc[real_segs[-1][1]+1, 'sell_save'] if real_segs[-1][1] < len(df) - 1 else None
+    _end = real_segs[-1][1] + 1 if real_segs[-1][1] < len(df) - 1 else real_segs[-1][1]
+    range_data = reset_sell_save(df.loc[_begin:_end, :].copy(), data_0, data_m1)
+    df.loc[_begin:_end, 'sell_save'] = range_data['sell_save']
+
     # 3. 获取新的 sell_save_segs
     new_sell_save_segs = find_segments(df.loc[begin_idx:real_segs[-1][1], 'sell_save'] > 0)
     # 4. 删除之间只有一个间隔的分组（合并成一个大的分组）
@@ -2484,7 +2535,7 @@ def _merge_segs(segs: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
         # 5. 检查当前线段是否与最后一个合并线段重叠。
         #    因为列表已按 begin 排序，所以 current_begin >= last_begin 总是成立。
         #    因此，我们只需检查当前线段的起点是否小于或等于上一个线段的终点。
-        if current_begin <= last_end:
+        if current_begin <= last_end + 1:
             # 如果重叠，则合并它们。
             # 新的合并线段的终点是两者终点中的较大值。
             # 更新结果列表中的最后一个线段。
@@ -2856,82 +2907,7 @@ def split_segments_at_midday(
 
     return processed_segs
 
-def _plot_df_with_segs_0(extra_len, b, e, df, segs, _type_name='profit', extra_name='', logout=blank_logout):
-    """
-    绘制带有高亮分段区域和边界垂直线的 DataFrame 图表。
-
-    Args:
-        extra_len (int): 在主要范围 b-e 前后额外扩展的数据点数。
-        b (int): 主要绘图范围的起始索引。
-        e (int): 主要绘图范围的结束索引。
-        df (pd.DataFrame): 包含价格数据的 DataFrame。
-        segs (list of tuples): 需要高亮的分段区域列表，每个元组为 (start, end)。
-        _type_name (str, optional): 日志文件名的类型前缀。默认为 'profit'。
-        logout (function, optional): 用于记录日志和获取文件路径的函数。
-    """
-    # **** 输出 df 表格图片日志 ****
-    if len(segs) == 0:
-        # print("警告：segs 列表为空，不生成图表。")
-        return
-
-    # 准备绘图所需的数据
-    plot_df = df.loc[b - extra_len: e + extra_len, ['mid_price', 'BASE买1价', 'BASE卖1价']].copy()
-    
-    # 创建图表和坐标轴
-    fig, ax = plt.subplots(figsize=(15, 6)) # 使用 subplots 以便更好地控制
-    
-    # 绘制价格曲线
-    ax.plot(plot_df.index, plot_df['mid_price'], color='C0', label='mid_price')
-    ax.plot(plot_df.index, plot_df['BASE买1价'], color='C1', alpha=0.3, label='BASE买1价')
-    ax.plot(plot_df.index, plot_df['BASE卖1价'], color='C2', alpha=0.3, label='BASE卖1价')
-
-    # ---- 新增功能：在 b 和 e 处绘制垂直线 ----
-    # 使用 axvline 绘制垂直线，设置颜色、线型和标签
-    ax.axvline(x=b, color='red', linestyle='--', linewidth=1.5, label=f'范围起始 (b={b})')
-    ax.axvline(x=e, color='red', linestyle='--', linewidth=1.5, label=f'范围结束 (e={e})')
-    ax.axvline(x=e+2, color='red', linestyle='--', linewidth=1.5, label=f'延申部分 (e={e+2})')
-    # ---- 新增功能结束 ----
-
-    # 初始化一个集合，用于存储所有自定义的X轴刻度
-    custom_x_ticks = set()
-
-    # 填充 segs 区域，并收集刻度
-    for _b, _e in segs:
-        ax.axvspan(_b + b, _e + b, color='#b3e5fc', alpha=0.4, zorder=0)  # 淡蓝色填充
-        # 将每个高亮区域的起始点和结束点加入到刻度集合中
-        custom_x_ticks.add(_b + b)
-        custom_x_ticks.add(_e + b)
-
-    # 将 b 和 e 也添加到 X 轴刻度中，确保边界点被显示
-    custom_x_ticks.add(b)
-    custom_x_ticks.add(e)
-    custom_x_ticks.add(e+2)
-
-    # 设置X轴的刻度为我们收集到的边界点
-    ax.set_xticks(sorted(list(custom_x_ticks)))
-    ax.tick_params(axis='x', rotation=45, labelsize=10) # 调整标签大小和旋转角度
-
-    # 添加图表标题和坐标轴标签
-    ax.set_title(f'价格走势与分析区间 ({_type_name})', fontsize=16)
-    ax.set_xlabel('数据索引', fontsize=12)
-    ax.set_ylabel('价格', fontsize=12)
-    
-    # 显示图例
-    ax.legend()
-    ax.grid(True, linestyle=':', alpha=0.6) # 添加网格线，方便查看
-
-    # 调整布局，防止标签被截断
-    plt.tight_layout()
-    
-    # 保存图表
-    plot_file_path = logout(
-        title=f'{_type_name}_{extra_name}_plot' if extra_name else f'{_type_name}_plot', 
-        plot=True)
-    if plot_file_path is not None:
-        plt.savefig(plot_file_path, dpi=150) # 提高保存图片的分辨率
-    plt.close(fig) # 关闭图形，释放内存
-
-def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_name='', logout=blank_logout):
+def _plot_df_with_segs(extra_len, b, e, df, col, segs=None, _type_name='profit', extra_name='', logout=blank_logout):
     """
     绘制带有高亮分段区域和边界垂直线的 DataFrame 图表。（健壮版）
 
@@ -2940,13 +2916,13 @@ def _plot_df_with_segs(extra_len, b, e, df, segs, _type_name='profit', extra_nam
         b (int): 主要绘图范围的起始索引。
         e (int): 主要绘图范围的结束索引。
         df (pd.DataFrame): 包含价格数据的 DataFrame。
-        segs (list of tuples): 需要高亮的分段区域列表，每个元组为 (start, end)。
+        col (str): 用于计算segs的列名
         _type_name (str, optional): 日志文件名的类型前缀。默认为 'profit'。
         logout (function, optional): 用于记录日志和获取文件路径的函数。
     """
-    if len(segs) == 0:
-        return
-
+    if None is segs:
+        segs = find_segments(df.loc[b:e, col] > 0)
+    
     # 创建图表和坐标轴
     fig, ax = plt.subplots(figsize=(15, 6))
     
@@ -3034,10 +3010,10 @@ def fix_profit_sell_save(df, logout=blank_logout):
         # 若出现变化 输出 df 表格图片
         if _original_profit_segs != profit_segs:
             # 原始图片
-            _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, _original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+            _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, 'profit', segs=_original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
             original_plot = True
             # 检查第一段后的调整图片
-            _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
+            _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, 'profit', _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
 
         print(f'fix_profit {pic_type_name} 1')
 
@@ -3056,9 +3032,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
         # 若出现变化 输出 df 表格图片
         if _old_profit_segs != profit_segs and len(profit_segs):
             if not original_plot:
-                _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, _original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+                _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, 'profit', segs=_original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                 original_plot = True
-            _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, profit_segs, _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
+            _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, 'profit', _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
 
         print(f'fix_profit {pic_type_name} 2')
         print(profit_segs)
@@ -3102,7 +3078,13 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
             # 检查新的 profit 是否有夹杂 profit <= 0 的段
             _new_profit_segs = find_segments(df.loc[real_b:real_e, 'profit'] > 0)
-            skip_1_point(_act_0_data_begin_idx, df, _new_profit_segs, 'profit')
+            # 需要向前推并合并
+            _extend_segs = []
+            for _b, _e in _new_profit_segs:
+                new_begin = _extend_profit_start(df, _b+real_b, _e+real_b, df['profit'].values, df['mid_price'].values, df['no_move_len'].values)
+                _extend_segs.append((new_begin-real_b, _e))
+            _new_profit_segs = _merge_segs(_extend_segs)
+            skip_1_point(real_b, df, _new_profit_segs, 'profit')
 
             change = False
             old_profit_segs = [i for i in profit_segs[:-2]]
@@ -3149,9 +3131,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 all = profit_segs + dones
                 if len(all):
                     if not original_plot:   
-                        _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, _original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+                        _plot_df_with_segs(extra_len, _original_act_0_data_begin_idx, e, df, 'profit', segs=_original_profit_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                         original_plot = True
-                    _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, all, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
+                    _plot_df_with_segs(extra_len, _act_0_data_begin_idx, e, df, 'profit', _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
             print(f'fix_profit {pic_type_name} 3 {idx}')
 
@@ -3185,9 +3167,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
         # 若出现变化 输出 df 表格图片
         if _original_sell_save_segs != sell_save_segs:
-            _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, _original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+            _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, 'sell_save', segs=_original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
             original_plot = True
-            _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, sell_save_segs, _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
+            _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, 'sell_save', _type_name=pic_type_name, extra_name='1_check_first', logout=logout)
 
         # 对最后一段 sell_save 进行修正
         _old_sell_save_segs = [i for i in sell_save_segs]
@@ -3208,9 +3190,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
         # 若出现变化 输出 df 表格图片
         if _old_sell_save_segs != sell_save_segs and len(sell_save_segs):
             if not original_plot:
-                _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, _original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+                _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, 'sell_save', segs=_original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                 original_plot = True
-            _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, sell_save_segs, _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
+            _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, 'sell_save', _type_name=pic_type_name, extra_name='2_check_last', logout=logout)
 
         # 需要对除了最后一段的 sell_save 进行修正
         idx = 0
@@ -3248,7 +3230,13 @@ def fix_profit_sell_save(df, logout=blank_logout):
 
             # 检查新的 sell_save 是否有夹杂 sell_save <= 0 的段
             _new_sell_save_segs = find_segments(df.loc[real_b:real_e, 'sell_save'] > 0)
-            skip_1_point(_act_1_data_begin_idx, df, _new_sell_save_segs, 'sell_save')
+            # 需要向前推并合并
+            _extend_segs = []
+            for _b, _e in _new_sell_save_segs:
+                new_begin = _extend_sell_save_start(df, _b+real_b, _e+real_b, df['sell_save'].values, df['mid_price'].values, df['no_move_len'].values)
+                _extend_segs.append((new_begin-real_b, _e))
+            _new_sell_save_segs = _merge_segs(_extend_segs)
+            skip_1_point(real_b, df, _new_sell_save_segs, 'sell_save')
 
             change = False
             old_sell_save_segs = [i for i in sell_save_segs[:-2]]
@@ -3295,9 +3283,9 @@ def fix_profit_sell_save(df, logout=blank_logout):
                 all = sell_save_segs + dones
                 if len(all):
                     if not original_plot:
-                        _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, _original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
+                        _plot_df_with_segs(extra_len, _original_act_1_data_begin_idx, e, df, 'sell_save', segs=_original_sell_save_segs, _type_name=pic_type_name, extra_name='0', logout=logout)
                         original_plot = True
-                    _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, sell_save_segs + dones, _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
+                    _plot_df_with_segs(extra_len, _act_1_data_begin_idx, e, df, 'sell_save', _type_name=pic_type_name, extra_name=f'3_fix_{idx}', logout=logout)
 
             idx += 1
     # report_memory_usage(f'fix_sell_save end')
@@ -3348,13 +3336,22 @@ def replace_isolated_value_inplace(df, column='profit'):
     df.drop(['is_positive', 'is_isolated_positive', 'is_non_positive', 'is_isolated_non_positive'], 
             axis=1, inplace=True)
     
-def reset_profit(lob_data, logout=blank_logout):
+def reset_profit(lob_data, data_0=None, data_m1=None, logout=blank_logout):
     """
     剔除掉动作之后下一个点的价格变化带来的优势 (成交价格带来的优势不允许利用)
     第一个profit>0信号点，下一个时点价格不能下跌
     最后一个profit>0信号点，下一个时点价格不能下跌
 
     第一个profit<=0信号点, 若与前一个时点的中间价一致，下一个时点价格不能上涨
+
+    参数：
+        lob_data (pd.DataFrame): 输入的 DataFrame，将被直接修改
+        data_0 (float): 备份 lob_data 前一个数据，不在操作范围内，只用于 shift 避免nan
+        data_m1 (float): 备份 lob_data 后一个数据，不在操作范围内，只用于 shift 避免nan
+        logout (function): 输出函数，用于输出日志
+
+    返回：
+        pd.DataFrame: 修改后的 DataFrame
     """
     next_sell_price = lob_data['BASE卖1价'].shift(-1)
 
@@ -3387,6 +3384,12 @@ def reset_profit(lob_data, logout=blank_logout):
             if not profit_cond1.any() and not profit_cond2.any():
                 stop = True
                 if count > 0:
+                    # 恢复备份
+                    if data_0 is not None:
+                        lob_data.loc[lob_data.index[0], 'profit'] = data_0
+                    if data_m1 is not None:
+                        lob_data.loc[lob_data.index[-1], 'profit'] = data_m1
+
                     return lob_data
 
         stop = False
@@ -3552,13 +3555,22 @@ def find_not_stable_sign(arr: np.ndarray, N_EXPANSION = 1) -> np.ndarray:
 
     return expanded_extrema_mask
 
-def reset_sell_save(lob_data, logout=blank_logout):
+def reset_sell_save(lob_data, data_0=None, data_m1=None, logout=blank_logout):
     """
     剔除掉动作之后下一个点的价格变化带来的优势 (成交价格带来的优势不允许利用)  
     第一个sell_save>0信号点，下一个时点价格不能上涨  
     最后一个sell_save>0信号点，下一个时点价格不能上涨  
 
     第一个sell_save<=0信号点, 若与前一个时点的中间价一致，下一个时点价格不能下跌  
+
+    参数：
+        lob_data (pd.DataFrame): 输入的 DataFrame，将被直接修改
+        data_0 (float): 备份 lob_data 前一个数据，不在操作范围内，只用于 shift 避免nan
+        data_m1 (float): 备份 lob_data 后一个数据，不在操作范围内，只用于 shift 避免nan
+        logout (function): 输出函数，用于输出日志
+
+    返回：
+        pd.DataFrame: 修改后的 DataFrame    
     """ 
     next_buy_price = lob_data['BASE买1价'].shift(-1)   
 
@@ -3592,6 +3604,12 @@ def reset_sell_save(lob_data, logout=blank_logout):
             if not sell_save_cond1.any() and not sell_save_cond2.any():
                 stop = True
                 if count > 0:
+                    # 恢复备份
+                    if data_0 is not None:
+                        lob_data.loc[lob_data.index[0], 'sell_save'] = data_0
+                    if data_m1 is not None:
+                        lob_data.loc[lob_data.index[-1], 'sell_save'] = data_m1
+
                     return lob_data
 
         stop = False
@@ -3619,8 +3637,8 @@ def reset_profit_sell_save(lob_data, logout=blank_logout):
     第一个sell_save>0信号点，下一个时点价格不能上涨
     第一个sell_save<0信号点，下一个时点价格不能下跌
     """
-    lob_data = reset_profit(lob_data, logout)
-    lob_data = reset_sell_save(lob_data, logout)
+    lob_data = reset_profit(lob_data)
+    lob_data = reset_sell_save(lob_data)
     return lob_data
 
 def remove_spikes_vectorized(arr):

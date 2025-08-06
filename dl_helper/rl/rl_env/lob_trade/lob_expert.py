@@ -502,7 +502,7 @@ def delay_sell_save_start(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame
             
     return df_copy
 
-def delay_start_platform(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
+def delay_start_platform_0(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
     """
     推迟 profit 和 sell_save 列中正数平台的起始点。
 
@@ -568,6 +568,185 @@ def delay_start_platform(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
                 
                 # 将这些位置的值赋为0
                 df_copy.loc[indices_to_zero, col] = 0
+                
+    return df_copy
+
+# 这是一个虚拟的日志记录器，用于演示。
+# 在您的实际使用中，可以替换为您自己的日志对象。
+class BlankLogout:
+    def info(self, msg):
+        print(f"信息: {msg}")
+    def warning(self, msg):
+        print(f"警告: {msg}")
+
+blank_logout = BlankLogout()
+
+def delay_start_platform_0(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
+    """
+    推迟 profit 和 sell_save 列中正数平台的起始点。
+
+    该函数会识别出 'profit' 和 'sell_save' 列中所有从非正数变为正数的
+    “起始点”。对于每一个起始点所在的 BASE卖1价(对于profit) 或 BASE买1价(对于sell_save)
+    连续平台（即数值相同的一段数据），如果该平台的长度大于2，函数会将其
+    前 n-2 个点的值置为0，仅保留平台末尾的两个点。
+
+    Args:
+        df (pd.DataFrame): 包含 'profit', 'sell_save', 'BASE卖1价', 'BASE买1价'
+                           列的DataFrame。DataFrame 必须有一个单调递增的默认整数索引。
+        logout (object): 用于日志记录的对象，默认为 blank_logout。
+
+    Returns:
+        pd.DataFrame: 经过处理后的新 DataFrame。
+    """
+    # 创建一个副本以避免修改原始 DataFrame
+    df_copy = df.copy()
+
+    # --- 新增: 定义目标列与其平台定义列之间的映射关系 ---
+    # 'profit' 平台的判断依据是 'BASE卖1价' 列
+    # 'sell_save' 平台的判断依据是 'BASE买1价' 列
+    platform_def_map = {
+        'profit': 'BASE卖1价',
+        'sell_save': 'BASE买1价'
+    }
+
+    # 遍历映射关系来处理每个目标列
+    for target_col, platform_col in platform_def_map.items():
+        # 检查所需列是否存在
+        if target_col not in df_copy.columns:
+            logout.warning(f"目标列 '{target_col}' 不在 DataFrame 中，将跳过。")
+            continue
+        if platform_col not in df_copy.columns:
+            logout.warning(f"平台定义列 '{platform_col}' 不在 DataFrame 中，无法处理 '{target_col}'，将跳过。")
+            continue
+
+        # s_target 是我们要修改的目标列 ('profit' 或 'sell_save')
+        s_target = df_copy[target_col]
+        # s_platform 是定义平台的列 ('BASE卖1价' 或 'BASE买1价')
+        s_platform = df_copy[platform_col]
+
+        # --- 步骤 1: 识别目标列中所有从非正数变为正数的“起始点” ---
+        # (这部分逻辑不变，因为起始点仍然是在 profit/sell_save 中寻找)
+        is_positive = s_target > 0
+        was_non_positive = s_target.shift(1, fill_value=0) <= 0
+        start_point_mask = is_positive & was_non_positive
+        start_indices = df_copy.index[start_point_mask]
+
+        if start_indices.empty:
+            continue
+
+        # --- 步骤 2 & 3: 使用平台定义列来高效处理每个平台 ---
+        # **核心修改**: 使用 s_platform (BASE卖1价 或 BASE买1价) 来创建平台ID
+        block_ids = (s_platform != s_platform.shift(1)).cumsum()
+
+        # 遍历每一个识别出的“起始点”
+        for start_idx in start_indices:
+            # 获取该起始点所在平台的ID (基于 platform_col)
+            platform_id = block_ids.loc[start_idx]
+            
+            # 找到该平台包含的所有行的索引 (基于 platform_col)
+            platform_mask = (block_ids == platform_id)
+            platform_indices = df_copy.index[platform_mask]
+            
+            # 如果平台的长度大于2，我们需要修改它
+            if len(platform_indices) > 2:
+                # 确定需要被置为0的索引：即平台的前 n-2 个元素
+                indices_to_zero = platform_indices[:-2]
+                
+                # **重要**: 在原始的目标列 (target_col) 中将这些位置的值赋为0
+                df_copy.loc[indices_to_zero, target_col] = 0
+                
+    return df_copy
+
+def delay_start_platform(df: pd.DataFrame, logout=blank_logout) -> pd.DataFrame:
+    """
+    推迟 profit 和 sell_save 列中正数平台的起始点。
+
+    该函数会识别出 'profit' 和 'sell_save' 列中所有从非正数变为正数的
+    “起始点”。对于每一个起始点，函数会查找其在对应平台定义列
+    ('BASE卖1价' 或 'BASE买1价') 中的 **连续平台**（即数值相同且索引连续的一段数据）。
+    如果该连续平台的长度大于2，函数会将该平台在前 n-2 个点对应的
+    目标列 ('profit' 或 'sell_save') 的值置为0，仅保留平台末尾的两个点。
+
+    Args:
+        df (pd.DataFrame): 包含 'profit', 'sell_save', 'BASE卖1价', 'BASE买1价'
+                           列的DataFrame。DataFrame 必须有一个单调递增的默认整数索引。
+        logout (object): 用于日志记录的对象，默认为 blank_logout。
+
+    Returns:
+        pd.DataFrame: 经过处理后的新 DataFrame。
+    """
+    # 创建一个副本以避免修改原始 DataFrame
+    df_copy = df.copy()
+
+    # 定义目标列与其平台定义列之间的映射关系
+    platform_def_map = {
+        'profit': 'mid_price',  # 使用 mid_price_raw 作为平台定义列
+        'sell_save': 'mid_price',  # 使用 mid_price_raw 作为平台定义列'
+    }
+
+    # 遍历映射关系来处理每个目标列
+    for target_col, platform_col in platform_def_map.items():
+        # 检查所需列是否存在
+        if target_col not in df_copy.columns:
+            logout.warning(f"目标列 '{target_col}' 不在 DataFrame 中，将跳过。")
+            continue
+        if platform_col not in df_copy.columns:
+            logout.warning(f"平台定义列 '{platform_col}' 不在 DataFrame 中，无法处理 '{target_col}'，将跳过。")
+            continue
+
+        s_target = df_copy[target_col]
+        s_platform = df_copy[platform_col]
+
+        # 步骤 1: 识别目标列中所有从非正数变为正数的“起始点”
+        is_positive = s_target > 0
+        was_non_positive = s_target.shift(1, fill_value=0) <= 0
+        start_point_mask = is_positive & was_non_positive
+        start_indices = df_copy.index[start_point_mask]
+
+        if start_indices.empty:
+            continue
+
+        # 使用平台定义列来创建平台ID
+        block_ids = (s_platform != s_platform.shift(1)).cumsum()
+
+        # 遍历每一个识别出的“起始点”
+        for start_idx in start_indices:
+            # 获取该起始点所在平台的ID
+            platform_id = block_ids.loc[start_idx]
+            
+            # --- 以下是核心修正逻辑 ---
+            
+            # 1. 初步筛选：获取所有具有相同平台ID的行的索引。
+            #    这些索引对应的平台值相同，但可能不连续。
+            candidate_indices = df_copy.index[block_ids == platform_id]
+            
+            # 2. 识别连续性：在候选索引中找到不连续的点。
+            #    如果一个索引与前一个索引的差不为1，则说明此处发生了中断。
+            #    .to_series() 是为了能安全地使用 .diff()。
+            is_break = candidate_indices.to_series().diff() != 1
+            
+            # 3. 创建连续区块的标签：对“中断点”进行累加求和，
+            #    为每一个连续的区块分配一个唯一的标签。
+            contiguous_block_labels = is_break.cumsum()
+            
+            # 4. 定位目标区块：找到 start_idx 所在的那个连续区块的标签。
+            #    我们将区块标签与其对应的索引关联起来。
+            block_series = pd.Series(contiguous_block_labels.values, index=candidate_indices)
+            target_block_label = block_series.loc[start_idx]
+            
+            # 5. 最终筛选：只选择属于目标区块的索引。
+            #    这确保了我们只操作包含 start_idx 的那一个连续平台。
+            platform_indices = block_series[block_series == target_block_label].index
+
+            # --- 修正结束，后续逻辑不变 ---
+            
+            # 如果平台的长度大于2，我们需要修改它
+            if len(platform_indices) > 2:
+                # 确定需要被置为0的索引：即平台的前 n-2 个元素
+                indices_to_zero = platform_indices[:-2]
+                
+                # 在原始的目标列 (target_col) 中将这些位置的值赋为0
+                df_copy.loc[indices_to_zero, target_col] = 0
                 
     return df_copy
 

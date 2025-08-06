@@ -433,7 +433,7 @@ class DeepLOB_v2(nn.Module):
             self,
             # --- 新增的维度参数 ---
             num_lob_levels: int = 1,              # LOB的档位数 (例如1档)
-            num_extension_features: int = 4,      # 延伸特征的数量 (例如mid_price, mid_vol, spread, imbalance)
+            num_extension_features: int = 5,      # 延伸特征的数量 (例如mid_price, mid_vol, spread, imbalance)
             # --- 原有参数 ---
             time_steps: int = 50,                 # 时间序列长度
             static_input_dims: int = 3,           # 静态特征数量 (id, time, position)
@@ -647,10 +647,17 @@ class DeepLOB_v2(nn.Module):
         return output
 
 # 简单的数据结构
-# 50 * 4 的矩阵
+ext_features = [
+    'EXT_micro_price',
+    'EXT_obi_l1',
+    'EXT_relative_spread_l1',
+    'EXT_weighted_mid_price_v1',
+    'EXT_volatility_5',
+    'EXT_ofi',
+]
 data_config = {
     'his_len': 50,# 每个样本的 历史数据长度
-    'need_cols': [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']],
+    'need_cols': [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']] + ext_features,
 }
 
 class test(test_base):
@@ -668,7 +675,7 @@ class test(test_base):
         self.params_kwargs['label_smoothing'] = 0
 
         seeds = range(5)
-        self.model_cls = DeepLOB
+        self.model_cls = DeepLOB_v2
         self.seed = seeds[self.idx]
         self.params_kwargs['seed'] = self.seed
 
@@ -689,7 +696,14 @@ class test(test_base):
         return f'{self.model_cls.__name__}_seed{self.seed}'
 
     def get_model(self):
-        return self.model_cls()
+        return self.model_cls(
+            num_lob_levels=1,
+            num_extension_features=len(ext_features),
+            time_steps=50,
+            static_input_dims=3,
+            output_dim=2,
+            use_regularization=False,
+        )
     
     def get_data(self, _type, data_sample_getter_func=None):
         if _type == 'train':
@@ -703,8 +717,15 @@ if '__main__' == __name__:
     # 测试模型
     # model = DeepLOB()
     # x = torch.randn(10, 50*4+4)
-    model = DeepLOB_v2()
-    x = torch.randn(10, 50*8+4)
+    model = DeepLOB_v2(
+        num_lob_levels=1,
+        num_extension_features=len(ext_features),
+        time_steps=50,
+        static_input_dims=3,
+        output_dim=2,
+        use_regularization=False,
+    )
+    x = torch.randn(10, 50*9+4)
     x[:, -4] = 0
     print(model(x).shape)
     print(f"模型参数量: {model_params_num(model)}")
