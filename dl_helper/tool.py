@@ -2622,6 +2622,9 @@ def check_last_profit_segment(begin_idx, df, real_b, real_e, profit_segs):
     """
     返回 real_b（可能会被向前扩展，profit_segs会自动处理）
     """
+    # 测试用
+    print(f'check_last_profit_segment begin_idx: {begin_idx}, real_b: {real_b}, real_e: {real_e}, profit_segs: {profit_segs}')
+
     # 检查最后一段内是否存在 profit<=0 and no_move_len_raw>NO_MOVE_THRESHOLD
     # 若存在的话，将 real_e 调整到 no_move_len_raw>NO_MOVE_THRESHOLD 的第一个点
     # 替换成 no_move_len
