@@ -2128,6 +2128,9 @@ def update_non_positive_blocks(
     Returns:
         pd.Series: 更新后的 a series。
     """
+    # 测试用
+    pickle.dump((a, b, valid_mask), open('a_b_valid_mask_raw.pkl', 'wb'))
+
     # 确保输入是 Series 且索引一致
     if not all(isinstance(s, pd.Series) for s in [a, b, valid_mask]):
         raise TypeError("输入 a, b, valid_mask 都必须是 pandas Series 类型。")
@@ -2162,7 +2165,7 @@ def update_non_positive_blocks(
         #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
         block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
     except Exception as e:
-        pickle.dump((a, b, valid_mask), open('a_b_valid_mask.pkl', 'wb'))
+        pickle.dump((is_non_positive, block_ids, non_positive_block_ids, block_condition, relevant_conditions), open('tempdata.pkl', 'wb'))
         raise e
 
     # 3. 将部分结果 reindex 回完整的索引，并将所有其他位置（即 a > 0 的位置）填充为 False。
