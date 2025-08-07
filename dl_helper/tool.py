@@ -2163,7 +2163,8 @@ def update_non_positive_blocks(
     try:
         # 2. 对这个索引对齐的子集进行 groupby 和 transform。
         #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
-        block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+        # block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+        block_met_partial = relevant_conditions.groupby(non_positive_block_ids.values).transform('all')
     except Exception as e:
         print(relevant_conditions)
         print(non_positive_block_ids)
