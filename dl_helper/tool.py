@@ -2157,9 +2157,13 @@ def update_non_positive_blocks(
     # 1. 筛选出与 non_positive_block_ids 索引相同的 relevant_conditions
     relevant_conditions = block_condition[non_positive_block_ids.index]
 
-    # 2. 对这个索引对齐的子集进行 groupby 和 transform。
-    #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
-    block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+    try:
+        # 2. 对这个索引对齐的子集进行 groupby 和 transform。
+        #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
+        block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+    except Exception as e:
+        pickle.dump((a, b, valid_mask), open('a_b_valid_mask.pkl', 'wb'))
+        raise e
 
     # 3. 将部分结果 reindex 回完整的索引，并将所有其他位置（即 a > 0 的位置）填充为 False。
     #    这样 is_block_condition_met 就是一个完整的、纯布尔的 Series。
