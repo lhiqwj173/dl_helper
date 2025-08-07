@@ -2165,6 +2165,8 @@ def update_non_positive_blocks(
         #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
         block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
     except Exception as e:
+        print(relevant_conditions)
+        print(non_positive_block_ids)
         pickle.dump((is_non_positive, block_ids, non_positive_block_ids, block_condition, relevant_conditions), open('tempdata.pkl', 'wb'))
         raise e
 
@@ -2176,6 +2178,64 @@ def update_non_positive_blocks(
     # 步骤 4: 创建最终的替换掩码
     # 现在的 is_block_condition_met 是一个纯布尔 Series，
     # final_update_mask 的计算更安全、更清晰。
+    final_update_mask = is_non_positive & is_block_condition_met
+
+    # 步骤 5: 执行替换
+    a_updated.loc[final_update_mask] = b[final_update_mask]
+
+    return a_updated
+
+def update_non_positive_blocks_fixed(
+    a: pd.Series,
+    b: pd.Series,
+    valid_mask: pd.Series
+) -> pd.Series:
+    """
+    检查 a 中的连续非正值块，若对应位置的 b 值全为正 且 valid_mask 全为 True，
+    则将 a 的这些值替换为 b 的值。(修复版)
+
+    Args:
+        a (pd.Series): 原始的 a series。
+        b (pd.Series): 用于条件检查和提供替换值的 series。
+                       必须与 a 具有相同的索引。
+        valid_mask (pd.Series): 用于条件检查的布尔掩码。
+                                必须与 a 具有相同的索引。
+
+    Returns:
+        pd.Series: 更新后的 a series。
+    """
+    # 确保输入是 Series 且索引一致 (代码与原版一致，此处省略)
+    if not all(isinstance(s, pd.Series) for s in [a, b, valid_mask]):
+        raise TypeError("输入 a, b, valid_mask 都必须是 pandas Series 类型。")
+    if not a.index.equals(b.index) or not a.index.equals(valid_mask.index):
+        raise ValueError("三个 Series (a, b, valid_mask) 的索引必须完全相同。")
+    if not valid_mask.dtype == 'bool':
+        raise TypeError("valid_mask 必须是布尔类型的 Series。")
+
+    a_updated = a.copy()
+    is_non_positive = a <= 0
+    if not is_non_positive.any():
+        return a_updated
+
+    # 步骤 1: 识别所有连续块（包括正值和非正值块）
+    # 这里的 block_ids 是一个完整的 Series，与 a 索引相同
+    block_ids = is_non_positive.ne(is_non_positive.shift()).cumsum()
+
+    # 步骤 2: 计算每一行的替换条件
+    # block_condition 也是一个完整的 Series
+    block_condition = (b > 0) & valid_mask
+
+    # --- **核心修复点** ---
+    # 步骤 3: 在完整的 Series 上执行 groupby.transform
+    # 对完整的 block_condition 按完整的 block_ids 分组
+    # 检查每个块内的所有条件是否都为 True。
+    # .transform('all') 会返回一个与 a 索引相同的布尔 Series，
+    # 其中每个元素的值是其所在块的 `all()` 聚合结果。
+    # 这种方式避免了对稀疏/过滤后的数据进行 groupby，从而规避了潜在的 bug。
+    is_block_condition_met = block_condition.groupby(block_ids).transform('all')
+
+    # 步骤 4: 创建最终的替换掩码
+    # 只有当 a 是非正数 且 其所在的整个块都满足条件时，才进行替换
     final_update_mask = is_non_positive & is_block_condition_met
 
     # 步骤 5: 执行替换
