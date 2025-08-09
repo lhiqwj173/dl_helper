@@ -24,7 +24,7 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
 from dl_helper.rl.rl_env.lob_trade.lob_const import LOCAL_DATA_FOLDER, KAGGLE_DATA_FOLDER, DATA_FOLDER
 from dl_helper.rl.rl_env.lob_trade.lob_env import LOB_trade_env
 from dl_helper.rl.rl_utils import date2days, days2date
-from dl_helper.tool import find_not_stable_sign, _extend_sell_save_start, blank_logout, _extend_profit_start, calculate_profit, calculate_sell_save, reset_profit_sell_save, clear_folder, process_lob_data_extended_sell_save, filte_no_move, fix_profit_sell_save
+from dl_helper.tool import find_not_stable_bid_ask, find_not_stable_sign, _extend_sell_save_start, blank_logout, _extend_profit_start, calculate_profit, calculate_sell_save, reset_profit_sell_save, clear_folder, process_lob_data_extended_sell_save, filte_no_move, fix_profit_sell_save
 from dl_helper.tool import report_memory_usage
 
 from py_ext.tool import log, share_tensor, export_df_to_image_dft
@@ -944,6 +944,14 @@ class LobExpert_file():
         lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].ffill()
         lob_data.loc[pm_cond, 'action'] = lob_data.loc[pm_cond, 'action'].fillna(ACTION_SELL)
 
+        # # 计算 not_stable_bid_ask
+        # am_res = find_not_stable_bid_ask(lob_data.loc[am_cond, :].copy())
+        # pm_res = find_not_stable_bid_ask(lob_data.loc[pm_cond, :].copy().reset_index(drop=True))
+        # lob_data['not_stable_bid_ask'] = np.nan
+        # lob_data.loc[am_cond, 'not_stable_bid_ask'] = am_res
+        # lob_data.loc[pm_cond, 'not_stable_bid_ask'] = pm_res
+        # lob_data['not_stable_bid_ask'] = lob_data['not_stable_bid_ask'].fillna(False)
+
         # 计算 action==0 时点买入的收益
         am_res = calculate_profit(lob_data.loc[am_cond, :].copy())
         pm_res = calculate_profit(lob_data.loc[pm_cond, :].copy().reset_index(drop=True))
@@ -975,7 +983,7 @@ class LobExpert_file():
 
         # fix profit / sell_save
         self._logout_switch_file('fix_profit_sell_save')
-        lob_data.to_csv(f"fix_profit_sell_save_before.csv", encoding='gbk',index=True)
+        # lob_data.to_csv(f"fix_profit_sell_save_before.csv", encoding='gbk',index=True)
         # snapshot1 = tracemalloc.take_snapshot()
         # report_memory_usage(f'fix_profit_sell_save begin')
         lob_data = fix_profit_sell_save(lob_data, logout=self._logout)

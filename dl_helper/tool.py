@@ -1287,6 +1287,9 @@ def calculate_profit(df, fee=5e-5):
         if not rows_to_update_index.empty:
             df.loc[rows_to_update_index, 'profit'] = 0
 
+    # # 7. 过滤所有 not_stable_bid_ask 的点
+    # df.loc[df['not_stable_bid_ask'], 'profit'] = 0
+
     return df
 
 def calculate_sell_save(df, fee=5e-5):
@@ -1439,6 +1442,9 @@ def calculate_sell_save(df, fee=5e-5):
         rows_to_update_index = df.loc[b:e].index[not_stable_mask_sell_save]
         if not rows_to_update_index.empty:
             df.loc[rows_to_update_index, 'sell_save'] = 0
+
+    # # 8. 过滤所有 not_stable_bid_ask 的点
+    # df.loc[df['not_stable_bid_ask'], 'sell_save'] = 0
 
     return df
 
@@ -2128,9 +2134,6 @@ def update_non_positive_blocks(
     Returns:
         pd.Series: 更新后的 a series。
     """
-    # 测试用
-    pickle.dump((a, b, valid_mask), open('a_b_valid_mask_raw.pkl', 'wb'))
-
     # 确保输入是 Series 且索引一致
     if not all(isinstance(s, pd.Series) for s in [a, b, valid_mask]):
         raise TypeError("输入 a, b, valid_mask 都必须是 pandas Series 类型。")
@@ -2160,16 +2163,10 @@ def update_non_positive_blocks(
     # 1. 筛选出与 non_positive_block_ids 索引相同的 relevant_conditions
     relevant_conditions = block_condition[non_positive_block_ids.index]
 
-    try:
-        # 2. 对这个索引对齐的子集进行 groupby 和 transform。
-        #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
-        # block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
-        block_met_partial = relevant_conditions.groupby(non_positive_block_ids.values).transform('all')
-    except Exception as e:
-        print(relevant_conditions)
-        print(non_positive_block_ids)
-        pickle.dump((is_non_positive, block_ids, non_positive_block_ids, block_condition, relevant_conditions), open('tempdata.pkl', 'wb'))
-        raise e
+    # 2. 对这个索引对齐的子集进行 groupby 和 transform。
+    #    结果 block_met_partial 的索引将是 non_positive_block_ids.index。
+    # block_met_partial = relevant_conditions.groupby(non_positive_block_ids).transform('all')
+    block_met_partial = relevant_conditions.groupby(non_positive_block_ids.values).transform('all')
 
     # 3. 将部分结果 reindex 回完整的索引，并将所有其他位置（即 a > 0 的位置）填充为 False。
     #    这样 is_block_condition_met 就是一个完整的、纯布尔的 Series。
@@ -2306,14 +2303,17 @@ def fix_profit(df, begin, end):
             sell_gain = max_mid_value * (1 - 5e-5)
             profit = np.log(sell_gain / buy_cost)
             # 过滤不稳定的 +- 点
+            _range_idx = range_data.iloc[:max_idx-1].index
             not_stable_mask_profit = find_not_stable_sign(profit.values)
             buy_cost_b1_diff = (range_data.iloc[1:max_idx]['BASE买1价'] + 0.001) * (1 + 5e-5)
             profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
             diff_valid_mask = (range_data.iloc[1:max_idx]['BASE卖1价'] - range_data.iloc[1:max_idx]['BASE买1价']) < 0.0022
             profit = update_non_positive_blocks(profit, profit_b1_diff, diff_valid_mask)
             profit.loc[not_stable_mask_profit] = 0
-            df.loc[range_data.iloc[:max_idx-1].index, 'profit'] = profit.values
-        
+            df.loc[_range_idx, 'profit'] = profit.values
+            # # 过滤所有 not_stable_bid_ask 的点
+            # df.loc[df['not_stable_bid_ask'], 'profit'] = 0
+
     # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     data_0 = df.loc[new_begin-1, 'profit'] if new_begin > 0 else None
     _begin = new_begin - 1 if new_begin > 0 else new_begin
@@ -2343,6 +2343,7 @@ def fix_profit_segs(begin_idx, df, profit_segs, close_price):
         buy_cost = df.loc[seg[0]+1:seg[1]+1, 'BASE卖1价'] * (1 + 5e-5)
         profit = np.log(sell_gain / buy_cost)
         # 过滤不稳定的 +- 点
+        # 构造临时计算用的 df, 只需要包含 BASE卖1价, BASE买1价, profit
         not_stable_mask_profit = find_not_stable_sign(profit.values)
         buy_cost_b1_diff = (df.loc[seg[0]+1:seg[1]+1, 'BASE买1价']+0.001) * (1 + 5e-5)
         profit_b1_diff = np.log(sell_gain / buy_cost_b1_diff)
@@ -2350,6 +2351,9 @@ def fix_profit_segs(begin_idx, df, profit_segs, close_price):
         profit = update_non_positive_blocks(profit, profit_b1_diff, diff_valid_mask)
         profit.loc[not_stable_mask_profit] = 0
         df.loc[seg[0]:seg[1], 'profit'] = profit.values
+
+    # # 过滤 not_stable_bid_ask 的点
+    # df.loc[df['not_stable_bid_ask'], 'profit'] = 0
 
     # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     data_0 = df.loc[begin_idx-1, 'profit'] if begin_idx > 0 else None   
@@ -2475,14 +2479,18 @@ def fix_sell_save(df, begin, end):
             sell_gain = range_data.iloc[1:min_idx]['BASE买1价'] * (1 - 5e-5)
             sell_save = np.log(sell_gain / buy_cost)
             # 过滤不稳定的 +- 点
+            # 构造临时计算用的 df, 只需要包含 BASE卖1价, BASE买1价, sell_save
+            _range_idx = range_data.iloc[:min_idx-1].index
             not_stable_mask_sell_save = find_not_stable_sign(sell_save.values)
             sell_gain_a1_diff = (range_data.iloc[1:min_idx]['BASE卖1价'] - 0.001) * (1 - 5e-5)
             sell_save_a1_diff = np.log(sell_gain_a1_diff / buy_cost)
-            diff_valid_mask = (range_data.iloc[1:min_idx]['BASE卖1价'] - range_data.iloc[1:min_idx]['BASE买1价']) < 0.0022
+            diff_valid_mask = (range_data.iloc[1:min_idx]['BASE卖1价'] - range_data.iloc[1:min_idx]['BASE买1价']) < 0.0022 # 价差 < 0.0022
             sell_save = update_non_positive_blocks(sell_save, sell_save_a1_diff, diff_valid_mask)
             # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
             sell_save.loc[not_stable_mask_sell_save] = 0
-            df.loc[range_data.iloc[:min_idx-1].index, 'sell_save'] = sell_save.values
+            df.loc[_range_idx, 'sell_save'] = sell_save.values
+            # # 过滤 not_stable_bid_ask 的点
+            # df.loc[df['not_stable_bid_ask'], 'sell_save'] = 0
 
     # 第一个 sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     data_0 = df.loc[new_begin-1, 'sell_save'] if new_begin > 0 else None
@@ -2520,6 +2528,9 @@ def fix_sell_save_segs(begin_idx, df, sell_save_segs, close_price):
         # sell_save = process_non_positive_blocks(remove_spikes_vectorized(sell_save.values))
         sell_save.loc[not_stable_mask_sell_save] = 0
         df.loc[seg[0]:seg[1], 'sell_save'] = sell_save.values
+
+    # # 过滤所有 not_stable_bid_ask 的点
+    # df.loc[df['not_stable_bid_ask'], 'sell_save'] = 0
 
     # 第一个 profit > 0/ sell_save > 0 时, 不允许 买入信号后，价格（成交价格）下跌 / 卖出信号后，价格（成交价格）上涨，利用跳价
     data_0 = df.loc[begin_idx-1, 'sell_save'] if begin_idx > 0 else None
@@ -2655,6 +2666,12 @@ def check_last_profit_segment(begin_idx, df, real_b, real_e, profit_segs):
     _new_profit_segs = find_segments(df.loc[real_b:real_e, 'profit'] > 0)
     _new_profit_segs = [(i[0]+real_b, i[1]+real_b) for i in _new_profit_segs]
     _new_profit_segs = [(i[0]-begin_idx, i[1]-begin_idx) for i in _new_profit_segs]
+    # 需要向前推并合并
+    _extend_segs = []
+    for _b, _e in _new_profit_segs:
+        new_begin = _extend_profit_start(df, _b+begin_idx, _e+begin_idx, df['profit'].values, df['mid_price'].values, df['no_move_len'].values)
+        _extend_segs.append((new_begin-begin_idx, _e))
+    _new_profit_segs = _merge_segs(_extend_segs)
     # 删除之间只有一个间隔的分组（合并成一个大的分组）
     skip_1_point(begin_idx, df, _new_profit_segs, 'profit')
 
@@ -2732,6 +2749,12 @@ def check_last_sell_save_segment(begin_idx, df, real_b, real_e, sell_save_segs):
     _new_sell_save_segs = find_segments(df.loc[real_b:real_e, 'sell_save'] > 0)
     _new_sell_save_segs = [(i[0]+real_b, i[1]+real_b) for i in _new_sell_save_segs]
     _new_sell_save_segs = [(i[0]-begin_idx, i[1]-begin_idx) for i in _new_sell_save_segs]
+    # 需要向前推并合并
+    _extend_segs = []
+    for _b, _e in _new_sell_save_segs:
+        new_begin = _extend_sell_save_start(df, _b+begin_idx, _e+begin_idx, df['sell_save'].values, df['mid_price'].values, df['no_move_len'].values)
+        _extend_segs.append((new_begin-begin_idx, _e))
+    _new_sell_save_segs = _merge_segs(_extend_segs)
     # 删除之间只有一个间隔的分组（合并成一个大的分组）
     skip_1_point(begin_idx, df, _new_sell_save_segs, 'sell_save')
     
@@ -3507,7 +3530,7 @@ def find_binary_extrema(arr: np.ndarray) -> np.ndarray:
     return result
 
 # --- 新增功能：扩展布尔掩码中的 True 区域 ---
-def expand_true_regions(mask: np.ndarray, n: int) -> np.ndarray:
+def expand_true_regions_0(mask: np.ndarray, n: int) -> np.ndarray:
     """
     扩展布尔掩码中的 True 区域，将其前后 n 个元素也设置为 True。
 
@@ -3548,6 +3571,67 @@ def expand_true_regions(mask: np.ndarray, n: int) -> np.ndarray:
     
     return expanded_mask
 
+def expand_true_regions(mask: np.ndarray, n: int) -> np.ndarray:
+    """
+    扩展布尔掩码中的 True 区域，将其前后 n 个元素也设置为 True。
+
+    该函数通过先对数组进行填充（padding），再使用一维卷积（convolution）
+    的方式实现高效的向量化操作。这种方法逻辑清晰，结果可预测，
+    避免了不同库或版本中 `mode='same'` 参数可能带来的歧义。
+
+    Args:
+        mask (np.ndarray): 输入的布尔掩码数组，必须是一维的。
+        n (int): 向前后扩展的邻域大小。如果 n=0，则不进行扩展。
+
+    Returns:
+        np.ndarray: 扩展后的布尔掩码数组，其长度与输入数组相同。
+        
+    Raises:
+        ValueError: 如果 n 为负数或 mask 不是一维数组。
+    """
+    # --- 输入验证 ---
+    if mask.ndim != 1:
+        raise ValueError("输入掩码必须是一维数组 (Input mask must be a 1D array)")
+    if n < 0:
+        raise ValueError("扩展邻域大小 n 不能为负数 (n cannot be negative)")
+    if n == 0:
+        return mask.copy()
+    if mask.size == 0 or not np.any(mask):
+        return mask.copy()
+
+    # --- 核心逻辑：两个方向的扩展 ---
+    # 为了精确控制扩展，我们分别处理向前和向后的情况，然后合并结果。
+    # 这比使用一个中心化的卷积核(2*n+1)在边界处理上更精确、更直观。
+
+    # 1. 将布尔掩码转换为整数 (True->1, False->0)
+    mask_int = mask.astype(np.int8)
+
+    # 2. 向右（向前）扩展：
+    #    创建一个长度为 n+1 的卷积核 [1, 1, ..., 1]
+    #    通过卷积，任何一个 True (1) 都会使其后的 n 个元素变为非零。
+    kernel = np.ones(n + 1, dtype=np.int8)
+    #    我们在右侧填充n个0，确保卷积输出长度与原数组一致。
+    padded_forward = np.pad(mask_int, (0, n), 'constant')
+    expanded_forward = np.convolve(padded_forward, kernel, mode='valid') > 0
+
+    # 3. 向左（向后）扩展：
+    #    同样的逻辑，只是填充方向相反。
+    padded_backward = np.pad(mask_int, (n, 0), 'constant')
+    expanded_backward = np.convolve(padded_backward, kernel, mode='valid') > 0
+    
+    # 4. 合并两个方向的扩展结果
+    #    使用逻辑或操作，任何一个方向扩展到的区域都为 True。
+    #    注意：这里有一个小技巧，expanded_backward 需要向右移动n个位置
+    #    才能与原始数组对齐。一个更简单的方法是反转原数组和结果。
+    mask_int_reversed = mask_int[::-1]
+    padded_reversed = np.pad(mask_int_reversed, (0, n), 'constant')
+    expanded_reversed_temp = np.convolve(padded_reversed, kernel, mode='valid') > 0
+    expanded_backward = expanded_reversed_temp[::-1] # 再次反转回来
+
+    # 将原始为True的位置、向前扩展的位置、向后扩展的位置合并
+    final_mask = mask | expanded_forward | expanded_backward
+    
+    return final_mask
 
 def keep_long_true_blocks(arr: np.ndarray, min_length: int = 5) -> np.ndarray:
     """
@@ -3607,15 +3691,118 @@ def keep_long_true_blocks(arr: np.ndarray, min_length: int = 5) -> np.ndarray:
     
     return valid_mask
 
+def calculate_er_metrics(np_arr: np.ndarray, window: int = 9) -> tuple[np.ndarray, np.ndarray]:
+    """
+    计算给定价格序列的效率比率（ER）和相关的波动指标。
 
-def find_not_stable_sign(arr: np.ndarray, N_EXPANSION = 1) -> np.ndarray:
+    计算基于一个指定大小（window）的中心移动窗口。
+
+    1. ER (效率比率) = Signal / Noise
+       - Signal (信号) = |窗口最后一个点的价格 - 窗口第一个点的价格|
+       - Noise (噪声) = sum(|Price[t] - Price[t-1]|) for t over the window
+
+    2. Wasted Movement (无效波动) = Noise - Signal
+       - 这个值代表了窗口内所有未对净方向变化做出贡献的价格波动总和。
+
+    Args:
+        np_arr (np.ndarray): 输入的价格序列，一个一维的 NumPy 数组。
+        window (int, optional): 用于计算的移动窗口大小。必须是一个大于1的奇数。
+                                默认为 5。
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: 一个包含两个 NumPy 数组的元组：
+            - er_series (np.ndarray): 与输入等长的 ER 序列。
+            - wasted_movement_series (np.ndarray): 与输入等长的无效波动序列。
+            对于无法形成完整窗口的边界点，两个序列中的对应值为 np.nan。
+
+    Raises:
+        ValueError: 如果 window 不是一个大于1的奇数。
+    """
+    # --- 输入验证 ---
+    if not isinstance(window, int) or window <= 1 or window % 2 == 0:
+        raise ValueError("窗口大小（window）必须是一个大于1的奇数。")
+
+    n = len(np_arr)
+
+    # 如果序列长度小于窗口大小，无法进行任何计算
+    if n < window:
+        return (np.full(n, np.nan), np.full(n, np.nan))
+
+    # --- 初始化结果数组 ---
+    er = np.full(n, np.nan)
+    wasted_movement = np.full(n, np.nan)
+    
+    # --- 向量化计算 ---
+
+    # 1. 计算信号 (Signal)
+    # 窗口内最后一个价格与第一个价格之差的绝对值
+    signal = np.abs(np_arr[window - 1:] - np_arr[:-(window - 1)])
+
+    # 2. 计算噪声 (Noise)
+    # 窗口内所有相邻价格差的绝对值之和
+    price_diffs = np.abs(np.diff(np_arr))
+    noise = np.convolve(price_diffs, np.ones(window - 1, dtype=float), mode='valid')
+
+    # 3. 计算 ER 核心部分
+    er_core = np.divide(signal, noise, out=np.ones_like(signal, dtype=float), where=noise != 0)
+
+    # 4. 计算无效波动 (Wasted Movement) 的核心部分
+    wasted_movement_core = noise - signal
+
+    # --- 填充结果 ---
+    
+    # 5. 计算结果的起始填充位置
+    offset = (window - 1) // 2
+    
+    # 6. 将计算出的核心部分填充到结果数组中
+    er[offset:-offset] = er_core
+    wasted_movement[offset:-offset] = wasted_movement_core
+
+    return er, wasted_movement
+
+
+def find_not_stable_bid_ask(df, N_EXPANSION = 1) -> np.ndarray:
+    """
+    df: 所有的数据
+
+    找到不稳定的 bid ask 点
+    返回需要 屏蔽 的bool索引
+
+    会保留 bid ask 起始的第一个数据
+    """
+    bid = df['BASE买1价'].values
+    ask = df['BASE卖1价'].values
+
+    # 计算 er / wasted_movement 的窗口大小
+    window = 5
+    extra_length = (window - 1) // 2
+
+    # 计算 er / wasted_movement
+    er_bid, wasted_movement_bid = calculate_er_metrics(bid, window=window)
+    er_ask, wasted_movement_ask = calculate_er_metrics(ask, window=window)
+
+    # 找到极端的值 趋势越小 and 无效波动越大
+    _er_mask = ((er_bid <= 0.15) | (er_ask <= 0.15)) & ((wasted_movement_bid >= 0.003) | (wasted_movement_ask >= 0.003))
+
+    # 扩展极值点区域
+    _er_mask = expand_true_regions(_er_mask, n=5)
+
+    # # 只有连续 5 个 True 才保留
+    # _er_mask = keep_long_true_blocks(_er_mask, min_length=12)
+
+    # # 扩展极值点区域
+    # _er_mask = expand_true_regions(_er_mask, n=5)
+
+    return _er_mask
+
+def find_not_stable_sign(arr, N_EXPANSION = 1) -> np.ndarray:
     """
     找到不稳定的信号点
     返回需要 屏蔽 的bool索引
 
     会保留 arr 起始的第一个数据
     """
-    # 步骤 1: 找到初始的极值点
+    # 步骤 1.0: 找到初始的极值点 profit / sell_save
     initial_extrema_mask = find_binary_extrema(arr)
 
     # 步骤 2: 扩展极值点区域
@@ -4297,3 +4484,35 @@ class LockWithLog:
         self.log_func(f"{self.header} Lock released!")
 
 
+if __name__ == '__main__':
+    print(find_not_stable_bid_ask(
+        pd.DataFrame({
+            'BASE卖1价': [
+                7.132,
+                7.132,
+                7.132,
+                7.131,
+                7.13,
+                7.129,
+                7.13,
+                7.129,
+                7.131,
+                7.133,
+                7.134,
+            ],
+            'BASE买1价': [
+                7.131,
+                7.131,
+                7.131,
+                7.13,
+                7.129,
+                7.128,
+                7.129,
+                7.128,
+                7.13,
+                7.131,
+                7.133,
+            ]
+        })
+
+    ))
