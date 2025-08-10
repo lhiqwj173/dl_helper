@@ -692,7 +692,7 @@ class test(test_base):
         # 准备数据集
         data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
         train_split_rng = np.random.default_rng(seed=self.seed)
-        self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, train_split_rng=train_split_rng)
+        self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, split_rng=train_split_rng)
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')
     
