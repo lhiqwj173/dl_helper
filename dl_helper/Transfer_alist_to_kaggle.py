@@ -946,18 +946,24 @@ if __name__ == '__main__':
     # h264/h265/av1
     codec = 'h264'
     host = ''
+    func = None
     for arg in sys.argv[1:]:
         if arg == 'bc_train_data_wait':
-            bc_train_data_wait()
+            func = bc_train_data_wait
         elif arg == 'only_transfer':
-            only_transfer()
+            func = only_transfer
         elif arg == 'bt_transfer':
-            bt_transfer()
+            func = bt_transfer
         elif arg == 'bt_process_inplace':
-            bt_process_inplace()
+            func = bt_process_inplace
         elif arg.startswith('codec='):
             codec = arg.split('=')[1]
             print(f'使用编码器: {codec}')
         elif arg.startswith('host='):
             host = arg.split('=')[1]
             print(f'使用alist主机: {host}')
+
+    if func is not None:
+        func()
+    else:
+        print('未指定功能')
