@@ -843,7 +843,7 @@ def bc_train_data_wait():
     # 下载压缩文件
     alist_folder = r'/bc_train_data_wait/'
     local_folder = r'bc_train_data'
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'])
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://146.235.33.108' if not host else host)
     files = alist_client.listdir(alist_folder)
     alist_client.download([os.path.join(alist_folder, i['name']) for i in files], local_folder)
 
@@ -857,7 +857,7 @@ def only_transfer():
     # 下载压缩文件
     alist_folder = r'/only_transfer/'
     local_folder = r'transfer'
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244')
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244' if not host else host)
     files = alist_client.listdir(alist_folder)
 
     for file in files:
@@ -874,7 +874,7 @@ def bt_transfer():
     local_folder = r'/completed'
     output_folder = r'completed'
     os.makedirs(output_folder, exist_ok=True)
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244')
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244' if not host else host)
 
     files = alist_client.listdir(alist_folder)
     VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv']
@@ -912,7 +912,7 @@ def bt_process_inplace():
     local_folder = r'/completed'
     output_folder = r'completed'
     os.makedirs(output_folder, exist_ok=True)
-    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244')
+    alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244' if not host else host)
 
     files = alist_client.listdir(alist_folder)
     VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.mkv']
@@ -945,6 +945,7 @@ def bt_process_inplace():
 if __name__ == '__main__':
     # h264/h265/av1
     codec = 'h264'
+    host = ''
     for arg in sys.argv[1:]:
         if arg == 'bc_train_data_wait':
             bc_train_data_wait()
@@ -957,3 +958,6 @@ if __name__ == '__main__':
         elif arg.startswith('codec='):
             codec = arg.split('=')[1]
             print(f'使用编码器: {codec}')
+        elif arg.startswith('host='):
+            host = arg.split('=')[1]
+            print(f'使用alist主机: {host}')
