@@ -733,11 +733,6 @@ if '__main__' == __name__:
     print(model(x).shape)
     print(f"模型参数量: {model_params_num(model)}")
 
-    # input_folder = r'/kaggle/input'
-    # # input_folder = r'C:\Users\lh\Desktop\temp\test_train_data'
-    # data_folder_name = os.listdir(input_folder)[0]
-    # data_folder = os.path.join(input_folder, data_folder_name)
-
-    # run(
-    #     test, 
-    # )
+    run(
+        test, 
+    )
