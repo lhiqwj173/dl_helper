@@ -647,17 +647,22 @@ class DeepLOB_v2(nn.Module):
         return output
 
 # 简单的数据结构
+his_len = 50
+base_features = [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']]
 ext_features = [
-    'EXT_micro_price',
-    'EXT_obi_l1',
+    "距离收盘秒数",
+    "EXT_micro_price",
+    "EXT_volatility_5",
+    "EXT_pressure_imbalance",
+    'EXT_volatility_wap_5',
     'EXT_relative_spread_l1',
-    'EXT_weighted_mid_price_v1',
-    'EXT_volatility_5',
+    'EXT_weighted_mid_price_v2',
+    'EXT_depth_imbalance',
     'EXT_ofi',
 ]
 data_config = {
-    'his_len': 50,# 每个样本的 历史数据长度
-    'need_cols': [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']] + ext_features,
+    'his_len': his_len,# 每个样本的 历史数据长度
+    'need_cols':  base_features + ext_features,
 }
 
 class test(test_base):
@@ -699,7 +704,7 @@ class test(test_base):
         return self.model_cls(
             num_lob_levels=1,
             num_extension_features=len(ext_features),
-            time_steps=50,
+            time_steps=his_len,
             static_input_dims=3,
             output_dim=2,
             use_regularization=False,
@@ -715,17 +720,15 @@ class test(test_base):
         
 if '__main__' == __name__:
     # 测试模型
-    # model = DeepLOB()
-    # x = torch.randn(10, 50*4+4)
     model = DeepLOB_v2(
         num_lob_levels=1,
         num_extension_features=len(ext_features),
-        time_steps=50,
+        time_steps=his_len,
         static_input_dims=3,
         output_dim=2,
         use_regularization=False,
     )
-    x = torch.randn(10, 50*9+4)
+    x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
     print(model(x).shape)
     print(f"模型参数量: {model_params_num(model)}")
