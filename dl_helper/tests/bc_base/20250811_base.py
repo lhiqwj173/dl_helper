@@ -22,7 +22,7 @@ from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
-from dl_helper.tool import model_params_num
+from dl_helper.tool import model_params_num, check_dependencies
 
 """
 订单簿 bc 数据集
@@ -577,6 +577,7 @@ if '__main__' == __name__:
     test_init_loss = False# 验证初始化损失
     check_data_sample_balance = False # 检查 train/val/test 样本均衡
     overfit = False # 小样本过拟合测试
+    need_check_dependencies = False # 检查梯度计算依赖关系
 
     for arg in sys.argv[1:]:
         if arg == 'test_init_loss':
@@ -587,6 +588,8 @@ if '__main__' == __name__:
             check_data_sample_balance = True
         elif arg == 'overfit':
             overfit = True
+        elif arg == "check_dependencies":
+            need_check_dependencies = True
 
     # ################################
     # # 测试模型
@@ -633,13 +636,16 @@ if '__main__' == __name__:
         print(f"Initial loss: { np.mean(init_losses)}")
         print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    if check_data_sample_balance:
+    elif check_data_sample_balance:
         # 准备数据集
         data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
         train_split_rng = np.random.default_rng(seed=0)
         train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, split_rng=train_split_rng)
         val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, data_type='val')
         test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, data_type='test')
+
+    elif need_check_dependencies:
+        check_dependencies(model, x, 3)
 
     else:
         # 开始训练

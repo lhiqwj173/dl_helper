@@ -4420,6 +4420,65 @@ def check_gradients(
 
     return total_grad_norm
 
+def check_dependencies(model, input_tensor, test_idx):
+    """
+    测试一个模型的输出是否正确地只依赖于对应的输入。
+
+    Args:
+        model (nn.Module): 要测试的模型。
+        input_tensor (torch.Tensor): 输入张量。
+        test_idx (int): 我们要关注的批次中的样本索引。
+    """
+    print(f"--- Testing {model.__class__.__name__} ---")
+    print(f"目标：仅让第 {test_idx} 个样本的输出产生损失。")
+
+    # 1. 确保输入张量可以计算梯度
+    input_tensor.requires_grad = True
+
+    # 2. 清除旧的梯度
+    if input_tensor.grad is not None:
+        input_tensor.grad.zero_()
+
+    # 3. 前向传播
+    output = model(input_tensor)
+
+    # 4. 定义 "探针" 损失：只取第 test_idx 个样本的输出总和
+    loss = output[test_idx].sum()
+    print(f"损失函数: output[{test_idx}].sum()")
+
+    # 5. 反向传播
+    loss.backward()
+
+    # 6. 检查输入的梯度
+    input_grad = input_tensor.grad
+    print("输入的梯度（按样本求和后的绝对值）:")
+    # 为了方便观察，我们计算每个样本梯度的总和
+    grad_sum_per_sample = input_grad.abs().sum(dim=1)
+    print(grad_sum_per_sample)
+
+    # 7. 分析结果
+    is_bug_found = False
+    for i in range(input_tensor.shape[0]):
+        # 检查梯度是否为零
+        is_zero = torch.all(input_grad[i] == 0)
+        if i == test_idx:
+            if is_zero:
+                print(f"❌ 错误! 样本 {i} (目标样本) 的梯度为零，这不应该发生。")
+                is_bug_found = True
+            else:
+                print(f"✅ 正确! 样本 {i} (目标样本) 的梯度非零。")
+        else:
+            if not is_zero:
+                print(f"🚨🚨🚨 Bug 发现! 样本 {i} 的梯度非零，说明发生了信息泄露！")
+                is_bug_found = True
+            else:
+                print(f"✅ 正确! 样本 {i} 的梯度为零。")
+    
+    if not is_bug_found:
+        print("结论：依赖关系正确！\n")
+    else:
+        print("结论：依赖关系错误！\n")
+
 def check_nan(output):
     """
     检查 output 中是否存在 NaN 或 inf
