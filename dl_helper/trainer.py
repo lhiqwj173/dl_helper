@@ -131,7 +131,7 @@ def inspect_batch(y, num_classes, printer):
     cls_counts = {int(cls): int(counts[cls].item()) for cls in range(num_classes)}
 
     for cls, cnt in cls_counts.items():
-        printer.print(f" Class {cls}: {cnt} samples({100*cnt/total:.2%}%)", main=False)
+        printer.print(f" Class {cls}: {cnt} samples({cnt/total:.2%})", main=False)
     printer.print(f" Total: {total}", main=False)
 
 def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerator, tracker, printer, trans, need_checkpoint=True):
@@ -158,8 +158,8 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
         if params.classify:
             target = target.long()
 
-        # 检查batch的标签分布
-        inspect_batch(target, params.y_n, printer)
+        # # 检查batch的标签分布
+        # inspect_batch(target, params.y_n, printer)
 
         if None is first_batch_data and target.shape[0]<10 and accelerator.is_local_main_process:
             first_batch_data = (data.clone(), target.clone())

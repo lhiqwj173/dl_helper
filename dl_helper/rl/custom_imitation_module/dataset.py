@@ -504,6 +504,14 @@ class LobTrajectoryDataset(Dataset):
                 assert obs_0_act_0_num == obs_0_act_1_num and obs_1_act_0_num == obs_1_act_1_num, \
                     f"样本不均衡: {obs_0_act_0_num} != {obs_0_act_1_num} or {obs_1_act_0_num} != {obs_1_act_1_num}"
 
+        # 输出样本各个类别的数量
+        class_nums = [0, 0]
+        for key in data_dict:
+            act = data_dict[key]['acts']
+            for i in range(2):
+                class_nums[i] += len(np.where(act == i)[0])
+        print(f"样本类别数量: {class_nums}")        
+
         return data_dict
 
     def __len__(self):
