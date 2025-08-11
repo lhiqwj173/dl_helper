@@ -648,6 +648,8 @@ if '__main__' == __name__:
         test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, data_type='test')
 
     elif need_check_dependencies:
+        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+        x[:, -4] = 0
         check_dependencies(model, x, 3)
 
     else:
