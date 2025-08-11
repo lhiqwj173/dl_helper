@@ -576,6 +576,8 @@ if '__main__' == __name__:
             test_init_loss = True
         elif arg == 'input_indepent':
             input_indepent = True
+        elif arg == 'check_data_sample_balance':
+            check_data_sample_balance = True
 
     # ################################
     # # 测试模型
