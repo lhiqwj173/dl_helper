@@ -325,13 +325,13 @@ class LobTrajectoryDataset(Dataset):
         elif len(file_paths) >= 3:
             # 多文件情况, 分割 训练/验证/测试集
             if len(file_paths) >= 60:
-                # 最后40个日期文件作为 val/ test
+                # 最后20个日期文件作为 val/ test
                 if self.data_type == 'train':
-                    file_paths = file_paths[:-40]
+                    file_paths = file_paths[:-20]
                 elif self.data_type == 'val':
-                    file_paths = file_paths[-40:-20]
+                    file_paths = file_paths[-20:-10]
                 elif self.data_type == 'test':
-                    file_paths = file_paths[-20:]
+                    file_paths = file_paths[-10:]
             else:
                 if self.data_type == 'train':
                     file_paths = file_paths[:-2]

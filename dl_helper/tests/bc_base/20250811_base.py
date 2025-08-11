@@ -533,9 +533,15 @@ class test(test_base):
         # 准备数据集
         data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
         train_split_rng = np.random.default_rng(seed=self.seed)
-        self.train_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, split_rng=train_split_rng)
-        self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, data_type='val')
-        self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, input_zero=input_indepent, data_config = data_config, data_type='test')
+        self.train_dataset = LobTrajectoryDataset(
+            data_folder= data_dict_folder, 
+            input_zero=input_indepent, 
+            sample_num_limit= None if not overfit else 5, 
+            data_config = data_config, 
+            split_rng=train_split_rng
+        )
+        self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
+        self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')
     
     def get_title_suffix(self):
         """获取后缀"""
@@ -570,6 +576,7 @@ if '__main__' == __name__:
     input_indepent = False# 训练无关输入（全0）的模型
     test_init_loss = False# 验证初始化损失
     check_data_sample_balance = False # 检查 train/val/test 样本均衡
+    overfit = False # 小样本过拟合测试
 
     for arg in sys.argv[1:]:
         if arg == 'test_init_loss':
@@ -578,6 +585,8 @@ if '__main__' == __name__:
             input_indepent = True
         elif arg == 'check_data_sample_balance':
             check_data_sample_balance = True
+        elif arg == 'overfit':
+            overfit = True
 
     # ################################
     # # 测试模型
