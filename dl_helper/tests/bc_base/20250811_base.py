@@ -382,10 +382,11 @@ class DeepLOB_v2(nn.Module):
         #    使得初始损失精确地接近 log(num_classes)。
         #    这个判断必须放在最前面，因为它也是一个nn.Linear实例。
         if hasattr(self, 'fusion_net') and module == self.fusion_net[-1]:
+            # pass
             init.constant_(module.weight, 0)
             if module.bias is not None:
                 init.constant_(module.bias, 0)
-        
+
         # 2. 通用处理：卷积层和线性层
         #    使用 Kaiming 初始化，它专门为 ReLU 家族的激活函数设计。
         #    'leaky_relu' 是一个很好的选择，因为它适用于 ReLU 和 LeakyReLU。
