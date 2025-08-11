@@ -550,6 +550,9 @@ class test(test_base):
         if input_indepent:
             res += '_input_indepent'
 
+        if overfit:
+            res += '_overfit'
+
         return res
 
     def get_model(self):
