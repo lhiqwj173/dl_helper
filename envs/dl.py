@@ -30,6 +30,7 @@ if '__main__' == __name__:
     for cmd in [
             'pip install torchstat',
             # 'pip install accelerate==1.3.0',
+            'pip install imitation',
             'pip install uvloop',
             'pip install lz4',
             'pip install df2img',
