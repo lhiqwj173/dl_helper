@@ -2,6 +2,7 @@ from enum import Flag
 from re import I
 import copy, shutil
 import psutil, pickle, torch, os, time
+import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 import platform
@@ -4478,6 +4479,45 @@ def check_dependencies(model, input_tensor, test_idx):
         print("结论：依赖关系正确！\n")
     else:
         print("结论：依赖关系错误！\n")
+
+def run_dependency_check_without_bn(model, test_input, test_idx):
+    """
+    一个封装好的函数，用于测试一个模型在禁用BatchNorm后的依赖关系。
+
+    Args:
+        model (nn.Module): 要测试的模型。
+        test_input (torch.Tensor): 测试用的输入张量。
+        test_idx (int): 目标样本的索引。
+    """
+    print("="*50)
+    print("开始验证（已临时禁用 BatchNorm）...")
+    print("="*50)
+
+    # 2. 定义一个替换函数
+    def replace_bn_with_identity(model):
+        for name, module in model.named_children():
+            if isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm1d):
+                # 替换为恒等映射
+                setattr(model, name, nn.Identity())
+            else:
+                # 递归处理子模块
+                replace_bn_with_identity(module)
+        return model
+    
+    # 3. 使用 .apply() 方法，将替换函数递归地应用到模型的所有子模块
+    #    这会创建一个没有BatchNorm效应的新模型实例
+    #    注意：这会原地修改模型，所以我们在原始模型的副本上操作
+    import copy
+    model_without_bn = copy.deepcopy(model)
+    replace_bn_with_identity(model_without_bn)
+    
+    # 将模型设置为训练模式，以确保其他层（如Dropout）正常工作
+    model_without_bn.train()
+    
+    print("模型中的 BatchNorm 层已被 nn.Identity 临时替换。")
+    
+    # 4. 使用你原来的 check_dependencies 函数来测试这个“净化”过的模型
+    check_dependencies(model_without_bn, test_input, test_idx)
 
 def check_nan(output):
     """
