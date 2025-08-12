@@ -428,6 +428,18 @@ class printer():
             else:
                 log(head, *msg, caller_info=caller_info)
 
+def run_fn_save_first_batch(test_class, args, kwargs):
+    # 训练实例
+    test = test_class(*args, **kwargs)
+    # 数据增强
+    trans = test.get_transform(None)
+    train_loader = test.get_data('train')
+    for batch in train_loader:
+        # 预处理
+        data, target = trans(batch, train=True)
+        pickle.dump((data, target), open('first_batch.pkl', 'wb'))
+        break
+
 def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
 
     # 训练实例
@@ -857,7 +869,7 @@ def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwar
 
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: normal / simple
+    mode: normal / simple / save_first_batch
     args / kwargs 为tester构造参数
 
     可增加字典参数(都可在命令行添加):
@@ -919,5 +931,7 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     elif mode == 'simple':
         notebook_launcher(run_fn_gpu_simple, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
+    elif mode == 'save_first_batch':
+        run_fn_save_first_batch(test_class, args, kwargs)
     else:
         raise Exception(f'mode error: {mode}, must be normal')
