@@ -527,7 +527,8 @@ class test(test_base):
             input_zero=input_indepent, 
             sample_num_limit= None if not overfit else 5, 
             data_config = data_config, 
-            split_rng=train_split_rng
+            split_rng=train_split_rng,
+            std = not save_train_batch_data,
         )
         self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
         self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')
@@ -648,4 +649,5 @@ if '__main__' == __name__:
         # 开始训练
         run(
             test, 
+            mode='normal' if not save_train_batch_data else 'save_first_batch',
         )
