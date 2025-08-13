@@ -433,12 +433,15 @@ def run_fn_save_first_batch(test_class, args, kwargs):
     test = test_class(*args, **kwargs)
     # 数据增强
     trans = test.get_transform(None)
-    train_loader = test.get_data('train')
-    for batch in train_loader:
-        # 预处理
-        data, target, ms= trans(batch, train=True)
-        pickle.dump((data, target, ms), open('first_batch.pkl', 'wb'))
-        break
+
+    for std in [True, False]:
+        set_seed(0)
+        train_loader = test.get_data('train', std=std)
+        for batch in train_loader:
+            # 预处理
+            batch= trans(batch, train=True)
+            pickle.dump(batch, open(f'first_batch_std{std}.pkl', 'wb'))
+            break
 
 def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
 

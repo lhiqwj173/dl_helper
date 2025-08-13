@@ -519,20 +519,6 @@ class test(test_base):
             **self.params_kwargs
         )
 
-        # 准备数据集
-        data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
-        train_split_rng = np.random.default_rng(seed=self.seed)
-        self.train_dataset = LobTrajectoryDataset(
-            data_folder= data_dict_folder, 
-            input_zero=input_indepent, 
-            sample_num_limit= None if not overfit else 5, 
-            data_config = data_config, 
-            split_rng=train_split_rng,
-            std = not save_train_batch_data,
-        )
-        self.val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='val')
-        self.test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config, data_type='test')
-    
     def get_title_suffix(self):
         """获取后缀"""
         res = f'{self.model_cls.__name__}_seed{self.seed}'
@@ -555,13 +541,27 @@ class test(test_base):
             use_regularization=False,
         )
     
-    def get_data(self, _type, data_sample_getter_func=None):
+    def get_data(self, _type, data_sample_getter_func=None, std=True):
+        # 准备数据集
+        data_dict_folder = os.path.join(os.path.dirname(DATA_FOLDER), 'data_dict')
+
         if _type == 'train':
-            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
+            train_split_rng = np.random.default_rng(seed=self.seed)
+            train_dataset = LobTrajectoryDataset(
+                data_folder= data_dict_folder, 
+                input_zero=input_indepent, 
+                sample_num_limit= None if not overfit else 5, 
+                data_config = data_config, 
+                split_rng=train_split_rng,
+                std = std,
+            )
+            return DataLoader(dataset=train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
-            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
+            val_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config,std = std, data_type='val')
+            return DataLoader(dataset=val_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'test':
-            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
+            test_dataset = LobTrajectoryDataset(data_folder= data_dict_folder, data_config = data_config,std = std, data_type='test')
+            return DataLoader(dataset=test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
 if '__main__' == __name__:
 
