@@ -571,7 +571,7 @@ if '__main__' == __name__:
     check_data_sample_balance = False # 检查 train/val/test 样本均衡
     overfit = False # 小样本过拟合测试
     need_check_dependencies = False # 检查梯度计算依赖关系
-    save_train_batch_data = False # 保存随机的一批数据用于检查
+    save_train_batch_data = False   # 保存随机的一批数据用于检查
 
     for arg in sys.argv[1:]:
         if arg == 'test_init_loss':

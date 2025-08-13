@@ -46,7 +46,8 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import MAX_SEC_BEFORE_CLOSE
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 MAX_FLAT_RATIO = 0.2  # 平段占比最大值
-NO_MOVE_THRESHOLD = 50  # 无移动阈值
+# NO_MOVE_THRESHOLD = 50  # 无移动阈值
+NO_MOVE_THRESHOLD = 10  # 无移动阈值
 
 # 设置价格浮动阈值：中间段的价格与基准价格的最大允许偏差
 # 如果中间段的任何价格偏离超过这个值，则不考虑合并

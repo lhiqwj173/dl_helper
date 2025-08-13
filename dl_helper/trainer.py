@@ -39,7 +39,21 @@ from accelerate.utils import (
     set_seed
 )
 
-def package_root(accelerator, params):
+ver = 0
+def package_root(accelerator, params, new_version=False, epoch=-1):
+    """
+    new_version: 是否使用新的版本后缀
+    epoch: 用于后缀
+    """
+    global ver
+    if new_version:
+        assert epoch != -1, f'new_version 为True 时，epoch参数不能为-1'
+        # 清理就版本
+        old_zip_file = f'{params.root}_{ver}.7z'
+        if os.path.exists(old_zip_file):
+            os.remove(old_zip_file)
+        ver = epoch
+
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         # # 拷贝 log 文件夹
@@ -53,7 +67,7 @@ def package_root(accelerator, params):
         #     shutil.copy(src, target)
         # print('copy log folder done')
 
-        zip_file = f'{params.root}.7z'
+        zip_file = f'{params.root}_{ver}.7z'
         if os.path.exists(zip_file):
             os.remove(zip_file)
         compress_folder(params.root, zip_file, 9, inplace=False)
@@ -63,12 +77,16 @@ def package_root(accelerator, params):
             # 上传更新到alist
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
             # 上传文件夹
-            upload_folder = f'/{params.alist_upload_folder}/'
+            upload_folder = f'/{params.alist_upload_folder}/{params.root}/'
             client.mkdir(upload_folder)
             client.upload(zip_file, upload_folder)
         print('upload done')
 
     accelerator.wait_for_everyone()
+
+def update_ver(version):
+    global ver
+    ver = int(version)
 
 last_checkpoint_time = 0
 def checkpoint(epoch, accelerator, params, printer, need_check=True):
@@ -469,12 +487,21 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             p.print('check alist download')
             
             client = alist(os.environ.get('ALIST_USER'), os.environ.get('ALIST_PWD'))
+            _file = f'alist/{params.train_title}.7z'
             try:
-                _file = f'alist/{params.train_title}.7z'
                 # 下载文件
-                download_folder = f'/{params.alist_upload_folder}/'
-                client.download(f'{download_folder}{params.train_title}.7z', 'alist/')
-                p.print(f'download {_file}')
+                download_folder = f'/{params.alist_upload_folder}/{params.train_title}/'
+                files = [i['name'] for i in client.listdir(download_folder)]
+                if files:
+                    files = sorted(files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
+                    file = files[-1] # 下载最新的版本文件
+                    client.download(f'{download_folder}{file}', 'alist/')
+                    # 重命名为 _file
+                    os.rename(f'alist/{file}', _file)
+                    p.print(f'download {file} -> {_file}')
+                    # 记录最新的版本（亦是 epoch no）
+                    latest_ver = file.split('_')[-1].split('.')[0]
+                    update_ver(latest_ver)
 
             except:
                 pass
@@ -626,7 +653,7 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
                     # 记录最佳模型的 epoch
                     tracker.record_best_model_epoch()
 
-                if (epoch % 30 == 0 and epoch > 0) or (need_save_best_model):
+                if (epoch % 10 == 0 and epoch > 0) or (need_save_best_model):
 
                     # 保存模型
                     p.print(f'epoch {epoch} save_model_fn')
@@ -641,9 +668,9 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
                             shutil.rmtree(best_folder)
                         shutil.copytree(model_folder, best_folder)
 
-                # 打包
+                # 打包, 每 5 个epoch 保存版本
                 # debug(f'package_root')
-                package_root(accelerator, params)
+                package_root(accelerator, params, epoch % 5 == 0 and epoch > 0, epoch)
 
                 p.print(f'epoch {epoch} done')
 
