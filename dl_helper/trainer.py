@@ -436,8 +436,8 @@ def run_fn_save_first_batch(test_class, args, kwargs):
     train_loader = test.get_data('train')
     for batch in train_loader:
         # 预处理
-        data, target = trans(batch, train=True)
-        pickle.dump((data, target), open('first_batch.pkl', 'wb'))
+        data, target, ms= trans(batch, train=True)
+        pickle.dump((data, target, ms), open('first_batch.pkl', 'wb'))
         break
 
 def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, model=None, only_predict=False):
