@@ -46,8 +46,9 @@ from dl_helper.rl.rl_env.lob_trade.lob_const import MAX_SEC_BEFORE_CLOSE
 
 UPLOAD_INTERVAL = 300  # 5分钟 = 300秒
 MAX_FLAT_RATIO = 0.2  # 平段占比最大值
-# NO_MOVE_THRESHOLD = 50  # 无移动阈值
-NO_MOVE_THRESHOLD = 10  # 无移动阈值
+FUTURE_ACT_SAME_NUM = 5 # 未来动作同化 长度
+NO_MOVE_THRESHOLD_PROFIT = 25  # 无移动阈值
+NO_MOVE_THRESHOLD_SELL_SAVE = 50  # 无移动阈值
 
 # 设置价格浮动阈值：中间段的价格与基准价格的最大允许偏差
 # 如果中间段的任何价格偏离超过这个值，则不考虑合并
@@ -1603,7 +1604,7 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
                 i = potential_merge_end_segment_idx + 1
 
                 # 日志
-                if total_len > NO_MOVE_THRESHOLD:
+                if total_len > NO_MOVE_THRESHOLD_PROFIT:
                     logout(f'[diff_pct_merge] merge_start_row={merge_start_row}, merge_end_row={merge_end_row}, total_len={total_len}, diff_pct={(diff_total_len / total_len):.2f}')
                     _merge_price_segments_logout(logout, merge_start_row, merge_end_row, df)
 
@@ -1679,7 +1680,7 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
                         i = potential_merge_end_segment_idx + 1
 
                         # 日志
-                        if ext_total_len > NO_MOVE_THRESHOLD:
+                        if ext_total_len > NO_MOVE_THRESHOLD_PROFIT:
                             logout(f'[2price_merge] merge_start_row={ext_merge_start_row}, merge_end_row={ext_merge_end_row}, total_len={ext_total_len}, max_border={int(ext_total_len * 0.3)}, [0]={[int(i) for i in unique_mid_price_idxs[0]]}, [-1]={[int(i) for i in unique_mid_price_idxs[-1]]}')
                             _merge_price_segments_logout(logout, ext_merge_start_row, ext_merge_end_row, df)
                         
@@ -1752,7 +1753,7 @@ def _cal_need_keep(segs, df, need_keep, no_move_threshold):
         # 6. 将这些需要保留的行的标志位置为True
         need_keep.loc[indices_to_keep] = True
 
-def filte_no_move(df, no_move_threshold=NO_MOVE_THRESHOLD, logout=blank_logout):
+def filte_no_move(df, logout=blank_logout):
     """
     去除超过阈值价格没有波动的连续块，处理 profit 和 sell_save 两列
     功能一（profit）：连续 no move 超过阈值个，空仓情况下不进行买入（profit=0）
@@ -1771,11 +1772,11 @@ def filte_no_move(df, no_move_threshold=NO_MOVE_THRESHOLD, logout=blank_logout):
     need_keep = df['mid_price'] < 0
     # 1. profit 连续段
     profit_segs = find_segments(df['profit'] > 0)
-    _cal_need_keep(profit_segs, df, need_keep, no_move_threshold)
+    _cal_need_keep(profit_segs, df, need_keep, NO_MOVE_THRESHOLD_PROFIT)
     # 2. sell_save 连续段
     # sell_save_segs = find_segments(df['raw_sell_save'] > 0)
     sell_save_segs = find_segments(df['sell_save'] > 0)
-    _cal_need_keep(sell_save_segs, df, need_keep, no_move_threshold)
+    _cal_need_keep(sell_save_segs, df, need_keep, NO_MOVE_THRESHOLD_SELL_SAVE)
 
     # 标记每组的最后两行
     # 将每组最后两个值的 no_move_len_pct/no_move_len_2price 设为 0
@@ -1786,7 +1787,8 @@ def filte_no_move(df, no_move_threshold=NO_MOVE_THRESHOLD, logout=blank_logout):
     # 功能一：超过阈值的组的 profit 和 sell_save 置为 0
     # df.loc[((df['no_move_len_pct'] > no_move_threshold) & (~need_keep)), ['profit', 'sell_save']] = 0
     # df.loc[((df['no_move_len_2price'] > no_move_threshold) & (~need_keep)), ['profit', 'sell_save']] = 0
-    df.loc[((df['no_move_len'] > no_move_threshold) & (~need_keep)), ['profit', 'sell_save']] = 0
+    df.loc[((df['no_move_len'] > NO_MOVE_THRESHOLD_PROFIT) & (~need_keep)), ['profit']] = 0
+    df.loc[((df['no_move_len'] > NO_MOVE_THRESHOLD_SELL_SAVE) & (~need_keep)), ['sell_save']] = 0
     
     return df
 
@@ -1991,7 +1993,7 @@ def _extend_profit_start(df: pd.DataFrame, start_idx: int, end_idx: int, profits
         潜在的更早的起点，更新 p0 为这个更低的 mid_price，并继续向前搜索。
     d. 回溯在以下任一情况发生时停止：
         - 遇到某点的 mid_price >= p0。
-        - 遇到某点的 no_move_lens > 50。
+        - 遇到某点的 no_move_lens > NO_MOVE_THRESHOLD_PROFIT
     """
     # 更新 end_idx 为最高点(close点)
     max_idx, max_mid_value = find_last_max_b1_value(df.loc[start_idx:end_idx])
@@ -2002,8 +2004,8 @@ def _extend_profit_start(df: pd.DataFrame, start_idx: int, end_idx: int, profits
     p0 = mid_prices[start_idx]  # p0 是搜索过程中的动态最低价
 
     # 用于记录在回溯中找到的、符合条件的、最靠前的索引
-    new_start_idx = None
-    _pre_new_start_idx = None
+    new_start_idx = start_idx
+    _pre_new_start_idx = start_idx
 
     # 从 start_idx 的前一个位置开始，向索引 0 的方向回溯
     # range(start, stop, step) -> `step`为-1表示反向迭代
@@ -2021,28 +2023,27 @@ def _extend_profit_start(df: pd.DataFrame, start_idx: int, end_idx: int, profits
             else:
                 new_start_idx = i
 
-        if new_start_idx is not None:
-            # 需要检查 new_start_idx - start_idx，是否引入的 no_move 的段
-            # no_move 段的定义: no_move_lens连续相同值的数量 > NO_MOVE_THRESHOLD
-            # 若发现，则退回到 _pre_new_start_idx 并break
-            # 1. 提取需要检查的 no_move_lens 切片
-            segment_to_check = no_move_lens[new_start_idx : start_idx]
-            # 2. 计算该切片中，连续相同值的最大长度
-            if len(segment_to_check) > 0:
-                # 使用 itertools.groupby 高效计算最长连续次数
-                max_run = max(len(list(g)) for _, g in groupby(segment_to_check))
-            else:
-                max_run = 0 # 如果切片为空，则不存在连续段
-            # 3. 判断是否超过阈值
-            if max_run > NO_MOVE_THRESHOLD:
-                # 如果引入了 "no_move" 段，则停止搜索。
-                # final_start_idx 保持为上一个有效的值 (pre_final_start_idx)
-                new_start_idx = _pre_new_start_idx
-                break
+        # 需要检查 i - start_idx，是否引入的 no_move 的段
+        # no_move 段的定义: no_move_lens连续相同值的数量 > NO_MOVE_THRESHOLD_PROFIT
+        # 若发现，则退回到 _pre_new_start_idx 并break
+        # 1. 提取需要检查的 no_move_lens 切片
+        segment_to_check = no_move_lens[i : start_idx]
+        # 2. 计算该切片中，连续相同值的最大长度
+        if len(segment_to_check) > 0:
+            # 使用 itertools.groupby 高效计算最长连续次数
+            max_run = max(len(list(g)) for _, g in groupby(segment_to_check))
+        else:
+            max_run = 0 # 如果切片为空，则不存在连续段
+        # 3. 判断是否超过阈值
+        if max_run > NO_MOVE_THRESHOLD_PROFIT:
+            # 如果引入了 "no_move" 段，则停止搜索。
+            # final_start_idx 保持为上一个有效的值 (pre_final_start_idx)
+            new_start_idx = _pre_new_start_idx
+            break
 
     # --- 步骤 3: 如果找到了新的起点，则更新 profit 值 ---
     # 只有当 new_start_idx 被成功赋值后，才执行更新操作
-    if new_start_idx is not None:
+    if new_start_idx < start_idx:
         # df.loc[a:b] 的切片是包含 a 和 b 两端的。
         # 我们要更新的区间是 [new_start_idx, start_idx - 1]
         # 使用 .loc 可以确保精确和安全地对DataFrame进行赋值
@@ -2060,7 +2061,7 @@ def _extend_sell_save_start(df: pd.DataFrame, start_idx: int, end_idx: int, sell
         潜在的更早的起点，更新 p0 为这个更高的 mid_price，并继续向前搜索。
     d. 回溯在以下任一情况发生时停止：
         - 遇到某点的 mid_price < p0。
-        - 遇到某点的 no_move_lens > 50。
+        - 遇到某点的 no_move_lens > NO_MOVE_THRESHOLD_SELL_SAVE
     """
     # 更新 end_idx 为最高点(close点)
     min_idx, min_mid_value = find_last_min_a1_value(df.loc[start_idx:end_idx])
@@ -2071,8 +2072,8 @@ def _extend_sell_save_start(df: pd.DataFrame, start_idx: int, end_idx: int, sell
     p0 = mid_prices[start_idx]  # p0 是搜索过程中的动态最高价
 
     # 记录回溯中找到的、符合条件的、最靠前的索引
-    new_start_idx = None
-    _pre_new_start_idx = None
+    new_start_idx = start_idx
+    _pre_new_start_idx = start_idx
 
     # 从起点的前一个位置开始，向索引 0 的方向回溯
     for i in range(start_idx - 1, -1, -1):
@@ -2088,27 +2089,26 @@ def _extend_sell_save_start(df: pd.DataFrame, start_idx: int, end_idx: int, sell
             else:
                 new_start_idx = i
 
-        if new_start_idx is not None:
-            # 需要检查 new_start_idx - start_idx，是否引入的 no_move 的段
-            # no_move 段的定义: no_move_lens连续相同值的数量 > NO_MOVE_THRESHOLD
-            # 若发现，则退回到 _pre_new_start_idx 并break
-            # 1. 提取需要检查的 no_move_lens 切片
-            segment_to_check = no_move_lens[new_start_idx : start_idx]
-            # 2. 计算该切片中，连续相同值的最大长度
-            if len(segment_to_check) > 0:
-                # 使用 itertools.groupby 高效计算最长连续次数
-                max_run = max(len(list(g)) for _, g in groupby(segment_to_check))
-            else:
-                max_run = 0 # 如果切片为空，则不存在连续段
-            # 3. 判断是否超过阈值
-            if max_run > NO_MOVE_THRESHOLD:
-                # 如果引入了 "no_move" 段，则停止搜索。
-                # final_start_idx 保持为上一个有效的值 (pre_final_start_idx)
-                new_start_idx = _pre_new_start_idx
-                break
+        # 需要检查 i - start_idx，是否引入的 no_move 的段
+        # no_move 段的定义: no_move_lens连续相同值的数量 > NO_MOVE_THRESHOLD_SELL_SAVE
+        # 若发现，则退回到 _pre_new_start_idx 并break
+        # 1. 提取需要检查的 no_move_lens 切片
+        segment_to_check = no_move_lens[i : start_idx]
+        # 2. 计算该切片中，连续相同值的最大长度
+        if len(segment_to_check) > 0:
+            # 使用 itertools.groupby 高效计算最长连续次数
+            max_run = max(len(list(g)) for _, g in groupby(segment_to_check))
+        else:
+            max_run = 0 # 如果切片为空，则不存在连续段
+        # 3. 判断是否超过阈值
+        if max_run > NO_MOVE_THRESHOLD_SELL_SAVE:
+            # 如果引入了 "no_move" 段，则停止搜索。
+            # final_start_idx 保持为上一个有效的值 (pre_final_start_idx)
+            new_start_idx = _pre_new_start_idx
+            break
 
     # --- 步骤 3: 如果找到了新的起点，则更新 sell_save 值 ---
-    if new_start_idx is not None:
+    if new_start_idx < start_idx:
         # 根据题意，将 new_idx 到原起点之间的 sell_save 进行赋值
         # 赋值区间为 [new_start_idx, start_idx - 1]
         df.loc[new_start_idx : start_idx - 1, 'sell_save'] = original_sell_save
@@ -2638,17 +2638,17 @@ def check_last_profit_segment(begin_idx, df, real_b, real_e, profit_segs):
     # 测试用
     print(f'check_last_profit_segment begin_idx: {begin_idx}, real_b: {real_b}, real_e: {real_e}, profit_segs: {profit_segs}')
 
-    # 检查最后一段内是否存在 profit<=0 and no_move_len_raw>NO_MOVE_THRESHOLD
-    # 若存在的话，将 real_e 调整到 no_move_len_raw>NO_MOVE_THRESHOLD 的第一个点
+    # 检查最后一段内是否存在 profit<=0 and no_move_len_raw>NO_MOVE_THRESHOLD_PROFIT
+    # 若存在的话，将 real_e 调整到 no_move_len_raw>NO_MOVE_THRESHOLD_PROFIT 的第一个点
     # 替换成 no_move_len
-    # _cond = (df.loc[real_b:real_e, 'no_move_len_raw'] > NO_MOVE_THRESHOLD) & (df.loc[real_b:real_e, 'profit'] <= 0)
-    _cond = (df.loc[real_b:real_e, 'no_move_len'] > NO_MOVE_THRESHOLD) & (df.loc[real_b:real_e, 'profit'] <= 0)
+    # _cond = (df.loc[real_b:real_e, 'no_move_len_raw'] > NO_MOVE_THRESHOLD_PROFIT) & (df.loc[real_b:real_e, 'profit'] <= 0)
+    _cond = (df.loc[real_b:real_e, 'no_move_len'] > NO_MOVE_THRESHOLD_PROFIT) & (df.loc[real_b:real_e, 'profit'] <= 0)
     # Get indices where _cond is True
     satisfying_indices = df.loc[real_b:real_e][(_cond)].index
-    if _cond.any() and len(satisfying_indices) > NO_MOVE_THRESHOLD - 2:
+    if _cond.any() and len(satisfying_indices) > NO_MOVE_THRESHOLD_PROFIT - 2:
         # 使用第10个 no move 的点，避免一些突刺的极端情况，保证至少有2个相同中间价格的点，可以用于计算 profit/sell_save
         # _idx = satisfying_indices[9]
-        _idx = satisfying_indices[NO_MOVE_THRESHOLD - 2]# 最大使用前50个数据（no_move_len > 50 的段中，避免中间仍然间隔超过 50）
+        _idx = satisfying_indices[NO_MOVE_THRESHOLD_PROFIT - 2]# 最大使用前50个数据（no_move_len > 50 的段中，避免中间仍然间隔超过 50）
         _idx, _ = find_last_max_b1_value(df.loc[real_b:_idx, :])
         _idx += real_b
 
@@ -2721,17 +2721,17 @@ def check_last_sell_save_segment(begin_idx, df, real_b, real_e, sell_save_segs):
     返回 real_b（可能会被向前扩展，sell_save_segs会自动处理）
     """
 
-    # 检查最后一段内是否存在 sell_save<=0 and no_move_len_raw>NO_MOVE_THRESHOLD
-    # 若存在的话，将 real_e 调整到 no_move_len_raw>NO_MOVE_THRESHOLD 的第一个点
+    # 检查最后一段内是否存在 sell_save<=0 and no_move_len_raw>NO_MOVE_THRESHOLD_SELL_SAVE
+    # 若存在的话，将 real_e 调整到 no_move_len_raw>NO_MOVE_THRESHOLD_SELL_SAVE 的第一个点
     # 替换成 no_move_len
-    # _cond = (df.loc[real_b:real_e, 'no_move_len_raw'] > NO_MOVE_THRESHOLD) & (df.loc[real_b:real_e, 'sell_save'] <= 0)
-    _cond = (df.loc[real_b:real_e, 'no_move_len'] > NO_MOVE_THRESHOLD) & (df.loc[real_b:real_e, 'sell_save'] <= 0)
+    # _cond = (df.loc[real_b:real_e, 'no_move_len_raw'] > NO_MOVE_THRESHOLD_SELL_SAVE) & (df.loc[real_b:real_e, 'sell_save'] <= 0)
+    _cond = (df.loc[real_b:real_e, 'no_move_len'] > NO_MOVE_THRESHOLD_SELL_SAVE) & (df.loc[real_b:real_e, 'sell_save'] <= 0)
     # Get indices where _cond is True
     satisfying_indices = df.loc[real_b:real_e][(_cond)].index
-    if _cond.any() and len(satisfying_indices) > NO_MOVE_THRESHOLD - 2:
+    if _cond.any() and len(satisfying_indices) > NO_MOVE_THRESHOLD_SELL_SAVE - 2:
         # 使用第10个 no move 的点，避免一些突刺的极端情况，保证至少有2个相同中间价格的点，可以用于计算 profit/sell_save
         # _idx = satisfying_indices[min(9, len(satisfying_indices)-1)]
-        _idx = satisfying_indices[NO_MOVE_THRESHOLD - 2]# 最大使用前50个数据（no_move_len > 50 的段中，避免中间仍然间隔超过 50）
+        _idx = satisfying_indices[NO_MOVE_THRESHOLD_SELL_SAVE - 2]# 最大使用前50个数据（no_move_len > 50 的段中，避免中间仍然间隔超过 50）
         _idx, _ = find_last_min_a1_value(df.loc[real_b:_idx, :])
         _idx += real_b
 
@@ -2869,14 +2869,14 @@ def find_start_of_continuous_block(
     return block_start_index
 
 def check_first_profit_segment(begin_idx, df, real_b, real_e, profit_segs):
-    # 检查 real_b - 50 与 real_b 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 的段
+    # 检查 real_b - NO_MOVE_THRESHOLD_PROFIT 与 real_b 之间是否存在 no_move_len>NO_MOVE_THRESHOLD_PROFIT 的段
     pre_act1_begin_idx = find_start_of_continuous_block(df, real_b, 1)# 限制范围在前 act==1 的段内
-    check_begin_idx = max(0, real_b-50, 0 if pre_act1_begin_idx is None else pre_act1_begin_idx)
+    check_begin_idx = max(0, real_b-NO_MOVE_THRESHOLD_PROFIT, 0 if pre_act1_begin_idx is None else pre_act1_begin_idx)
     check_end_idx = real_b+1
-    # if (df.loc[check_begin_idx:check_end_idx, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD or
-    #     df.loc[check_begin_idx:check_end_idx, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD):
-    if df.loc[check_begin_idx:check_end_idx, 'no_move_len'].max() > NO_MOVE_THRESHOLD:
-        # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段，需要改用check_begin_idx起的最低点（至少连续2个点）
+    # if (df.loc[check_begin_idx:check_end_idx, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD_PROFIT or
+    #     df.loc[check_begin_idx:check_end_idx, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD_PROFIT):
+    if df.loc[check_begin_idx:check_end_idx, 'no_move_len'].max() > NO_MOVE_THRESHOLD_PROFIT:
+        # 若存在 no_move_len>NO_MOVE_THRESHOLD_PROFIT 段，需要改用check_begin_idx起的最低点（至少连续2个点）
         df_range = df.loc[check_begin_idx:check_end_idx, :]
         __min_idx, _ = find_last_min_a1_value_strict(df_range)
         __min_idx -= 1 # find_first_min_a1_value 返回的是连续2个点中的后一个，此处修正成前一个
@@ -2897,14 +2897,14 @@ def check_first_profit_segment(begin_idx, df, real_b, real_e, profit_segs):
     return begin_idx
 
 def check_first_sell_save_segment(begin_idx, df, real_b, real_e, sell_save_segs):
-    # 检查 real_b - 50 与 real_b 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 的段
+    # 检查 real_b - NO_MOVE_THRESHOLD_SELL_SAVE 与 real_b 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_SELL_SAVE 的段
     pre_act0_begin_idx = find_start_of_continuous_block(df, real_b, 0)# 限制范围在前 act==0 的段内
-    check_begin_idx = max(0, real_b-50, 0 if pre_act0_begin_idx is None else pre_act0_begin_idx)
+    check_begin_idx = max(0, real_b-NO_MOVE_THRESHOLD_SELL_SAVE, 0 if pre_act0_begin_idx is None else pre_act0_begin_idx)
     check_end_idx = real_b+1
-    # if (df.loc[check_begin_idx:check_end_idx, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD or
-    #     df.loc[check_begin_idx:check_end_idx, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD):
-    if df.loc[check_begin_idx:check_end_idx, 'no_move_len'].max() > NO_MOVE_THRESHOLD:
-        # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段，需要改用check_begin_idx起的最低点（至少连续2个点）
+    # if (df.loc[check_begin_idx:check_end_idx, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD_SELL_SAVE or
+    #     df.loc[check_begin_idx:check_end_idx, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD_SELL_SAVE):
+    if df.loc[check_begin_idx:check_end_idx, 'no_move_len'].max() > NO_MOVE_THRESHOLD_SELL_SAVE:
+        # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_SELL_SAVE 段，需要改用check_begin_idx起的最低点（至少连续2个点）
         df_range = df.loc[check_begin_idx:check_end_idx, :]
         __max_idx, _ = find_last_max_b1_value_strict(df_range)
         __max_idx -= 1 # find_first_max_b1_value 返回的是连续2个点中的后一个，此处修正成前一个
@@ -3146,23 +3146,23 @@ def fix_profit_sell_save(df, logout=blank_logout):
             # print(f'profit_segs length: {len(profit_segs)}')
             # 从最后一段开始，向前处理
             _b, _e = profit_segs[-2]
-            # profit_segs[-2] 与 profit_segs[-1] 之间存在多个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 连续的段，需要处理
-            # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段begin+5
+            # profit_segs[-2] 与 profit_segs[-1] 之间存在多个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 连续的段，需要处理
+            # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 段begin+5
             # 否则都使用 profit_segs[-1][0]-1
             _ee = profit_segs[-1][0]-1
             real_b, real_e, real_ee = _act_0_data_begin_idx + _b, _act_0_data_begin_idx + _e, _act_0_data_begin_idx + _ee
-            # 检查 real_e 与 real_ee 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 的段
-            # if (df.loc[real_e:real_ee, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD or
-            #     df.loc[real_e:real_ee, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD):
-            if df.loc[real_e:real_ee, 'no_move_len'].max() > NO_MOVE_THRESHOLD:
-                # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段的最高点
+            # 检查 real_e 与 real_ee 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 的段
+            # if (df.loc[real_e:real_ee, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD_PROFIT or
+            #     df.loc[real_e:real_ee, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD_PROFIT):
+            if df.loc[real_e:real_ee, 'no_move_len'].max() > NO_MOVE_THRESHOLD_PROFIT:
+                # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_PROFIT 段的最高点
                 df_range = df.loc[real_e:real_ee, :]
-                # if df_range['no_move_len_pct'].max() > NO_MOVE_THRESHOLD:
-                #     __b = df_range[df_range['no_move_len_pct'] > NO_MOVE_THRESHOLD].index[0]
+                # if df_range['no_move_len_pct'].max() > NO_MOVE_THRESHOLD_PROFIT:
+                #     __b = df_range[df_range['no_move_len_pct'] > NO_MOVE_THRESHOLD_PROFIT].index[0]
                 # else:
-                #     __b = df_range[df_range['no_move_len_2price'] > NO_MOVE_THRESHOLD].index[0]
-                __b = df_range[df_range['no_move_len'] > NO_MOVE_THRESHOLD].index[0]
-                __e = __b + NO_MOVE_THRESHOLD - 2 - 1
+                #     __b = df_range[df_range['no_move_len_2price'] > NO_MOVE_THRESHOLD_PROFIT].index[0]
+                __b = df_range[df_range['no_move_len'] > NO_MOVE_THRESHOLD_PROFIT].index[0]
+                __e = __b + NO_MOVE_THRESHOLD_PROFIT - 2 - 1
                 __max_idx, _ = find_last_max_b1_value(df.loc[__b:__e, :])
                 real_e = min(__max_idx + __b, real_ee)
             else:
@@ -3303,18 +3303,18 @@ def fix_profit_sell_save(df, logout=blank_logout):
             _b, _e = sell_save_segs[-2]
             _ee= sell_save_segs[-1][0]-1
             real_b, real_e, real_ee = _act_1_data_begin_idx + _b, _act_1_data_begin_idx + _e, _act_1_data_begin_idx + _ee
-            # 检查 real_e 与 real_ee 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 的段
-            # if (df.loc[real_e:real_ee, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD or
-            #     df.loc[real_e:real_ee, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD):
-            if df.loc[real_e:real_ee, 'no_move_len'].max() > NO_MOVE_THRESHOLD:
-                # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD 段的最低点
+            # 检查 real_e 与 real_ee 之间是否存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_SELL_SAVE 的段
+            # if (df.loc[real_e:real_ee, 'no_move_len_pct'].max() > NO_MOVE_THRESHOLD_SELL_SAVE or
+            #     df.loc[real_e:real_ee, 'no_move_len_2price'].max() > NO_MOVE_THRESHOLD_SELL_SAVE):
+            if df.loc[real_e:real_ee, 'no_move_len'].max() > NO_MOVE_THRESHOLD_SELL_SAVE:
+                # 若存在 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_SELL_SAVE 段，需要改用第一个 no_move_len_pct/no_move_len_2price>NO_MOVE_THRESHOLD_SELL_SAVE 段的最低点
                 df_range = df.loc[real_e:real_ee, :]
-                # if df_range['no_move_len_pct'].max() > NO_MOVE_THRESHOLD:
-                #     __b = df_range[df_range['no_move_len_pct'] > NO_MOVE_THRESHOLD].index[0]
+                # if df_range['no_move_len_pct'].max() > NO_MOVE_THRESHOLD_SELL_SAVE:
+                #     __b = df_range[df_range['no_move_len_pct'] > NO_MOVE_THRESHOLD_SELL_SAVE].index[0]
                 # else:
-                #     __b = df_range[df_range['no_move_len_2price'] > NO_MOVE_THRESHOLD].index[0]
-                __b = df_range[df_range['no_move_len'] > NO_MOVE_THRESHOLD].index[0]
-                __e = __b + NO_MOVE_THRESHOLD - 2 - 1
+                #     __b = df_range[df_range['no_move_len_2price'] > NO_MOVE_THRESHOLD_SELL_SAVE].index[0]
+                __b = df_range[df_range['no_move_len'] > NO_MOVE_THRESHOLD_SELL_SAVE].index[0]
+                __e = __b + NO_MOVE_THRESHOLD_SELL_SAVE - 2 - 1
                 __min_idx, _ = find_last_min_a1_value(df.loc[__b:__e, :])
                 real_e = min(__min_idx + __b, real_ee)
             else:

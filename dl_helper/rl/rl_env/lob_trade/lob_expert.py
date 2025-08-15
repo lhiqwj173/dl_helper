@@ -17,7 +17,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from dl_helper.train_param import in_kaggle
-from dl_helper.tool import max_profit_reachable, plot_trades
+from dl_helper.tool import max_profit_reachable, plot_trades, FUTURE_ACT_SAME_NUM
 from dl_helper.rl.rl_env.lob_trade.lob_const import MEAN_SEC_BEFORE_CLOSE, STD_SEC_BEFORE_CLOSE, MAX_SEC_BEFORE_CLOSE
 from dl_helper.rl.rl_env.lob_trade.lob_const import USE_CODES, STD_REWARD
 from dl_helper.rl.rl_env.lob_trade.lob_const import ACTION_BUY, ACTION_SELL
@@ -571,8 +571,40 @@ def delay_start_platform_0(df: pd.DataFrame, logout=blank_logout) -> pd.DataFram
                 
     return df_copy
 
+def add_sell_save_miss(lob_data):
+    """
+    避免 action=1 连续块没有卖出信号，一直持有
+
+    (action=1 连续块的前两个点) 且 (raw_sell_save>0) 且 (sell_save<=0)
+    将符合条件的 sell_save 置为 0.001
+    """
+    # 条件1: (action=1 连续块的前两个点)
+    # 使用 shift() 和 cumsum() 创建每个连续块的唯一ID
+    block_id = (lob_data['action'] != lob_data['action'].shift()).cumsum()
+
+    # 在每个块内，使用 cumcount() 计算行的序号 (从0开始)
+    position_in_block = lob_data.groupby(block_id).cumcount()
+
+    # 筛选出 action=1 且在块内序号为 0 或 1 (即前两个点) 的行
+    cond1 = (lob_data['action'] == 1) & (position_in_block < 2)
+
+    # 条件2: (raw_sell_save > 0)
+    cond2 = lob_data['raw_sell_save'] > 0
+
+    # 条件3: (sell_save <= 0)
+    cond3 = lob_data['sell_save'] <= 0
+
+    # 合并所有条件
+    # 只有当三个条件都为 True 时，才进行修改
+    final_condition = cond1 & cond2 & cond3
+
+    # 使用 .loc[] 对符合所有条件的行的 'sell_save' 列进行赋值
+    # 这是 Pandas 推荐的赋值方式，可以避免 SettingWithCopyWarning
+    lob_data.loc[final_condition, 'sell_save'] = 0.001
+    return lob_data
+
 # 这是一个虚拟的日志记录器，用于演示。
-# 在您的实际使用中，可以替换为您自己的日志对象。
+# 在您的实际使用中，可以替换为您自己的日志对象
 class BlankLogout:
     def info(self, msg):
         print(f"信息: {msg}")
@@ -1011,6 +1043,11 @@ class LobExpert_file():
         # 推迟平台起点
         self._logout_switch_file('delay_start_platform')
         lob_data = delay_start_platform(lob_data, logout=self._logout)
+
+        # sell_save 保留
+        # 卖出点 act=1 的前两个点 且 raw_sell_save>=0.0015 且 sell_save<=0
+        # 将 sell_save 置为 0.001
+        lob_data = add_sell_save_miss(lob_data)
         
         if self.cache_debug:
             try:
@@ -1113,7 +1150,7 @@ class LobExpert_file():
         
         # 查找 action
         # 向后多取 future_act_num 个数据
-        future_act_num = 3
+        future_act_num = FUTURE_ACT_SAME_NUM
         data = lob_data[(lob_data['before_market_close_sec'] <= before_market_close_sec) & (lob_data['before_market_close_sec'] >= (before_market_close_sec - 0.1))].iloc[:future_act_num]
         assert len(data) > 0, f'len(data): {len(data)}'# 至少有一个数据
 
