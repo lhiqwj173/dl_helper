@@ -28,6 +28,9 @@ class test_base():
         self.para = None
         self.findbest_lr = findbest_lr
 
+        # 学习率
+        self.lr = kwargs.get('learning_rate', None)
+
         # 实例化参数 的 kwargs
         self.params_kwargs = {k: v for k, v in kwargs.items()}
         self.params_kwargs['data_folder'] = data_folder
@@ -55,6 +58,9 @@ class test_base():
             self.para.epochs = 45
             self.para.root += f'_findlr'
             self.para.train_title += f'_findlr'
+
+        if self.lr:
+            self.para.learning_rate = float(self.lr) * self.para.batch_n
 
         return self.para
 
