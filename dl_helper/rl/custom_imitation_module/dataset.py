@@ -242,7 +242,7 @@ class LobTrajectoryDataset(Dataset):
             file_path = os.path.join(base_data_folder, file)
             # _ids, _mean_std, _x, _all_raw_data = pickle.load(open(file_path, 'rb'))
             datas = pickle.load(open(file_path, 'rb'))
-            self.ids, self.mean_std, self.x, self.all_raw_data = datas[:4]
+            _ids, _mean_std, _x, _all_raw_data = datas[:4]
             # 转换数据类型为float32
             for col in _all_raw_data.iloc[:, :-3].columns:
                 _all_raw_data[col] = _all_raw_data[col].astype('float32')
