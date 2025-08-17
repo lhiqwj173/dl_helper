@@ -501,7 +501,7 @@ class test(test_base):
         for i in range(5):
             for model_cls in [DeepLOB_v2]:
                 for base_data_folder in [
-                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_deeplob',
+                    r'/kaggle/input/bc-train-data-20250817-deeplob'
                 ]:
                     args.append((model_cls, i, base_data_folder))
 
