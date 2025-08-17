@@ -484,7 +484,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250815_b&l'
+    title_base = '20250817_base'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
