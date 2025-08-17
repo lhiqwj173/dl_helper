@@ -889,7 +889,7 @@ class LobExpert_file():
             self.log_item_name = item_name
             os.makedirs(os.path.join(self.log_folder, self.log_item_name), exist_ok=True)
 
-    def _prepare_data(self, begin_idx, end_idx, x, before_market_close_sec, dtype):
+    def _prepare_data(self, begin_idx, end_idx, x, before_market_close_sec, dtype, y=None):
         # report_memory_usage(f'prepare_data 0')
         # 清空日志
         if self.logout:
@@ -910,6 +910,12 @@ class LobExpert_file():
         lob_data.loc[sample_idxs,'before_market_close_sec'] = [i for i in before_market_close_sec[begin_idx:end_idx]]
         lob_data['before_market_close_sec'] /= MAX_SEC_BEFORE_CLOSE
         # report_memory_usage(f'prepare_data 1')
+
+        # 若有 y， 匹配到 lob_data 中
+        if y is not None:
+            lob_data['y'] = y[begin_idx:end_idx]
+            lob_data = lob_data.loc[:, ['y', 'before_market_close_sec', 'BASE买1价', 'BASE卖1价']]
+            return lob_data
 
         lob_data = lob_data.reset_index(drop=True)
 
@@ -1078,7 +1084,12 @@ class LobExpert_file():
             _date_file = f'{date}.pkl'
             _idx = self.all_file_names.index(_date_file)
             _data_file_path = self.all_file_paths[_idx]
-        ids, _, x, self.full_lob_data = pickle.load(open(_data_file_path, 'rb'))
+        # ids, _, x, self.full_lob_data = pickle.load(open(_data_file_path, 'rb'))
+        datas = pickle.load(open(_data_file_path, 'rb'))
+        if len(datas) == 4:
+            ids, _, x, self.full_lob_data = datas
+        else:
+            ids, _, x, self.full_lob_data, y = datas
 
         # 距离市场关闭的秒数
         dt = datetime.datetime.strptime(f'{date} 15:00:00', '%Y%m%d %H:%M:%S')
@@ -1160,59 +1171,74 @@ class LobExpert_file():
         if noon_need_close or pm_need_close:
             res = ACTION_SELL
         else:
-            if pos == 0:
-                # 当前空仓
-                # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
-                if len(data[\
-                    # 有买入动作
-                    (data['action']==ACTION_BUY) & \
-                        # 潜在收益为正
-                        (data['profit'] > 0) & \
 
-                            # # 价格与当前一致
-                            # (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
-                            # (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
-                            #     # 与 第一行数据之间没有发生 BASE卖1价 的下跌(小于第一行 BASE卖1价 的个数为0)
-                            #     # 1. 不允许任何的变化
-                            #     ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
-                            #     ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
+            if 'profit' in list(lob_data):
+                # 使用 bc 来决策
+                if pos == 0:
+                    # 当前空仓
+                    # 若未来 future_act_num 个数据中, 有买入动作[且]买入收益为正[且]价格与当前一致（若当前存在收益值，潜在收益一致）, 则买入
+                    if len(data[\
+                        # 有买入动作
+                        (data['action']==ACTION_BUY) & \
+                            # 潜在收益为正
+                            (data['profit'] > 0) & \
 
-                            # 价格与当前一致
-                            (data['BASE卖1价'] >= data['BASE卖1价'].iloc[0]) & \
-                            (data['BASE买1价'] >= data['BASE买1价'].iloc[0]) & \
-                                # 与 第一行数据之间没有发生 任何下跌
-                                # 2. 不允许下跌
-                                (~has_ever_decreased_since_start(data['BASE卖1价'])) & \
-                                (~has_ever_decreased_since_start(data['BASE买1价']))
+                                # # 价格与当前一致
+                                # (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
+                                # (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
+                                #     # 与 第一行数据之间没有发生 BASE卖1价 的下跌(小于第一行 BASE卖1价 的个数为0)
+                                #     # 1. 不允许任何的变化
+                                #     ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
+                                #     ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
 
-                                    ]) > 0:
-                    res = ACTION_BUY
+                                # 价格与当前一致
+                                (data['BASE卖1价'] >= data['BASE卖1价'].iloc[0]) & \
+                                (data['BASE买1价'] >= data['BASE买1价'].iloc[0]) & \
+                                    # 与 第一行数据之间没有发生 任何下跌
+                                    # 2. 不允许下跌
+                                    (~has_ever_decreased_since_start(data['BASE卖1价'])) & \
+                                    (~has_ever_decreased_since_start(data['BASE买1价']))
+
+                                        ]) > 0:
+                        res = ACTION_BUY
+                    else:
+                        res = ACTION_SELL
                 else:
-                    res = ACTION_SELL
+                    # 当前有持仓
+                    # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
+                    if len(data[\
+                        (data['action']==ACTION_SELL) & \
+                            # 潜在收益为正
+                            (data['sell_save'] > 0) & \
+
+                                # (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
+                                # (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
+                                #     # 与 第一行数据之间没有发生 BASE买1价 的上涨(小于第一行 BASE买1价 的个数为0)
+                                #     ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
+                                #     ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
+
+                                (data['BASE买1价'] <= data['BASE买1价'].iloc[0]) & \
+                                (data['BASE卖1价'] <= data['BASE卖1价'].iloc[0]) & \
+                                    # 与 第一行数据之间没有发生 任何上涨
+                                    (~has_ever_increased_since_start(data['BASE买1价'])) & \
+                                    (~has_ever_increased_since_start(data['BASE卖1价']))
+
+                                        ]) > 0:
+                        res = ACTION_SELL
+                    else:
+                        res = ACTION_BUY
+
             else:
-                # 当前有持仓
-                # 若未来 future_act_num 个数据中, 有卖出动作[且]卖出收益为正[且]价格与当前一致（潜在收益一致）, 则卖出
-                if len(data[\
-                    (data['action']==ACTION_SELL) & \
-                        # 潜在收益为正
-                        (data['sell_save'] > 0) & \
-
-                            # (data['BASE买1价'] == data['BASE买1价'].iloc[0]) & \
-                            # (data['BASE卖1价'] == data['BASE卖1价'].iloc[0]) & \
-                            #     # 与 第一行数据之间没有发生 BASE买1价 的上涨(小于第一行 BASE买1价 的个数为0)
-                            #     ((data['BASE卖1价'] != data['BASE卖1价'].iloc[0]).cumsum() == 0) & \
-                            #     ((data['BASE买1价'] != data['BASE买1价'].iloc[0]).cumsum() == 0)
-
-                            (data['BASE买1价'] <= data['BASE买1价'].iloc[0]) & \
-                            (data['BASE卖1价'] <= data['BASE卖1价'].iloc[0]) & \
-                                # 与 第一行数据之间没有发生 任何上涨
-                                (~has_ever_increased_since_start(data['BASE买1价'])) & \
-                                (~has_ever_increased_since_start(data['BASE卖1价']))
-
-                                    ]) > 0:
-                    res = ACTION_SELL
+                # 使用 y 来决策
+                # y: 0上涨/ 1下跌/ 2平整
+                assert 'y' in list(lob_data), f'使用 y 决策，必须包含 y 列'
+                trend = lob_data['y'].iloc[0]
+                if pos == 0:    
+                    # 当前空仓, 只有上涨才会买入
+                    res = ACTION_BUY if trend == 0 else ACTION_SELL
                 else:
-                    res = ACTION_BUY
+                    # 当前持仓, 只有下跌才会卖出
+                    res = ACTION_SELL if trend == 1 else ACTION_BUY
 
         return res
     

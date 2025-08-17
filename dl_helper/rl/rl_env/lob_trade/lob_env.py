@@ -276,7 +276,9 @@ class data_producer:
                 self.cur_data_file = os.path.basename(_cur_data_file)
 
                 log(f'[{self.data_type}] load date file: {self.cur_data_file}')
-                self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(_cur_data_file, 'rb'))
+                # self.ids, self.mean_std, self.x, self.all_raw_data = pickle.load(open(_cur_data_file, 'rb'))
+                datas = pickle.load(open(_cur_data_file, 'rb'))
+                self.ids, self.mean_std, self.x, self.all_raw_data = datas[:4]
                 # 转换数据类型为float32
                 for col in self.all_raw_data.iloc[:, :-3].columns:
                     self.all_raw_data[col] = self.all_raw_data[col].astype('float32')
