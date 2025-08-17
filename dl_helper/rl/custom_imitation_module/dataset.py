@@ -113,6 +113,7 @@ class LobTrajectoryDataset(Dataset):
         sample_num_limit:int=None, 
         data_type:str='train',
         std:bool=True,
+        base_data_folder=DATA_FOLDER,
         split_rng:np.random.Generator=np.random.default_rng(),
     ):
         """
@@ -235,10 +236,10 @@ class LobTrajectoryDataset(Dataset):
         # {symbol_id: {date: _all_raw_data}}
         self.all_data = {}
         self.raw_data = {}
-        for file in os.listdir(DATA_FOLDER):
+        for file in os.listdir(base_data_folder):
             if not file.endswith('.pkl'):
                 continue
-            file_path = os.path.join(DATA_FOLDER, file)
+            file_path = os.path.join(base_data_folder, file)
             _ids, _mean_std, _x, _all_raw_data = pickle.load(open(file_path, 'rb'))
             # 转换数据类型为float32
             for col in _all_raw_data.iloc[:, :-3].columns:

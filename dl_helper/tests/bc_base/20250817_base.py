@@ -1,0 +1,637 @@
+import sys, torch, os, pickle
+from torch.nn.init import xavier_uniform_, zeros_, normal_
+import torch.nn.init as init
+import torchvision
+import torchvision.transforms as transforms 
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, random_split
+import functools
+from math import prod
+from itertools import product
+import numpy as np
+
+from accelerate.utils import set_seed
+
+from dl_helper.rl.custom_imitation_module.dataset import LobTrajectoryDataset
+from dl_helper.tester import test_base
+from dl_helper.train_param import Params, match_num_processes
+from dl_helper.scheduler import OneCycle_fast
+from dl_helper.data import data_parm2str
+from dl_helper.models.binctabl import m_bin_ctabl
+from dl_helper.transforms.base import transform
+from dl_helper.trainer import run
+from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
+"""
+订单簿 bc 数据集
+目标: tcn 替换的 DeepLOB 模型，作为基准
+结论: 
+"""
+class StaticFeatureProcessor(nn.Module):
+    """
+    静态特征处理模块
+    用于处理包含类别特征和数值特征的静态输入
+    """
+    def __init__(
+        self,
+        num_categories: int = 10,
+        embedding_dim: int = 16,
+        num_features: int = 2,
+        output_dim: int = 32,
+        static_hidden: tuple = (64, 32),
+        use_regularization: bool = False,
+        dropout_rate: float = 0.1,
+    ):
+        super().__init__()
+        
+        # 参数验证
+        if num_categories <= 0: raise ValueError("num_categories必须大于0")
+        if embedding_dim <= 0: raise ValueError("embedding_dim必须大于0")
+        if num_features < 0: raise ValueError("num_features不能为负数")
+        if output_dim <= 0: raise ValueError("output_dim必须大于0")
+        if not (0 <= dropout_rate < 1): raise ValueError("dropout_rate必须在[0, 1)范围内")
+        
+        self.num_categories = num_categories
+        self.embedding_dim = embedding_dim
+        self.num_features = num_features
+        self.output_dim = output_dim
+        self.use_regularization = use_regularization
+        self.dropout_rate = dropout_rate if use_regularization else 0.0
+        
+        # 类别特征嵌入层
+        self.id_embedding = nn.Embedding(num_categories, embedding_dim)
+        
+        # 数值特征预处理层 (BatchNorm现在是默认组件)
+        if num_features > 0:
+            self.num_feature_norm = nn.BatchNorm1d(num_features)
+        
+        # 静态特征融合网络
+        static_input_dim = embedding_dim + num_features
+        layers = []
+        in_dim = static_input_dim
+        
+        for i, h_dim in enumerate(static_hidden):
+            layers.append(nn.Linear(in_dim, h_dim))
+            # 优化: BatchNorm层在激活函数之前
+            layers.append(nn.BatchNorm1d(h_dim))
+            layers.append(nn.ReLU())
+            # Dropout仅在启用正则化时添加
+            if self.dropout_rate > 0:
+                layers.append(nn.Dropout(self.dropout_rate))
+            in_dim = h_dim
+        
+        # 最后的输出层（不加激活函数和dropout）
+        layers.append(nn.Linear(in_dim, output_dim))
+        self.static_net = nn.Sequential(*layers)
+        
+    def forward(self, static_features: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播
+        
+        Args:
+            static_features: 静态特征张量，形状为 [batch_size, total_features]
+                           其中第一个特征是类别特征(整数)，其余为数值特征
+        
+        Returns:
+            处理后的静态特征，形状为 [batch_size, output_dim]
+        """
+        # 输入验证
+        if static_features.size(1) != (1 + self.num_features):
+            raise ValueError(f"输入特征维度不匹配，期望 {1 + self.num_features}，实际 {static_features.size(1)}")
+        
+        # 分离类别特征和数值特征
+        cat_feat = static_features[:, 0].long()
+        
+        # 验证类别特征的有效性
+        if torch.any(cat_feat < 0) or torch.any(cat_feat >= self.num_categories):
+            raise ValueError(f"类别特征值必须在[0, {self.num_categories-1}]范围内")
+        
+        # 对类别特征进行嵌入
+        embedded = self.id_embedding(cat_feat)
+        
+        # 处理数值特征
+        if self.num_features > 0:
+            num_feat = static_features[:, 1:]
+            
+            # # 检查数值特征中的异常值
+            # if torch.isnan(num_feat).any() or torch.isinf(num_feat).any():
+            #     raise ValueError("数值特征中包含NaN或Inf值")
+            
+            # 应用批标准化（如果启用）
+            num_feat = self.num_feature_norm(num_feat)
+            
+            # 拼接嵌入特征和数值特征
+            static_input = torch.cat([embedded, num_feat], dim=1)
+        else:
+            # 如果没有数值特征，只使用嵌入特征
+            static_input = embedded
+        
+        # 通过静态特征处理网络
+        output = self.static_net(static_input)
+        
+        # # 输出验证
+        # if torch.isnan(output).any() or torch.isinf(output).any():
+        #     raise ValueError("模型输出包含NaN或Inf值")
+        
+        return output
+    
+    def get_output_dim(self) -> int:
+        """
+        获取输出维度
+        
+        Returns:
+            输出特征的维度
+        """
+        return self.output_dim
+    
+    def get_embedding_weights(self) -> torch.Tensor:
+        """
+        获取嵌入层权重，用于可视化或分析
+        
+        Returns:
+            嵌入层权重张量
+        """
+        return self.id_embedding.weight.detach()
+    
+    def freeze_embedding(self):
+        """
+        冻结嵌入层参数，防止训练时更新
+        """
+        for param in self.id_embedding.parameters():
+            param.requires_grad = False
+    
+    def unfreeze_embedding(self):
+        """
+        解冻嵌入层参数，允许训练时更新
+        """
+        for param in self.id_embedding.parameters():
+            param.requires_grad = True
+
+class TemporalBlock(nn.Module):
+    """TCN的基本时间块，包含因果卷积、残差连接和正则化"""
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2, use_regularization=True):
+        super(TemporalBlock, self).__init__()
+        
+        self.net = nn.Sequential(
+            nn.Conv1d(n_inputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
+            Chomp1d(padding),
+            nn.BatchNorm1d(n_outputs),                                                  # BN层固定存在
+            nn.ReLU(),
+            nn.Dropout(dropout) if use_regularization else nn.Identity(),               # Dropout受use_regularization控制
+            nn.Conv1d(n_outputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
+            Chomp1d(padding),
+            nn.BatchNorm1d(n_outputs),                                                  # BN层固定存在
+            nn.ReLU(),
+            nn.Dropout(dropout) if use_regularization else nn.Identity()                # Dropout受use_regularization控制
+        )
+        
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        """前向传播，包含残差连接"""
+        out = self.net(x)
+        res = x if self.downsample is None else self.downsample(x)
+        return self.relu(out + res)
+
+class Chomp1d(nn.Module):
+    """移除卷积后右侧的填充，保持因果性"""
+    def __init__(self, chomp_size):
+        super(Chomp1d, self).__init__()
+        self.chomp_size = chomp_size
+
+    def forward(self, x):
+        return x[:, :, :-self.chomp_size].contiguous()
+
+class TemporalConvNet(nn.Module):
+    """时间卷积网络 (TCN)"""
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2, use_regularization=True):
+        super(TemporalConvNet, self).__init__()
+        layers = []
+        num_levels = len(num_channels)
+        
+        for i in range(num_levels):
+            dilation_size = 2 ** i  # 膨胀率呈指数增长
+            in_channels = num_inputs if i == 0 else num_channels[i-1]
+            out_channels = num_channels[i]
+            layers.append(TemporalBlock(
+                in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
+                padding=(kernel_size-1) * dilation_size, dropout=dropout, use_regularization=use_regularization
+            ))
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+class DeepLOB_v2(nn.Module):
+    """
+    DeepLOB_v2的大容量版本。
+    - 通过增加各模块的通道数和隐藏维度来提升模型容量。
+    - 保持了原始的三流融合架构。
+    - 预计参数量: 582742
+    """
+    def __init__(
+            self,
+            num_lob_levels: int = 1,
+            num_extension_features: int = 5,
+            time_steps: int = 50,
+            static_input_dims: int = 3,
+            output_dim: int = 2,
+            use_regularization: bool = False,
+        ):
+        super().__init__()
+        
+        # --- 维度信息 (与原版一致) ---
+        self.time_steps = time_steps
+        self.num_lob_levels = num_lob_levels
+        self.lob_feature_dim = 4
+        self.num_extension_features = num_extension_features
+        self.static_input_dims = static_input_dims
+        self.y_len = output_dim
+        self.use_regularization = use_regularization
+        
+        # --- 1. 静态特征处理流 (增大) ---
+        static_out_dim = 48 # 32 -> 48
+        self.static_feature_processor = StaticFeatureProcessor(
+            num_categories=10, embedding_dim=16, num_features=2,
+            output_dim=static_out_dim,
+            static_hidden=(80, 48), # (64, 32) -> (80, 48)
+            use_regularization=use_regularization,
+        )
+
+        # --- 2. LOB特征处理流 (增大) ---
+        lob_conv_channels = 40 # 32 -> 40
+        # 卷积块1
+        self.lob_conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=lob_conv_channels, kernel_size=(1,2), stride=(1,2)),
+            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
+            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
+            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+        )
+        
+        # 卷积块2
+        self.lob_conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(1,2), stride=(1,2)),
+            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
+            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
+            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
+            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
+            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
+        )
+        
+        # 卷积块3
+        if self.num_lob_levels > 1:
+            self.lob_conv3 = nn.Sequential(
+                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(1, self.num_lob_levels)),
+                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)), 
+                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
+                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+            )
+        else:
+            self.lob_conv3 = None
+            
+        # Inception模块 (增大)
+        inception_channels = 80 # 64 -> 80
+        self.inp1 = self._build_inception_branch(lob_conv_channels, inception_channels, (3,1))
+        self.inp2 = self._build_inception_branch(lob_conv_channels, inception_channels, (5,1))
+        self.inp3 = self._build_inception_pool_branch(lob_conv_channels, inception_channels)
+        
+        # LOB流的TCN (增大)
+        lob_tcn_input_dim = inception_channels * 3
+        lob_tcn_channels = [160, 128, 96] # [128, 96, 64] -> [160, 128, 96]
+        lob_tcn_output_dim = lob_tcn_channels[-1]
+        dropout_rate = 0.2 if self.use_regularization else 0.0
+        self.lob_tcn = TemporalConvNet(
+            num_inputs=lob_tcn_input_dim, num_channels=lob_tcn_channels, kernel_size=3, 
+            dropout=dropout_rate, use_regularization=self.use_regularization
+        )
+        
+        # --- 3. 延伸特征处理流 (增大) ---
+        ext_tcn_channels = [48, 48] # [32, 32] -> [48, 48]
+        ext_tcn_output_dim = ext_tcn_channels[-1]
+        self.extension_tcn = TemporalConvNet(
+            num_inputs=self.num_extension_features, num_channels=ext_tcn_channels,
+            kernel_size=3, dropout=dropout_rate, use_regularization=self.use_regularization
+        )
+        self.dropout_final = nn.Dropout(0.3) if self.use_regularization else nn.Identity()
+        
+        # --- 4. 融合网络 (增大) ---
+        fusion_input_dim = lob_tcn_output_dim + ext_tcn_output_dim + static_out_dim
+        self.fusion_net = nn.Sequential(
+            nn.Linear(fusion_input_dim, 96), # 64 -> 96
+            nn.BatchNorm1d(96),
+            nn.ReLU(),
+            nn.Dropout(0.3) if self.use_regularization else nn.Identity(),
+            nn.Linear(96, self.y_len)
+        )
+    
+        self.apply(self._init_weights)
+
+    def _build_inception_branch(self, in_channels, out_channels, kernel_size):
+        return nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1,1), padding='same'),
+            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
+            nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, padding='same'),
+            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
+        )
+
+    def _build_inception_pool_branch(self, in_channels, out_channels):
+        return nn.Sequential(
+            nn.MaxPool2d((3, 1), stride=(1, 1), padding=(1, 0)),
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1,1), padding='same'),
+            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
+        )
+
+
+    def _init_weights(self, module):
+        """
+        一个健壮的、遵循最佳实践的权重初始化函数。
+        """
+        # 1. 特殊处理：最终的分类线性层
+        #    这是解决初始损失不等于 log(C) 的关键。
+        #    通过将最后一层的权重和偏置设为0，我们确保模型的初始输出(logits)为0，
+        #    使得初始损失精确地接近 log(num_classes)。
+        #    这个判断必须放在最前面，因为它也是一个nn.Linear实例。
+        if hasattr(self, 'fusion_net') and module == self.fusion_net[-1]:
+            # pass
+            init.constant_(module.weight, 0)
+            if module.bias is not None:
+                init.constant_(module.bias, 0)
+
+        # 2. 通用处理：卷积层和线性层
+        #    使用 Kaiming 初始化，它专门为 ReLU 家族的激活函数设计。
+        #    'leaky_relu' 是一个很好的选择，因为它适用于 ReLU 和 LeakyReLU。
+        #    这有助于在训练初期维持梯度的幅度，防止梯度消失或爆炸。
+        elif isinstance(module, (nn.Linear, nn.Conv1d, nn.Conv2d)):
+            init.kaiming_uniform_(module.weight, mode='fan_in', nonlinearity='leaky_relu')
+            if module.bias is not None:
+                init.zeros_(module.bias)
+                
+        # 3. 标准处理：批量归一化层
+        #    BatchNorm 的标准初始化是：gamma(weight)=1, beta(bias)=0。
+        #    这意味着在训练开始时，它只进行归一化而不进行缩放或平移。
+        elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
+            init.constant_(module.weight, 1)
+            init.constant_(module.bias, 0)
+            
+        # 4. 标准处理：嵌入层
+        #    Xavier/Glorot 初始化是嵌入层的常用且有效的选择。
+        elif isinstance(module, nn.Embedding):
+            init.xavier_uniform_(module.weight)
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播函数
+        
+        Args:
+            observations (torch.Tensor): 形状为 [batch_size, total_features]。
+                特征排列顺序应为: 
+                [LOB数据 (50*4*n) | 延伸特征 (50*m) | 静态特征 (3)]
+        """
+        batch_size = observations.size(0)
+
+        # --- 输入特征分割 ---
+        lob_data_len = self.time_steps * self.lob_feature_dim * self.num_lob_levels
+        ext_data_len = self.time_steps * self.num_extension_features
+        
+        # 1. LOB数据
+        x_lob = observations[:, :lob_data_len]
+        x_lob = x_lob.reshape(batch_size, self.time_steps, self.lob_feature_dim * self.num_lob_levels)
+        
+        # 2. 延伸特征数据
+        x_ext = observations[:, lob_data_len : lob_data_len + ext_data_len]
+        x_ext = x_ext.reshape(batch_size, self.time_steps, self.num_extension_features)
+        
+        # 3. 静态特征数据
+        x_static = observations[:, lob_data_len + ext_data_len: lob_data_len + ext_data_len + self.static_input_dims]
+
+        # --- 流 1: LOB 特征处理 ---
+        # [B, T, F] -> [B, 1, T, F] for Conv2d
+        h_lob = x_lob.unsqueeze(1)
+        h_lob = self.lob_conv1(h_lob)
+        h_lob = self.lob_conv2(h_lob)
+        if self.lob_conv3 is not None:
+            h_lob = self.lob_conv3(h_lob)
+        
+        # Inception 模块
+        h_lob_inp1 = self.inp1(h_lob)
+        h_lob_inp2 = self.inp2(h_lob)
+        h_lob_inp3 = self.inp3(h_lob)
+        h_lob = torch.cat((h_lob_inp1, h_lob_inp2, h_lob_inp3), dim=1) # [B, 192, H, W]
+        
+        # 调整维度以适应TCN [B, C, T]
+        h_lob = h_lob.permute(0, 2, 1, 3)
+        h_lob = torch.reshape(h_lob, (batch_size, h_lob.shape[1], -1)) # [B, T_new, C_new]
+        h_lob = h_lob.permute(0, 2, 1) # [B, C_new, T_new]
+        
+        # LOB TCN
+        h_lob = self.lob_tcn(h_lob)
+        h_lob = h_lob[:, :, -1] # 取序列最后一个时间步的输出 [B, lob_tcn_output_dim]
+        
+        # --- 流 2: 延伸特征处理 ---
+        # [B, T, M] -> [B, M, T] for TCN
+        h_ext = x_ext.permute(0, 2, 1) 
+        h_ext = self.extension_tcn(h_ext)
+        h_ext = h_ext[:, :, -1] # 取序列最后一个时间步的输出 [B, ext_tcn_output_dim]
+        
+        # --- 流 3: 静态特征处理 ---
+        h_static = self.static_feature_processor(x_static) # [B, static_out_dim]
+        
+        # --- 4. 特征融合 ---
+        # 将三个流的输出拼接起来
+        fusion_input = torch.cat([h_lob, h_ext, h_static], dim=1)
+        
+        if self.use_regularization:
+            fusion_input = self.dropout_final(fusion_input)
+            
+        output = self.fusion_net(fusion_input)
+        
+        # 数值检查
+        if torch.isnan(output).any() or torch.isinf(output).any():
+            model_sd = self.state_dict()
+            model_sd = {k: v.cpu() for k, v in model_sd.items()}
+            with open('debug_nan_data.pkl', 'wb') as f:
+                pickle.dump({
+                    'state_dict': model_sd,
+                    'observations': observations.detach().cpu(),
+                }, f)
+            raise ValueError("output contains nan or inf")
+        
+        return output
+
+# 简单的数据结构
+his_len = 50
+base_features = [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']]
+ext_features = [
+    "距离收盘秒数",
+    "EXT_micro_price",
+    "EXT_volatility_5",
+    "EXT_pressure_imbalance",
+    'EXT_volatility_wap_5',
+    'EXT_relative_spread_l1',
+    'EXT_weighted_mid_price_v2',
+    'EXT_depth_imbalance',
+    'EXT_ofi',
+]
+data_config = {
+    'his_len': his_len,# 每个样本的 历史数据长度
+    'need_cols':  base_features + ext_features,
+}
+
+class test(test_base):
+    title_base = '20250815_b&l'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.params_kwargs['y_n'] = 2
+        self.params_kwargs['classify'] = True
+        self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['batch_n'] = 128
+        self.params_kwargs['epochs'] = 200
+        self.params_kwargs['learning_rate'] = 3e-4
+        self.params_kwargs['no_better_stop'] = 0
+        self.params_kwargs['label_smoothing'] = 0
+
+        args = []
+        for i in range(5):
+            for model_cls in [DeepLOB_v2]:
+                for base_data_folder in [
+                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove30',
+                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove50',
+                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove70',
+                ]:
+                    args.append((model_cls, i, base_data_folder))
+
+        self.model_cls, self.seed, self.base_data_folder = args[self.idx]
+        self.params_kwargs['seed'] = self.seed
+
+        # 实例化 参数对象
+        self.para = Params(
+            **self.params_kwargs
+        )
+
+        # 准备数据集
+        data_dict_folder = os.path.join(self.base_data_folder, 'data_dict')
+        train_split_rng = np.random.default_rng(seed=self.seed)
+        self.train_dataset = LobTrajectoryDataset(
+            data_folder= data_dict_folder, 
+            input_zero=input_indepent, 
+            sample_num_limit= None if not overfit else 5, 
+            data_config = data_config, 
+            base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
+            split_rng=train_split_rng,
+        )
+        self.val_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='val')
+        self.test_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='test')
+    
+    def get_title_suffix(self):
+        """获取后缀"""
+        res = f'{self.model_cls.__name__}_seed{self.seed}'
+
+        if input_indepent:
+            res += '_input_indepent'
+
+        if overfit:
+            res += '_overfit'
+
+        return res
+
+    def get_model(self):
+        return self.model_cls(
+            num_lob_levels=1,
+            num_extension_features=len(ext_features),
+            time_steps=his_len,
+            static_input_dims=3,
+            output_dim=2,
+            use_regularization=False,
+        )
+    
+    def get_data(self, _type, data_sample_getter_func=None):
+        if _type == 'train':
+            return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
+        elif _type == 'val':
+            return DataLoader(dataset=self.val_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
+        elif _type == 'test':
+            return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
+        
+if '__main__' == __name__:
+
+    # 全局训练参数
+    input_indepent = False# 训练无关输入（全0）的模型
+    test_init_loss = False# 验证初始化损失
+    check_data_sample_balance = False # 检查 train/val/test 样本均衡
+    overfit = False # 小样本过拟合测试
+    need_check_dependencies = False # 检查梯度计算依赖关系
+
+    for arg in sys.argv[1:]:
+        if arg == 'test_init_loss':
+            test_init_loss = True
+        elif arg == 'input_indepent':
+            input_indepent = True
+        elif arg == 'check_data_sample_balance':
+            check_data_sample_balance = True
+        elif arg == 'overfit':
+            overfit = True
+        elif arg == "check_dependencies":
+            need_check_dependencies = True
+
+    # ################################
+    # # 测试模型
+    # ################################
+    model = DeepLOB_v2(
+        num_lob_levels=1,
+        num_extension_features=len(ext_features),
+        time_steps=his_len,
+        static_input_dims=3,
+        output_dim=2,
+        use_regularization=False,
+    )
+    x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+    x[:, -4] = 0
+    print(model(x).shape)
+    print(f"模型参数量: {model_params_num(model)}")
+
+    # ################################
+    # # 验证初始化损失 == log(C)
+    # ################################
+    if test_init_loss:
+        from tqdm import tqdm
+        init_losses = []
+        for i in tqdm(range(10)):
+            model = DeepLOB_v2(
+                num_lob_levels=1,
+                num_extension_features=len(ext_features),
+                time_steps=his_len,
+                static_input_dims=3,
+                output_dim=2,
+                use_regularization=False,
+            )
+            num_classes = 2
+            criterion = nn.CrossEntropyLoss()
+            batchsize = 128
+            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+            x[:, -4] = 0
+            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+            # 前向传播
+            outputs = model(x)
+            loss = criterion(outputs, y)
+            init_losses.append(loss.item())
+        print(init_losses)
+        print(f"Initial loss: { np.mean(init_losses)}")
+        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
+
+    elif need_check_dependencies:
+        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+        x[:, -4] = 0
+        run_dependency_check_without_bn(model, x, 3)
+
+    else:
+        # 开始训练
+        run(
+            test, 
+        )
