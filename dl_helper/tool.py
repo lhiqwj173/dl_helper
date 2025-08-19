@@ -50,20 +50,20 @@ MAX_FLAT_RATIO = 0.2  # 平段占比最大值
 ###############################
 # NO_MOVE 阈值
 
-# # 基准阈值
-# FUTURE_ACT_SAME_NUM = 10 # 未来动作同化 长度
-# NO_MOVE_THRESHOLD_PROFIT = 50  # 无移动阈值
-# NO_MOVE_THRESHOLD_SELL_SAVE = 50  # 无移动阈值
+# 基准阈值
+FUTURE_ACT_SAME_NUM = 10 # 未来动作同化 长度
+NO_MOVE_THRESHOLD_PROFIT = 50  # 无移动阈值
+NO_MOVE_THRESHOLD_SELL_SAVE = 50  # 无移动阈值
 
 # # 较小阈值
 # FUTURE_ACT_SAME_NUM = 10 # 未来动作同化 长度
 # NO_MOVE_THRESHOLD_PROFIT = 30  # 无移动阈值
 # NO_MOVE_THRESHOLD_SELL_SAVE = 30  # 无移动阈值
 
-# 较大阈值
-FUTURE_ACT_SAME_NUM = 10 # 未来动作同化 长度
-NO_MOVE_THRESHOLD_PROFIT = 70  # 无移动阈值
-NO_MOVE_THRESHOLD_SELL_SAVE = 70  # 无移动阈值
+# # 较大阈值
+# FUTURE_ACT_SAME_NUM = 10 # 未来动作同化 长度
+# NO_MOVE_THRESHOLD_PROFIT = 70  # 无移动阈值
+# NO_MOVE_THRESHOLD_SELL_SAVE = 70  # 无移动阈值
 
 ###############################
 
