@@ -24,8 +24,9 @@ from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
 订单簿 bc 数据集
-目标: tcn 替换的 DeepLOB 模型，作为基准
+目标: 
 结论: 
+
 """
 class StaticFeatureProcessor(nn.Module):
     """

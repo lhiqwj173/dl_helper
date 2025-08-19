@@ -224,6 +224,7 @@ class LobTrajectoryDataset(Dataset):
         self.his_len = data_config.get('his_len', None)
         self.need_cols = data_config.get('need_cols', None)
         self.need_cols_idx = []
+        self.vol_cols_idx = []
         self.input_zero = input_zero
 
         # data_dict 包含的 symbols
@@ -258,6 +259,7 @@ class LobTrajectoryDataset(Dataset):
             if not self.need_cols:
                 # 默认保留所有列(除 时间 列)
                 self.need_cols = [i for i in _all_raw_data.columns.tolist() if i != '时间']
+                self.vol_cols_idx = [i for i in range(len(self.need_cols)) if '量' in self.need_cols[i] and 'BASE' in self.need_cols[i]]
             if not self.need_cols_idx:
                 self.need_cols_idx = [_all_raw_data.columns.get_loc(col) for col in self.need_cols]
             # 只保留需要的列
@@ -291,6 +293,16 @@ class LobTrajectoryDataset(Dataset):
                 except:
                     ms = pd.DataFrame(symbol_mean_std[0]['price_vol_each']['robust'], dtype=np.float32).iloc[self.need_cols_idx, :].values
                 
+                # 截断极值
+                try:
+                    clip_threshold = symbol_mean_std[0]['all_std']['vol_clip_threshold']
+                    # 只截断极大值，保留下限
+                    self.raw_data[days][x_a:x_b, self.vol_cols_idx] = np.minimum(
+                        self.raw_data[days][x_a:x_b, self.vol_cols_idx], clip_threshold
+                    )
+                except:
+                    pass
+
                 # 提前标准化数据
                 if self.std:
                     # 直接标准化标的的数据

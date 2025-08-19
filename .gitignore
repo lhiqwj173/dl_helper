@@ -38,7 +38,8 @@ ENV/
 
 mobilenet_v2_data_v6/
 20240513_001/
-*.ipynb
+temp/
+
 *.pkl
 *.csv
 *.png

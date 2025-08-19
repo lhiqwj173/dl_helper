@@ -24,8 +24,34 @@ from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
 订单簿 bc 数据集
-目标: tcn 替换的 DeepLOB 模型，作为基准
+目标: 
+    1. 考察不同 nomove 阈值的数据集的表现情况
+    2. 考察新的标的范围对模型性能的影响
 结论: 
+
+    1. nomove 30 为最优，性能随着阈值减小单调递增
+       同时阈值越小，训练数据越少，相同参数的模型越容易拟合，这个结论可能没有什么意义
+       TODO 还需要考察各个数据集的最优参数模型（train_f1无显著提升）的val_f1性能对比
+
+                                                        train_f1	val_f1	cost
+        train_title			
+        20250817_base_P100_DeepLOB_v2_final_nomove30	0.920442	0.648930	12.07h
+        20250817_base_P100_DeepLOB_v2_final_nomove50	0.906923	0.638214	14.863999999999999h
+        20250817_base_P100_DeepLOB_v2_final_nomove70	0.897084	0.620636	16.922h
+
+    2. new_codes 训练样本 1(810372)@1(810372) 1(1079480)@1(1079480) 1(1292891)@1(1292891)
+       old_codes 训练样本 1(330787)@1(330787)
+
+       指标上来看 新标的范围 性能不如 旧的
+       
+                                                        train_f1	val_f1	cost
+        train_title_old_codes		
+        20250811_el_P100_DeepLOB_v2_ExtraLarge_final	0.992900	0.795387	8.42h
+        20250811_s&l_P100_DeepLOB_v2_Large_final	    0.991325	0.779560	6.388h
+        20250518_base_P100_DeepLOB_v2_final	            0.986987	0.851849	5.28h
+        20250811_base_P100_DeepLOB_v2_final	            0.986273	0.776328	4.904999999999999h
+        20250811_s&l_P100_DeepLOB_v2_Small_final	    0.973233	0.760379	4.3420000000000005h
+
 """
 class StaticFeatureProcessor(nn.Module):
     """
