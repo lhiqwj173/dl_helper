@@ -494,7 +494,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TemporalConvNet, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+            for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
@@ -516,9 +516,10 @@ class test(test_base):
             data_config = data_config, 
             base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
             split_rng=train_split_rng,
+            use_data_file_num=200,
         )
-        self.val_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='val')
-        self.test_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='test')
+        self.val_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='val', use_data_file_num=200)
+        self.test_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='test', use_data_file_num=200)
     
     def get_title_suffix(self):
         """获取后缀"""

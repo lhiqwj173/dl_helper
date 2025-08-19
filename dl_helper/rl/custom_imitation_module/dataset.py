@@ -115,6 +115,7 @@ class LobTrajectoryDataset(Dataset):
         std:bool=True,
         base_data_folder=DATA_FOLDER,
         split_rng:np.random.Generator=np.random.default_rng(),
+        use_data_file_num:int=None, # 使用数据文件数量，默认使用所有文件
     ):
         """
         data_config:
@@ -152,6 +153,9 @@ class LobTrajectoryDataset(Dataset):
 
         # 随机数生成器
         self.split_rng = split_rng
+
+        # 使用数据文件数量
+        self.use_data_file_num = use_data_file_num
 
         if data_dict:
             # 先储存到tmp 目录，在读取
@@ -333,6 +337,8 @@ class LobTrajectoryDataset(Dataset):
                 if _file.endswith('.pkl'):
                     file_paths.append(os.path.join(root, _file))
         file_paths.sort()
+        if self.use_data_file_num:
+            file_paths = file_paths[:self.use_data_file_num]
 
         if len(file_paths) == 0:
             raise ValueError(f"没有找到任何 pkl 文件")
