@@ -534,12 +534,9 @@ class test(test_base):
 
     def get_model(self):
         return self.model_cls(
-            num_lob_levels=1,
-            num_extension_features=len(ext_features),
+            num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
-            static_input_dims=3,
-            output_dim=2,
-            use_regularization=False,
+            num_static_features=3,
         )
     
     def get_data(self, _type, data_sample_getter_func=None):
