@@ -250,259 +250,228 @@ class TemporalConvNet(nn.Module):
     def forward(self, x):
         return self.network(x)
 
-class DeepLOB_v2(nn.Module):
+class TimeSeriesStaticModel(nn.Module):
     """
-    DeepLOB_v2的大容量版本。
-    - 通过增加各模块的通道数和隐藏维度来提升模型容量。
-    - 保持了原始的三流融合架构。
-    - 预计参数量: 582742
+    一个结合了TCN处理时间序列特征和MLP处理静态特征的混合模型。
+
+    该模型包含两个并行的处理流：
+    1. 时间序列流：使用时间卷积网络（TCN）来捕捉时间序列数据中的时序依赖关系。
+    2. 静态特征流：使用一个多层感知机（MLP），包括嵌入层，来处理不随时间变化的静态特征。
+
+    最后，两个流的输出被拼接在一起，通过一个融合网络（Fusion Network）来产生最终的预测。
     """
     def __init__(
-            self,
-            num_lob_levels: int = 1,
-            num_extension_features: int = 5,
-            time_steps: int = 50,
-            static_input_dims: int = 3,
-            output_dim: int = 2,
-            use_regularization: bool = False,
-        ):
+        self,
+        # 时间序列参数
+        num_ts_features: int,
+        time_steps: int,
+        tcn_channels: list = [64, 32],
+        tcn_kernel_size: int = 3,
+        # 静态特征参数
+        num_static_features: int = 3, # 1个类别特征 + 2个数值特征
+        static_num_categories: int = 10,
+        static_embedding_dim: int = 16,
+        static_output_dim: int = 32,
+        static_hidden_dims: tuple = (64, 32),
+        # 融合网络与输出参数
+        fusion_hidden_dim: int = 64,
+        output_dim: int = 2,
+        # 正则化参数
+        use_regularization: bool = False,
+        dropout_rate: float = 0.2,
+    ):
+        """
+        初始化模型。
+
+        Args:
+            num_ts_features (int): 每个时间步的时间序列特征数量。
+            time_steps (int): 时间序列的长度。
+            tcn_channels (list): TCN中每个时间块的输出通道数列表。
+            tcn_kernel_size (int): TCN中卷积层的核大小。
+            num_static_features (int): 静态特征的总数（类别+数值）。
+            static_num_categories (int): 静态数据中类别特征的类别总数。
+            static_embedding_dim (int): 类别特征的嵌入维度。
+            static_output_dim (int): 静态特征处理器处理后的输出维度。
+            static_hidden_dims (tuple): 静态特征处理器中隐藏层的维度。
+            fusion_hidden_dim (int): 融合网络中隐藏层的维度。
+            output_dim (int): 模型的最终输出维度。
+            use_regularization (bool): 是否启用Dropout正则化。
+            dropout_rate (float): TCN和融合网络中使用的dropout比率。
+        """
         super().__init__()
         
-        # --- 维度信息 (与原版一致) ---
+        # --- 保存维度信息 ---
+        self.num_ts_features = num_ts_features
         self.time_steps = time_steps
-        self.num_lob_levels = num_lob_levels
-        self.lob_feature_dim = 4
-        self.num_extension_features = num_extension_features
-        self.static_input_dims = static_input_dims
-        self.y_len = output_dim
+        self.num_static_features = num_static_features
+        self.output_dim = output_dim
         self.use_regularization = use_regularization
         
-        # --- 1. 静态特征处理流 (增大) ---
-        static_out_dim = 48 # 32 -> 48
-        self.static_feature_processor = StaticFeatureProcessor(
-            num_categories=10, embedding_dim=16, num_features=2,
-            output_dim=static_out_dim,
-            static_hidden=(80, 48), # (64, 32) -> (80, 48)
+        # --- 1. 静态特征处理流 ---
+        self.static_processor = StaticFeatureProcessor(
+            num_categories=static_num_categories,
+            embedding_dim=static_embedding_dim,
+            num_features=num_static_features - 1, # 减去1个类别特征
+            output_dim=static_output_dim,
+            static_hidden=static_hidden_dims,
             use_regularization=use_regularization,
+            dropout_rate=dropout_rate,
         )
 
-        # --- 2. LOB特征处理流 (增大) ---
-        lob_conv_channels = 40 # 32 -> 40
-        # 卷积块1
-        self.lob_conv1 = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=lob_conv_channels, kernel_size=(1,2), stride=(1,2)),
-            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
-            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
-            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
-            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
-            nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
+        # --- 2. 时间序列特征处理流 (TCN) ---
+        self.ts_tcn = TemporalConvNet(
+            num_inputs=self.num_ts_features,
+            num_channels=tcn_channels,
+            kernel_size=tcn_kernel_size,
+            dropout=dropout_rate if self.use_regularization else 0.0,
+            use_regularization=self.use_regularization
         )
-        
-        # 卷积块2
-        self.lob_conv2 = nn.Sequential(
-            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(1,2), stride=(1,2)),
-            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
-            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
-            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
-            nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
-            nn.BatchNorm2d(lob_conv_channels), nn.Tanh(),
-        )
-        
-        # 卷积块3
-        if self.num_lob_levels > 1:
-            self.lob_conv3 = nn.Sequential(
-                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(1, self.num_lob_levels)),
-                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
-                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)), 
-                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
-                nn.Conv2d(in_channels=lob_conv_channels, out_channels=lob_conv_channels, kernel_size=(4,1)),
-                nn.BatchNorm2d(lob_conv_channels), nn.LeakyReLU(negative_slope=0.01),
-            )
-        else:
-            self.lob_conv3 = None
-            
-        # Inception模块 (增大)
-        inception_channels = 80 # 64 -> 80
-        self.inp1 = self._build_inception_branch(lob_conv_channels, inception_channels, (3,1))
-        self.inp2 = self._build_inception_branch(lob_conv_channels, inception_channels, (5,1))
-        self.inp3 = self._build_inception_pool_branch(lob_conv_channels, inception_channels)
-        
-        # LOB流的TCN (增大)
-        lob_tcn_input_dim = inception_channels * 3
-        lob_tcn_channels = [160, 128, 96] # [128, 96, 64] -> [160, 128, 96]
-        lob_tcn_output_dim = lob_tcn_channels[-1]
-        dropout_rate = 0.2 if self.use_regularization else 0.0
-        self.lob_tcn = TemporalConvNet(
-            num_inputs=lob_tcn_input_dim, num_channels=lob_tcn_channels, kernel_size=3, 
-            dropout=dropout_rate, use_regularization=self.use_regularization
-        )
-        
-        # --- 3. 延伸特征处理流 (增大) ---
-        ext_tcn_channels = [48, 48] # [32, 32] -> [48, 48]
-        ext_tcn_output_dim = ext_tcn_channels[-1]
-        self.extension_tcn = TemporalConvNet(
-            num_inputs=self.num_extension_features, num_channels=ext_tcn_channels,
-            kernel_size=3, dropout=dropout_rate, use_regularization=self.use_regularization
-        )
-        self.dropout_final = nn.Dropout(0.3) if self.use_regularization else nn.Identity()
-        
-        # --- 4. 融合网络 (增大) ---
-        fusion_input_dim = lob_tcn_output_dim + ext_tcn_output_dim + static_out_dim
+        tcn_output_dim = tcn_channels[-1]
+
+        # --- 3. 融合网络 ---
+        fusion_input_dim = tcn_output_dim + static_output_dim
         self.fusion_net = nn.Sequential(
-            nn.Linear(fusion_input_dim, 96), # 64 -> 96
-            nn.BatchNorm1d(96),
+            nn.Linear(fusion_input_dim, fusion_hidden_dim),
+            nn.BatchNorm1d(fusion_hidden_dim),
             nn.ReLU(),
-            nn.Dropout(0.3) if self.use_regularization else nn.Identity(),
-            nn.Linear(96, self.y_len)
+            nn.Dropout(dropout_rate) if self.use_regularization else nn.Identity(),
+            nn.Linear(fusion_hidden_dim, self.output_dim)
         )
     
+        # --- 权重初始化 ---
         self.apply(self._init_weights)
 
-    def _build_inception_branch(self, in_channels, out_channels, kernel_size):
-        return nn.Sequential(
-            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1,1), padding='same'),
-            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
-            nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size, padding='same'),
-            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
-        )
-
-    def _build_inception_pool_branch(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.MaxPool2d((3, 1), stride=(1, 1), padding=(1, 0)),
-            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=(1,1), padding='same'),
-            nn.BatchNorm2d(out_channels), nn.LeakyReLU(negative_slope=0.01),
-        )
-
-
-    def _init_weights(self, module):
+    def _init_weights(self, module: nn.Module):
         """
-        一个健壮的、遵循最佳实践的权重初始化函数。
+        健壮的权重初始化函数，遵循最佳实践。
         """
-        # 1. 特殊处理：最终的分类线性层
-        #    这是解决初始损失不等于 log(C) 的关键。
-        #    通过将最后一层的权重和偏置设为0，我们确保模型的初始输出(logits)为0，
-        #    使得初始损失精确地接近 log(num_classes)。
-        #    这个判断必须放在最前面，因为它也是一个nn.Linear实例。
+        # 最终分类/回归层的权重和偏置初始化为0，有助于稳定训练初期
         if hasattr(self, 'fusion_net') and module == self.fusion_net[-1]:
-            # pass
             init.constant_(module.weight, 0)
             if module.bias is not None:
                 init.constant_(module.bias, 0)
-
-        # 2. 通用处理：卷积层和线性层
-        #    使用 Kaiming 初始化，它专门为 ReLU 家族的激活函数设计。
-        #    'leaky_relu' 是一个很好的选择，因为它适用于 ReLU 和 LeakyReLU。
-        #    这有助于在训练初期维持梯度的幅度，防止梯度消失或爆炸。
+        # 对线性和卷积层使用Kaiming初始化 (适用于ReLU)
         elif isinstance(module, (nn.Linear, nn.Conv1d, nn.Conv2d)):
-            init.kaiming_uniform_(module.weight, mode='fan_in', nonlinearity='leaky_relu')
+            init.kaiming_uniform_(module.weight, mode='fan_in', nonlinearity='relu')
             if module.bias is not None:
                 init.zeros_(module.bias)
-                
-        # 3. 标准处理：批量归一化层
-        #    BatchNorm 的标准初始化是：gamma(weight)=1, beta(bias)=0。
-        #    这意味着在训练开始时，它只进行归一化而不进行缩放或平移。
+        # 对BatchNorm层使用标准初始化
         elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)):
             init.constant_(module.weight, 1)
             init.constant_(module.bias, 0)
-            
-        # 4. 标准处理：嵌入层
-        #    Xavier/Glorot 初始化是嵌入层的常用且有效的选择。
+        # 对嵌入层使用Xavier初始化
         elif isinstance(module, nn.Embedding):
             init.xavier_uniform_(module.weight)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         """
-        前向传播函数
-        
+        前向传播函数。
+
         Args:
-            observations (torch.Tensor): 形状为 [batch_size, total_features]。
-                特征排列顺序应为: 
-                [LOB数据 (50*4*n) | 延伸特征 (50*m) | 静态特征 (3)]
+            observations (torch.Tensor): 形状为 [batch_size, total_features] 的输入张量。
+                特征排列顺序应为: [时间序列特征 (T * F) | 静态特征 (S)]
+        
+        Returns:
+            torch.Tensor: 模型的输出，形状为 [batch_size, output_dim]。
         """
         batch_size = observations.size(0)
 
-        # --- 输入特征分割 ---
-        lob_data_len = self.time_steps * self.lob_feature_dim * self.num_lob_levels
-        ext_data_len = self.time_steps * self.num_extension_features
+        # --- 1. 输入特征分割 ---
+        ts_data_len = self.time_steps * self.num_ts_features
         
-        # 1. LOB数据
-        x_lob = observations[:, :lob_data_len]
-        x_lob = x_lob.reshape(batch_size, self.time_steps, self.lob_feature_dim * self.num_lob_levels)
-        
-        # 2. 延伸特征数据
-        x_ext = observations[:, lob_data_len : lob_data_len + ext_data_len]
-        x_ext = x_ext.reshape(batch_size, self.time_steps, self.num_extension_features)
-        
-        # 3. 静态特征数据
-        x_static = observations[:, lob_data_len + ext_data_len: lob_data_len + ext_data_len + self.static_input_dims]
+        # 提取时间序列数据
+        x_ts = observations[:, :ts_data_len]
+        # 提取静态数据 最后一个日期数据，不在训练中使用
+        x_static = observations[:, ts_data_len:-1]
 
-        # --- 流 1: LOB 特征处理 ---
-        # [B, T, F] -> [B, 1, T, F] for Conv2d
-        h_lob = x_lob.unsqueeze(1)
-        h_lob = self.lob_conv1(h_lob)
-        h_lob = self.lob_conv2(h_lob)
-        if self.lob_conv3 is not None:
-            h_lob = self.lob_conv3(h_lob)
+        # --- 2. 时间序列流处理 ---
+        # Reshape: [B, T * F] -> [B, T, F]
+        h_ts = x_ts.view(batch_size, self.time_steps, self.num_ts_features)
+        # Permute: [B, T, F] -> [B, F, T] 以匹配Conv1d的输入 (N, C_in, L_in)
+        h_ts = h_ts.permute(0, 2, 1)
         
-        # Inception 模块
-        h_lob_inp1 = self.inp1(h_lob)
-        h_lob_inp2 = self.inp2(h_lob)
-        h_lob_inp3 = self.inp3(h_lob)
-        h_lob = torch.cat((h_lob_inp1, h_lob_inp2, h_lob_inp3), dim=1) # [B, 192, H, W]
+        # 通过TCN网络
+        h_ts = self.ts_tcn(h_ts)
         
-        # 调整维度以适应TCN [B, C, T]
-        h_lob = h_lob.permute(0, 2, 1, 3)
-        h_lob = torch.reshape(h_lob, (batch_size, h_lob.shape[1], -1)) # [B, T_new, C_new]
-        h_lob = h_lob.permute(0, 2, 1) # [B, C_new, T_new]
+        # 取序列最后一个时间步的输出作为该序列的表示
+        # h_ts shape: [B, tcn_output_dim, T] -> [B, tcn_output_dim]
+        h_ts = h_ts[:, :, -1]
         
-        # LOB TCN
-        h_lob = self.lob_tcn(h_lob)
-        h_lob = h_lob[:, :, -1] # 取序列最后一个时间步的输出 [B, lob_tcn_output_dim]
-        
-        # --- 流 2: 延伸特征处理 ---
-        # [B, T, M] -> [B, M, T] for TCN
-        h_ext = x_ext.permute(0, 2, 1) 
-        h_ext = self.extension_tcn(h_ext)
-        h_ext = h_ext[:, :, -1] # 取序列最后一个时间步的输出 [B, ext_tcn_output_dim]
-        
-        # --- 流 3: 静态特征处理 ---
-        h_static = self.static_feature_processor(x_static) # [B, static_out_dim]
+        # --- 3. 静态特征流处理 ---
+        h_static = self.static_processor(x_static) # [B, static_output_dim]
         
         # --- 4. 特征融合 ---
-        # 将三个流的输出拼接起来
-        fusion_input = torch.cat([h_lob, h_ext, h_static], dim=1)
+        # 将两个流的输出拼接起来
+        fusion_input = torch.cat([h_ts, h_static], dim=1)
         
-        if self.use_regularization:
-            fusion_input = self.dropout_final(fusion_input)
-            
+        # 通过融合网络得到最终输出
         output = self.fusion_net(fusion_input)
-        
-        # 数值检查
-        if torch.isnan(output).any() or torch.isinf(output).any():
-            model_sd = self.state_dict()
-            model_sd = {k: v.cpu() for k, v in model_sd.items()}
-            with open('debug_nan_data.pkl', 'wb') as f:
-                pickle.dump({
-                    'state_dict': model_sd,
-                    'observations': observations.detach().cpu(),
-                }, f)
-            raise ValueError("output contains nan or inf")
         
         return output
 
+class TimeSeriesStaticModelSmall(TimeSeriesStaticModel):
+    """
+    (小版本) TimeSeriesStaticModel的轻量级变体，参数量约减少50%。
+    """
+    def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
+        # 定义小模型的默认参数
+        model_params = dict(
+            tcn_channels=[32, 32],
+            tcn_kernel_size=3,
+            static_num_categories=10,
+            static_embedding_dim=8,
+            static_output_dim=16,
+            static_hidden_dims=(32, 16),
+            fusion_hidden_dim=32,
+            output_dim=2,
+            use_regularization=False,
+            dropout_rate=0.2,
+        )
+        # 允许用户通过kwargs覆盖默认值
+        model_params.update(kwargs)
+        
+        super().__init__(
+            num_ts_features=num_ts_features,
+            time_steps=time_steps,
+            num_static_features=num_static_features,
+            **model_params
+        )
+
+class TimeSeriesStaticModelLarge(TimeSeriesStaticModel):
+    """
+    (大版本) TimeSeriesStaticModel的高容量变体，参数量约增加50%。
+    """
+    def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
+        # 定义大模型的默认参数
+        model_params = dict(
+            tcn_channels=[96, 48],
+            tcn_kernel_size=3,
+            static_num_categories=10,
+            static_embedding_dim=24,
+            static_output_dim=48,
+            static_hidden_dims=(96, 48),
+            fusion_hidden_dim=96,
+            output_dim=2,
+            use_regularization=False,
+            dropout_rate=0.2,
+        )
+        # 允许用户通过kwargs覆盖默认值
+        model_params.update(kwargs)
+
+        super().__init__(
+            num_ts_features=num_ts_features,
+            time_steps=time_steps,
+            num_static_features=num_static_features,
+            **model_params
+        )
+
 # 简单的数据结构
-his_len = 50
-base_features = [item for i in range(1) for item in [f'BASE卖{i+1}价', f'BASE卖{i+1}量', f'BASE买{i+1}价', f'BASE买{i+1}量']]
+his_len = 30
+base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
 ext_features = [
     "距离收盘秒数",
-    "EXT_micro_price",
-    "EXT_volatility_5",
-    "EXT_pressure_imbalance",
-    'EXT_volatility_wap_5',
-    'EXT_relative_spread_l1',
-    'EXT_weighted_mid_price_v2',
-    'EXT_depth_imbalance',
-    'EXT_ofi',
+    "EXT_log_ret_mid_price",
+    "EXT_ofi",
 ]
 data_config = {
     'his_len': his_len,# 每个样本的 历史数据长度
@@ -510,7 +479,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250817_base'
+    title_base = '20250819_tcn_base'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -525,15 +494,11 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [DeepLOB_v2]:
-                for base_data_folder in [
-                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove30',
-                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove50',
-                    r'/kaggle/input/bc-train-data-20250817/BC_train_data_20250817_nomove70',
-                ]:
-                    args.append((model_cls, i, base_data_folder))
+            for model_cls in [TemporalConvNet, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+                args.append((model_cls, i))
 
-        self.model_cls, self.seed, self.base_data_folder = args[self.idx]
+        self.model_cls, self.seed = args[self.idx]
+        self.base_data_folder = r'/kaggle/input/bc-train-data-20250818'
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象
@@ -609,14 +574,26 @@ if '__main__' == __name__:
     # ################################
     # # 测试模型
     # ################################
-    model = DeepLOB_v2(
-        num_lob_levels=1,
-        num_extension_features=len(ext_features),
+    model = TimeSeriesStaticModel(
+        num_ts_features=len(ext_features) + len(base_features),
         time_steps=his_len,
-        static_input_dims=3,
+        num_static_features=3,
         output_dim=2,
         use_regularization=False,
     )
+
+    # model = TimeSeriesStaticModelSmall(
+    #     num_ts_features=len(ext_features) + len(base_features),
+    #     time_steps=his_len,
+    #     num_static_features=3,
+    # )
+
+    # model = TimeSeriesStaticModelLarge(
+    #     num_ts_features=len(ext_features) + len(base_features),
+    #     time_steps=his_len,
+    #     num_static_features=3,
+    # )
+
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
     print(model(x).shape)
@@ -629,11 +606,16 @@ if '__main__' == __name__:
         from tqdm import tqdm
         init_losses = []
         for i in tqdm(range(10)):
-            model = DeepLOB_v2(
-                num_lob_levels=1,
-                num_extension_features=len(ext_features),
+            model = TimeSeriesStaticModel(
+                num_ts_features=len(ext_features) + len(base_features),
                 time_steps=his_len,
-                static_input_dims=3,
+                tcn_channels=[64, 32],
+                tcn_kernel_size=3,
+                num_static_features=3,
+                static_num_categories=10,
+                static_embedding_dim=16,
+                static_output_dim=32,
+                static_hidden_dims=(64, 32),
                 output_dim=2,
                 use_regularization=False,
             )
