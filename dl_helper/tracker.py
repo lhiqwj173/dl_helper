@@ -22,7 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, precision_recall_curve
 
-from accelerate.utils import broadcast, gather_object
+from accelerate.utils import broadcast
 
 from dl_helper.scheduler import ReduceLR_slow_loss, ReduceLROnPlateau, WarmupReduceLROnPlateau, LRFinder
 from dl_helper.tool import save_df_pic
@@ -44,7 +44,7 @@ TYPES_NO_NEED_SYMBOL_SCORE = ['train', 'val']
 
 TYPES_NEED_LABEL_COUNT = ['train', 'val', 'test_final']
 TYPES_NEED_CAL_THRESHOLD = ['test_final', 'test_best']
-TYPES_NEED_OUTPUT = ['train_final', 'train_best', 'val_final', 'val_best', 'test_final', 'test_best', 'test_dummy']# 用于模型融合 基特征
+
 
 def last_value(data):
     """返回最后一个非nan值"""
@@ -473,9 +473,7 @@ class Tracker():
             'printer',
         ]
 
-        # 用于output输出
-        # 格式为 [(id, target, predict), ...]
-        self.output_datas=[]
+
 
         # 最终数据
         self.data = {}
@@ -577,49 +575,7 @@ class Tracker():
 
         self.printer.print(f'update {self.track_update}')
 
-        # 模型 output 输出，用于模型融合训练
-        # > train/val/test > date_file
-        # id,target,0,1,2
-        if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
 
-            dataset_type, model_type = self.track_update.split('_')
-            save_folder = os.path.join(self.params.root, f"model_{model_type}")
-            assert dataset_type in ['train', 'val', 'test'], f'error dataset_type:{dataset_type}'
-
-            out_folder = os.path.join(save_folder, dataset_type)
-            os.makedirs(out_folder, exist_ok=True)
-
-            self.printer.print(f'输出模型output: {model_type} {dataset_type} 共{len(self.output_datas)}条')
-
-            # id 排序
-            # 格式为 [(id, target, predict), ...]
-            self.output_datas = sorted(self.output_datas, key=lambda x: x[0])
-
-            # self.printer.print(f'输出模型output: {model_type} {dataset_type} {_id}')
-            with open(os.path.join(out_folder, f'{model_type}_{dataset_type}.csv'), 'w') as f:
-                # 输出 列名
-                f.write('id')
-                # 获取 target 维度
-                # 支持多个输出
-                target_length = 1 if len(self.output_datas[0][1].shape)==0 else self.output_datas[0][1].shape[0]
-                if target_length > 1:
-                    for i in range(target_length):
-                        f.write(f',target{i}')
-                else:
-                    f.write(f',target')
-                # 预测类别
-                for i in range(self.params.y_n):
-                    f.write(f',{i}')
-                f.write('\n')
-
-                # 储存数据
-                for _id, target, predict in self.output_datas:
-                    predict_str = ','.join([str(float(i)) for i in predict])
-                    target_str = ','.join([str(float(i)) for i in target])
-                    f.write(f'{_id},{target_str},{predict_str}\n')
-
-            self.output_datas = []# 重置
-            self.printer.print(f'输出模型output: {model_type} {dataset_type} 完成')
 
         # 等待同步
         self.accelerator.wait_for_everyone()
@@ -803,7 +759,7 @@ class Tracker():
         self.track_update = ''
         self.temp = {}
 
-        self.temp['_ids'] = []
+
 
         self.temp['_loss'] = None
         self.temp['_num'] = 0
@@ -879,13 +835,7 @@ class Tracker():
         else:
             predict = output
 
-        # 模型 output 输出，用于模型融合训练
-        if self.data_id_getter_func:
-            all_ids = self.data_id_getter_func(data)
-            if self.track_update in TYPES_NEED_OUTPUT and self.params.need_meta_output:
-                # 按日期分类输出数据
-                for i in range(predict.shape[0]):
-                    self.output_datas.append((all_ids[i], target[i], predict[i]))
+
 
         # 汇总所有设备上的数据
         # self.printer.print('sync track...')
@@ -903,10 +853,6 @@ class Tracker():
         # self.printer.print('gather loss, y_true, y_pred done')
         if _type in TYPES_NO_NEED_SYMBOL_SCORE:
             # train/val 不需要, 避免浪费计算
-            pass
-        elif _type in TYPES_NEED_OUTPUT and self.data_id_getter_func:
-            _ids = gather_object(all_ids)
-        else:
             pass
 
         # self.printer.print('_ids done', main=False)
@@ -936,8 +882,7 @@ class Tracker():
                 self.temp['_loss'] = torch.cat([self.temp['_loss'], _loss])
             # self.printer.print('temp data done')
 
-            if _type in TYPES_NEED_OUTPUT and self.data_id_getter_func:
-                self.temp['_ids'] += _ids
+
 
             # self.temp['_codes'] += codes
             self.temp['_num'] += _y_true.shape[0]

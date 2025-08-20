@@ -170,8 +170,7 @@ class Params:
 
   test=False
 
-  # 用于模型融合 
-  need_meta_output=True
+
 
   def __init__(
       self,
@@ -196,8 +195,7 @@ class Params:
       # 测试运行
       test=False,
 
-      # 模型融合
-      need_meta_output=False,
+
 
       **kwargs
   ):
@@ -232,7 +230,7 @@ class Params:
       self.debug = bool(debug)
       self.test = bool(test)
       self.seed = int(seed)
-      self.need_meta_output = bool(need_meta_output)
+
 
       # # log
       # os.makedirs(os.path.join(self.root, 'log'), exist_ok=True)
