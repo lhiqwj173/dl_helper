@@ -250,7 +250,7 @@ class TemporalConvNet(nn.Module):
     def forward(self, x):
         return self.network(x)
 
-# 模型参数量: 34630
+# 模型参数量: 33606
 class TimeSeriesStaticModel(nn.Module):
     """
     一个结合了TCN处理时间序列特征和MLP处理静态特征的混合模型。
@@ -274,8 +274,7 @@ class TimeSeriesStaticModel(nn.Module):
         static_embedding_dim: int = 16,
         static_output_dim: int = 32,
         static_hidden_dims: tuple = (64, 32),
-        # 融合网络与输出参数
-        fusion_hidden_dim: int = 64,
+        # 输出参数
         output_dim: int = 2,
         # 正则化参数
         use_regularization: bool = False,
@@ -294,7 +293,6 @@ class TimeSeriesStaticModel(nn.Module):
             static_embedding_dim (int): 类别特征的嵌入维度。
             static_output_dim (int): 静态特征处理器处理后的输出维度。
             static_hidden_dims (tuple): 静态特征处理器中隐藏层的维度。
-            fusion_hidden_dim (int): 融合网络中隐藏层的维度。
             output_dim (int): 模型的最终输出维度。
             use_regularization (bool): 是否启用Dropout正则化。
             dropout_rate (float): TCN和融合网络中使用的dropout比率。
@@ -331,6 +329,7 @@ class TimeSeriesStaticModel(nn.Module):
 
         # --- 3. 融合网络 ---
         fusion_input_dim = tcn_output_dim + static_output_dim
+        fusion_hidden_dim = (fusion_input_dim + output_dim) // 2
         self.fusion_net = nn.Sequential(
             nn.Linear(fusion_input_dim, fusion_hidden_dim),
             nn.BatchNorm1d(fusion_hidden_dim),
@@ -418,16 +417,12 @@ class TimeSeriesStaticModelSmall(TimeSeriesStaticModel):
     def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
         # 定义小模型的默认参数
         model_params = dict(
-            tcn_channels=[32, 32],
+            tcn_channels=[32, 16],
             tcn_kernel_size=3,
-            static_num_categories=10,
-            static_embedding_dim=8,
             static_output_dim=16,
             static_hidden_dims=(32, 16),
-            fusion_hidden_dim=32,
             output_dim=2,
             use_regularization=False,
-            dropout_rate=0.2,
         )
         # 允许用户通过kwargs覆盖默认值
         model_params.update(kwargs)
@@ -447,16 +442,12 @@ class TimeSeriesStaticModelLarge(TimeSeriesStaticModel):
     def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
         # 定义大模型的默认参数
         model_params = dict(
-            tcn_channels=[96, 48],
+            tcn_channels=[128, 64],
             tcn_kernel_size=3,
-            static_num_categories=10,
-            static_embedding_dim=24,
-            static_output_dim=48,
-            static_hidden_dims=(96, 48),
-            fusion_hidden_dim=96,
+            static_output_dim=32,
+            static_hidden_dims=(64, 32),
             output_dim=2,
             use_regularization=False,
-            dropout_rate=0.2,
         )
         # 允许用户通过kwargs覆盖默认值
         model_params.update(kwargs)
@@ -471,9 +462,8 @@ class TimeSeriesStaticModelLarge(TimeSeriesStaticModel):
 # 简单的数据结构
 his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
+base_features = []
 ext_features = [
-    "距离收盘秒数",
-    "EXT_log_ret_mid_price",
     "EXT_ofi",
 ]
 data_config = {
@@ -575,72 +565,56 @@ if '__main__' == __name__:
     # ################################
     # # 测试模型
     # ################################
-    model = TimeSeriesStaticModel(
-        num_ts_features=len(ext_features) + len(base_features),
-        time_steps=his_len,
-        num_static_features=3,
-        output_dim=2,
-        use_regularization=False,
-    )
+    for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+        model = model_cls(
+            num_ts_features=len(ext_features) + len(base_features),
+            time_steps=his_len,
+            num_static_features=3,
+        )
+        print(model)
+        print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
 
-    # model = TimeSeriesStaticModelSmall(
-    #     num_ts_features=len(ext_features) + len(base_features),
-    #     time_steps=his_len,
-    #     num_static_features=3,
-    # )
+    # ################################
+    # # 验证初始化损失 == log(C)
+    # ################################
+    if test_init_loss:
+        from tqdm import tqdm
+        init_losses = []
+        for i in tqdm(range(10)):
+            model = TimeSeriesStaticModel(
+                num_ts_features=len(ext_features) + len(base_features),
+                time_steps=his_len,
+                tcn_channels=[64, 32],
+                tcn_kernel_size=3,
+                num_static_features=3,
+                static_num_categories=10,
+                static_embedding_dim=16,
+                static_output_dim=32,
+                static_hidden_dims=(64, 32),
+                output_dim=2,
+                use_regularization=False,
+            )
+            num_classes = 2
+            criterion = nn.CrossEntropyLoss()
+            batchsize = 128
+            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+            x[:, -4] = 0
+            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+            # 前向传播
+            outputs = model(x)
+            loss = criterion(outputs, y)
+            init_losses.append(loss.item())
+        print(init_losses)
+        print(f"Initial loss: { np.mean(init_losses)}")
+        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    # model = TimeSeriesStaticModelLarge(
-    #     num_ts_features=len(ext_features) + len(base_features),
-    #     time_steps=his_len,
-    #     num_static_features=3,
-    # )
+    elif need_check_dependencies:
+        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+        x[:, -4] = 0
+        run_dependency_check_without_bn(model, x, 3)
 
-    x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-    x[:, -4] = 0
-    print(model(x).shape)
-    print(f"模型参数量: {model_params_num(model)}")
-
-    # # ################################
-    # # # 验证初始化损失 == log(C)
-    # # ################################
-    # if test_init_loss:
-    #     from tqdm import tqdm
-    #     init_losses = []
-    #     for i in tqdm(range(10)):
-    #         model = TimeSeriesStaticModel(
-    #             num_ts_features=len(ext_features) + len(base_features),
-    #             time_steps=his_len,
-    #             tcn_channels=[64, 32],
-    #             tcn_kernel_size=3,
-    #             num_static_features=3,
-    #             static_num_categories=10,
-    #             static_embedding_dim=16,
-    #             static_output_dim=32,
-    #             static_hidden_dims=(64, 32),
-    #             output_dim=2,
-    #             use_regularization=False,
-    #         )
-    #         num_classes = 2
-    #         criterion = nn.CrossEntropyLoss()
-    #         batchsize = 128
-    #         x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
-    #         x[:, -4] = 0
-    #         y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
-    #         # 前向传播
-    #         outputs = model(x)
-    #         loss = criterion(outputs, y)
-    #         init_losses.append(loss.item())
-    #     print(init_losses)
-    #     print(f"Initial loss: { np.mean(init_losses)}")
-    #     print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
-
-    # elif need_check_dependencies:
-    #     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-    #     x[:, -4] = 0
-    #     run_dependency_check_without_bn(model, x, 3)
-
-    # else:
-    #     # 开始训练
-    #     run(
-    #         test, 
-    #     )
+    else:
+        # 开始训练
+        run(
+            test, 
+        )
