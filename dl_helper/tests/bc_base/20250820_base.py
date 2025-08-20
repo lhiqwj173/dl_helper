@@ -472,7 +472,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250819_tcn_base'
+    title_base = '20250820_tcn_base'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
