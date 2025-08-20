@@ -25,21 +25,12 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 """
 订单簿 bc 数据集
 目标: 
-    1. 不同容量的模型对性能的影响
-        TimeSeriesStaticModelSmall      参数量 13302
-        TimeSeriesStaticModel           参数量 33606
-        TimeSeriesStaticModelLarge      参数量 75750
+    1. 考察容量更深的模型对性能的影响
+        TimeSeriesStaticModel                   模型参数量: 31467
+        TimeSeriesStaticModelLarge4x            模型参数量: 114539
+        TimeSeriesStaticModelLarge14x           模型参数量: 435707
 
 结论: 
-
-    TimeSeriesStaticModel 性能比 TimeSeriesStaticModelLarge 还好，但是 train_loss 没有达到几乎0的水平
-    观察loss曲线，3个模型几乎都在震荡，没有收敛
-    计划继续提高模型容量进行测试
-                                                            train_loss	train_f1	val_f1	test_final_f1	cost
-                                        train_title					
-    20250820_tcn_base_P100_TimeSeriesStaticModel_final	    0.567210	0.731239	0.796971	0.783253	3.346h
-    20250820_tcn_base_P100_TimeSeriesStaticModelLarge_final	0.573155	0.720493	0.752858	0.744991	3.37h
-    20250820_tcn_base_P100_TimeSeriesStaticModelSmall_final	0.581805	0.708697	0.701103	0.697647	3.134h
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -249,6 +240,8 @@ class TimeSeriesStaticModel(nn.Module):
     2. 静态特征流：使用一个多层感知机（MLP），包括嵌入层，来处理不随时间变化的静态特征。
 
     最后，两个流的输出被拼接在一起，通过一个融合网络（Fusion Network）来产生最终的预测。
+
+    模型参数量: 31467
     """
     def __init__(
         self,
@@ -398,24 +391,45 @@ class TimeSeriesStaticModel(nn.Module):
         
         return output
 
-# 模型参数量: 13302
-class TimeSeriesStaticModelSmall(TimeSeriesStaticModel):
+class TimeSeriesStaticModelLarge4x(TimeSeriesStaticModel):
     """
-    (小版本) TimeSeriesStaticModel的轻量级变体，参数量约减少50%。
+    TimeSeriesStaticModel 的一个更大版本 (约3倍TCN参数)。
+
+    通过加宽和加深TCN网络来提升模型容量。
+    - TCN通道数: [128, 64, 32]
+    - TCN深度: 3个TemporalBlock
+
+    模型参数量: 114539
     """
-    def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
-        # 定义小模型的默认参数
+    def __init__(
+        self,
+        num_ts_features: int,
+        time_steps: int,
+        num_static_features: int,
+        **kwargs
+    ):
+        """
+        初始化模型。
+
+        Args:
+            num_ts_features (int): 每个时间步的时间序列特征数量。
+            time_steps (int): 时间序列的长度。
+            num_static_features (int): 静态特征的总数（类别+数值）。
+            **kwargs: 其他可以覆盖默认值的参数。
+        """
+        # 定义此大型模型的默认参数
         model_params = dict(
-            tcn_channels=[32, 16],
+            # 关键改动：加宽通道并增加一个TCN块
+            tcn_channels=[128, 64, 32],
             tcn_kernel_size=3,
-            static_output_dim=16,
-            static_hidden_dims=(32, 16),
-            output_dim=2,
+            # 静态部分可以保持不变，也可以相应增大
+            static_output_dim=32,
+            static_hidden_dims=(64, 32),
             use_regularization=False,
         )
         # 允许用户通过kwargs覆盖默认值
         model_params.update(kwargs)
-        
+
         super().__init__(
             num_ts_features=num_ts_features,
             time_steps=time_steps,
@@ -423,19 +437,39 @@ class TimeSeriesStaticModelSmall(TimeSeriesStaticModel):
             **model_params
         )
 
-# 模型参数量: 75750
-class TimeSeriesStaticModelLarge(TimeSeriesStaticModel):
+
+class TimeSeriesStaticModelLarge14x(TimeSeriesStaticModel):
     """
-    (大版本) TimeSeriesStaticModel的高容量变体，参数量约增加50%。
+    通过加宽和加深TCN网络来提升模型容量。
+    - TCN通道数: [256, 128, 64]
+    - TCN深度: 3个TemporalBlock
+
+    模型参数量: 435707
     """
-    def __init__(self, num_ts_features: int, time_steps: int, num_static_features: int, **kwargs):
-        # 定义大模型的默认参数
+    def __init__(
+        self,
+        num_ts_features: int,
+        time_steps: int,
+        num_static_features: int,
+        **kwargs
+    ):
+        """
+        初始化模型。
+
+        Args:
+            num_ts_features (int): 每个时间步的时间序列特征数量。
+            time_steps (int): 时间序列的长度。
+            num_static_features (int): 静态特征的总数（类别+数值）。
+            **kwargs: 其他可以覆盖默认值的参数。
+        """
+        # 定义此大型模型的默认参数
         model_params = dict(
-            tcn_channels=[128, 64],
+            # 关键改动：加宽通道并增加一个TCN块
+            tcn_channels=[256, 128, 64],
             tcn_kernel_size=3,
+            # 静态部分可以保持不变，也可以相应增大
             static_output_dim=32,
             static_hidden_dims=(64, 32),
-            output_dim=2,
             use_regularization=False,
         )
         # 允许用户通过kwargs覆盖默认值
@@ -461,7 +495,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250820_tcn_base'
+    title_base = '20250820_bigger_base'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -476,7 +510,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+            for model_cls in [TimeSeriesStaticModelLarge4x, TimeSeriesStaticModelLarge14x]:
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
@@ -547,8 +581,6 @@ def test_save_predictions():
     save_predictions(model, dataloader, 'val_predictions', lambda x: x, printer())
 
 if '__main__' == __name__:
-    # test_save_predictions()# 预测保存测试
-
     # 全局训练参数
     input_indepent = False# 训练无关输入（全0）的模型
     test_init_loss = False# 验证初始化损失
@@ -571,7 +603,7 @@ if '__main__' == __name__:
     # ################################
     # # 测试模型
     # ################################
-    for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+    for model_cls in [TimeSeriesStaticModel,TimeSeriesStaticModelLarge4x, TimeSeriesStaticModelLarge14x]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,

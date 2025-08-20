@@ -427,13 +427,14 @@ def save_predictions(model, dataloader, out_folder, trans, printer):
             probs_np = probabilities.detach().cpu().numpy()
             target_np = target.detach().cpu().numpy()
 
-            # 提取元数据 (symbol_id, before_market_close_sec, days)
+            # 提取元数据 (symbol_id, before_market_close_sec, has_pos, days)
             # 假设 batch 的原始数据在 batch[0] 中
             raw_data = batch[0]  # 原始输入数据
 
             # 提取关键字段
             symbol_ids = raw_data[:, -4].detach().cpu().numpy().astype(int)  # symbol_id
             before_market_close_sec = raw_data[:, -3].detach().cpu().numpy()  # 标准化的距离收盘秒数
+            has_pos = raw_data[:, -2].detach().cpu().numpy().astype(int)  # 当前是否持仓
             days = raw_data[:, -1].detach().cpu().numpy().astype(int)  # days
 
             # 还原实际的距离收盘秒数
@@ -446,6 +447,7 @@ def save_predictions(model, dataloader, out_folder, trans, printer):
                     'symbol_id': symbol_ids[i],
                     'days': days[i],
                     'sec_before_close': actual_sec_before_close[i],
+                    'has_pos': has_pos[i],
                     'target': target_np[i] if len(target_np.shape) == 1 else target_np[i].item()
                 })
 
@@ -467,6 +469,7 @@ def _save_predictions_by_symbol(predictions, metadata, out_folder, printer):
             'symbol_id': meta['symbol_id'],
             'days': meta['days'],
             'sec_before_close': meta['sec_before_close'],
+            'has_pos': meta['has_pos'],
             'target': meta['target']
         }
         # 添加预测概率列
@@ -496,7 +499,7 @@ def _save_predictions_by_symbol(predictions, metadata, out_folder, printer):
         # 重新排列列顺序
         prob_cols = [col for col in group.columns if col.isdigit()]
         prob_cols.sort(key=int)  # 按数字顺序排序
-        final_cols = ['timestamp', 'target'] + prob_cols
+        final_cols = ['timestamp', 'target', 'has_pos'] + prob_cols
         group = group[final_cols]
 
         # 生成文件名
