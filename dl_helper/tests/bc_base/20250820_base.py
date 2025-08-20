@@ -541,80 +541,97 @@ class test(test_base):
         elif _type == 'test':
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
+def test_save_predictions():
+    from dl_helper.trainer import save_predictions
+    model = TimeSeriesStaticModel(
+        num_ts_features=len(ext_features) + len(base_features),
+        time_steps=his_len,
+        num_static_features=3,
+    )
+    base_data_folder = r'/kaggle/input/bc-train-data-20250818'
+    data_dict_folder = os.path.join(base_data_folder, 'data_dict')
+    val_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(base_data_folder, 'train_data'), data_type='val', use_data_file_num=200)
+    dataloader = DataLoader(dataset=val_dataset, batch_size=128, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
+    class printer():
+        def print(self, *args, **kwargs):
+            print(*args, **kwargs)
+    save_predictions(model, dataloader, 'val_predictions', lambda x: x, printer())
+
 if '__main__' == __name__:
+    test_save_predictions()# 预测保存测试
 
-    # 全局训练参数
-    input_indepent = False# 训练无关输入（全0）的模型
-    test_init_loss = False# 验证初始化损失
-    check_data_sample_balance = False # 检查 train/val/test 样本均衡
-    overfit = False # 小样本过拟合测试
-    need_check_dependencies = False # 检查梯度计算依赖关系
+    # # 全局训练参数
+    # input_indepent = False# 训练无关输入（全0）的模型
+    # test_init_loss = False# 验证初始化损失
+    # check_data_sample_balance = False # 检查 train/val/test 样本均衡
+    # overfit = False # 小样本过拟合测试
+    # need_check_dependencies = False # 检查梯度计算依赖关系
 
-    for arg in sys.argv[1:]:
-        if arg == 'test_init_loss':
-            test_init_loss = True
-        elif arg == 'input_indepent':
-            input_indepent = True
-        elif arg == 'check_data_sample_balance':
-            check_data_sample_balance = True
-        elif arg == 'overfit':
-            overfit = True
-        elif arg == "check_dependencies":
-            need_check_dependencies = True
+    # for arg in sys.argv[1:]:
+    #     if arg == 'test_init_loss':
+    #         test_init_loss = True
+    #     elif arg == 'input_indepent':
+    #         input_indepent = True
+    #     elif arg == 'check_data_sample_balance':
+    #         check_data_sample_balance = True
+    #     elif arg == 'overfit':
+    #         overfit = True
+    #     elif arg == "check_dependencies":
+    #         need_check_dependencies = True
 
-    # ################################
-    # # 测试模型
-    # ################################
-    for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
-        model = model_cls(
-            num_ts_features=len(ext_features) + len(base_features),
-            time_steps=his_len,
-            num_static_features=3,
-        )
-        print(model)
-        print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
+    # # ################################
+    # # # 测试模型
+    # # ################################
+    # for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelSmall, TimeSeriesStaticModelLarge]:
+    #     model = model_cls(
+    #         num_ts_features=len(ext_features) + len(base_features),
+    #         time_steps=his_len,
+    #         num_static_features=3,
+    #     )
+    #     print(model)
+    #     print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
 
-    # ################################
-    # # 验证初始化损失 == log(C)
-    # ################################
-    if test_init_loss:
-        from tqdm import tqdm
-        init_losses = []
-        for i in tqdm(range(10)):
-            model = TimeSeriesStaticModel(
-                num_ts_features=len(ext_features) + len(base_features),
-                time_steps=his_len,
-                tcn_channels=[64, 32],
-                tcn_kernel_size=3,
-                num_static_features=3,
-                static_num_categories=10,
-                static_embedding_dim=16,
-                static_output_dim=32,
-                static_hidden_dims=(64, 32),
-                output_dim=2,
-                use_regularization=False,
-            )
-            num_classes = 2
-            criterion = nn.CrossEntropyLoss()
-            batchsize = 128
-            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
-            x[:, -4] = 0
-            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
-            # 前向传播
-            outputs = model(x)
-            loss = criterion(outputs, y)
-            init_losses.append(loss.item())
-        print(init_losses)
-        print(f"Initial loss: { np.mean(init_losses)}")
-        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
+    # # ################################
+    # # # 验证初始化损失 == log(C)
+    # # ################################
+    # if test_init_loss:
+    #     from tqdm import tqdm
+    #     init_losses = []
+    #     for i in tqdm(range(10)):
+    #         model = TimeSeriesStaticModel(
+    #             num_ts_features=len(ext_features) + len(base_features),
+    #             time_steps=his_len,
+    #             tcn_channels=[64, 32],
+    #             tcn_kernel_size=3,
+    #             num_static_features=3,
+    #             static_num_categories=10,
+    #             static_embedding_dim=16,
+    #             static_output_dim=32,
+    #             static_hidden_dims=(64, 32),
+    #             output_dim=2,
+    #             use_regularization=False,
+    #         )
+    #         num_classes = 2
+    #         criterion = nn.CrossEntropyLoss()
+    #         batchsize = 128
+    #         x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+    #         x[:, -4] = 0
+    #         y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+    #         # 前向传播
+    #         outputs = model(x)
+    #         loss = criterion(outputs, y)
+    #         init_losses.append(loss.item())
+    #     print(init_losses)
+    #     print(f"Initial loss: { np.mean(init_losses)}")
+    #     print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    elif need_check_dependencies:
-        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-        x[:, -4] = 0
-        run_dependency_check_without_bn(model, x, 3)
+    # elif need_check_dependencies:
+    #     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+    #     x[:, -4] = 0
+    #     run_dependency_check_without_bn(model, x, 3)
 
-    else:
-        # 开始训练
-        run(
-            test, 
-        )
+    # else:
+    #     # 开始训练
+    #     run(
+    #         test, 
+    #     )

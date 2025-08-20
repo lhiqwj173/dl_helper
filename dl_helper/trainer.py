@@ -11,6 +11,8 @@ import traceback
 import pickle
 import shutil
 import multiprocessing as mp
+import pandas as pd
+import numpy as np
 
 from tqdm import tqdm
 import time, os, sys
@@ -28,6 +30,9 @@ from py_ext.tool import log, debug, get_log_folder, _get_caller_info, init_logge
 from py_ext.lzma import compress_folder, decompress
 from py_ext.wechat import wx
 from py_ext.alist import alist
+
+from dl_helper.rl.rl_utils import days2date
+from dl_helper.rl.rl_env.lob_trade.lob_const import MAX_SEC_BEFORE_CLOSE, USE_CODES
 
 ses = os.environ.get('TG_SESSION')
 
@@ -244,33 +249,6 @@ def print_grad(idx, model, printer):
         printer.print(f"step{idx} grad: {param.grad} v: {param}", main=False)
         break
 
-def test_train_func(data_file_path, id, test_class):
-    test = test_class(idx=0)
-
-    params = test.get_param()
-    model = test.get_model()
-    trans = test.get_transform(None)
-
-    from .data import Dataset_cahce
-    dataset = Dataset_cahce(params, 'test')# 使用test 避免类别均衡 导致拿不到数据
-    dataset.files = [data_file_path]
-    data_map = dataset._parse_data_map(dataset.files, 1, 0)
-    dataset._load_data_map(data_map)
-
-    idx = dataset.ids.index(id)
-    batch = dataset.__getitem__(idx)
-    batch = [i.unsqueeze(0).float() for i in batch]
-
-    data, target = trans(batch, train=True)
-    if params.classify:
-        target = target.long()
-    output = model(data)
-    batch_indices = _check_nan(output)
-
-    print(f"[{idx}] batch_indices: {batch_indices}")
-
-
-
 def val_fn(epoch, params, model, criterion, val_data, accelerator, tracker, printer, trans):
     """
     异常模型在验证时checkpoint会报错, 默认不进行checkpoint
@@ -411,7 +389,132 @@ def output_fn(params, model, blank_model, criterion, train_loader, val_loader, a
     # for debug
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        report_memory_usage(f"output done")       
+        report_memory_usage(f"output done")
+
+# {{ AURA-X | Action: Add | Reason: 新增预测保存函数，用于输出val/test预测数据 | Approval: Cunzhi(ID:1735632000) }}
+def save_predictions(model, dataloader, out_folder, trans, printer):
+    """
+    使用模型对数据进行预测，并将输出保存到 out_folder 中
+
+    Args:
+        model: 训练好的模型
+        dataloader: 数据加载器
+        out_folder: 输出文件夹路径
+        trans: 数据变换函数
+        printer: 打印器
+    """
+    printer.print(f'开始保存预测数据到: {out_folder}')
+
+    # 确保输出文件夹存在
+    os.makedirs(out_folder, exist_ok=True)
+
+    model.eval()
+    all_predictions = []
+    all_metadata = []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            # 数据预处理
+            data, target = trans(batch)
+
+            # 模型预测
+            output = model(data)
+
+            # 应用 softmax 获取概率分布
+            probabilities = F.softmax(output, dim=1)
+
+            # 转换为 numpy 数组
+            probs_np = probabilities.detach().cpu().numpy()
+            target_np = target.detach().cpu().numpy()
+
+            # 提取元数据 (symbol_id, before_market_close_sec, days)
+            # 假设 batch 的原始数据在 batch[0] 中
+            raw_data = batch[0]  # 原始输入数据
+
+            # 提取关键字段
+            symbol_ids = raw_data[:, -4].detach().cpu().numpy().astype(int)  # symbol_id
+            before_market_close_sec = raw_data[:, -3].detach().cpu().numpy()  # 标准化的距离收盘秒数
+            days = raw_data[:, -1].detach().cpu().numpy().astype(int)  # days
+
+            # 还原实际的距离收盘秒数
+            actual_sec_before_close = before_market_close_sec * MAX_SEC_BEFORE_CLOSE
+
+            # 保存预测结果和元数据
+            for i in range(len(probs_np)):
+                all_predictions.append(probs_np[i])
+                all_metadata.append({
+                    'symbol_id': symbol_ids[i],
+                    'days': days[i],
+                    'sec_before_close': actual_sec_before_close[i],
+                    'target': target_np[i] if len(target_np.shape) == 1 else target_np[i].item()
+                })
+
+    # 按标的分组并保存
+    _save_predictions_by_symbol(all_predictions, all_metadata, out_folder, printer)
+
+    printer.print(f'预测数据保存完成')
+
+# {{ AURA-X | Action: Add | Reason: 辅助函数，按标的分组保存预测数据 | Approval: Cunzhi(ID:1735632000) }}
+def _save_predictions_by_symbol(predictions, metadata, out_folder, printer):
+    """
+    按标的分组保存预测结果
+    """
+
+    # 转换为 DataFrame 便于处理
+    df_data = []
+    for i, (pred, meta) in enumerate(zip(predictions, metadata)):
+        row = {
+            'symbol_id': meta['symbol_id'],
+            'days': meta['days'],
+            'sec_before_close': meta['sec_before_close'],
+            'target': meta['target']
+        }
+        # 添加预测概率列
+        for j, prob in enumerate(pred):
+            row[str(j)] = prob
+        df_data.append(row)
+
+    df = pd.DataFrame(df_data)
+
+    # 按 symbol_id 分组
+    for symbol_id, group in df.groupby('symbol_id'):
+        # 排序确保时间顺序
+        group = group.sort_values(['days', 'sec_before_close'])
+
+        # 生成时间戳
+        timestamps = []
+        for _, row in group.iterrows():
+            date_str = days2date(int(row['days']))
+            # 计算当天的时间戳 (15:00:00 - sec_before_close)，强制使用北京时间
+            base_dt = pd.to_datetime(f"{date_str} 15:00:00", utc=False)
+            base_dt = base_dt.tz_localize('Asia/Shanghai')  # 北京时间
+            actual_dt = base_dt - pd.Timedelta(seconds=row['sec_before_close'])
+            timestamps.append(int(actual_dt.timestamp()))
+
+        group['timestamp'] = timestamps
+
+        # 重新排列列顺序
+        prob_cols = [col for col in group.columns if col.isdigit()]
+        prob_cols.sort(key=int)  # 按数字顺序排序
+        final_cols = ['timestamp', 'target'] + prob_cols
+        group = group[final_cols]
+
+        # 生成文件名
+        begin_timestamp = group['timestamp'].min()
+        end_timestamp = group['timestamp'].max()
+
+        # 将 symbol_id 转换为实际的标的代码
+        if symbol_id < len(USE_CODES):
+            symbol = USE_CODES[symbol_id]
+        else:
+            symbol = f"symbol_{symbol_id}"  # 备用方案
+
+        filename = f"{symbol}_{begin_timestamp}_{end_timestamp}.csv"
+        filepath = os.path.join(out_folder, filename)
+
+        # 保存文件
+        group.to_csv(filepath, index=False)
+        printer.print(f'保存预测文件: {filename}, 样本数: {len(group)}')
 
 def save_model_fn(params, model, accelerator, input_shape=None):
     accelerator.wait_for_everyone()
@@ -688,6 +791,35 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
             # 测试
             test_fn(params, model, test.get_model(), criterion, test_loader, accelerator, tracker, p, trans)
 
+        # 保存预测数据
+        p.print(f'开始保存预测数据')
+
+        # 准备 best 模型
+        best_model = test.get_model()
+        load_checkpoint_in_model(best_model, os.path.join(params.root, MODEL_BEST))
+        best_model = accelerator.prepare(best_model)
+
+        # 保存 val 数据的预测结果 (分别使用 best 和 final 模型)
+        if accelerator.is_local_main_process:
+            if val_loader:
+                # 使用 best 模型预测 val 数据
+                val_best_folder = os.path.join(params.root, MODEL_BEST, 'val')
+                save_predictions(best_model, val_loader, val_best_folder, trans, p)
+
+                # 使用 final 模型预测 val 数据
+                val_final_folder = os.path.join(params.root, MODEL_FINAL, 'val')
+                save_predictions(model, val_loader, val_final_folder, trans, p)
+
+            # 保存 test 数据的预测结果 (分别使用 best 和 final 模型)
+            if test_loader:
+                # 使用 best 模型预测 test 数据
+                test_best_folder = os.path.join(params.root, MODEL_BEST, 'test')
+                save_predictions(best_model, test_loader, test_best_folder, trans, p)
+
+                # 使用 final 模型预测 test 数据
+                test_final_folder = os.path.join(params.root, MODEL_FINAL, 'test')
+                save_predictions(model, test_loader, test_final_folder, trans, p)
+
         # 保存模型
         save_model_fn(params, model, accelerator)
 
@@ -696,10 +828,6 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         # 输出状态到日志
         tracker.print_state()
-
-        # 输出模型预测，用于模型融合
-        if params.need_meta_output:
-            output_fn(params, model, test.get_model(), criterion, train_loader, val_loader, accelerator, tracker, p, trans)
 
         # 打包
         package_root(accelerator, params)

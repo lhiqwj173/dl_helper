@@ -148,32 +148,70 @@
 ## **代码处理与输出指南**
 
 **代码块结构**：
-输出的代码块必须清晰地标注修改原因和决策来源，采用更结构化的注释。
+输出的代码块必须将修改记录作为**注释**，清晰地标注修改原因和决策来源。该注释块应**紧邻**在它所描述的代码变更**之前**，并保持与后续代码一致的缩进。这确保了代码的语法正确性和可执行性。
 
-```language:file_path
-... 上下文代码 ...
-{{ AURA-X | Action: [Add/Modify/Delete] | Reason: [简要原因] | Approval: Cunzhi(ID:[timestamp/hash]) }}
-+    新增或修改的代码行
--    删除的代码行
-... 上下文代码 ...
+**格式规范**:
 ```
+# {{ AURA-X | Action: [Add/Modify/Delete] | Reason: [简要原因] | Approval: Cunzhi(ID:[timestamp/hash]) }}
+```
+或 C++ 风格:
+```
+// {{ AURA-X | Action: [Add/Modify/Delete] | Reason: [简要原因] | Approval: Cunzhi(ID:[timestamp/hash]) }}
+```
+
 *   当信息来自外部时，添加 `Source` 字段。
 *   当决策由用户确认时，添加 `Confirmed` 字段。
+
+---
+*示例0：新增一个完整的函数（修复您遇到的问题）*
+```python:utils/inference.py
+... existing code ...
+
+# {{ AURA-X | Action: Add | Reason: 新增预测保存函数，用于输出val/test预测数据 | Approval: Cunzhi(ID:1735632000) }}
+def save_predictions(model, dataloader, out_folder, accelerator, trans, printer):
+    """
+    使用模型对数据进行预测，并将输出保存到 out_folder 中
+
+    Args:
+        model: 训练好的模型
+        dataloader: 数据加载器
+        out_folder: 输出文件夹路径
+        accelerator: Accelerator 实例
+        trans: 数据变换函数
+        printer: 打印器
+    """
+    if not accelerator.is_main_process:
+        return
+    
+    # ... function implementation ...
+    printer.print("Prediction saving complete.")
+
+... existing code ...
+```
 
 *示例1：修改PyTorch模型（DL）*
 ```python:models/resnet.py
 ... existing code ...
-{{ AURA-X | Action: Modify | Reason: 增加SE注意力模块以提升特征表达能力 | Approval: Cunzhi(ID:1678889901) | Source: context7-mcp on 'Squeeze-and-Excitation Networks' }}
-+   # 引入SELayer，在残差块的末端增强通道注意力
-+   self.se = SELayer(planes)
-...
+    def __init__(self, block, layers, num_classes=1000):
+        super(ResNet, self).__init__()
+        # ... existing __init__ code ...
+        
+        # {{ AURA-X | Action: Add | Reason: 增加SE注意力模块以提升特征表达能力 | Approval: Cunzhi(ID:1678889901) | Source: context7-mcp on 'Squeeze-and-Excitation Networks' }}
+        # 引入SELayer，在残差块的末端增强通道注意力
+        self.se = SELayer(planes)
+        
+        # ... other __init__ code ...
+
     def forward(self, x):
         identity = x
         out = self.conv1(x)
 ...
         out = self.conv2(out)
         out = self.bn2(out)
-+       out = self.se(out) # 应用SE模块
+        
+        # {{ AURA-X | Action: Modify | Reason: 应用SE模块 | Approval: Cunzhi(ID:1678889901) }}
+        out = self.se(out)
+        
         if self.downsample is not None:
             identity = self.downsample(x)
         out += identity
@@ -183,12 +221,12 @@
 *示例2：增加 C++ 量化策略的过滤条件（Quant）*
 ```cpp:strategies/arbitrage_strategy.cpp
 ... existing code for signal generation ...
-{{ AURA-X | Action: Add | Reason: 增加最小价差过滤，避免交易成本侵蚀利润 | Approval: Cunzhi(ID:1678891234) }}
     double spread = market_a.get_bid() - market_b.get_ask();
--   if (spread > 0) {
-+   // Confirmed via 寸止: 仅当价差大于万分之一时才认为套利机会有效
-+   constexpr double MINIMUM_SPREAD_BPS = 0.0001;
-+   if (spread > (market_a.get_bid() * MINIMUM_SPREAD_BPS)) {
+
+    // {{ AURA-X | Action: Modify | Reason: 增加最小价差过滤，避免交易成本侵蚀利润 | Approval: Cunzhi(ID:1678891234) | Confirmed: 用户确认使用万分之一作为阈值 }}
+    // 仅当价差大于万分之一时才认为套利机会有效
+    constexpr double MINIMUM_SPREAD_BPS = 0.0001;
+    if (spread > (market_a.get_bid() * MINIMUM_SPREAD_BPS)) {
         // Execute arbitrage trade
         execute_trade(market_a, market_b);
     }
