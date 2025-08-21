@@ -176,53 +176,104 @@ class LobTrajectoryDataset(Dataset):
                 fix_data_dict[k] = data_dict[k]
         self.data_dict = fix_data_dict
 
-        # 如果设置了样本数限制，尽可能的均衡symbol采样
+        # {{ AURA-X | Action: Modify | Reason: 优化小样本采样逻辑，增加类别均衡优先的两阶段采样策略 | Approval: Cunzhi(ID:1735632000) }}
+        # 如果设置了样本数限制，优先保证类别均衡，其次考虑标的均衡
         self.sample_num_limit = sample_num_limit
         if self.sample_num_limit:
             _new_data_dict = {}
-            keys = list(self.data_dict.keys())
-            num_keys = len(keys)
-            if num_keys > 0:
-                # 计算每个 key 的基本采样数和剩余样本
-                base_samples_per_key = self.sample_num_limit // num_keys
-                extra_samples = self.sample_num_limit % num_keys
-                total_used = 0
+            
+            # 第一步：统计所有数据的类别分布
+            all_actions = []
+            symbol_action_counts = {}  # {symbol: {action: count}}
+            
+            for symbol, data in self.data_dict.items():
+                actions = data['acts']
+                all_actions.extend(actions)
                 
-                # 第一次分配，尽量均匀
-                for i, k in enumerate(keys):
-                    v = self.data_dict[k]
-                    # 分配基本采样数，额外样本按顺序分配给前 extra_samples 个 key
-                    use_num = min(base_samples_per_key + (1 if i < extra_samples else 0), len(v['obs']))
-                    if use_num > 0:
-                        _new_data_dict[k] = {
-                            'obs': v['obs'][:use_num],
-                            'acts': v['acts'][:use_num],
-                        }
-                        total_used += use_num
+                # 统计每个标的的类别分布
+                unique_actions, counts = np.unique(actions, return_counts=True)
+                symbol_action_counts[symbol] = dict(zip(unique_actions, counts))
+            
+            # 获取所有唯一的类别
+            unique_classes = np.unique(all_actions)
+            num_classes = len(unique_classes)
+            
+            if num_classes > 0:
+                # 第一阶段：按类别分配样本配额（类别均衡优先）
+                base_samples_per_class = self.sample_num_limit // num_classes
+                extra_samples = self.sample_num_limit % num_classes
                 
-                # 如果总采样数不足 sample_num_limit，重新分配剩余样本
-                remaining_samples = self.sample_num_limit - total_used
-                while remaining_samples > 0:
-                    allocated = 0
-                    for k in keys:
-                        if k in _new_data_dict:
-                            v = self.data_dict[k]
-                            current_used = len(_new_data_dict[k]['obs'])
-                            # 尝试为该 key 额外分配一个样本
-                            if current_used < len(v['obs']):
-                                _new_data_dict[k]['obs'].append(v['obs'][current_used])
-                                _new_data_dict[k]['acts'].append(v['acts'][current_used])
-                                allocated += 1
-                                total_used += 1
-                                remaining_samples -= 1
-                                if remaining_samples == 0:
-                                    break
-                    # 如果没有分配到任何样本，退出循环以避免死循环
-                    if allocated == 0:
-                        break
+                class_quotas = {}
+                for i, action_class in enumerate(unique_classes):
+                    # 前 extra_samples 个类别多分配1个样本
+                    class_quotas[action_class] = base_samples_per_class + (1 if i < extra_samples else 0)
+                
+                print(f"类别配额分配: {class_quotas}")
+                
+                # 第二阶段：在每个类别内部按标的均衡分配
+                for action_class, class_quota in class_quotas.items():
+                    if class_quota <= 0:
+                        continue
+                    
+                    # 找出包含该类别的所有标的及其样本数
+                    available_symbols = []
+                    for symbol, action_counts in symbol_action_counts.items():
+                        if action_class in action_counts and action_counts[action_class] > 0:
+                            available_symbols.append(symbol)
+                    
+                    if not available_symbols:
+                        continue
+                    
+                    # 在该类别内按标的均衡分配
+                    num_symbols = len(available_symbols)
+                    base_samples_per_symbol = class_quota // num_symbols
+                    extra_samples_in_class = class_quota % num_symbols
+                    
+                    symbol_quotas = {}
+                    for i, symbol in enumerate(available_symbols):
+                        symbol_quotas[symbol] = base_samples_per_symbol + (1 if i < extra_samples_in_class else 0)
+                    
+                    # 从每个标的中采样该类别的样本
+                    for symbol, symbol_quota in symbol_quotas.items():
+                        if symbol_quota <= 0:
+                            continue
+                        
+                        # 获取该标的该类别的所有样本索引
+                        symbol_data = self.data_dict[symbol]
+                        class_mask = np.array(symbol_data['acts']) == action_class
+                        class_indices = np.where(class_mask)[0]
+                        
+                        # 限制采样数量不超过可用样本数
+                        actual_samples = min(symbol_quota, len(class_indices))
+                        if actual_samples > 0:
+                            # 随机采样
+                            selected_indices = np.random.choice(class_indices, actual_samples, replace=False)
+                            
+                            # 初始化该标的的数据结构
+                            if symbol not in _new_data_dict:
+                                _new_data_dict[symbol] = {'obs': [], 'acts': []}
+                            
+                            # 添加采样的数据
+                            for idx in selected_indices:
+                                _new_data_dict[symbol]['obs'].append(symbol_data['obs'][idx])
+                                _new_data_dict[symbol]['acts'].append(symbol_data['acts'][idx])
+                
+                # 转换为numpy数组
+                for symbol in _new_data_dict:
+                    _new_data_dict[symbol]['obs'] = np.array(_new_data_dict[symbol]['obs'])
+                    _new_data_dict[symbol]['acts'] = np.array(_new_data_dict[symbol]['acts'])
+                
+                # 验证采样结果
+                total_samples = sum(len(data['acts']) for data in _new_data_dict.values())
+                class_distribution = {}
+                for symbol, data in _new_data_dict.items():
+                    for action in data['acts']:
+                        class_distribution[action] = class_distribution.get(action, 0) + 1
+                
+                print(f"小样本采样完成: 总样本数={total_samples}, 类别分布={class_distribution}")
                         
             self.data_dict = _new_data_dict
-
+            
         self.mapper = IndexMapper({i: len(v['obs']) for i, v in self.data_dict.items()})
         self.length = self.mapper.get_total_length()
         self.his_len = data_config.get('his_len', None)
