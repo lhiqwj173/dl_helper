@@ -25,10 +25,12 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 """
 订单簿 bc 数据集
 目标: 
-    1. 考察容量更深的模型对性能的影响
-        TimeSeriesStaticModel                   模型参数量: 31467
-        TimeSeriesStaticModelLarge4x            模型参数量: 114539
-        TimeSeriesStaticModelLarge14x           模型参数量: 435707
+    1. 考察容量更深的模型(简单mlp)对性能的影响
+        MLPStaticModelSmall     模型参数量: 7971
+        MLPStaticModel          模型参数量: 21675
+        MLPStaticModelLarge     模型参数量: 65683
+
+        
 
 结论: 
 

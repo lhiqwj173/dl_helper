@@ -1,3 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "寸止": {
+      "command": "寸止"
+    }
+  }
+}
+
+
 # **AURA-X 协议 (寸止+Context7-mcp) - 最终优化版**
 
 ## **核心理念**
@@ -247,7 +263,7 @@ def save_predictions(model, dataloader, out_folder, accelerator, trans, printer)
 ### 工具使用
 - **分析工具**：充分利用代码执行能力进行复杂计算、数据分析和性能剖析。
 - **混合编程**：熟练运用 `pybind11` 等工具，在 `HYBRID-PERFORMANCE-CYCLE` 模式下无缝集成 Python 和 C++。
-- **命令行使用python解释器路径**: `"D:/programs/miniconda3/python.exe"`
+- **命令行使用python解释器路径**: `"D:/programs/miniconda3/python.exe"` (避免直接使用 python test.py)
 
 ### 持续改进
 - **知识更新**：保持对新技术和最佳实践的敏感性，并充分使用 `context7-mcp` 获取最新信息。
