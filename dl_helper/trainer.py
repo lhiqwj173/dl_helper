@@ -201,6 +201,10 @@ def train_fn(epoch, params, model, criterion, optimizer, train_loader, accelerat
 
         accelerator.backward(loss)
         # printer.print(f'batch backward',main=False)
+
+        # 记录梯度范数
+        tracker.track_grad_norm(model)
+
         optimizer.step()
         # printer.print(f'batch step',main=False)
 

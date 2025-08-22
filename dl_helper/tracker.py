@@ -480,6 +480,7 @@ class Tracker():
 
         # 训练学习率
         self.data['lr'] = []
+        self.data['grad_norm'] = []
 
         # 跟新类别
         self.track_update = ''
@@ -698,6 +699,10 @@ class Tracker():
                 self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
                 # self.printer.print('append lr')
 
+                # 记录梯度范数
+                if len(self.temp['_grad_norm']) > 0:
+                    self.data['grad_norm'].append(np.mean(self.temp['_grad_norm']))
+
                 # 更新 学习率
                 self.scheduler.step(self.data['train_loss'])
 
@@ -766,6 +771,7 @@ class Tracker():
         self.temp['_codes'] = []
         self.temp['_y_true'] = None
         self.temp['_y_pred'] = None
+        self.temp['_grad_norm'] = []
 
         self.step_count = 0
 
@@ -889,6 +895,17 @@ class Tracker():
 
         # self.printer.print(f"track done", main=False)
 
+    def track_grad_norm(self, model):
+        """记录梯度范数"""
+        if self.accelerator.is_main_process:
+            total_norm = 0
+            for p in model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            self.temp['_grad_norm'].append(total_norm)
+
     def get_mean_socre_important(self):
         if self.accelerator.is_main_process:
             if self.params.classify:
@@ -924,6 +941,8 @@ class Tracker():
 
                 if 'test' in i:
                     data[i] = [data[i][-1]] * epochs if len(data[i]) else []
+                elif 'grad_norm' in i:
+                    data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
 
@@ -1031,6 +1050,9 @@ class Tracker():
 
             # 绘制学习率
             line_lr, = ax2.plot(list(range(epochs)), data['lr'], label='lr', c='#87CEFF',linewidth=2,alpha =0.5)
+            if 'grad_norm' in data and len(data['grad_norm']) > 0 and not any(math.isnan(x) for x in data['grad_norm']):
+                ax2.plot(list(range(epochs)), data['grad_norm'], label=f"grad_norm {last_value(data['grad_norm']):.4f}", c='#FFD700', linewidth=2, alpha=0.5)
+
             # self.printer.print(f'plot lr')
 
             # 添加图例
