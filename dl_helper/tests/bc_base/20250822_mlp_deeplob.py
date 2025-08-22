@@ -25,15 +25,10 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 """
 订单簿 bc 数据集
 目标: 
-    1. 考察容量更深的模型对性能的影响
-        MLPPureModelSmall   模型参数量: 4514
-        MLPPureModel        模型参数量: 13122
-        MLPPureModelLarge   模型参数量: 50882
+    考察新特征与deeplob 标签是否可以全拟合
 结论: 
-    仍然无法全拟合训练集
 
 """
-
 class MLPPureModel(nn.Module):
     """
     极简纯MLP模型：仅由一个MLP主干构成，处理拼接后的时序与静态特征。
@@ -121,7 +116,7 @@ his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
 base_features = []
 ext_features = [
-    "EXT_ofi",
+    "EXT_log_ret_micro_price",
 ]
 data_config = {
     'his_len': his_len,# 每个样本的 历史数据长度
@@ -129,7 +124,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250821_pure'
+    title_base = '20250822_base'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -148,7 +143,7 @@ class test(test_base):
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
-        self.base_data_folder = r'/kaggle/input/bc-train-data-20250818'
+        self.base_data_folder = r'/kaggle/input/bc-train-data-20250822-deeplob'
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象

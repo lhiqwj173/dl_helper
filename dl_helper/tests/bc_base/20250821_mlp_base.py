@@ -30,9 +30,8 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
         MLPStaticModel          模型参数量: 21675
         MLPStaticModelLarge     模型参数量: 65683
 
-        
-
 结论: 
+    大容量模型仍然无法100%拟合训练集，仍然存在问题
 
 """
 class StaticFeatureProcessor(nn.Module):
