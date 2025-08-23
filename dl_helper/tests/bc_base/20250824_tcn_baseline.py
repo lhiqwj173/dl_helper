@@ -23,25 +23,20 @@ from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
-特征: EXT_total_ofi
+特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance
 标签: deeplob
+模型: TimeSeriesStaticModelx16
 
 目标: 
     专注于 train_loss, 获取一个容量足够大的基础模型
+    增加特征
 
 结论: 
                                                                 train_loss	train_f1	val_f1	test_final_f1	cost
     train_title					
-    20250822_tcn_baseline_P100_TimeSeriesStaticModelx4_final	0.012497	0.996081	0.767777	0.749016	3.694h
-    20250822_tcn_baseline_P100_TimeSeriesStaticModelx2_final	0.035844	0.986744	0.755584	0.725190	3.332h
-    20250822_tcn_baseline_P100_TimeSeriesStaticModel_final	    0.082148	0.966833	0.728776	0.711696	3.332h
+    20250822_tcn_baseline3_P100_TimeSeriesStaticModelx16_final	0.00001	    1.0	        0.827682	0.809021	4.18h
 
-    继续探索 x8/x16 的模型
 
-                                                                train_loss	train_f1	val_f1	test_final_f1	cost
-    train_title					
-    20250822_tcn_baseline_P100_TimeSeriesStaticModelx16_final	0.004258	0.998749	0.809746	0.788740	4.428h
-    20250822_tcn_baseline_P100_TimeSeriesStaticModelx8_final	0.008740	0.997075	0.778131	0.752981	3.8619999999999997h
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -435,25 +430,6 @@ class TimeSeriesStaticModel(nn.Module):
         
         return output
 
-class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
-    """参数量约为原始模型八倍的版本"""
-    def __init__(self, *args, **kwargs):
-        factor = math.sqrt(8)  # ≈2.828, 使得总参数量 ~8x
-        # 获取原始参数
-        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
-        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
-        static_output_dim = kwargs.pop('static_output_dim', 32)
-        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
-
-        # 按比例放大（向上取整更稳定）
-        kwargs['tcn_channels'] = [int(round(c * factor)) for c in tcn_channels]
-        kwargs['static_embedding_dim'] = int(round(static_embedding_dim * factor))
-        kwargs['static_output_dim'] = int(round(static_output_dim * factor))
-        kwargs['static_hidden_dims'] = tuple(int(round(d * factor)) for d in static_hidden_dims)
-        kwargs['fusion_hidden_dims'] = None  # 让融合层自动重新计算维度
-
-        super().__init__(*args, **kwargs)
-
 class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
     """参数量约为原始模型十六倍的版本"""
     def __init__(self, *args, **kwargs):
@@ -473,13 +449,14 @@ class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
 
         super().__init__(*args, **kwargs)
 
-
 # 简单的数据结构
 his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
 base_features = []
 ext_features = [
     "EXT_total_ofi",
+    "EXT_ofi_level_1",
+    "EXT_ofi_imbalance",
 ]
 data_config = {
     'his_len': his_len,# 每个样本的 历史数据长度
@@ -487,7 +464,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250822_tcn_baseline'
+    title_base = '20250824_tcn_baseline'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -502,7 +479,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
+            for model_cls in [TimeSeriesStaticModelx16]:
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
@@ -581,7 +558,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
+    for model_cls in [TimeSeriesStaticModelx16]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
@@ -594,10 +571,10 @@ if '__main__' == __name__:
     # # 验证初始化损失 == log(C)
     # ################################
     if test_init_loss:
-        from tqdm import tqdm
+        from tqdm import tqdms
         init_losses = []
         for i in tqdm(range(10)):
-            model = TimeSeriesStaticModel(
+            model = TimeSeriesStaticModelx16(
                 num_ts_features=len(ext_features) + len(base_features),
                 time_steps=his_len,
             )

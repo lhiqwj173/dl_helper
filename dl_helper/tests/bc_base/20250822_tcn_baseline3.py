@@ -33,6 +33,16 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
+                                                                train_loss	train_f1	val_f1	test_final_f1	cost
+    train_title					
+    20250822_tcn_baseline_P100_TimeSeriesStaticModelx16_final	0.004258	0.998749	0.809746	0.788740	4.428h
+
+
+                                                                train_loss	train_f1	val_f1	test_final_f1	cost
+    train_title					
+    20250822_tcn_baseline3_P100_TimeSeriesStaticModelx16_final	0.00001	    1.0	        0.827682	0.809021	4.18h
+
+    EXT_ofi_level_1 增加了训练/验证精度，继续增加训练特征
 
 """
 class StaticFeatureProcessor(nn.Module):
