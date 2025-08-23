@@ -38,6 +38,11 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
     继续探索 x8/x16 的模型
 
+                                                                train_loss	train_f1	val_f1	test_final_f1	cost
+    train_title					
+    20250822_tcn_baseline_P100_TimeSeriesStaticModelx16_final	0.00525	    0.998451	0.813003	0.791542	4.325h
+    20250822_tcn_baseline_P100_TimeSeriesStaticModelx8_final	0.00874	    0.997075	0.778131	0.752981	3.8619999999999997h
+
 """
 class StaticFeatureProcessor(nn.Module):
     """
