@@ -430,29 +430,29 @@ class TimeSeriesStaticModel(nn.Module):
         
         return output
 
-class TimeSeriesStaticModelx2(TimeSeriesStaticModel):
-    """参数量约为原始模型两倍的版本"""
+class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
+    """参数量约为原始模型八倍的版本"""
     def __init__(self, *args, **kwargs):
-        factor = math.sqrt(2) # 维度放大因子
+        factor = math.sqrt(8)  # ≈2.828, 使得总参数量 ~8x
         # 获取原始参数
         tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
         static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
         static_output_dim = kwargs.pop('static_output_dim', 32)
         static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
 
-        # 按比例放大
-        kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
-        kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
-        kwargs['static_output_dim'] = int(static_output_dim * factor)
-        kwargs['static_hidden_dims'] = tuple([int(d * factor) for d in static_hidden_dims])
-        kwargs['fusion_hidden_dims'] = None # 重新自动计算
+        # 按比例放大（向上取整更稳定）
+        kwargs['tcn_channels'] = [int(round(c * factor)) for c in tcn_channels]
+        kwargs['static_embedding_dim'] = int(round(static_embedding_dim * factor))
+        kwargs['static_output_dim'] = int(round(static_output_dim * factor))
+        kwargs['static_hidden_dims'] = tuple(int(round(d * factor)) for d in static_hidden_dims)
+        kwargs['fusion_hidden_dims'] = None  # 让融合层自动重新计算维度
 
         super().__init__(*args, **kwargs)
 
-class TimeSeriesStaticModelx4(TimeSeriesStaticModel):
-    """参数量约为原始模型四倍的版本"""
+class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
+    """参数量约为原始模型十六倍的版本"""
     def __init__(self, *args, **kwargs):
-        factor = 2 # 维度放大因子 (sqrt(4))
+        factor = 4  # sqrt(16) = 4
         # 获取原始参数
         tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
         static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
@@ -463,10 +463,11 @@ class TimeSeriesStaticModelx4(TimeSeriesStaticModel):
         kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
         kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
         kwargs['static_output_dim'] = int(static_output_dim * factor)
-        kwargs['static_hidden_dims'] = tuple([int(d * factor) for d in static_hidden_dims])
+        kwargs['static_hidden_dims'] = tuple(int(d * factor) for d in static_hidden_dims)
         kwargs['fusion_hidden_dims'] = None
 
         super().__init__(*args, **kwargs)
+
 
 # 简单的数据结构
 his_len = 30
@@ -496,7 +497,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelx2, TimeSeriesStaticModelx4]:
+            for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
@@ -575,7 +576,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelx2, TimeSeriesStaticModelx4]:
+    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
