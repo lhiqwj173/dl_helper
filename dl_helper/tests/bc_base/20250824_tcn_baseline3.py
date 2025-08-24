@@ -23,26 +23,20 @@ from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
-特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price(TEST)
+特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price(TEST)
 标签: deeplob
 模型: TimeSeriesStaticModelx16
 
 目标: 
     专注于 train_loss, 获取一个容量足够大的基础模型
-    增加特征
+    增加特征 / 扩大容量x32
 
 结论: 
-                                                                train_loss	train_f1	val_f1	test_final_f1	cost
-    train_title					
-    20250824_tcn_baseline_P100_TimeSeriesStaticModelx16_final	0.000005	1.0	        0.849242	0.830479	3.932h
-
 
                                                                 train_loss	train_f1	val_f1	test_final_f1	cost
     train_title					
     20250824_tcn_baseline2_P100_TimeSeriesStaticModelx16_final	0.000004	1.0	        0.853824	0.832862	4.148h
 
-    EXT_log_ret_mid_price 增加了训练/验证精度，但提升较小
-    继续增加训练特征
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -455,6 +449,58 @@ class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
 
         super().__init__(*args, **kwargs)
 
+class TimeSeriesStaticModelx32(TimeSeriesStaticModel):
+    """
+    参数量约为原始模型三十二倍的版本。
+    
+    这个版本通过同时增加模型的宽度（通道数/神经元数）和深度（层数）来实现。
+    - 宽度因子约为 4.5
+    - TCN 深度从 5 增加到 8 层。
+    - 静态特征MLP深度从 2 增加到 3 层。
+    - 融合网络深度被明确定义为 3 个隐藏层。
+    """
+    def __init__(self, *args, **kwargs):
+        # 宽度放大因子，因为参数量与宽度平方成正比，所以因子为 sqrt(32)
+        width_factor = 4.5
+
+        # --- 1. 获取或定义原始/基础参数 ---
+        # TCN 参数
+        # 增加TCN深度：从5层 -> 8层
+        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 64, 32, 32, 32, 32])
+
+        # 静态特征MLP参数
+        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
+        static_output_dim = kwargs.pop('static_output_dim', 32)
+        # 增加静态MLP深度：从2个隐藏层 -> 3个隐藏层
+        static_hidden_dims = kwargs.pop('static_hidden_dims', (128, 64, 64)) 
+
+        # 融合网络参数 (将在后面单独处理)
+        kwargs.pop('fusion_hidden_dims', None)
+
+        # --- 2. 按比例放大参数 ---
+        
+        # 放大 TCN 通道数
+        kwargs['tcn_channels'] = [int(c * width_factor) for c in tcn_channels]
+        
+        # 放大静态特征处理器的维度
+        kwargs['static_embedding_dim'] = int(static_embedding_dim * width_factor)
+        kwargs['static_output_dim'] = int(static_output_dim * width_factor)
+        kwargs['static_hidden_dims'] = tuple(int(d * width_factor) for d in static_hidden_dims)
+
+        # --- 3. 动态计算并放大融合网络的维度 ---
+        # 为了定义一个更深的融合网络，我们需要先计算出它的输入维度
+        # 这取决于 TCN 的输出和静态处理器的输出
+        tcn_output_dim = kwargs['tcn_channels'][-1]
+        static_out_dim = kwargs['static_output_dim']
+        fusion_input_dim = tcn_output_dim + static_out_dim
+        
+        # 定义一个更深的融合网络结构并按比例放大
+        fusion_hiddens_base = (fusion_input_dim, (fusion_input_dim + kwargs.get('output_dim', 2)) // 2)
+        kwargs['fusion_hidden_dims'] = tuple(int(d * 0.5) for d in fusion_hiddens_base) # 使用0.5的比例防止融合层过大
+
+        # --- 4. 使用修改后的参数初始化父类 ---
+        super().__init__(*args, **kwargs)
+
 # 简单的数据结构
 his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
@@ -464,6 +510,7 @@ ext_features = [
     "EXT_ofi_level_1",
     "EXT_ofi_imbalance",
     "EXT_log_ret_mid_price",
+    "EXT_log_ret_micro_price",
 ]
 data_config = {
     'his_len': his_len,# 每个样本的 历史数据长度
@@ -471,7 +518,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250824_tcn_baseline2'
+    title_base = '20250824_tcn_baseline3'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -486,7 +533,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx16]:
+            for model_cls in [TimeSeriesStaticModelx16, TimeSeriesStaticModelx32]:
                 args.append((model_cls, i))
 
         self.model_cls, self.seed = args[self.idx]
@@ -565,7 +612,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx16]:
+    for model_cls in [TimeSeriesStaticModelx16, TimeSeriesStaticModelx32]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
