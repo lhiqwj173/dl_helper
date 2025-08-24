@@ -23,7 +23,7 @@ from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
-特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance(TEST)
+特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price(TEST)
 标签: deeplob
 模型: TimeSeriesStaticModelx16
 
@@ -34,13 +34,9 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 结论: 
                                                                 train_loss	train_f1	val_f1	test_final_f1	cost
     train_title					
-    20250822_tcn_baseline3_P100_TimeSeriesStaticModelx16_final	0.00001	    1.0	        0.827682	0.809021	4.18h
-
-                                                                train_loss	train_f1	val_f1	test_final_f1	cost
-    train_title					
     20250824_tcn_baseline_P100_TimeSeriesStaticModelx16_final	0.000005	1.0	        0.849242	0.830479	3.932h
 
-    EXT_ofi_imbalance 增加了训练/验证精度，继续增加训练特征
+    
 """
 class StaticFeatureProcessor(nn.Module):
     """
@@ -460,6 +456,7 @@ ext_features = [
     "EXT_total_ofi",
     "EXT_ofi_level_1",
     "EXT_ofi_imbalance",
+    "EXT_log_ret_mid_price",
 ]
 data_config = {
     'his_len': his_len,# 每个样本的 历史数据长度
@@ -467,7 +464,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250824_tcn_baseline'
+    title_base = '20250824_tcn_baseline2'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

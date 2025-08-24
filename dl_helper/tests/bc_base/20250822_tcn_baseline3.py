@@ -23,7 +23,7 @@ from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
-特征: EXT_total_ofi | EXT_ofi_level_1 
+特征: EXT_total_ofi | EXT_ofi_level_1(TEST) 
 标签: deeplob
 模型: TimeSeriesStaticModelx16
 
