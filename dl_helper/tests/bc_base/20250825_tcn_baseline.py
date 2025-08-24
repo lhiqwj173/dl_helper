@@ -23,30 +23,19 @@ from dl_helper.transforms.base import transform
 from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
-特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price(TEST)
+特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
 标签: deeplob
 模型: TimeSeriesStaticModelx16
 
 目标: 
-    专注于 train_loss, 获取一个容量足够大的基础模型
-    增加特征 / 扩大容量x32
+    专注于 val_loss
+    增加训练数据 —> 250 / 300
 
 结论: 
-
-                                                                train_loss	train_f1	val_f1	test_final_f1	cost
-    train_title					
-    20250824_tcn_baseline2_P100_TimeSeriesStaticModelx16_final	0.000004	1.0	        0.853824	0.832862	4.148h
-
-    
                                                                 train_loss	train_f1	val_f1	test_final_f1	cost
     train_title					
     20250824_tcn_baseline3_P100_TimeSeriesStaticModelx16_final	0.000005	1.000000	0.856483	0.833855	4.142h
-    20250824_tcn_baseline3_P100_TimeSeriesStaticModelx32_final	0.000166	0.999955	0.855685	0.831266	6.182h
 
-    EXT_log_ret_micro_price 对验证/测试集又微小的提升
-    扩大模型容量没有明显提升
-
-    train_loss 几乎达到最前，再新增特征/容量提升也有限，开始进入正则化阶段
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -528,7 +517,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250824_tcn_baseline3'
+    title_base = '20250825_tcn_baseline'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -543,10 +532,11 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx16, TimeSeriesStaticModelx32]:
-                args.append((model_cls, i))
+            for model_cls in [TimeSeriesStaticModelx16]:
+                for use_data_file_num in [250, 300]:
+                    args.append((model_cls, i, use_data_file_num))
 
-        self.model_cls, self.seed = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num = args[self.idx]
         self.base_data_folder = r'/kaggle/input/bc-train-data-20250823-deeplob'
         self.params_kwargs['seed'] = self.seed
 
@@ -565,14 +555,25 @@ class test(test_base):
             data_config = data_config, 
             base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
             split_rng=train_split_rng,
-            use_data_file_num=200,
+            use_data_file_num=self.use_data_file_num,
         )
-        self.val_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='val', use_data_file_num=200)
-        self.test_dataset = LobTrajectoryDataset(data_folder=data_dict_folder, data_config = data_config,base_data_folder=os.path.join(self.base_data_folder, 'train_data'), data_type='test', use_data_file_num=200)
+        self.val_dataset = LobTrajectoryDataset(
+            data_folder=data_dict_folder, 
+            data_config = data_config,
+            base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
+            data_type='val', 
+            use_data_file_num=self.use_data_file_num)
+        self.test_dataset = LobTrajectoryDataset(
+            data_folder=data_dict_folder, 
+            data_config = data_config,
+            base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
+            data_type='test', 
+            use_data_file_num=self.use_data_file_num)
     
     def get_title_suffix(self):
         """获取后缀"""
-        res = f'{self.model_cls.__name__}_seed{self.seed}'
+        # res = f'{self.model_cls.__name__}_seed{self.seed}'
+        res = f'{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -622,7 +623,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx16, TimeSeriesStaticModelx32]:
+    for model_cls in [TimeSeriesStaticModelx16]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
