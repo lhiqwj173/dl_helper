@@ -116,6 +116,8 @@ class LobTrajectoryDataset(Dataset):
         base_data_folder=DATA_FOLDER,
         split_rng:np.random.Generator=np.random.default_rng(),
         use_data_file_num:int=None, # 使用数据文件数量，默认使用所有文件
+        use_data_begin:int=None,
+        use_data_end:int=None,# 不包含
     ):
         """
         data_config:
@@ -156,6 +158,10 @@ class LobTrajectoryDataset(Dataset):
 
         # 使用数据文件数量
         self.use_data_file_num = use_data_file_num
+
+        # 使用数据文件的切片
+        self.use_data_begin = use_data_begin
+        self.use_data_end = use_data_end
 
         if data_dict:
             # 先储存到tmp 目录，在读取
@@ -391,26 +397,31 @@ class LobTrajectoryDataset(Dataset):
         if self.use_data_file_num:
             file_paths = file_paths[:self.use_data_file_num]
 
+        if self.use_data_begin and self.use_data_end and self.use_data_begin<self.use_data_end:
+            file_paths = file_paths[self.use_data_begin:self.use_data_end]
+
         if len(file_paths) == 0:
             raise ValueError(f"没有找到任何 pkl 文件")
 
         elif len(file_paths) >= 3:
-            # 多文件情况, 分割 训练/验证/测试集
-            if len(file_paths) >= 60:
-                # 最后20个日期文件作为 val/ test
-                if self.data_type == 'train':
-                    file_paths = file_paths[:-20]
-                elif self.data_type == 'val':
-                    file_paths = file_paths[-20:-10]
-                elif self.data_type == 'test':
-                    file_paths = file_paths[-10:]
-            else:
-                if self.data_type == 'train':
-                    file_paths = file_paths[:-2]
-                elif self.data_type == 'val':
-                    file_paths = [file_paths[-2]]
-                elif self.data_type == 'test':
-                    file_paths = [file_paths[-1]]
+            # 不存在 使用数据切片
+            if not (self.use_data_begin and self.use_data_end and self.use_data_begin<self.use_data_end):
+                # 多文件情况, 分割 训练/验证/测试集
+                if len(file_paths) >= 60:
+                    # 最后20个日期文件作为 val/ test
+                    if self.data_type == 'train':
+                        file_paths = file_paths[:-20]
+                    elif self.data_type == 'val':
+                        file_paths = file_paths[-20:-10]
+                    elif self.data_type == 'test':
+                        file_paths = file_paths[-10:]
+                else:
+                    if self.data_type == 'train':
+                        file_paths = file_paths[:-2]
+                    elif self.data_type == 'val':
+                        file_paths = [file_paths[-2]]
+                    elif self.data_type == 'test':
+                        file_paths = [file_paths[-1]]
 
         # 首先遍历一遍所有文件，获取每个键值和子键值的总长度
         key_shape = {}  # 记录数据结构

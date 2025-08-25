@@ -1032,9 +1032,96 @@ def predict(test_class, *args, mode='normal', train_param={}, model=None, **kwar
     lock = mp.Manager().Lock()
     notebook_launcher(run_fn_gpu, args=(lock, num_processes, test_class, args, kwargs, train_param, model, True), num_processes=num_processes)
 
+def test_data(test_class, args, kwargs):
+    """
+    测试数据的mode函数
+    
+    Args:
+        test_instance: 测试类的实例，需要实现get_dataloaders和get_models方法
+    """
+    test_instance = test_class(*args, **kwargs)
+    params = test_instance.get_param()
+
+    # 实例化accelerator
+    accelerator = Accelerator(mixed_precision=params.amp if params.amp!='no' else 'no')
+
+    # 获取参数和转换函数
+    trans = test_instance.get_transform(accelerator.device)
+    
+    # 实例化tracker
+    class blank_printer():
+        def print(self, *args, **kwargs):
+            print(*args, **kwargs)
+    tracker = Tracker('test_data', params, accelerator, None, None, blank_printer())
+    
+    # 获取dataloader列表和模型列表
+    models = test_instance.get_models()
+    dataloaders = test_instance.get_dataloaders()
+
+    # 确保输出目录存在
+    extra_test_dir = "extra_test"
+    os.makedirs(extra_test_dir, exist_ok=True)
+    
+    # 遍历所有dataloader和模型进行测试
+    for i, dataloader in enumerate(dataloaders):
+        dataloader = accelerator.prepare(dataloader)
+        for j, model in enumerate(models):
+            model = accelerator.prepare(model)
+            model.eval()
+            
+            print(f"测试 dataloader {i+1}/{len(dataloaders)}, model {j+1}/{len(models)}")
+            
+            with torch.no_grad():
+                for batch_idx, batch in enumerate(dataloader):
+                    # 数据预处理
+                    data, target = trans(batch)
+                    if params.classify:
+                        target = target.long()
+                    
+                    # 模型预测
+                    output = model(data)
+                    
+                    # 计算损失
+                    criterion = test_instance.get_criterion()
+                    loss = criterion(output, target)
+                    
+                    # 使用tracker追踪记录
+                    tracker.track('extra_test', output, data, target, loss)
+                
+                # 更新tracker以计算指标
+                tracker.update()
+                
+                # 获取测试结果
+                extra_test_data = tracker.get_latest_extra_test_data()
+                
+                # 保存结果到CSV
+                if accelerator.is_main_process:
+                    # 创建结果DataFrame
+                    result_data = {'id': f"dataloader_{i+1}_model_{j+1}"}
+                    for key, value in extra_test_data.items():
+                        if isinstance(value, torch.Tensor):
+                            result_data[key] = value.cpu().numpy()
+                        else:
+                            result_data[key] = value
+                    
+                    # 生成文件名
+                    filepath = os.path.join(extra_test_dir, 'test_results.csv')
+                    
+                    # 将结果保存到CSV文件
+                    df = pd.DataFrame([result_data])
+                    # 检查文件是否存在以决定是否写入表头
+                    write_header = not os.path.exists(filepath)
+                    df.to_csv(filepath, mode='a', header=write_header, index=False)
+            
+            # 清理GPU内存
+            del model
+            torch.cuda.empty_cache()
+    
+    print("所有测试完成")
+
 def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
     """
-    mode: normal / simple / save_first_batch
+    mode: normal / simple / save_first_batch / test_data
     args / kwargs 为tester构造参数
 
     可增加字典参数(都可在命令行添加):
@@ -1098,5 +1185,8 @@ def run(test_class, *args, mode='normal', train_param={}, model=None, **kwargs):
         notebook_launcher(run_fn_gpu_simple, args=(lock, num_processes, test_class, args, kwargs, train_param, model), num_processes=num_processes)
     elif mode == 'save_first_batch':
         run_fn_save_first_batch(test_class, args, kwargs)
+    elif mode == 'test_data':
+        test_data(test_class, args, kwargs)
     else:
         raise Exception(f'mode error: {mode}, must be normal')
+

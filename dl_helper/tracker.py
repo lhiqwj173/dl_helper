@@ -37,8 +37,8 @@ if tpu_available():
 MODEL_TYPES=['model_final', 'model_best', 'model_dummy']
 MODEL_FINAL, MODEL_BEST, MODEL_DUMMY = MODEL_TYPES
 
-TEST_TYPES=['test_final', 'test_best', 'test_dummy']
-TEST_FINAL, TEST_BEST, TEST_DUMMY = TEST_TYPES
+TEST_TYPES=['test_final', 'test_best', 'test_dummy', 'extra_test']
+TEST_FINAL, TEST_BEST, TEST_DUMMY, EXTRA_TEST = TEST_TYPES
 
 TYPES_NO_NEED_SYMBOL_SCORE = ['train', 'val']
 
@@ -471,6 +471,8 @@ class Tracker():
             'accelerator',
             'scheduler',
             'printer',
+            'extra_test_data',
+            'extra_test_finsh'
         ]
 
 
@@ -492,6 +494,11 @@ class Tracker():
 
         # 储存各个标的的各过程的 0, 1 类f1 score
         self.symbol_score = {}
+
+        # 用于存储 extra_test 数据
+        self.extra_test_data = {}
+        # 标记是否有新的 extra_test 数据
+        self.extra_test_finsh = False
 
         # 获取数据 id 的函数
         # 参数为 batch data，返回 batch id tesnsor格式
@@ -757,6 +764,17 @@ class Tracker():
             need_test_temp = broadcast(need_test_temp)
             self.need_test = need_test_temp.item() == 1
 
+        # 处理 extra_test 类型的更新
+        if EXTRA_TEST == self.track_update:
+            # 保存 extra_test 数据
+            if self.accelerator.is_main_process:
+                self.extra_test_data = {}
+                for key in self.data:
+                    if key.startswith('extra_test_'):
+                        self.extra_test_data[key] = self.data[key]
+                # 设置标记表示有新的 extra_test 数据
+                self.extra_test_finsh = True
+
         self.reset_temp()
 
     def reset_temp(self):
@@ -834,6 +852,14 @@ class Tracker():
 
         # epoch内的迭代次数
         self.step_count += 1
+
+        # 如果是 extra_test 类型，先清理旧数据
+        if _type == EXTRA_TEST and self.accelerator.is_main_process and self.extra_test_finsh:
+            # 清理旧的 extra_test 数据
+            keys_to_remove = [key for key in self.data if key.startswith('extra_test_')]
+            for key in keys_to_remove:
+                del self.data[key]
+            self.extra_test_finsh = False
 
         # TODO 区分 2分类 与 多分类
         if self.params.classify:
@@ -947,8 +973,8 @@ class Tracker():
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
 
             # 更改键名 test_final -> test
-            # 选择 TEST_FINAL 进行绘图
-            old_keys = [i for i in data if TEST_FINAL in i]
+            # 选择 TEST_FINAL 进行绘图，排除 EXTRA_TEST
+            old_keys = [i for i in data if TEST_FINAL in i and EXTRA_TEST not in i]
             new_keys = [i.replace(TEST_FINAL, 'test') for i in old_keys]
             print(f'old_keys:\n{old_keys}')
             print(f'new_keys:\n{new_keys}')
@@ -1415,6 +1441,12 @@ class Tracker():
         
         self.accelerator.wait_for_everyone()
         # debug('save_result done')
+
+    def get_latest_extra_test_data(self):
+        """
+        返回最近的 extra_test 所属的所有评价数据
+        """
+        return self.extra_test_data
 
     def state_dict(self):
         return {key: value for key, value in self.__dict__.items() if key not in self.no_need_save_parm}

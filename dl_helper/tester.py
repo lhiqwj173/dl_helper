@@ -69,6 +69,14 @@ class test_base():
     def get_data(self, _type, data_sample_getter_func=None):
         raise NotImplementedError("必须在子类中实现 get_data 方法")
 
+    def get_dataloaders(self):
+        """返回需要测试的数据集"""
+        raise NotImplementedError("必须在子类中实现 get_dataloaders 方法")
+    
+    def get_models(self):
+        """返回需要测试的模型"""
+        raise NotImplementedError("必须在子类中实现 get_models 方法")
+
     # 初始化模型
     # 返回一个 torch model
     def get_model(self):

@@ -36,6 +36,14 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
     train_title					
     20250824_tcn_baseline3_P100_TimeSeriesStaticModelx16_final	0.000005	1.000000	0.856483	0.833855	4.142h
 
+    
+                                            train_loss	train_f1	val_f1	test_final_f1	cost
+    train_title					
+    20250825_tcn_baseline_P100_250_final	0.000005	1.000000	0.756394	0.759930	4.144h
+    20250825_tcn_baseline_P100_300_final	0.001992	0.999316	0.478070	0.431994	4.886h
+
+    训练数据 —> 250 时x16模型还可以很好的拟合训练集, 训练集性能没有下降
+    训练数据 —> 300 时x16模型训练集更加复杂, 训练集性能下降
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -546,30 +554,56 @@ class test(test_base):
         )
 
         # 准备数据集
-        data_dict_folder = os.path.join(self.base_data_folder, 'data_dict')
-        train_split_rng = np.random.default_rng(seed=self.seed)
-        self.train_dataset = LobTrajectoryDataset(
-            data_folder= data_dict_folder, 
-            input_zero=input_indepent, 
-            sample_num_limit= None if not overfit else 5, 
-            data_config = data_config, 
-            base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
-            split_rng=train_split_rng,
-            use_data_file_num=self.use_data_file_num,
-        )
-        self.val_dataset = LobTrajectoryDataset(
-            data_folder=data_dict_folder, 
-            data_config = data_config,
-            base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
-            data_type='val', 
-            use_data_file_num=self.use_data_file_num)
-        self.test_dataset = LobTrajectoryDataset(
-            data_folder=data_dict_folder, 
-            data_config = data_config,
-            base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
-            data_type='test', 
-            use_data_file_num=self.use_data_file_num)
+        self.data_dict_folder = os.path.join(self.base_data_folder, 'data_dict')
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
     
+    def get_dataloaders(self):
+        """返回需要测试的数据集"""
+        # 共 381 个日期
+        test_batch_num = 30     
+        data_sets = [
+            LobTrajectoryDataset(
+                data_folder=self.data_dict_folder, 
+                data_config = data_config,
+                base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
+                data_type='test', 
+                use_data_begin=i,
+                use_data_end=i+test_batch_num
+            )
+
+            for i in range(0, 381, test_batch_num)
+        ]
+
+        data_loaders = [
+            DataLoader(
+                dataset=data_set,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=4//match_num_processes(),
+                pin_memory=self.pin_memory,
+            )
+
+            for data_set in data_sets
+        ]
+
+        return data_loaders
+    
+    def get_models(self):
+        """返回需要测试的模型"""
+        model = self.model_cls(
+            num_ts_features=len(ext_features) + len(base_features),
+            time_steps=his_len,
+            num_static_features=3,
+        )
+
+        # 加载模型
+        from safetensors.torch import load_file
+        model.load_state_dict(load_file(r"D:\code\forecast_model\notebook\20250824_tcn_baseline3\20250824_tcn_baseline3_P100_TimeSeriesStaticModelx16_seed2_IDX4\model_final\model.safetensors"))
+
+        return [model]
+
     def get_title_suffix(self):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
@@ -591,6 +625,30 @@ class test(test_base):
         )
     
     def get_data(self, _type, data_sample_getter_func=None):
+        if self.test_dataset is None:
+            train_split_rng = np.random.default_rng(seed=self.seed)
+            self.train_dataset = LobTrajectoryDataset(
+                data_folder= self.data_dict_folder, 
+                input_zero=input_indepent, 
+                sample_num_limit= None if not overfit else 5, 
+                data_config = data_config, 
+                base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
+                split_rng=train_split_rng,
+                use_data_file_num=self.use_data_file_num,
+            )
+            self.val_dataset = LobTrajectoryDataset(
+                data_folder=self.data_dict_folder, 
+                data_config = data_config,
+                base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
+                data_type='val', 
+                use_data_file_num=self.use_data_file_num)
+            self.test_dataset = LobTrajectoryDataset(
+                data_folder=self.data_dict_folder, 
+                data_config = data_config,
+                base_data_folder=os.path.join(self.base_data_folder, 'train_data'), 
+                data_type='test', 
+                use_data_file_num=self.use_data_file_num)
+
         if _type == 'train':
             return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
@@ -605,6 +663,7 @@ if '__main__' == __name__:
     check_data_sample_balance = False # 检查 train/val/test 样本均衡
     overfit = False # 小样本过拟合测试
     need_check_dependencies = False # 检查梯度计算依赖关系
+    mode='normal'
 
     for arg in sys.argv[1:]:
         if arg == 'test_init_loss':
@@ -617,6 +676,8 @@ if '__main__' == __name__:
             overfit = True
         elif arg == "check_dependencies":
             need_check_dependencies = True
+        elif arg.startswith('mode='):
+            mode = arg.split('=')[1]
 
     # ################################
     # # 测试模型
@@ -666,4 +727,5 @@ if '__main__' == __name__:
         # 开始训练
         run(
             test, 
+            mode=mode,
         )
