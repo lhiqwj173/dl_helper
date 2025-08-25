@@ -600,7 +600,7 @@ class test(test_base):
 
         # 加载模型
         from safetensors.torch import load_file
-        model.load_state_dict(load_file(r"D:\code\forecast_model\notebook\20250824_tcn_baseline3\20250824_tcn_baseline3_P100_TimeSeriesStaticModelx16_seed2_IDX4\model_final\model.safetensors"))
+        model.load_state_dict(load_file(r"/kaggle/input/data200/pytorch/default/1/model.safetensors"))
 
         return [model]
 
