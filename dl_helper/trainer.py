@@ -1099,7 +1099,7 @@ def test_data(test_class, args, kwargs):
                     # 创建结果DataFrame
                     result_data = {'id': f"dataloader_{i+1}_model_{j+1}"}
                     for key, value in extra_test_data.items():
-                        print(key, value, type(value))
+                        # print(key, value, type(value))
                         if isinstance(value, torch.Tensor):
                             result_data[key] = value.item()
                         else:
