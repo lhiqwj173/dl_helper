@@ -1101,7 +1101,7 @@ def test_data(test_class, args, kwargs):
                     for key, value in extra_test_data.items():
                         print(key, value, type(value))
                         if isinstance(value, torch.Tensor):
-                            result_data[key] = value.cpu().numpy()
+                            result_data[key] = value.item()
                         else:
                             result_data[key] = value
                     
