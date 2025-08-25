@@ -579,7 +579,7 @@ class test(test_base):
         data_loaders = [
             DataLoader(
                 dataset=data_set,
-                batch_size=self.batch_size,
+                batch_size=self.para.batch_size,
                 shuffle=False,
                 num_workers=4//match_num_processes(),
                 pin_memory=self.pin_memory,
