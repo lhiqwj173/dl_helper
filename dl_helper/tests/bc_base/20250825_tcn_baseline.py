@@ -582,7 +582,7 @@ class test(test_base):
                 batch_size=self.para.batch_size,
                 shuffle=False,
                 num_workers=4//match_num_processes(),
-                pin_memory=self.pin_memory,
+                pin_memory=True,
             )
 
             for data_set in data_sets
