@@ -481,7 +481,7 @@ class test(test_base):
                     args.append((model_cls, i, use_data_file_num))
 
         self.model_cls, self.seed, self.use_data_file_num = args[self.idx]
-        self.base_data_folder = r'/kaggle/input/bc-train-data-20250823-deeplob'
+        self.base_data_folder = r'/kaggle/input/bc-train-data-20250826-deeplob'
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象
