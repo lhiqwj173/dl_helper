@@ -1606,7 +1606,7 @@ def merge_price_segments(df: pd.DataFrame, price_col: str='mid_price', logout=bl
             merge_end_row = int(segment_info.iloc[potential_merge_end_segment_idx]['end_index'])
 
             # 获取合并块的中间价格
-            unique_mid_prices = np.sort(df.loc[merge_start_row:merge_end_row, 'mid_price'].unique())
+            unique_mid_prices = np.sort(df.loc[merge_start_row:merge_end_row, 'mid_price'].round(5).unique())
 
             # 检查条件 2: "扰动"段占比是否小于阈值
             # 增加 diff_total_len > 0 的判断以避免除零错误
