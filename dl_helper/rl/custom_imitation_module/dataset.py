@@ -164,12 +164,22 @@ class LobTrajectoryDataset(Dataset):
         self.use_data_end = use_data_end
 
         # 读取nomove块长度文件，如果存在
-        nomove_len_file = os.path.join(os.path.dirname(base_data_folder), 'block_len_means.csv')
-        if os.path.exists(nomove_len_file):
-            # 列名: date,code1,code2,...
-            self.nomove_df = pd.read_csv(nomove_len_file)
+        block_len_means_folder = os.path.join(os.path.dirname(base_data_folder), 'block_len_means')
+        if os.path.exists(block_len_means_folder):
+            # 读取所有的csv，合并
+            csvs = os.listdir(block_len_means_folder)
+            self.block_len_means = pd.DataFrame()
+            for csv in csvs:
+                csv = os.path.join(block_len_means_folder, csv)
+                self.block_len_means = pd.concat([self.block_len_means, pd.read_csv(csv)], ignore_index=True)
+            # 确保 'date' 列是字符串类型，以匹配文件名
+            self.block_len_means['date'] = self.block_len_means['date'].astype(str)
+            # 将 'date' 设置为索引，方便使用 .loc 进行快速查找
+            self.block_len_means.set_index('date', inplace=True)
+            # 排序
+            self.block_len_means.sort_index(inplace=True)
         else:
-            self.nomove_df = None
+            self.block_len_means = None
 
         if data_dict:
             # 先储存到tmp 目录，在读取
@@ -398,19 +408,12 @@ class LobTrajectoryDataset(Dataset):
         此过滤功能仅对训练集(self.data_type == 'train')生效。
         - 每个标的，相同持仓条件(持仓/空仓)下act类别(未来持仓/空仓)数量均衡     -> 避免模型偏向某一种act类别
         """
-        # --- 新增代码: 仅在训练模式下准备用于过滤的 DataFrame ---
         nomove_df = None
         if self.data_type == 'train':
             print("当前为 'train' 模式，将启用 nomove_len > 10 的数据过滤功能。")
-            # 为避免修改原始 df，创建一个副本
-            nomove_df = self.nomove_df.copy()
-            # 确保 'date' 列是字符串类型，以匹配文件名
-            nomove_df['date'] = nomove_df['date'].astype(str)
-            # 将 'date' 设置为索引，方便使用 .loc 进行快速查找
-            nomove_df.set_index('date', inplace=True)
+            nomove_df = self.block_len_means
         else:
             print(f"当前为 '{self.data_type}' 模式，将加载所有原始数据，不过滤。")
-        # --- 新增代码结束 ---
 
         file_paths = []
         for root, dirs, _files in os.walk(data_folder):
