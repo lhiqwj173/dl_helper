@@ -547,7 +547,7 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        res = f'{os.path.basename(self.base_data_folder).split('_')[-1]}_seed{self.seed}'
+        res = f'{os.path.basename(self.base_data_folder).split("_")[-1]}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
