@@ -457,6 +457,9 @@ class LobTrajectoryDataset(Dataset):
         # 统计各个标的下 样本 obs[-2] == 0 / 1 下， acts 的 0/1 数量
         key_type_sample_idxs = {}
         key_total_cur_length = {}
+
+        # 统计文件数
+        use_key_dates = {}
         
         # 第一遍遍历：了解数据结构和计算总长度
         print("第一遍遍历: 统计元数据和索引...")
@@ -491,6 +494,10 @@ class LobTrajectoryDataset(Dataset):
                         'obs_1_act_0': np.array([], dtype=np.int32), 'obs_1_act_1': np.array([], dtype=np.int32),
                     }
                     key_total_cur_length[key] = 0
+                    use_key_dates[key] = 0
+
+                # 累加使用文件数
+                use_key_dates[key] += 1
 
                 # 累加样本长度
                 current_file_length = value['obs'].shape[0]
@@ -524,6 +531,10 @@ class LobTrajectoryDataset(Dataset):
         
         if not key_lengths:
             raise ValueError("经过过滤后，没有加载任何有效数据。请检查过滤条件或数据文件。")
+        
+        print(f'使用文件数汇总:')
+        for key in use_key_dates:
+            print(f'{key}: {use_key_dates[key]}')
 
         # 计算均衡后的样本数 (此逻辑仅对训练集生效)
         if self.data_type == 'train':
