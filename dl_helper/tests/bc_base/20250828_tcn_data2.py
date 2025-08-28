@@ -29,7 +29,7 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 目标: 
     专注于 train_loss
-    观察 deeplob / bc 标签 在200/300days数据集 训练效果
+    观察 deeplob / bc 标签 在420days数据集 训练效果
 
 结论: 
 
@@ -496,7 +496,7 @@ class test(test_base):
         args = []
         for i in range(5):
             for model_cls in [TimeSeriesStaticModelx8]:
-                for use_data_file_num in [200, 300]:
+                for use_data_file_num in [420]:
                     for data_folder in [
                         '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_bc',
                         '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_deeplob'
@@ -566,7 +566,7 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        res = f'{self.model_cls.__name__}_{os.path.basename(self.base_data_folder).split("_")[-1]}_{self.use_data_file_num}_seed{self.seed}'
+        res = f'{os.path.basename(self.base_data_folder).split("_")[-1]}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
