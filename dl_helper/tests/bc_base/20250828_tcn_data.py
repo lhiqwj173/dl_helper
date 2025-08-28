@@ -425,6 +425,25 @@ class TimeSeriesStaticModel(nn.Module):
         
         return output
 
+class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
+    """参数量约为原始模型八倍的版本"""
+    def __init__(self, *args, **kwargs):
+        factor = math.sqrt(8)  # ≈2.828, 使得总参数量 ~8x
+        # 获取原始参数
+        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
+        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
+        static_output_dim = kwargs.pop('static_output_dim', 32)
+        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
+
+        # 按比例放大（向上取整更稳定）
+        kwargs['tcn_channels'] = [int(round(c * factor)) for c in tcn_channels]
+        kwargs['static_embedding_dim'] = int(round(static_embedding_dim * factor))
+        kwargs['static_output_dim'] = int(round(static_output_dim * factor))
+        kwargs['static_hidden_dims'] = tuple(int(round(d * factor)) for d in static_hidden_dims)
+        kwargs['fusion_hidden_dims'] = None  # 让融合层自动重新计算维度
+
+        super().__init__(*args, **kwargs)
+
 class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
     """参数量约为原始模型十六倍的版本"""
     def __init__(self, *args, **kwargs):
@@ -476,8 +495,8 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx16]:
-                for use_data_file_num in [200]:
+            for model_cls in [TimeSeriesStaticModelx8]:
+                for use_data_file_num in [200, 300]:
                     for data_folder in [
                         '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_bc',
                         '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_deeplob'
@@ -547,7 +566,7 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        res = f'{os.path.basename(self.base_data_folder).split("_")[-1]}_seed{self.seed}'
+        res = f'{self.model_cls.__name__}_{os.path.basename(self.base_data_folder).split("_")[-1]}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -624,7 +643,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx16]:
+    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
@@ -633,39 +652,39 @@ if '__main__' == __name__:
         model(x)
         print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
 
-    # ################################
-    # # 验证初始化损失 == log(C)
-    # ################################
-    if test_init_loss:
-        from tqdm import tqdms
-        init_losses = []
-        for i in tqdm(range(10)):
-            model = TimeSeriesStaticModelx16(
-                num_ts_features=len(ext_features) + len(base_features),
-                time_steps=his_len,
-            )
-            num_classes = 2
-            criterion = nn.CrossEntropyLoss()
-            batchsize = 128
-            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
-            x[:, -4] = 0
-            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
-            # 前向传播
-            outputs = model(x)
-            loss = criterion(outputs, y)
-            init_losses.append(loss.item())
-        print(init_losses)
-        print(f"Initial loss: { np.mean(init_losses)}")
-        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
+    # # ################################
+    # # # 验证初始化损失 == log(C)
+    # # ################################
+    # if test_init_loss:
+    #     from tqdm import tqdms
+    #     init_losses = []
+    #     for i in tqdm(range(10)):
+    #         model = TimeSeriesStaticModelx16(
+    #             num_ts_features=len(ext_features) + len(base_features),
+    #             time_steps=his_len,
+    #         )
+    #         num_classes = 2
+    #         criterion = nn.CrossEntropyLoss()
+    #         batchsize = 128
+    #         x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+    #         x[:, -4] = 0
+    #         y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+    #         # 前向传播
+    #         outputs = model(x)
+    #         loss = criterion(outputs, y)
+    #         init_losses.append(loss.item())
+    #     print(init_losses)
+    #     print(f"Initial loss: { np.mean(init_losses)}")
+    #     print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    elif need_check_dependencies:
-        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-        x[:, -4] = 0
-        run_dependency_check_without_bn(model, x, 3)
+    # elif need_check_dependencies:
+    #     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+    #     x[:, -4] = 0
+    #     run_dependency_check_without_bn(model, x, 3)
 
-    else:
-        # 开始训练
-        run(
-            test, 
-            mode=mode,
-        )
+    # else:
+    #     # 开始训练
+    #     run(
+    #         test, 
+    #         mode=mode,
+    #     )
