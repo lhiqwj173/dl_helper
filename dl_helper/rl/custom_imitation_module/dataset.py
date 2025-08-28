@@ -163,6 +163,14 @@ class LobTrajectoryDataset(Dataset):
         self.use_data_begin = use_data_begin
         self.use_data_end = use_data_end
 
+        # 读取nomove块长度文件，如果存在
+        nomove_len_file = os.path.join(os.path.dirname(base_data_folder), 'block_len_means.csv')
+        if os.path.exists(nomove_len_file):
+            # 列名: date,code1,code2,...
+            self.nomove_df = pd.read_csv(nomove_len_file)
+        else:
+            self.nomove_df = None
+
         if data_dict:
             # 先储存到tmp 目录，在读取
             data_folder = os.path.join(os.getenv('TEMP'), 'lob_data')
@@ -386,8 +394,24 @@ class LobTrajectoryDataset(Dataset):
 
     def _load_data_dict(self, data_folder:str):
         """
+        - 增加过滤功能：根据 self.nomove_len_dict，过滤掉 nomove_len_mean > 10 的日期-标的数据。
+        此过滤功能仅对训练集(self.data_type == 'train')生效。
         - 每个标的，相同持仓条件(持仓/空仓)下act类别(未来持仓/空仓)数量均衡     -> 避免模型偏向某一种act类别
         """
+        # --- 新增代码: 仅在训练模式下准备用于过滤的 DataFrame ---
+        nomove_df = None
+        if self.data_type == 'train':
+            print("当前为 'train' 模式，将启用 nomove_len > 10 的数据过滤功能。")
+            # 为避免修改原始 df，创建一个副本
+            nomove_df = self.nomove_df.copy()
+            # 确保 'date' 列是字符串类型，以匹配文件名
+            nomove_df['date'] = nomove_df['date'].astype(str)
+            # 将 'date' 设置为索引，方便使用 .loc 进行快速查找
+            nomove_df.set_index('date', inplace=True)
+        else:
+            print(f"当前为 '{self.data_type}' 模式，将加载所有原始数据，不过滤。")
+        # --- 新增代码结束 ---
+
         file_paths = []
         for root, dirs, _files in os.walk(data_folder):
             for _file in _files:
@@ -424,34 +448,50 @@ class LobTrajectoryDataset(Dataset):
                         file_paths = [file_paths[-1]]
 
         # 首先遍历一遍所有文件，获取每个键值和子键值的总长度
-        key_shape = {}  # 记录数据结构
-        key_lengths = {}    # 记录每个键值的总长度
+        key_shape = {}      # 记录数据结构
+        key_lengths = {}    # 记录每个键值（标的）的总长度
 
         # 统计各个标的下 样本 obs[-2] == 0 / 1 下， acts 的 0/1 数量
         key_type_sample_idxs = {}
         key_total_cur_length = {}
         
         # 第一遍遍历：了解数据结构和计算总长度
+        print("第一遍遍历: 统计元数据和索引...")
         for file_path in file_paths:
+            # 新增: 从文件名(YYYYMMDD.pkl)获取日期字符串
+            date_str = os.path.basename(file_path).split('.')[0]
             _data_dict = pickle.load(open(file_path, 'rb'))
             
             for key, value in _data_dict.items():
+                # 此处的key是标的id
+                
+                # --- 新增代码: 仅在训练模式下执行过滤 ---
+                if self.data_type == 'train':
+                    try:
+                        # 检查标的(key)是否存在于 nomove_df 的列中
+                        if key in nomove_df.columns:
+                            nomove_len_mean = nomove_df.loc[date_str, key]
+                            # 如果 nomove_len_mean > 10 并且不是 NaN, 则跳过该日期-标的数据
+                            if pd.notna(nomove_len_mean) and nomove_len_mean > 10:
+                                continue # 跳到当前文件的下一个标的
+                    except KeyError:
+                        # 如果日期不在 nomove_df 索引中，说明没有该日期的过滤信息，直接通过
+                        pass
+                # --- 新增代码结束 ---
+                
                 if key not in key_lengths:
                     # 初始化
                     key_lengths[key] = 0
-                    key_shape[key] = {}
-                    for k, v in value.items():
-                        key_shape[key][k] = v.shape
+                    key_shape[key] = {k: v.shape for k, v in value.items()}
                     key_type_sample_idxs[key] = {
-                        'obs_0_act_0': np.array([], dtype=np.int32),
-                        'obs_0_act_1': np.array([], dtype=np.int32),
-                        'obs_1_act_0': np.array([], dtype=np.int32),
-                        'obs_1_act_1': np.array([], dtype=np.int32),
+                        'obs_0_act_0': np.array([], dtype=np.int32), 'obs_0_act_1': np.array([], dtype=np.int32),
+                        'obs_1_act_0': np.array([], dtype=np.int32), 'obs_1_act_1': np.array([], dtype=np.int32),
                     }
                     key_total_cur_length[key] = 0
 
                 # 累加样本长度
-                key_lengths[key] += value['obs'].shape[0]
+                current_file_length = value['obs'].shape[0]
+                key_lengths[key] += current_file_length
 
                 # 统计样本 obs[-2] == 0 / 1 下， acts 的 0/1 数量
                 obs_feature = value['obs'][:, -2]
@@ -459,34 +499,33 @@ class LobTrajectoryDataset(Dataset):
                 obs_0_mask = obs_feature == 0
                 obs_1_mask = obs_feature == 1
 
-                # 获取各类样本的索引
-                # 若类型的样本不存在，返回空数组
-                try:
-                    obs_0_act_0_idx = np.where((act == 0) & obs_0_mask)[0]
-                    obs_0_act_0_idx = (obs_0_act_0_idx + key_total_cur_length[key]) if len(obs_0_act_0_idx) > 0 else np.array([], dtype=np.int32)
-                    obs_0_act_1_idx = np.where((act == 1) & obs_0_mask)[0]
-                    obs_0_act_1_idx = (obs_0_act_1_idx + key_total_cur_length[key]) if len(obs_0_act_1_idx) > 0 else np.array([], dtype=np.int32)
-                    obs_1_act_0_idx = np.where((act == 0) & obs_1_mask)[0]
-                    obs_1_act_0_idx = (obs_1_act_0_idx + key_total_cur_length[key]) if len(obs_1_act_0_idx) > 0 else np.array([], dtype=np.int32)
-                    obs_1_act_1_idx = np.where((act == 1) & obs_1_mask)[0]
-                    obs_1_act_1_idx = (obs_1_act_1_idx + key_total_cur_length[key]) if len(obs_1_act_1_idx) > 0 else np.array([], dtype=np.int32)
-                    key_total_cur_length[key] += value['obs'].shape[0]
-                except Exception as e:
-                    print(f'{file_path} 数据异常')
-                    raise e
+                # 获取各类样本的索引 (此为当前文件内的局部索引)
+                obs_0_act_0_idx_local = np.where((act == 0) & obs_0_mask)[0]
+                obs_0_act_1_idx_local = np.where((act == 1) & obs_0_mask)[0]
+                obs_1_act_0_idx_local = np.where((act == 0) & obs_1_mask)[0]
+                obs_1_act_1_idx_local = np.where((act == 1) & obs_1_mask)[0]
+                
+                # 将局部索引转换为全局索引 (局部索引 + 已累计的长度)
+                global_start_idx = key_total_cur_length[key]
+                
+                # 合并索引 (将当前文件的各类样本的全局索引追加到总列表中)
+                key_type_sample_idxs[key]['obs_0_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_0'], obs_0_act_0_idx_local + global_start_idx])
+                key_type_sample_idxs[key]['obs_0_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_1'], obs_0_act_1_idx_local + global_start_idx])
+                key_type_sample_idxs[key]['obs_1_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_0'], obs_1_act_0_idx_local + global_start_idx])
+                key_type_sample_idxs[key]['obs_1_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_1'], obs_1_act_1_idx_local + global_start_idx])
 
-                # 合并索引
-                key_type_sample_idxs[key]['obs_0_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_0'], obs_0_act_0_idx])
-                key_type_sample_idxs[key]['obs_0_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_0_act_1'], obs_0_act_1_idx])
-                key_type_sample_idxs[key]['obs_1_act_0'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_0'], obs_1_act_0_idx])
-                key_type_sample_idxs[key]['obs_1_act_1'] = np.concatenate([key_type_sample_idxs[key]['obs_1_act_1'], obs_1_act_1_idx])
+                # 更新该标的已处理过的样本总长度，为下一个文件的全局索引计算做准备
+                key_total_cur_length[key] += current_file_length
 
                 assert value['obs'].shape[0] == value['acts'].shape[0], f"obs/acts 数据长度不一致: {value['obs'].shape[0]} != {value['acts'].shape[0]}"
         
-        # 计算均衡后的样本数
+        if not key_lengths:
+            raise ValueError("经过过滤后，没有加载任何有效数据。请检查过滤条件或数据文件。")
+
+        # 计算均衡后的样本数 (此逻辑仅对训练集生效)
         if self.data_type == 'train':
+            print("\n对训练集进行样本均衡处理...")
             for key in key_type_sample_idxs:
-                total_samples = key_lengths[key]
                 # pos 0/1 分类的最小样本数
                 pos_0_min_sampel_length = min(key_type_sample_idxs[key]['obs_0_act_0'].shape[0], key_type_sample_idxs[key]['obs_0_act_1'].shape[0])
                 pos_1_min_sampel_length = min(key_type_sample_idxs[key]['obs_1_act_0'].shape[0], key_type_sample_idxs[key]['obs_1_act_1'].shape[0])
@@ -502,7 +541,7 @@ class LobTrajectoryDataset(Dataset):
                 key_type_sample_idxs[key]['obs_0_act_1'] = key_type_sample_idxs[key]['obs_0_act_1'][:pos_0_min_sampel_length]
                 key_type_sample_idxs[key]['obs_1_act_0'] = key_type_sample_idxs[key]['obs_1_act_0'][:pos_1_min_sampel_length]
                 key_type_sample_idxs[key]['obs_1_act_1'] = key_type_sample_idxs[key]['obs_1_act_1'][:pos_1_min_sampel_length]
-                # 再排序，用于最后的读取
+                # 排序不是必须的，但在调试时可能有用，保留
                 key_type_sample_idxs[key]['obs_0_act_0'].sort()
                 key_type_sample_idxs[key]['obs_0_act_1'].sort()
                 key_type_sample_idxs[key]['obs_1_act_0'].sort()
@@ -514,64 +553,87 @@ class LobTrajectoryDataset(Dataset):
         # 创建最终数据字典并预分配空间
         data_dict = {}
         for key, length in key_lengths.items():
-            data_dict[key] = {}
-            for k in ['obs', 'acts']:
-                # 为每个子键值预分配空间
-                data_dict[key][k] = np.empty([key_lengths[key]] + list(key_shape[key][k][1:]), dtype=np.float32)
+            if length > 0:
+                data_dict[key] = {}
+                for k in ['obs', 'acts']:
+                    # 为每个子键值预分配空间
+                    data_dict[key][k] = np.empty([length] + list(key_shape[key][k][1:]), dtype=np.float32)
         
         # 第二遍遍历：填充数据
-        position = {key: {k: 0 for k in sub_keys} for key, sub_keys in key_shape.items()}
+        print("第二遍遍历: 填充数据到最终字典...")
+        # position 记录每个标的在 data_dict 中已填充到的位置
+        position = {key: {'obs': 0, 'acts': 0} for key in data_dict}
         
-        key_total_cur_length = {}
+        # 重置全局长度计数器，用于在第二遍遍历时定位
+        key_total_cur_length = {key: 0 for key in data_dict}
         for file_path in file_paths:
+            date_str = os.path.basename(file_path).split('.')[0]
             _data_dict = pickle.load(open(file_path, 'rb'))
             
             for key, value in _data_dict.items():
-                # 待填充数据长度
-                length = value['obs'].shape[0]
+                # 只有在第一遍遍历后确定要加载的标的（即存在于data_dict中的），才进行处理
+                if key not in data_dict:
+                    continue
 
-                # 初始化 key_total_cur_length
-                if key not in key_total_cur_length:
-                    key_total_cur_length[key] = 0
-
-                # 训练集需要均衡
+                # --- 新增代码: 再次执行同样的过滤检查，确保逻辑一致 ---
                 if self.data_type == 'train':
-                    # 截取范围 key_total_cur_length[key]开始的 length 个索引
-                    begin = key_total_cur_length[key]
-                    end = begin + length
+                    try:
+                        if key in nomove_df.columns:
+                            nomove_len_mean = nomove_df.loc[date_str, key]
+                            if pd.notna(nomove_len_mean) and nomove_len_mean > 10:
+                                continue
+                    except KeyError:
+                        pass
+                # --- 新增代码结束 ---
+                
+                # 当前文件原始数据长度
+                current_file_length = value['obs'].shape[0]
 
-                    # 合并所有索引
+                # 训练集需要根据均衡后的索引来截取数据
+                if self.data_type == 'train':
+                    # 计算当前文件数据对应的全局索引范围
+                    begin = key_total_cur_length[key]
+                    end = begin + current_file_length
+
+                    # 合并所有需要保留的均衡后的全局索引
                     keep_sample_idx = np.concatenate([
-                        key_type_sample_idxs[key]['obs_0_act_0'],
-                        key_type_sample_idxs[key]['obs_0_act_1'], 
-                        key_type_sample_idxs[key]['obs_1_act_0'],
-                        key_type_sample_idxs[key]['obs_1_act_1']
+                        key_type_sample_idxs[key]['obs_0_act_0'], key_type_sample_idxs[key]['obs_0_act_1'], 
+                        key_type_sample_idxs[key]['obs_1_act_0'], key_type_sample_idxs[key]['obs_1_act_1']
                     ])
 
-                    cur_file_use_idx = keep_sample_idx[(keep_sample_idx >= begin) & (keep_sample_idx < end)]
-                    # 截取数据
-                    local_idx = cur_file_use_idx - begin
-                    value['obs'] = value['obs'][local_idx]
-                    value['acts'] = value['acts'][local_idx]
+                    # 找出落在当前文件全局索引范围内的那些需要保留的索引
+                    cur_file_use_global_idx = keep_sample_idx[(keep_sample_idx >= begin) & (keep_sample_idx < end)]
+                    # 将这些全局索引转换回当前文件的局部索引，用于从 value 中提取数据
+                    local_idx = cur_file_use_global_idx - begin
+                    
+                    # 根据局部索引截取数据
+                    obs_to_fill = value['obs'][local_idx]
+                    acts_to_fill = value['acts'][local_idx]
+                else:
+                    # 对于 val/test 集，使用当前文件的全部数据
+                    obs_to_fill = value['obs']
+                    acts_to_fill = value['acts']
 
-                # 更新位置
-                key_total_cur_length[key] += length
+                # 更新该标的已处理过的文件数据总长度
+                key_total_cur_length[key] += current_file_length
+                
+                # 获取要填充的数据的实际长度
+                fill_length = obs_to_fill.shape[0]
+                if fill_length == 0:
+                    continue
 
-                # 更新 length
-                length = value['obs'].shape[0]
-
-                for k in ['obs', 'acts']:
+                # 拷贝数据到预分配的数组中
+                for k, data_to_fill in [('obs', obs_to_fill), ('acts', acts_to_fill)]:
                     # 当前位置
                     current_pos = position[key][k]
-
-                    # 拷贝数据到预分配的数组中
-                    data_dict[key][k][current_pos:current_pos + length] = value[k]
-                    
+                    # 填充数据
+                    data_dict[key][k][current_pos : current_pos + fill_length] = data_to_fill
                     # 更新位置
-                    position[key][k] += length
+                    position[key][k] += fill_length
 
-        # 检查是否样本均衡
+        # 检查是否样本均衡 (仅对训练集)
         if self.data_type == 'train':
+            print("\n检查训练集样本均衡结果...")
             for key in data_dict:
                 # 获取样本数
                 obs_feature = data_dict[key]['obs'][:, -2]
@@ -579,21 +641,23 @@ class LobTrajectoryDataset(Dataset):
                 obs_0_mask = obs_feature == 0
                 obs_1_mask = obs_feature == 1
                 # 获取各类样本数量
-                obs_0_act_0_num = len(np.where((act == 0) & obs_0_mask)[0])
-                obs_0_act_1_num = len(np.where((act == 1) & obs_0_mask)[0])
-                obs_1_act_0_num = len(np.where((act == 0) & obs_1_mask)[0])
-                obs_1_act_1_num = len(np.where((act == 1) & obs_1_mask)[0])
+                obs_0_act_0_num = np.sum((act == 0) & obs_0_mask)
+                obs_0_act_1_num = np.sum((act == 1) & obs_0_mask)
+                obs_1_act_0_num = np.sum((act == 0) & obs_1_mask)
+                obs_1_act_1_num = np.sum((act == 1) & obs_1_mask)
+                
                 # 检查是否均衡
-                assert obs_0_act_0_num == obs_0_act_1_num and obs_1_act_0_num == obs_1_act_1_num, \
-                    f"样本不均衡: {obs_0_act_0_num} != {obs_0_act_1_num} or {obs_1_act_0_num} != {obs_1_act_1_num}"
+                assert obs_0_act_0_num == obs_0_act_1_num, f"样本不均衡 (空仓): {obs_0_act_0_num} != {obs_0_act_1_num}"
+                assert obs_1_act_0_num == obs_1_act_1_num, f"样本不均衡 (持仓): {obs_1_act_0_num} != {obs_1_act_1_num}"
+            print("...均衡检查通过。")
 
         # 输出样本各个类别的数量
         class_nums = [0, 0]
         for key in data_dict:
             act = data_dict[key]['acts']
-            for i in range(2):
-                class_nums[i] += len(np.where(act == i)[0])
-        print(f"样本类别数量: {class_nums}")        
+            class_nums[0] += np.sum(act == 0)
+            class_nums[1] += np.sum(act == 1)
+        print(f"\n最终样本类别总数 (0/1): {class_nums}")        
 
         return data_dict
 
