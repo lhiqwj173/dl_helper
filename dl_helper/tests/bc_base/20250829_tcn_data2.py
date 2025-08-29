@@ -502,7 +502,7 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 200
+        self.params_kwargs['epochs'] = 150
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
@@ -593,10 +593,14 @@ class test(test_base):
         return res
 
     def get_model(self):
+        # 提取 top5 的类别数
+        static_num_categories = 1 if 'top' not in self.base_data_folder else int((self.base_data_folder.split('top')[-1]).split('_')[0])
+
         return self.model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
             num_static_features=3,
+            static_num_categories = static_num_categories,
         )
     
     def get_data(self, _type, data_sample_getter_func=None):

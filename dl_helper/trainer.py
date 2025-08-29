@@ -660,6 +660,8 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
 
         if None is model:
             model = test.get_model()
+            p.print(f'model init')
+            p.print(model)
 
         if not only_predict:
             train_loader = test.get_data('train')
