@@ -582,6 +582,7 @@ class test(test_base):
         # res = f'{self.use_data_file_num}_seed{self.seed}'
         data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
         data_suffix = '_'.join(data_suffix)
+        data_suffix = data_suffix.replace('dl_only15', 'only15')
         res = f'{data_suffix}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
