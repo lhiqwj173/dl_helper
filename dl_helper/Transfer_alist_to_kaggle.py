@@ -865,6 +865,9 @@ def only_transfer():
         alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
         print(f'下载完成 {file["name"]}')
 
+    # 清理其他文件
+    
+
 def bt_transfer():
     """
     1. 下载 bt下载主机 alist 文件到本地

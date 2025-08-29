@@ -966,11 +966,20 @@ class Tracker():
                 print(f"{i}: {data[i]}")
 
                 if 'test' in i:
-                    data[i] = [data[i][-1]] * epochs if len(data[i]) else []
-                elif 'grad_norm' in i:
-                    data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
+                    data[i] = [data[i][-1]] * epochs if len(data[i]) else [np.nan]*epochs
                 else:
                     data[i] = data[i] + (epochs - len(data[i])) * [np.nan]
+
+            # self.data 值中的最大长度为 max_length
+            # 若 max_length == epochs，无需额外处理
+            # 若 max_length < epochs，在上面的循环中会被补齐
+            # 若 max_length > epochs，说明中途有提前结束的，需要补齐, data 值中的最大长度也为 max_length 
+            max_length = max(len(value) for value in data.values())
+            if max_length > epochs:
+                for i in data:
+                    if len(data[i]) < max_length:
+                        data[i] = data[i] + (max_length - len(data[i])) * [np.nan]
+                epochs = max_length
 
             # 更改键名 test_final -> test
             # 选择 TEST_FINAL 进行绘图，排除 EXTRA_TEST
