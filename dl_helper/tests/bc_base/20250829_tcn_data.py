@@ -29,10 +29,9 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 目标: 
     专注于 train_loss
-    观察 deeplob / bc 标签 在420days数据集 训练效果
+    观察deeplob标签 only15/top5 200/300/420days数据集 训练效果
 
 结论: 
-
 
                                                             train_loss	train_f1	val_f1	    cost
     train_title				
@@ -495,7 +494,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250828_data'
+    title_base = '20250829_data'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -511,10 +510,10 @@ class test(test_base):
         args = []
         for i in range(5):
             for model_cls in [TimeSeriesStaticModelx8]:
-                for use_data_file_num in [420]:
+                for use_data_file_num in [200,300,420]:
                     for data_folder in [
-                        '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_bc',
-                        '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_deeplob'
+                        '/kaggle/input/train-data-20250829-all/train_data_20250829_dl_only15',
+                        '/kaggle/input/train-data-20250829-all/train_data_20250829_dl_top5'
                     ]:
                         args.append((model_cls, i, use_data_file_num, data_folder))
 

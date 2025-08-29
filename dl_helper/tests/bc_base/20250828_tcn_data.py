@@ -33,6 +33,18 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
+                                                            train_loss	train_f1	val_f1	cost
+    train_title				
+    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_300	0.013003	0.995435	0.680547	3.04h           
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	    0.012255	0.995675	0.676436	3.06h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	    0.009046	0.996900	0.668479	3.074h
+    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_200	0.008475	0.997078	0.655824	3.068h
+
+    deeplob标签 val_f1 +3.7%
+    bc标签      val_f1 +1.2%
+
+    
+
 """
 class StaticFeatureProcessor(nn.Module):
     """
