@@ -856,7 +856,7 @@ def only_transfer():
     """
     # 下载压缩文件
     alist_folder = r'/only_transfer/'
-    local_folder = r'transfer'
+    local_folder = r'/kaggle/working/'
     alist_client = alist(os.environ['ALIST_USER'], os.environ['ALIST_PWD'], host='http://168.138.158.156:5244' if not host else host)
     files = alist_client.listdir(alist_folder)
 
@@ -864,9 +864,6 @@ def only_transfer():
         print(f'开始下载 {file["name"]}')
         alist_client.download(os.path.join(alist_folder, file['name']), local_folder)
         print(f'下载完成 {file["name"]}')
-
-    # 清理其他文件
-    
 
 def bt_transfer():
     """
