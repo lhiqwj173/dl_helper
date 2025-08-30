@@ -24,12 +24,12 @@ from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
-标签: bc/dl
+标签: bc
 模型: TimeSeriesStaticModelx16
 
 目标: 
     专注于 train_loss
-    观察bc/dl标签 only30/nofilter 420days数据集 训练效果
+    观察bc标签 only30/nofilter 420days数据集 训练效果
 
 结论: 
 
@@ -498,8 +498,9 @@ class test(test_base):
             for model_cls in [TimeSeriesStaticModelx8]:
                 for use_data_file_num in [420]:
                     for data_folder in [
-                        '/kaggle/input/train-data-20250829/train_data_20250829_bc_only15',
-                        '/kaggle/input/train-data-20250829/train_data_20250829_bc_top5'
+                        '/kaggle/input/20250830-data/single_bc_nofilter',
+                        '/kaggle/input/20250830-data/single_bc_only30min'
+
                     ]:
                         args.append((model_cls, i, use_data_file_num, data_folder))
 
