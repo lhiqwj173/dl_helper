@@ -24,27 +24,15 @@ from dl_helper.trainer import run
 from dl_helper.tool import model_params_num, check_dependencies, run_dependency_check_without_bn
 """
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
-标签: deeplob
+标签: bc/dl
 模型: TimeSeriesStaticModelx16
 
 目标: 
     专注于 train_loss
-    观察 deeplob / bc 标签 在200/300days数据集 训练效果
+    观察bc/dl标签 only30/nofilter 420days数据集 训练效果
 
 结论: 
 
-                                                            train_loss	train_f1	val_f1	    val_f1_best	  val_loss	label_train	cost
-    train_title							
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	    0.009046	0.996900	0.668479	0.690048	2.878343	182852.0	3.074h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_200	0.008475	0.997078	0.655824	0.689272	2.948499	178490.0	3.068h
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	    0.012255	0.995675	0.676436	0.684623	2.827367	341296.0	3.06h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_300	0.013003	0.995435	0.680547	0.683710	2.775117	332396.0	3.04h
-
-    deeplob标签 val_f1_best300 -0.81%
-    bc标签      val_f1_best300 -0.79%
-
-    增加100天训练数据 性能馊味下降
-    
 """
 class StaticFeatureProcessor(nn.Module):
     """
@@ -492,7 +480,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250828_data'
+    title_base = '20250830_data'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -500,7 +488,7 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 200
+        self.params_kwargs['epochs'] = 180
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
@@ -508,10 +496,10 @@ class test(test_base):
         args = []
         for i in range(5):
             for model_cls in [TimeSeriesStaticModelx8]:
-                for use_data_file_num in [200, 300]:
+                for use_data_file_num in [420]:
                     for data_folder in [
-                        '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_bc',
-                        '/kaggle/input/bc-train-data-20250828-all/BC_train_data_20250828_deeplob'
+                        '/kaggle/input/train-data-20250829/train_data_20250829_bc_only15',
+                        '/kaggle/input/train-data-20250829/train_data_20250829_bc_top5'
                     ]:
                         args.append((model_cls, i, use_data_file_num, data_folder))
 
@@ -578,7 +566,9 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        res = f'{self.model_cls.__name__}_{os.path.basename(self.base_data_folder).split("_")[-1]}_{self.use_data_file_num}_seed{self.seed}'
+        data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
+        data_suffix = '_'.join(data_suffix)
+        res = f'{data_suffix}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -589,10 +579,14 @@ class test(test_base):
         return res
 
     def get_model(self):
+        # 提取 top5 的类别数
+        static_num_categories = 1 if 'top' not in self.base_data_folder else int((self.base_data_folder.split('top')[-1]).split('_')[0])
+
         return self.model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
             num_static_features=3,
+            static_num_categories = static_num_categories,
         )
     
     def get_data(self, _type, data_sample_getter_func=None):

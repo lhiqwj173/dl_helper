@@ -33,20 +33,18 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
+                                                            train_loss	train_f1	val_f1	    val_f1_best	  val_loss	label_train	cost
+    train_title							
+   *20250828_data_P100_deeplob_420_final	                0.014125	0.994961	0.681926	0.728979	2.998034	603498.0	6.244h
+   *20250828_data_P100_bc_420_final	                        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.414h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	    0.009046	0.996900	0.668479	0.690048	2.878343	182852.0	3.074h
+    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_200	0.008475	0.997078	0.655824	0.689272	2.948499	178490.0	3.068h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	    0.012255	0.995675	0.676436	0.684623	2.827367	341296.0	3.06h
+    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_300	0.013003	0.995435	0.680547	0.683710	2.775117	332396.0	3.04h
 
-                                                            train_loss	train_f1	val_f1	    cost
-    train_title				
-    20250828_data_P100_bc_420_final	                        0.015150	0.994624	0.695981	6.414h
-    20250828_data_P100_deeplob_420_final	                0.014125	0.994961	0.681926	6.244h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_300	0.013003	0.995435	0.680547	3.04h
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	    0.012255	0.995675	0.676436	3.06h
-
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	    0.009046	0.996900	0.668479	3.074h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_200	0.008475	0.997078	0.655824	3.068h
-
-                        420_300     420_200
-    deeplob标签 val_f1  +0.2%       3.9%
-    bc标签      val_f1  +2.8%       +4.1%
+                                300_200     420_200
+    deeplob标签     val_f1_best  -0.81%      +5.76%
+    bc标签          val_f1_best  -0.79%      +3.04%
 
 """
 class StaticFeatureProcessor(nn.Module):

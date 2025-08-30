@@ -33,19 +33,36 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
-                                                            train_loss	train_f1	val_f1	    cost
-    train_title				
-    20250828_data_P100_bc_420_final	                        0.015150	0.994624	0.695981	6.414h
-    20250828_data_P100_deeplob_420_final	                0.014125	0.994961	0.681926	6.244h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_300	0.013003	0.995435	0.680547	3.04h
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	    0.012255	0.995675	0.676436	3.06h
+    only15 vs 前后半小时: 
+        1. 420天only15验证性能提升明显
+        2. 200天only15验证性能反而下降
+        3. 300天only15验证性能略微上升
 
-    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	    0.009046	0.996900	0.668479	3.074h
-    20250828_data_P100_TimeSeriesStaticModelx8_deeplob_200	0.008475	0.997078	0.655824	3.068h
+                                                        train_loss	train_f1	val_f1	val_f1_best	    val_loss	label_train	cost
+    train_title							
+   *20250829_data_bc_P100_bc_only15_420	                0.023513	0.991422	0.690460	0.731607	2.803140	887654.0	6.52h
+    20250828_data_P100_bc_420	                        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.41h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	0.009046	0.996900	0.668479	0.690048	2.878343	182852.0	3.07h
+   *20250829_data_bc_P100_bc_only15_300	                0.014064	0.995006	0.673535	0.689153	2.950793	485974.0	4.8h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	0.012255	0.995675	0.676436	0.684623	2.827367	341296.0	3.06h
+   *20250829_data_bc_P100_bc_only15_200	                0.010456	0.996377	0.662815	0.679944	2.908177	256690.0	3.94h
 
-                        420_300     420_200
-    deeplob标签 val_f1  +0.2%       3.9%
-    bc标签      val_f1  +2.8%       +4.1%
+    -----------------------------------------------------------------------------
+   
+    top5标的 vs 单标的:
+        1. 200/300天top5验证性能提升明显
+        2. 420天top5验证性能略微上升
+
+                                                        train_loss	train_f1	val_f1	val_f1_best	    val_loss	label_train	cost
+    train_title							
+   *20250829_data_bc_P100_bc_top5_300	                0.044520	0.983322	0.703182	0.768434	2.310449	1021926.0	7.17h
+   *20250829_data_bc_P100_bc_top5_200	                0.013743	0.995122	0.709904	0.733480	2.395001	524014.0	5.27h
+   *20250829_data_bc_P100_bc_top5_420	                0.165308	0.931016	0.652201	0.717970	1.557495	1960698.0	10.7h
+    20250828_data_P100_bc_420	                        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.41h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_200	0.009046	0.996900	0.668479	0.690048	2.878343	182852.0	3.07h
+    20250828_data_P100_TimeSeriesStaticModelx8_bc_300	0.012255	0.995675	0.676436	0.684623	2.827367	341296.0	3.06h
+
+
 
 """
 class StaticFeatureProcessor(nn.Module):
