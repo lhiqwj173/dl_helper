@@ -485,7 +485,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250831_label_smoothing0_1'
+    title_base = '20250831'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -496,7 +496,7 @@ class test(test_base):
         self.params_kwargs['epochs'] = 120
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
-        self.params_kwargs['label_smoothing'] = 0.1
+        self.params_kwargs['label_smoothing'] = 0
 
         args = []
         for i in range(5):
@@ -504,12 +504,13 @@ class test(test_base):
                 for use_data_file_num in [420]:
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
-
                     ]:
-                        args.append((model_cls, i, use_data_file_num, data_folder))
+                        for label_smoothing in [0.1, 0.2, 0.3]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, label_smoothing))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.label_smoothing = args[self.idx]
         self.params_kwargs['seed'] = self.seed
+        self.params_kwargs['label_smoothing'] = self.label_smoothing
 
         # 实例化 参数对象
         self.para = Params(
@@ -571,9 +572,9 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
-        data_suffix = '_'.join(data_suffix)
-        res = f'{data_suffix}_{self.use_data_file_num}_seed{self.seed}'
+        # data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
+        # data_suffix = '_'.join(data_suffix)
+        res = f'seed{self.seed}_ls{self.label_smoothing}'
 
         if input_indepent:
             res += '_input_indepent'
