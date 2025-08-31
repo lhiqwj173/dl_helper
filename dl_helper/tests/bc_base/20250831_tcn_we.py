@@ -30,7 +30,7 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 目标: 
     专注于 val_f1_best
-    label_smoothing = 0.1/0.2/0.3
+    weight_decay = 0.01/0.001/0.0001
     
 结论: 
 
@@ -41,7 +41,6 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
    *20250831_P100_ls0.3	                0.435458	0.986499	0.698796	0.734446	0.745556	0.761018	728942.0	3.27h
     20250830_data_P100_bc_only30min_420	0.018217	0.993403	0.703874	0.731989	2.729845	0.765115	728942.0	5.65h
 
-    label_smoothing = 0.2
 """
 class StaticFeatureProcessor(nn.Module):
     """
@@ -489,7 +488,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250831'
+    title_base = '20250831_2'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -509,12 +508,12 @@ class test(test_base):
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for label_smoothing in [0.1, 0.2, 0.3]:
-                            args.append((model_cls, i, use_data_file_num, data_folder, label_smoothing))
+                        for weight_decay in [0.01, 0.001, 0.0001]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, weight_decay))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.label_smoothing = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.weight_decay = args[self.idx]
         self.params_kwargs['seed'] = self.seed
-        self.params_kwargs['label_smoothing'] = self.label_smoothing
+        self.params_kwargs['weight_decay'] = self.weight_decay
 
         # 实例化 参数对象
         self.para = Params(
@@ -578,7 +577,7 @@ class test(test_base):
         # res = f'{self.use_data_file_num}_seed{self.seed}'
         # data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
         # data_suffix = '_'.join(data_suffix)
-        res = f'seed{self.seed}_ls{self.label_smoothing}'
+        res = f'seed{self.seed}_wd{self.weight_decay}'
 
         if input_indepent:
             res += '_input_indepent'
