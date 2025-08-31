@@ -29,17 +29,9 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 目标: 
     专注于 train_loss
-    观察bc标签 only30/nofilter 420days数据集 训练效果
+    观察bc标签 top5 nofilter 420days数据集 训练效果
 
 结论: 
-    不进行过滤验证集性能最优
-
-                                        train_loss	train_f1	val_f1	    val_f1_best	val_loss	label_train	cost
-    train_title							
-   *20250830_data_P100_bc_nofilter_420	0.035415	0.987880	0.690233	0.741403	2.766560	1049154.0	7.02h
-   *20250830_data_P100_bc_only30min_420	0.018217	0.993403	0.703874	0.731989	2.729845	728942.0	5.65h
-    20250829_data_bc_P100_bc_only15_420	0.023513	0.991422	0.690460	0.731607	2.803140	887654.0	6.52h
-    20250828_data_P100_bc_420	        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.41h
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -506,9 +498,7 @@ class test(test_base):
             for model_cls in [TimeSeriesStaticModelx8]:
                 for use_data_file_num in [420]:
                     for data_folder in [
-                        '/kaggle/input/20250830-data/single_bc_nofilter',
-                        '/kaggle/input/20250830-data/single_bc_only30min'
-
+                        '/kaggle/input/bc-nofilter-top5'
                     ]:
                         args.append((model_cls, i, use_data_file_num, data_folder))
 
@@ -575,8 +565,8 @@ class test(test_base):
         """获取后缀"""
         # res = f'{self.model_cls.__name__}_seed{self.seed}'
         # res = f'{self.use_data_file_num}_seed{self.seed}'
-        data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
-        data_suffix = '_'.join(data_suffix)
+        data_suffix = os.path.basename(self.base_data_folder).split("/")[-1]
+        data_suffix = data_suffix.replace('-', '_')
         res = f'{data_suffix}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
@@ -589,7 +579,8 @@ class test(test_base):
 
     def get_model(self):
         # 提取 top5 的类别数
-        static_num_categories = 1 if 'top' not in self.base_data_folder else int((self.base_data_folder.split('top')[-1]).split('_')[0])
+        _base_data_folder = self.base_data_folder.replace('-', '_')
+        static_num_categories = 1 if 'top' not in _base_data_folder else int((_base_data_folder.split('top')[-1]).split('_')[0])
 
         return self.model_cls(
             num_ts_features=len(ext_features) + len(base_features),
