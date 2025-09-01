@@ -697,48 +697,21 @@ class Tracker():
             # train 结束，指向验证阶段
             self.step_in_epoch = 1
 
-            # 学习率调整记录
-            lr_change = torch.tensor(0, device=self.accelerator.device)
+            # 记录梯度范数 (仍然在train分支记录，因为train阶段才有梯度)
             if self.accelerator.is_main_process:
-                # self.printer.print('scheduler.step')
-
-                # 记录学习率
-                self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
-                # self.printer.print('append lr')
+                # 记录学习率 (仍需记录初始值)
+                if 'lr' not in self.data:
+                    self.data['lr'].append(self.scheduler.optimizer.param_groups[0]["lr"])
 
                 # 记录梯度范数
                 if len(self.temp['_grad_norm']) > 0:
                     self.data['grad_norm'].append(np.mean(self.temp['_grad_norm']))
 
-                # 更新 学习率
-                self.scheduler.step(self.data['train_loss'])
-
-                # self.printer.print('step done')
-                if self.data['lr'][-1] != self.scheduler.optimizer.param_groups[0]["lr"]:
-                    lr_change += 1
-            # self.printer.print('step done')
-
-            # 同步学习率
-            self.accelerator.wait_for_everyone()
-            lr_change = broadcast(lr_change)
-            # self.printer.print('lr_change')
-
-            if tpu_available():
-                xm.mark_step()
-
-            if lr_change.item() == 1:
-                # self.printer.print('broadcast lr')
-                cur_lr = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
-
-                self.accelerator.wait_for_everyone()
-                cur_lr = broadcast(cur_lr)
-
-                # 在其他设备上应用学习率
-                # self.printer.print(f'apply not main lr -> {cur_lr}')
-                if not self.accelerator.is_main_process:
-                    self.scheduler.use_lr(cur_lr)
-
         if 'val' == self.track_update:
+            # 学习率调整使用val_loss
+            if 'val_loss' in self.data:
+                self._adjust_learning_rate(self.data['val_loss'])
+
             # val 结束，重置为训练阶段
             # self.printer.print('update val round, step_in_epoch -> 0')
             self.step_in_epoch = 0
@@ -776,6 +749,40 @@ class Tracker():
                 self.extra_test_finsh = True
 
         self.reset_temp()
+
+    def _adjust_learning_rate(self, loss):
+        """独立的学习率调整方法"""
+        # 学习率调整记录
+        lr_change = torch.tensor(0, device=self.accelerator.device)
+        if self.accelerator.is_main_process:
+            # 记录当前学习率
+            current_lr = self.scheduler.optimizer.param_groups[0]["lr"]
+            self.data['lr'].append(current_lr)
+
+            # 更新 学习率
+            self.scheduler.step(loss)
+
+            new_lr = self.scheduler.optimizer.param_groups[0]["lr"]
+            if current_lr != new_lr:
+                lr_change += 1
+
+        # 同步学习率变化标志
+        self.accelerator.wait_for_everyone()
+        lr_change = broadcast(lr_change)
+
+        if lr_change.item() == 1:
+            # 广播新学习率
+            if self.accelerator.is_main_process:
+                new_lr_tensor = torch.tensor(self.scheduler.optimizer.param_groups[0]["lr"], device=self.accelerator.device)
+            else:
+                new_lr_tensor = torch.tensor(0.0, device=self.accelerator.device)  # 占位符
+
+            self.accelerator.wait_for_everyone()
+            new_lr_tensor = broadcast(new_lr_tensor)
+
+            # 在其他设备上应用学习率
+            if not self.accelerator.is_main_process:
+                self.scheduler.use_lr(new_lr_tensor)
 
     def reset_temp(self):
         # 重置计算变量
@@ -918,6 +925,10 @@ class Tracker():
 
             # self.temp['_codes'] += codes
             self.temp['_num'] += _y_true.shape[0]
+
+        if self.track_update == 'train':
+            # 调用scheduler的batch_step进行每批步骤更新
+            self.scheduler.batch_step()
 
         # self.printer.print(f"track done", main=False)
 

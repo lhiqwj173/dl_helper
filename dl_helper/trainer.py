@@ -672,8 +672,12 @@ def run_fn_gpu(lock, num_processes, test_class, args, kwargs, train_param={}, mo
         # optimizer = optim.SGD(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate, weight_decay=params.weight_decay)
         # optimizer = torch.optim.AdamW(model.parameters(), lr=params.learning_rate if not params.abs_learning_rate else params.abs_learning_rate,weight_decay=params.weight_decay)
         optimizer = test.get_optimizer(model)
-        scheduler = test.get_lr_scheduler(optimizer)
         criterion = test.get_criterion()
+        scheduler = test.get_lr_scheduler(optimizer)
+        # 为scheduler添加batch_step方法（如果不存在）
+        if scheduler:
+            if not hasattr(scheduler, 'batch_step'):
+                scheduler.batch_step = lambda *args: None
 
         # # TEST
         # tracker = Tracker_None()

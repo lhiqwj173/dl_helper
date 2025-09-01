@@ -16,7 +16,7 @@ from accelerate.utils import set_seed
 from dl_helper.rl.custom_imitation_module.dataset import LobTrajectoryDataset
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params, match_num_processes
-from dl_helper.scheduler import OneCycle_fast
+from dl_helper.scheduler import OneCycle_fast, WarmupReduceLROnPlateau
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.base import transform
@@ -27,6 +27,8 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 标签: bc
 模型: TimeSeriesStaticModelx8
 数据集: only30min_420days  
+学习率调度器: WarmupReduceLROnPlateau warinup_epochs = 5
+label_smoothing = 0.2
 
 目标: 
     专注于 val_f1_best
@@ -36,10 +38,18 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
                                         train_loss	train_f1	val_f1	val_f1_best	val_loss	test_best_f1	label_train	cost
     train_title								
-   *20250831_P100_ls0.2	                0.341267	0.987716	0.693502	0.749539	0.795846	0.781919	728942.0	3.31h
-   *20250831_P100_ls0.1	                0.218254	0.989179	0.692643	0.743756	0.904686	0.778777	728942.0	3.29h
-   *20250831_P100_ls0.3	                0.435458	0.986499	0.698796	0.734446	0.745556	0.761018	728942.0	3.27h
+   *20250831_2_P100_wd0.01	            0.140439	0.943630	0.699601	0.755078	1.147292	0.789186	728942.0	3.31h
+   *20250831_2_P100_wd0.0001	        0.026638	0.990275	0.689474	0.730915	2.591012	0.767236	728942.0	3.37h
+   *20250831_2_P100_wd0.001	            0.035946	0.986799	0.713429	0.726419	2.085281	0.763554	728942.0	3.25h
+
+                                        train_loss	train_f1	val_f1	val_f1_best	val_loss	test_best_f1	label_train	cost
+    train_title								
+    20250831_P100_ls0.2	                0.341267	0.987716	0.693502	0.749539	0.795846	0.781919	728942.0	3.31h
+    20250831_P100_ls0.1	                0.218254	0.989179	0.692643	0.743756	0.904686	0.778777	728942.0	3.29h
+    20250831_P100_ls0.3	                0.435458	0.986499	0.698796	0.734446	0.745556	0.761018	728942.0	3.27h
     20250830_data_P100_bc_only30min_420	0.018217	0.993403	0.703874	0.731989	2.729845	0.765115	728942.0	5.65h
+
+    weight_decay = 0.01 最优
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -499,7 +509,7 @@ class test(test_base):
         self.params_kwargs['epochs'] = 120
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
-        self.params_kwargs['label_smoothing'] = 0
+        self.params_kwargs['label_smoothing'] = 0.2
 
         args = []
         for i in range(5):
@@ -598,7 +608,7 @@ class test(test_base):
             static_num_categories = static_num_categories,
         )
     
-    def get_data(self, _type, data_sample_getter_func=None):
+    def _init_dataset(self):
         if self.test_dataset is None:
             train_split_rng = np.random.default_rng(seed=self.seed)
             self.train_dataset = LobTrajectoryDataset(
@@ -623,6 +633,8 @@ class test(test_base):
                 data_type='test', 
                 use_data_file_num=self.use_data_file_num)
 
+    def get_data(self, _type, data_sample_getter_func=None):
+        self._init_dataset()
         if _type == 'train':
             return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
@@ -630,6 +642,13 @@ class test(test_base):
         elif _type == 'test':
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
+    def get_lr_scheduler(self, optimizer, *args, **kwargs):
+        self._init_dataset()
+        train_data_length = len(self.train_dataset)
+        train_batch_length = math.ceil(train_data_length / self.para.batch_size)
+        warinup_epochs = 5
+        return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
+
 if '__main__' == __name__:
     # 全局训练参数
     input_indepent = False# 训练无关输入（全0）的模型
