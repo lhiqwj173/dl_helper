@@ -470,6 +470,25 @@ class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
 
         super().__init__(*args, **kwargs)
 
+class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
+    """参数量约为原始模型十六倍的版本"""
+    def __init__(self, *args, **kwargs):
+        factor = 4  # sqrt(16) = 4
+        # 获取原始参数
+        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
+        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
+        static_output_dim = kwargs.pop('static_output_dim', 32)
+        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
+
+        # 按比例放大
+        kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
+        kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
+        kwargs['static_output_dim'] = int(static_output_dim * factor)
+        kwargs['static_hidden_dims'] = tuple(int(d * factor) for d in static_hidden_dims)
+        kwargs['fusion_hidden_dims'] = None
+
+        super().__init__(*args, **kwargs)
+
 # 简单的数据结构
 his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
@@ -502,7 +521,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx4, TimeSeriesStaticModelx8]:
+            for model_cls in [TimeSeriesStaticModelx4, TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
                 for use_data_file_num in [420]:
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
@@ -651,7 +670,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
+    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx4]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
