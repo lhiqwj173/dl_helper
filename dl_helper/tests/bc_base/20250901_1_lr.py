@@ -493,7 +493,7 @@ class test(test_base):
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for lr_change in [0.5, 0.25]:
+                        for lr_change in [0.1, 0.01]:
                             args.append((model_cls, i, use_data_file_num, data_folder, lr_change))
 
         self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.lr_change = args[self.idx]
