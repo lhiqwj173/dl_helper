@@ -26,19 +26,20 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
 标签: bc
 
+不使用正则化手段
+
 目标: 
     专注于 val_f1_best / loss曲线
-    使用模型 x4 / x8
+    使用模型 x4 / x8 / x16
 
 结论: 
-    不进行过滤验证集性能最优
-
-                                        train_loss	train_f1	val_f1	    val_f1_best	val_loss	label_train	cost
+                                                    train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	cost
     train_title							
-   *20250830_data_P100_bc_nofilter_420	0.035415	0.987880	0.690233	0.741403	2.766560	1049154.0	7.02h
-   *20250830_data_P100_bc_only30min_420	0.018217	0.993403	0.703874	0.731989	2.729845	728942.0	5.65h
-    20250829_data_bc_P100_bc_only15_420	0.023513	0.991422	0.690460	0.731607	2.803140	887654.0	6.52h
-    20250828_data_P100_bc_420	        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.41h
+    20250901_2_P100_TimeSeriesStaticModelx4_420	    0.054029	0.979467	0.674550	0.745677	2.590676	728942.0	2.98h
+    20250901_2_P100_TimeSeriesStaticModelx8_420	    0.027040	0.990199	0.703722	0.741627	2.454681	728942.0	2.99h
+    20250901_2_P100_TimeSeriesStaticModelx16_420	0.022583	0.991775	0.715832	0.718196	2.204350	728942.0	2.97h
+
+    val_loss曲线没有优化
 
 """
 class StaticFeatureProcessor(nn.Module):
