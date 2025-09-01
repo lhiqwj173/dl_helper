@@ -16,7 +16,7 @@ from accelerate.utils import set_seed
 from dl_helper.rl.custom_imitation_module.dataset import LobTrajectoryDataset
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params, match_num_processes
-from dl_helper.scheduler import OneCycle_fast, WarmupReduceLROnPlateau
+from dl_helper.scheduler import OneCycle_fast, WarmupReduceLROnPlateau, ConstantLRScheduler
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.base import transform
@@ -27,15 +27,15 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 标签: bc
 模型: TimeSeriesStaticModelx8
 数据集: only30min_420days  
-学习率调度器: WarmupReduceLROnPlateau warinup_epochs = 5
+学习率调度器: WarmupReduceLROnPlateau
 label_smoothing = 0.2
+weight_decay = 0.01
 
 目标: 
     专注于 val_f1_best
-    weight_decay = 0.01/0.001/0.0001
+    warinup_epochs=10 / 不使用 warmup
     
 结论: 
-
                                         train_loss	train_f1	val_f1	val_f1_best	    val_loss	label_train	cost
     train_title							
     20250831_2_P100_wd0.0001	        0.338218	0.992322	0.713452	0.745058	0.790910	728942.0	1.22h
@@ -504,7 +504,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250831_2'
+    title_base = '20250901'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -516,6 +516,7 @@ class test(test_base):
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0.2
+        self.params_kwargs['weight_decay'] = 0.01
 
         args = []
         for i in range(5):
@@ -524,12 +525,11 @@ class test(test_base):
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for weight_decay in [0.01, 0.001, 0.0001]:
-                            args.append((model_cls, i, use_data_file_num, data_folder, weight_decay))
+                        for warinup_epoch in [0, 10]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, warinup_epoch))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.weight_decay = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.warinup_epoch = args[self.idx]
         self.params_kwargs['seed'] = self.seed
-        self.params_kwargs['weight_decay'] = self.weight_decay
 
         # 实例化 参数对象
         self.para = Params(
@@ -593,7 +593,7 @@ class test(test_base):
         # res = f'{self.use_data_file_num}_seed{self.seed}'
         # data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
         # data_suffix = '_'.join(data_suffix)
-        res = f'seed{self.seed}_wd{self.weight_decay}'
+        res = f'seed{self.seed}_wu{self.warinup_epoch}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -652,8 +652,11 @@ class test(test_base):
         self._init_dataset()
         train_data_length = len(self.train_dataset)
         train_batch_length = math.ceil(train_data_length / self.para.batch_size)
-        warinup_epochs = 5
-        return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
+        warinup_epochs = self.warinup_epoch
+        if warinup_epochs:
+            return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
+        else:
+            return ConstantLRScheduler(optimizer, *args, **kwargs)
 
 if '__main__' == __name__:
     # 全局训练参数
