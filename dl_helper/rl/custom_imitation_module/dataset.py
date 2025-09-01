@@ -118,6 +118,7 @@ class LobTrajectoryDataset(Dataset):
         use_data_file_num:int=None, # 使用数据文件数量，默认使用所有文件
         use_data_begin:int=None,
         use_data_end:int=None,# 不包含
+        nomove_filter_threshold: int = 10,
     ):
         """
         data_config:
@@ -162,6 +163,9 @@ class LobTrajectoryDataset(Dataset):
         # 使用数据文件的切片
         self.use_data_begin = use_data_begin
         self.use_data_end = use_data_end
+        self.nomove_filter_threshold = nomove_filter_threshold
+
+        # 读取nomove块长度文件
 
         # 读取nomove块长度文件，如果存在
         block_len_means_folder = os.path.join(os.path.dirname(base_data_folder), 'block_len_means')
@@ -467,22 +471,23 @@ class LobTrajectoryDataset(Dataset):
             # 新增: 从文件名(YYYYMMDD.pkl)获取日期字符串
             date_str = os.path.basename(file_path).split('.')[0]
             _data_dict = pickle.load(open(file_path, 'rb'))
-            
+    
             for key, value in _data_dict.items():
                 # 此处的key是标的id
-                
+    
                 # --- 新增代码: 仅在训练模式下执行过滤 ---
                 if self.data_type == 'train':
-                    try:
-                        # 检查标的(key)是否存在于 nomove_df 的列中
-                        if key in nomove_df.columns:
-                            nomove_len_mean = nomove_df.loc[date_str, key]
-                            # 如果 nomove_len_mean > 10 并且不是 NaN, 则跳过该日期-标的数据
-                            if pd.notna(nomove_len_mean) and nomove_len_mean > 10:
-                                continue # 跳到当前文件的下一个标的
-                    except KeyError:
-                        # 如果日期不在 nomove_df 索引中，说明没有该日期的过滤信息，直接通过
-                        pass
+                    if self.nomove_filter_threshold > 0:
+                        try:
+                            # 检查标的(key)是否存在于 nomove_df 的列中
+                            if key in nomove_df.columns:
+                                nomove_len_mean = nomove_df.loc[date_str, key]
+                                # 如果 nomove_len_mean 大于阈值并且不是 NaN, 则跳过该日期-标的数据
+                                if pd.notna(nomove_len_mean) and nomove_len_mean > self.nomove_filter_threshold:
+                                    continue # 跳到当前文件的下一个标的
+                        except KeyError:
+                            # 如果日期不在 nomove_df 索引中，说明没有该日期的过滤信息，直接通过
+                            pass
                 # --- 新增代码结束 ---
                 
                 if key not in key_lengths:
@@ -588,16 +593,17 @@ class LobTrajectoryDataset(Dataset):
                 # 只有在第一遍遍历后确定要加载的标的（即存在于data_dict中的），才进行处理
                 if key not in data_dict:
                     continue
-
+    
                 # --- 新增代码: 再次执行同样的过滤检查，确保逻辑一致 ---
                 if self.data_type == 'train':
-                    try:
-                        if key in nomove_df.columns:
-                            nomove_len_mean = nomove_df.loc[date_str, key]
-                            if pd.notna(nomove_len_mean) and nomove_len_mean > 10:
-                                continue
-                    except KeyError:
-                        pass
+                    if self.nomove_filter_threshold > 0:
+                        try:
+                            if key in nomove_df.columns:
+                                nomove_len_mean = nomove_df.loc[date_str, key]
+                                if pd.notna(nomove_len_mean) and nomove_len_mean > self.nomove_filter_threshold:
+                                    continue
+                        except KeyError:
+                            pass
                 # --- 新增代码结束 ---
                 
                 # 当前文件原始数据长度

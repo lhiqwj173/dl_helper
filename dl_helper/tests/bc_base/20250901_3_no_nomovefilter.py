@@ -25,20 +25,12 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 """
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
 标签: bc
+模型: TimeSeriesStaticModelx8
 
 目标: 
-    专注于 val_f1_best / loss曲线
-    使用模型 x4 / x8
+    专注于 val_loss曲线
 
 结论: 
-    不进行过滤验证集性能最优
-
-                                        train_loss	train_f1	val_f1	    val_f1_best	val_loss	label_train	cost
-    train_title							
-   *20250830_data_P100_bc_nofilter_420	0.035415	0.987880	0.690233	0.741403	2.766560	1049154.0	7.02h
-   *20250830_data_P100_bc_only30min_420	0.018217	0.993403	0.703874	0.731989	2.729845	728942.0	5.65h
-    20250829_data_bc_P100_bc_only15_420	0.023513	0.991422	0.690460	0.731607	2.803140	887654.0	6.52h
-    20250828_data_P100_bc_420	        0.015150	0.994624	0.695981	0.711016	2.884220	618550.0	6.41h
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -506,7 +498,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250901_2'
+    title_base = '20250901_3'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -521,7 +513,7 @@ class test(test_base):
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx4, TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
+            for model_cls in [TimeSeriesStaticModelx8]:
                 for use_data_file_num in [420]:
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
@@ -589,7 +581,7 @@ class test(test_base):
 
     def get_title_suffix(self):
         """获取后缀"""
-        res = f'{self.model_cls.__name__}_{self.use_data_file_num}_seed{self.seed}'
+        res = f'no_nomovefilter_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -621,6 +613,7 @@ class test(test_base):
                 base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
                 split_rng=train_split_rng,
                 use_data_file_num=self.use_data_file_num,
+                nomove_filter_threshold=0,# 不使用过滤
             )
             self.val_dataset = LobTrajectoryDataset(
                 data_folder=self.data_dict_folder, 
