@@ -27,13 +27,13 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 标签: bc
 模型: TimeSeriesStaticModelx8
 数据集: only30min_420days  
-学习率调度器: WarmupReduceLROnPlateau
+学习率调度器: WarmupReduceLROnPlateau warinup_epochs=10
 label_smoothing = 0.2
 weight_decay = 0.01
 
 目标: 
     专注于 val_f1_best
-    warinup_epochs=10 / 不使用 warmup
+    调整学习率 *0.5 / *0.25
     
 结论: 
 
@@ -43,7 +43,6 @@ weight_decay = 0.01
     20250831_2_P100_wd0.01	            0.338387	0.992218	0.715234	0.743055	0.786556	728942.0	1.37h
    *20250901_P100_wu0	                0.402354	0.934481	0.696984	0.742979	0.724567	728942.0	1.36h
 
-    warinup_epochs=10 最优
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -456,25 +455,6 @@ class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
 
         super().__init__(*args, **kwargs)
 
-class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
-    """参数量约为原始模型十六倍的版本"""
-    def __init__(self, *args, **kwargs):
-        factor = 4  # sqrt(16) = 4
-        # 获取原始参数
-        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
-        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
-        static_output_dim = kwargs.pop('static_output_dim', 32)
-        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
-
-        # 按比例放大
-        kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
-        kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
-        kwargs['static_output_dim'] = int(static_output_dim * factor)
-        kwargs['static_hidden_dims'] = tuple(int(d * factor) for d in static_hidden_dims)
-        kwargs['fusion_hidden_dims'] = None
-
-        super().__init__(*args, **kwargs)
-
 # 简单的数据结构
 his_len = 30
 base_features = [item for i in range(1) for item in [f'BASE卖{i+1}量', f'BASE买{i+1}量']]
@@ -492,7 +472,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250901'
+    title_base = '20250901_2'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -500,7 +480,7 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 120
+        self.params_kwargs['epochs'] = 50
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0.2
@@ -513,11 +493,12 @@ class test(test_base):
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for warinup_epoch in [0, 10]:
-                            args.append((model_cls, i, use_data_file_num, data_folder, warinup_epoch))
+                        for lr_change in [0.5, 0.25]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, lr_change))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.warinup_epoch = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.lr_change = args[self.idx]
         self.params_kwargs['seed'] = self.seed
+        self.params_kwargs['learning_rate'] *= self.lr_change
 
         # 实例化 参数对象
         self.para = Params(
@@ -581,7 +562,7 @@ class test(test_base):
         # res = f'{self.use_data_file_num}_seed{self.seed}'
         # data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
         # data_suffix = '_'.join(data_suffix)
-        res = f'seed{self.seed}_wu{self.warinup_epoch}'
+        res = f'seed{self.seed}_lrchange{self.lr_change}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -640,11 +621,8 @@ class test(test_base):
         self._init_dataset()
         train_data_length = len(self.train_dataset)
         train_batch_length = math.ceil(train_data_length / self.para.batch_size)
-        warinup_epochs = self.warinup_epoch
-        if warinup_epochs:
-            return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
-        else:
-            return ConstantLRScheduler(optimizer, *args, **kwargs)
+        warinup_epochs = 10
+        return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
 
 if '__main__' == __name__:
     # 全局训练参数
@@ -674,7 +652,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
+    for model_cls in [TimeSeriesStaticModelx8]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
@@ -690,7 +668,7 @@ if '__main__' == __name__:
         from tqdm import tqdms
         init_losses = []
         for i in tqdm(range(10)):
-            model = TimeSeriesStaticModelx16(
+            model = TimeSeriesStaticModelx8(
                 num_ts_features=len(ext_features) + len(base_features),
                 time_steps=his_len,
             )
