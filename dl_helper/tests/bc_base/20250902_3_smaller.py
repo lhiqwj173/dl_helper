@@ -33,11 +33,12 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
     使用模型 TimeSeriesStaticModel
 
 结论: 
-                                                    train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	cost
-    train_title							
-    20250901_2_P100_TimeSeriesStaticModelx4_420	    0.054029	0.979467	0.674550	0.745677	2.590676	728942.0	2.98h
-    20250901_2_P100_TimeSeriesStaticModelx8_420	    0.027040	0.990199	0.703722	0.741627	2.454681	728942.0	2.99h
-    20250901_2_P100_TimeSeriesStaticModelx16_420	0.022583	0.991775	0.715832	0.718196	2.204350	728942.0	2.97h
+                                                    train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	label_val	cost
+    train_title								
+    20250901_2_P100_TimeSeriesStaticModelx4_420	    0.054029	0.979467	0.674550	0.745677	2.590676	728942.0	62400.0	2.98h
+   *20250902_3_P100_TimeSeriesStaticModel_420	    0.341244	0.844738	0.654631	0.743270	0.962144	728942.0	62400.0	2.56h
+    20250901_2_P100_TimeSeriesStaticModelx8_420	    0.027040	0.990199	0.703722	0.741627	2.454681	728942.0	62400.0	2.99h
+    20250901_2_P100_TimeSeriesStaticModelx16_420	0.022583	0.991775	0.715832	0.718196	2.204350	728942.0	62400.0	2.97h
 
     val_loss曲线没有优化
 

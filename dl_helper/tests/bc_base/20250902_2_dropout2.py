@@ -38,12 +38,19 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
         (0.3 / 0.6 / 0.3)
 
 结论: 
-                                train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	label_val	cost
-    train_title								
-    20250902_1_P100_do0.2_420	0.436398	0.794684	0.702416	0.737771	0.628193	728942.0	62400.0	2.69h
-    20250902_1_P100_do0.5_420	0.603598	0.676694	0.696148	0.732583	0.575589	728942.0	62400.0	2.68h
 
-    dropout 0.5 比 0.2 val_loss 曲线更加理想
+                                        train_loss	train_f1	val_f1	val_f1_best	val_loss	test_best_f1	label_train	cost
+    train_title								
+   *20250902_2_P100_x4_0.1_0.2_0.1_420	0.484696	0.764006	0.716561	0.747292	0.577086	0.784886	728942.0	5.57h
+   *20250902_2_P100_x4_0.3_0.6_0.3_420	0.623330	0.654874	0.720268	0.745048	0.551011	0.785506	728942.0	5.78h
+   *20250902_2_P100_x4_0.2_0.4_0.2_420	0.575144	0.698467	0.701546	0.729160	0.575325	0.765803	728942.0	5.61h
+
+                                        train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	label_val	cost
+    train_title								
+    20250902_1_P100_do0.2_420	        0.436398	0.794684	0.702416	0.737771	0.628193	728942.0	62400.0	2.69h
+    20250902_1_P100_do0.5_420	        0.603598	0.676694	0.696148	0.732583	0.575589	728942.0	62400.0	2.68h
+
+    dropout 0.3_0.6_0.3 val_loss 曲线最为理想，但需要更长时间训练
     
 """
 
@@ -478,7 +485,7 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 200
+        self.params_kwargs['epochs'] = 600
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0

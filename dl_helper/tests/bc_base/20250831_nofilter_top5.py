@@ -33,6 +33,12 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
+                                            train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	label_val	cost
+    train_title								
+    20250830_data_P100_bc_nofilter_top5_420	0.327777	0.853071	0.645399	0.70745	0.908758	3448180.0	424414.0	9.04h
+
+    使用top5没有明显提升
+
 """
 class StaticFeatureProcessor(nn.Module):
     """
