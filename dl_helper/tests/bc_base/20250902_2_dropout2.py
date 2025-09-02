@@ -652,39 +652,39 @@ if '__main__' == __name__:
         model(x)
         print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
 
-    # # ################################
-    # # # 验证初始化损失 == log(C)
-    # # ################################
-    # if test_init_loss:
-    #     from tqdm import tqdms
-    #     init_losses = []
-    #     for i in tqdm(range(10)):
-    #         model = TimeSeriesStaticModelx16(
-    #             num_ts_features=len(ext_features) + len(base_features),
-    #             time_steps=his_len,
-    #         )
-    #         num_classes = 2
-    #         criterion = nn.CrossEntropyLoss()
-    #         batchsize = 128
-    #         x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
-    #         x[:, -4] = 0
-    #         y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
-    #         # 前向传播
-    #         outputs = model(x)
-    #         loss = criterion(outputs, y)
-    #         init_losses.append(loss.item())
-    #     print(init_losses)
-    #     print(f"Initial loss: { np.mean(init_losses)}")
-    #     print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
+    # ################################
+    # # 验证初始化损失 == log(C)
+    # ################################
+    if test_init_loss:
+        from tqdm import tqdms
+        init_losses = []
+        for i in tqdm(range(10)):
+            model = TimeSeriesStaticModelx16(
+                num_ts_features=len(ext_features) + len(base_features),
+                time_steps=his_len,
+            )
+            num_classes = 2
+            criterion = nn.CrossEntropyLoss()
+            batchsize = 128
+            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+            x[:, -4] = 0
+            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+            # 前向传播
+            outputs = model(x)
+            loss = criterion(outputs, y)
+            init_losses.append(loss.item())
+        print(init_losses)
+        print(f"Initial loss: { np.mean(init_losses)}")
+        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    # elif need_check_dependencies:
-    #     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-    #     x[:, -4] = 0
-    #     run_dependency_check_without_bn(model, x, 3)
+    elif need_check_dependencies:
+        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+        x[:, -4] = 0
+        run_dependency_check_without_bn(model, x, 3)
 
-    # else:
-    #     # 开始训练
-    #     run(
-    #         test, 
-    #         mode=mode,
-    #     )
+    else:
+        # 开始训练
+        run(
+            test, 
+            mode=mode,
+        )
