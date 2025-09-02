@@ -32,11 +32,16 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
     使用nomove过滤 7 / 4 进行测试
 
 结论: 
-
-                                        train_loss	train_f1	val_f1	val_f1_best val_loss	test_best_f1	label_train	cost
+                                                    train_loss	train_f1	val_f1	val_f1_best	  val_loss	label_train	 label_val	cost
     train_title								
-    20250901_3_P100_no_nomovefilter_420	0.023781	0.991451	0.691033	0.793642	2.743266	0.829812	780890.0	4.64h
+    20250901_3_P100_no_nomovefilter_420	            0.023781	0.991451	0.691033	0.793642	2.743266	780890.0	62400.0	4.64h
+    20250901_2_P100_nomovefilter10_420	            0.027040	0.990199	0.703722	0.741627	2.454681	728942.0	62400.0	2.99h
+    20250902_0_P100_nomovefilter7_420	            0.020522	0.992573	0.682476	0.711335	2.772096	662130.0	62400.0	3.87h
+    20250902_0_P100_nomovefilter4_420	            0.014706	0.994851	0.707414	0.681870	2.522820	369754.0	62400.0	3.49h
 
+    nomove过滤越强, 验证集的性能越低
+    val_loss 曲线没有改善
+    
 """
 class StaticFeatureProcessor(nn.Module):
     """

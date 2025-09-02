@@ -25,10 +25,17 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 """
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
 标签: bc
+模型: TimeSeriesStaticModelx4
 
 目标: 
     专注于 val_f1_best / loss曲线
-    测试 dropout 对验性能的影响
+
+    使用更小的模型（x4）
+    使用分离的dropout设计
+        static_dropout_rate / tcn_dropout_rate / fusion_dropout_rate
+        (0.1 / 0.2 / 0.1)
+        (0.2 / 0.4 / 0.2)
+        (0.3 / 0.6 / 0.3)
 
 结论: 
                                 train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	label_val	cost
@@ -39,9 +46,10 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
     dropout 0.5 比 0.2 val_loss 曲线更加理想
     
 """
+
 class StaticFeatureProcessor(nn.Module):
     """
-    静态特征处理模块
+    静态特征处理模块 (已优化 Dropout 设计)
     用于处理包含类别特征和数值特征的静态输入。
     增强功能：当 num_categories 为 1 时，将忽略类别特征，只处理数值特征。
     """
@@ -52,8 +60,7 @@ class StaticFeatureProcessor(nn.Module):
         num_features: int = 2,
         output_dim: int = 32,
         static_hidden: tuple = (64, 32),
-        use_regularization: bool = False,
-        dropout_rate: float = 0.1,
+        dropout_rate: float = 0.1,  # 直接控制此模块的Dropout率
     ):
         super().__init__()
         
@@ -69,12 +76,11 @@ class StaticFeatureProcessor(nn.Module):
         self.embedding_dim = embedding_dim
         self.num_features = num_features
         self.output_dim = output_dim
-        self.use_regularization = use_regularization
-        self.dropout_rate = dropout_rate if use_regularization else 0.0
+        self.dropout_rate = dropout_rate
         
         static_input_dim = 0
         
-        # 类别特征嵌入层 (仅当类别数 > 1 时创建)
+        # 类别特征嵌入层
         if self.num_categories > 1:
             self.id_embedding = nn.Embedding(num_categories, embedding_dim)
             static_input_dim += embedding_dim
@@ -90,7 +96,7 @@ class StaticFeatureProcessor(nn.Module):
         layers = []
         in_dim = static_input_dim
         
-        for i, h_dim in enumerate(static_hidden):
+        for h_dim in static_hidden:
             layers.append(nn.Linear(in_dim, h_dim))
             layers.append(nn.BatchNorm1d(h_dim))
             layers.append(nn.ReLU())
@@ -102,20 +108,9 @@ class StaticFeatureProcessor(nn.Module):
         self.static_net = nn.Sequential(*layers)
         
     def forward(self, static_features: torch.Tensor) -> torch.Tensor:
-        """
-        前向传播
-        
-        Args:
-            static_features: 静态特征张量，形状为 [batch_size, total_features]
-                           其中第一个特征是类别特征(整数)，其余为数值特征
-        
-        Returns:
-            处理后的静态特征，形状为 [batch_size, output_dim]
-        """
         if static_features.size(1) != (1 + self.num_features):
             raise ValueError(f"输入特征维度不匹配，期望 {1 + self.num_features}，实际 {static_features.size(1)}")
             
-        # 当类别数 > 1 时，处理类别特征和数值特征
         if self.num_categories > 1:
             cat_feat = static_features[:, 0].long()
             if torch.any(cat_feat < 0) or torch.any(cat_feat >= self.num_categories):
@@ -129,83 +124,28 @@ class StaticFeatureProcessor(nn.Module):
                 static_input = torch.cat([embedded, num_feat], dim=1)
             else:
                 static_input = embedded
-        
-        # 当类别数 == 1 时，忽略类别特征，只处理数值特征
         else:
             if self.num_features > 0:
-                # 忽略第一个类别特征，只取后面的数值特征
                 num_feat = static_features[:, 1:]
                 static_input = self.num_feature_norm(num_feat)
             else:
-                # 这种情况在__init__中已经被阻止，但为了代码健壮性可以保留
                 raise RuntimeError("当num_categories为1时，必须有数值特征。")
 
-        output = self.static_net(static_input)
-        return output
+        return self.static_net(static_input)
     
-    def get_output_dim(self) -> int:
-        """
-        获取输出维度
-        """
-        return self.output_dim
-    
+    # 其他辅助函数保持不变
+    def get_output_dim(self) -> int: return self.output_dim
     def get_embedding_weights(self) -> torch.Tensor:
-        """
-        获取嵌入层权重，用于可视化或分析
-        """
-        if self.id_embedding is None:
-            raise AttributeError("当 num_categories=1 时，模型没有嵌入层。")
+        if self.id_embedding is None: raise AttributeError("当 num_categories=1 时，模型没有嵌入层。")
         return self.id_embedding.weight.detach()
-    
     def freeze_embedding(self):
-        """
-        冻结嵌入层参数，防止训练时更新
-        """
-        if self.id_embedding is None:
-            # 如果没有嵌入层，则静默返回
-            return
-        for param in self.id_embedding.parameters():
-            param.requires_grad = False
-    
+        if self.id_embedding:
+            for param in self.id_embedding.parameters(): param.requires_grad = False
     def unfreeze_embedding(self):
-        """
-        解冻嵌入层参数，允许训练时更新
-        """
-        if self.id_embedding is None:
-            # 如果没有嵌入层，则静默返回
-            return
-        for param in self.id_embedding.parameters():
-            param.requires_grad = True
-
-class TemporalBlock(nn.Module):
-    """TCN的基本时间块，包含因果卷积、残差连接和正则化"""
-    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2, use_regularization=True):
-        super(TemporalBlock, self).__init__()
-        
-        self.net = nn.Sequential(
-            nn.Conv1d(n_inputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
-            Chomp1d(padding),
-            nn.BatchNorm1d(n_outputs),                                                  # BN层固定存在
-            nn.ReLU(),
-            nn.Dropout(dropout) if use_regularization else nn.Identity(),               # Dropout受use_regularization控制
-            nn.Conv1d(n_outputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
-            Chomp1d(padding),
-            nn.BatchNorm1d(n_outputs),                                                  # BN层固定存在
-            nn.ReLU(),
-            nn.Dropout(dropout) if use_regularization else nn.Identity()                # Dropout受use_regularization控制
-        )
-        
-        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        """前向传播，包含残差连接"""
-        out = self.net(x)
-        res = x if self.downsample is None else self.downsample(x)
-        return self.relu(out + res)
+        if self.id_embedding:
+            for param in self.id_embedding.parameters(): param.requires_grad = True
 
 class Chomp1d(nn.Module):
-    """移除卷积后右侧的填充，保持因果性"""
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()
         self.chomp_size = chomp_size
@@ -213,20 +153,46 @@ class Chomp1d(nn.Module):
     def forward(self, x):
         return x[:, :, :-self.chomp_size].contiguous()
 
+class TemporalBlock(nn.Module):
+    """TCN的基本时间块 (已优化 Dropout 设计)"""
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+        super(TemporalBlock, self).__init__()
+        
+        self.net = nn.Sequential(
+            nn.Conv1d(n_inputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
+            Chomp1d(padding),
+            nn.BatchNorm1d(n_outputs),
+            nn.ReLU(),
+            nn.Dropout(dropout) if dropout > 0 else nn.Identity(), # 当dropout为0时，不添加Dropout层
+            nn.Conv1d(n_outputs, n_outputs, kernel_size, stride=stride, padding=padding, dilation=dilation),
+            Chomp1d(padding),
+            nn.BatchNorm1d(n_outputs),
+            nn.ReLU(),
+            nn.Dropout(dropout) if dropout > 0 else nn.Identity(), # 当dropout为0时，不添加Dropout层
+        )
+        
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        out = self.net(x)
+        res = x if self.downsample is None else self.downsample(x)
+        return self.relu(out + res)
+
 class TemporalConvNet(nn.Module):
-    """时间卷积网络 (TCN)"""
-    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2, use_regularization=True):
+    """时间卷积网络 (TCN) (已优化 Dropout 设计)"""
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
         super(TemporalConvNet, self).__init__()
         layers = []
         num_levels = len(num_channels)
         
         for i in range(num_levels):
-            dilation_size = 2 ** i  # 膨胀率呈指数增长
+            dilation_size = 2 ** i
             in_channels = num_inputs if i == 0 else num_channels[i-1]
             out_channels = num_channels[i]
             layers.append(TemporalBlock(
                 in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
-                padding=(kernel_size-1) * dilation_size, dropout=dropout, use_regularization=use_regularization
+                padding=(kernel_size-1) * dilation_size, dropout=dropout
             ))
 
         self.network = nn.Sequential(*layers)
@@ -235,15 +201,12 @@ class TemporalConvNet(nn.Module):
         return self.network(x)
 
 class FusionNetwork(nn.Module):
-    """
-    一个可配置的融合网络，用于合并来自不同来源的特征。
-    """
+    """可配置的融合网络 (已优化 Dropout 设计)"""
     def __init__(
         self,
         input_dim: int,
         output_dim: int,
         hiddens: tuple = (64, 32),
-        use_regularization: bool = False,
         dropout_rate: float = 0.1,
     ):
         super().__init__()
@@ -255,7 +218,7 @@ class FusionNetwork(nn.Module):
             layers.append(nn.Linear(in_dim, h_dim))
             layers.append(nn.BatchNorm1d(h_dim))
             layers.append(nn.ReLU())
-            if use_regularization and dropout_rate > 0:
+            if dropout_rate > 0:
                 layers.append(nn.Dropout(dropout_rate))
             in_dim = h_dim
             
@@ -265,10 +228,11 @@ class FusionNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
+
 # 模型参数量: 87563
 class TimeSeriesStaticModel(nn.Module):
     """
-    一个结合了TCN处理时间序列特征和MLP处理静态特征的混合模型。
+    一个结合了TCN和MLP的混合模型 (已细化 Dropout 设计)。
 
     该模型包含两个并行的处理流：
     1. 时间序列流：使用时间卷积网络（TCN）来捕捉时间序列数据中的时序依赖关系。
@@ -293,9 +257,10 @@ class TimeSeriesStaticModel(nn.Module):
         fusion_hidden_dims: tuple = None,
         # 输出参数
         output_dim: int = 2,
-        # 正则化参数
-        use_regularization: bool = False,
-        dropout_rate: float = 0.2,
+        # --- 精细化的 Dropout 参数 ---
+        static_dropout_rate: float = 0.1, # 静态特征处理器的Dropout率
+        tcn_dropout_rate: float = 0.2,    # TCN的Dropout率
+        fusion_dropout_rate: float = 0.1, # 融合网络的Dropout率
     ):
         """
         初始化模型。
@@ -312,17 +277,22 @@ class TimeSeriesStaticModel(nn.Module):
             static_hidden_dims (tuple): 静态特征处理器中隐藏层的维度。
             fusion_hidden_dims (tuple): 融合网络中隐藏层的维度。如果为None，则自动计算。
             output_dim (int): 模型的最终输出维度。
-            use_regularization (bool): 是否启用Dropout正则化。
-            dropout_rate (float): TCN和融合网络中使用的dropout比率。
+            static_dropout_rate (float): 静态特征MLP的Dropout率。设为0则禁用。
+            tcn_dropout_rate (float): TCN模块的Dropout率。设为0则禁用。
+            fusion_dropout_rate (float): 融合网络的Dropout率。设为0则禁用。
         """
         super().__init__()
+        
+        # --- 参数校验 ---
+        if not (0 <= static_dropout_rate < 1): raise ValueError("static_dropout_rate必须在[0, 1)范围内")
+        if not (0 <= tcn_dropout_rate < 1): raise ValueError("tcn_dropout_rate必须在[0, 1)范围内")
+        if not (0 <= fusion_dropout_rate < 1): raise ValueError("fusion_dropout_rate必须在[0, 1)范围内")
         
         # --- 保存维度信息 ---
         self.num_ts_features = num_ts_features
         self.time_steps = time_steps
         self.num_static_features = num_static_features
         self.output_dim = output_dim
-        self.use_regularization = use_regularization
         
         # --- 1. 静态特征处理流 ---
         self.static_processor = StaticFeatureProcessor(
@@ -331,8 +301,7 @@ class TimeSeriesStaticModel(nn.Module):
             num_features=num_static_features - 1, # 减去1个类别特征
             output_dim=static_output_dim,
             static_hidden=static_hidden_dims,
-            use_regularization=use_regularization,
-            dropout_rate=dropout_rate,
+            dropout_rate=static_dropout_rate, # 使用独立的dropout参数
         )
 
         # --- 2. 时间序列特征处理流 (TCN) ---
@@ -340,23 +309,20 @@ class TimeSeriesStaticModel(nn.Module):
             num_inputs=self.num_ts_features,
             num_channels=tcn_channels,
             kernel_size=tcn_kernel_size,
-            dropout=dropout_rate,
-            use_regularization=self.use_regularization
+            dropout=tcn_dropout_rate, # 使用独立的dropout参数
         )
         tcn_output_dim = tcn_channels[-1]
 
         # --- 3. 融合网络 ---
         fusion_input_dim = tcn_output_dim + static_output_dim
         if fusion_hidden_dims is None:
-            # 自动计算隐藏层维度
             fusion_hidden_dims = ((fusion_input_dim + output_dim) // 2,)
 
         self.fusion_net = FusionNetwork(
             input_dim=fusion_input_dim,
             output_dim=self.output_dim,
             hiddens=fusion_hidden_dims,
-            use_regularization=self.use_regularization,
-            dropout_rate=dropout_rate,
+            dropout_rate=fusion_dropout_rate, # 使用独立的dropout参数
         )
     
         # --- 权重初始化 ---
@@ -504,7 +470,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250902_1'
+    title_base = '20250902_2'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -512,22 +478,26 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 150
+        self.params_kwargs['epochs'] = 200
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['label_smoothing'] = 0
 
         args = []
         for i in range(5):
-            for model_cls in [TimeSeriesStaticModelx8]:
+            for model_cls in [TimeSeriesStaticModelx4]:
                 for use_data_file_num in [420]:
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for dropout_rate in [0.2, 0.5]:
-                            args.append((model_cls, i, use_data_file_num, data_folder, dropout_rate))
+                        for static_dropout_rate, tcn_dropout_rate, fusion_dropout_rate in [
+                            [0.1, 0.2, 0.1],
+                            [0.2, 0.4, 0.2],
+                            [0.3, 0.6, 0.3],
+                        ]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, static_dropout_rate, tcn_dropout_rate, fusion_dropout_rate))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.dropout_rate = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.static_dropout_rate, self.tcn_dropout_rate, self.fusion_dropout_rate = args[self.idx]
         self.params_kwargs['seed'] = self.seed
 
         # 实例化 参数对象
@@ -588,7 +558,7 @@ class test(test_base):
 
     def get_title_suffix(self):
         """获取后缀"""
-        res = f'do{self.dropout_rate}_{self.use_data_file_num}_seed{self.seed}'
+        res = f'x4_{self.static_dropout_rate}_{self.tcn_dropout_rate}_{self.fusion_dropout_rate}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -608,8 +578,9 @@ class test(test_base):
             num_static_features=3,
             static_num_categories = static_num_categories,
             # 使用dropout
-            use_regularization=True,
-            dropout_rate=self.dropout_rate,
+            static_dropout_rate = self.static_dropout_rate, 
+            tcn_dropout_rate = self.tcn_dropout_rate, 
+            fusion_dropout_rate = self.fusion_dropout_rate,
         )
     
     def get_data(self, _type, data_sample_getter_func=None):
@@ -681,39 +652,39 @@ if '__main__' == __name__:
         model(x)
         print(f"{model_cls.__name__} 模型参数量: {model_params_num(model)}")
 
-    # ################################
-    # # 验证初始化损失 == log(C)
-    # ################################
-    if test_init_loss:
-        from tqdm import tqdms
-        init_losses = []
-        for i in tqdm(range(10)):
-            model = TimeSeriesStaticModelx16(
-                num_ts_features=len(ext_features) + len(base_features),
-                time_steps=his_len,
-            )
-            num_classes = 2
-            criterion = nn.CrossEntropyLoss()
-            batchsize = 128
-            x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
-            x[:, -4] = 0
-            y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
-            # 前向传播
-            outputs = model(x)
-            loss = criterion(outputs, y)
-            init_losses.append(loss.item())
-        print(init_losses)
-        print(f"Initial loss: { np.mean(init_losses)}")
-        print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
+    # # ################################
+    # # # 验证初始化损失 == log(C)
+    # # ################################
+    # if test_init_loss:
+    #     from tqdm import tqdms
+    #     init_losses = []
+    #     for i in tqdm(range(10)):
+    #         model = TimeSeriesStaticModelx16(
+    #             num_ts_features=len(ext_features) + len(base_features),
+    #             time_steps=his_len,
+    #         )
+    #         num_classes = 2
+    #         criterion = nn.CrossEntropyLoss()
+    #         batchsize = 128
+    #         x = torch.randn(batchsize, his_len*(len(ext_features) + len(base_features))+4)
+    #         x[:, -4] = 0
+    #         y = torch.randint(0, num_classes, (batchsize,))  # 随机标签
+    #         # 前向传播
+    #         outputs = model(x)
+    #         loss = criterion(outputs, y)
+    #         init_losses.append(loss.item())
+    #     print(init_losses)
+    #     print(f"Initial loss: { np.mean(init_losses)}")
+    #     print(f"Expected loss: {torch.log(torch.tensor(num_classes)).item()}")
 
-    elif need_check_dependencies:
-        x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
-        x[:, -4] = 0
-        run_dependency_check_without_bn(model, x, 3)
+    # elif need_check_dependencies:
+    #     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
+    #     x[:, -4] = 0
+    #     run_dependency_check_without_bn(model, x, 3)
 
-    else:
-        # 开始训练
-        run(
-            test, 
-            mode=mode,
-        )
+    # else:
+    #     # 开始训练
+    #     run(
+    #         test, 
+    #         mode=mode,
+    #     )
