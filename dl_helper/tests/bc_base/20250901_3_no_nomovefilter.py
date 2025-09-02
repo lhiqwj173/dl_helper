@@ -32,6 +32,13 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 
 结论: 
 
+                                        train_loss	train_f1	val_f1	val_f1_best val_loss	test_best_f1	label_train	cost
+    train_title								
+    20250901_3_P100_no_nomovefilter_420	0.023781	0.991451	0.691033	0.793642	2.743266	0.829812	780890.0	4.64h
+
+    test_best_f1 应该是目前最高，但 val_loss 曲线仍然不理想
+    使用nomove过滤 7 / 4 进行测试
+
 """
 class StaticFeatureProcessor(nn.Module):
     """

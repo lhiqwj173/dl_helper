@@ -16,7 +16,7 @@ from accelerate.utils import set_seed
 from dl_helper.rl.custom_imitation_module.dataset import LobTrajectoryDataset
 from dl_helper.tester import test_base
 from dl_helper.train_param import Params, match_num_processes
-from dl_helper.scheduler import OneCycle_fast, WarmupReduceLROnPlateau, ConstantLRScheduler
+from dl_helper.scheduler import OneCycle_fast
 from dl_helper.data import data_parm2str
 from dl_helper.models.binctabl import m_bin_ctabl
 from dl_helper.transforms.base import transform
@@ -26,25 +26,16 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
 特征: EXT_total_ofi | EXT_ofi_level_1 | EXT_ofi_imbalance | EXT_log_ret_mid_price | EXT_log_ret_micro_price
 标签: bc
 模型: TimeSeriesStaticModelx8
-数据集: only30min_420days  
-学习率调度器: WarmupReduceLROnPlateau warinup_epochs=10
-label_smoothing = 0.2
-weight_decay = 0.01
 
 目标: 
-    专注于 val_f1_best
-    调整学习率 *0.5 / *0.25 / *0.1 / *0.01
-    
+    专注于 val_loss曲线
+    使用nomove过滤 7 / 4 进行测试
+
 结论: 
 
-                                        train_loss	train_f1	val_f1	val_f1_best	val_loss	label_train	    cost
-    train_title							
-    20250901_2_P100_lrchange0.25	    0.332038	0.996117	0.709253	0.764927	0.789662	728942.0	1.07h
-    20250901_1_P100_lrchange0.1	        0.334063	0.995328	0.701679	0.753481	0.791562	728942.0	1.13h
-    20250901_2_P100_lrchange0.5	        0.331958	0.996159	0.714530	0.743566	0.784521	728942.0	1.08h
-    20250901_1_P100_lrchange0.01	    0.426297	0.926489	0.644542	0.700956	0.796552	728942.0	1.12h
-
-    val_loss曲线没有优化
+                                        train_loss	train_f1	val_f1	val_f1_best val_loss	test_best_f1	label_train	cost
+    train_title								
+    20250901_3_P100_no_nomovefilter_420	0.023781	0.991451	0.691033	0.793642	2.743266	0.829812	780890.0	4.64h
 
 """
 class StaticFeatureProcessor(nn.Module):
@@ -273,7 +264,7 @@ class FusionNetwork(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-# 模型参数量: 86539
+# 模型参数量: 87563
 class TimeSeriesStaticModel(nn.Module):
     """
     一个结合了TCN处理时间序列特征和MLP处理静态特征的混合模型。
@@ -438,6 +429,25 @@ class TimeSeriesStaticModel(nn.Module):
         
         return output
 
+class TimeSeriesStaticModelx4(TimeSeriesStaticModel):
+    """参数量约为原始模型四倍的版本"""
+    def __init__(self, *args, **kwargs):
+        factor = 2 # 维度放大因子 (sqrt(4))
+        # 获取原始参数
+        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
+        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
+        static_output_dim = kwargs.pop('static_output_dim', 32)
+        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
+
+        # 按比例放大
+        kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
+        kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
+        kwargs['static_output_dim'] = int(static_output_dim * factor)
+        kwargs['static_hidden_dims'] = tuple([int(d * factor) for d in static_hidden_dims])
+        kwargs['fusion_hidden_dims'] = None
+
+        super().__init__(*args, **kwargs)
+
 class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
     """参数量约为原始模型八倍的版本"""
     def __init__(self, *args, **kwargs):
@@ -454,6 +464,25 @@ class TimeSeriesStaticModelx8(TimeSeriesStaticModel):
         kwargs['static_output_dim'] = int(round(static_output_dim * factor))
         kwargs['static_hidden_dims'] = tuple(int(round(d * factor)) for d in static_hidden_dims)
         kwargs['fusion_hidden_dims'] = None  # 让融合层自动重新计算维度
+
+        super().__init__(*args, **kwargs)
+
+class TimeSeriesStaticModelx16(TimeSeriesStaticModel):
+    """参数量约为原始模型十六倍的版本"""
+    def __init__(self, *args, **kwargs):
+        factor = 4  # sqrt(16) = 4
+        # 获取原始参数
+        tcn_channels = kwargs.pop('tcn_channels', [64, 64, 64, 32, 32])
+        static_embedding_dim = kwargs.pop('static_embedding_dim', 16)
+        static_output_dim = kwargs.pop('static_output_dim', 32)
+        static_hidden_dims = kwargs.pop('static_hidden_dims', (64, 32))
+
+        # 按比例放大
+        kwargs['tcn_channels'] = [int(c * factor) for c in tcn_channels]
+        kwargs['static_embedding_dim'] = int(static_embedding_dim * factor)
+        kwargs['static_output_dim'] = int(static_output_dim * factor)
+        kwargs['static_hidden_dims'] = tuple(int(d * factor) for d in static_hidden_dims)
+        kwargs['fusion_hidden_dims'] = None
 
         super().__init__(*args, **kwargs)
 
@@ -474,7 +503,7 @@ data_config = {
 }
 
 class test(test_base):
-    title_base = '20250901_1'
+    title_base = '20250902_0'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -482,11 +511,10 @@ class test(test_base):
         self.params_kwargs['classify'] = True
         self.params_kwargs['no_better_stop'] = 0
         self.params_kwargs['batch_n'] = 128
-        self.params_kwargs['epochs'] = 50
+        self.params_kwargs['epochs'] = 150
         self.params_kwargs['learning_rate'] = 3e-4
         self.params_kwargs['no_better_stop'] = 0
-        self.params_kwargs['label_smoothing'] = 0.2
-        self.params_kwargs['weight_decay'] = 0.01
+        self.params_kwargs['label_smoothing'] = 0
 
         args = []
         for i in range(5):
@@ -495,12 +523,11 @@ class test(test_base):
                     for data_folder in [
                         '/kaggle/input/20250830-data/single_bc_only30min'
                     ]:
-                        for lr_change in [0.1, 0.01]:
-                            args.append((model_cls, i, use_data_file_num, data_folder, lr_change))
+                        for filter_threshold in [7, 4]:
+                            args.append((model_cls, i, use_data_file_num, data_folder, filter_threshold))
 
-        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.lr_change = args[self.idx]
+        self.model_cls, self.seed, self.use_data_file_num, self.base_data_folder, self.filter_threshold = args[self.idx]
         self.params_kwargs['seed'] = self.seed
-        self.params_kwargs['learning_rate'] *= self.lr_change
 
         # 实例化 参数对象
         self.para = Params(
@@ -560,11 +587,7 @@ class test(test_base):
 
     def get_title_suffix(self):
         """获取后缀"""
-        # res = f'{self.model_cls.__name__}_seed{self.seed}'
-        # res = f'{self.use_data_file_num}_seed{self.seed}'
-        # data_suffix = os.path.basename(self.base_data_folder).split("_")[-2:]
-        # data_suffix = '_'.join(data_suffix)
-        res = f'seed{self.seed}_lrchange{self.lr_change}'
+        res = f'nomovefilter{self.filter_threshold}_{self.use_data_file_num}_seed{self.seed}'
 
         if input_indepent:
             res += '_input_indepent'
@@ -585,7 +608,7 @@ class test(test_base):
             static_num_categories = static_num_categories,
         )
     
-    def _init_dataset(self):
+    def get_data(self, _type, data_sample_getter_func=None):
         if self.test_dataset is None:
             train_split_rng = np.random.default_rng(seed=self.seed)
             self.train_dataset = LobTrajectoryDataset(
@@ -596,6 +619,7 @@ class test(test_base):
                 base_data_folder=os.path.join(self.base_data_folder, 'train_data'),
                 split_rng=train_split_rng,
                 use_data_file_num=self.use_data_file_num,
+                nomove_filter_threshold=self.filter_threshold,
             )
             self.val_dataset = LobTrajectoryDataset(
                 data_folder=self.data_dict_folder, 
@@ -610,8 +634,6 @@ class test(test_base):
                 data_type='test', 
                 use_data_file_num=self.use_data_file_num)
 
-    def get_data(self, _type, data_sample_getter_func=None):
-        self._init_dataset()
         if _type == 'train':
             return DataLoader(dataset=self.train_dataset, batch_size=self.para.batch_size, shuffle=True, num_workers=4//match_num_processes(), pin_memory=True)
         elif _type == 'val':
@@ -619,13 +641,6 @@ class test(test_base):
         elif _type == 'test':
             return DataLoader(dataset=self.test_dataset, batch_size=self.para.batch_size, shuffle=False, num_workers=4//match_num_processes(), pin_memory=True)
         
-    def get_lr_scheduler(self, optimizer, *args, **kwargs):
-        self._init_dataset()
-        train_data_length = len(self.train_dataset)
-        train_batch_length = math.ceil(train_data_length / self.para.batch_size)
-        warinup_epochs = 10
-        return WarmupReduceLROnPlateau(optimizer, warinup_epochs*train_batch_length, *args, **kwargs)
-
 if '__main__' == __name__:
     # 全局训练参数
     input_indepent = False# 训练无关输入（全0）的模型
@@ -654,7 +669,7 @@ if '__main__' == __name__:
     # ################################
     x = torch.randn(10, his_len*(len(ext_features) + len(base_features))+4)
     x[:, -4] = 0
-    for model_cls in [TimeSeriesStaticModelx8]:
+    for model_cls in [TimeSeriesStaticModel, TimeSeriesStaticModelx4, TimeSeriesStaticModelx8, TimeSeriesStaticModelx16]:
         model = model_cls(
             num_ts_features=len(ext_features) + len(base_features),
             time_steps=his_len,
@@ -670,7 +685,7 @@ if '__main__' == __name__:
         from tqdm import tqdms
         init_losses = []
         for i in tqdm(range(10)):
-            model = TimeSeriesStaticModelx8(
+            model = TimeSeriesStaticModelx16(
                 num_ts_features=len(ext_features) + len(base_features),
                 time_steps=his_len,
             )
