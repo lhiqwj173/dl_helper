@@ -41,6 +41,7 @@ from dl_helper.tool import model_params_num, check_dependencies, run_dependency_
     20250901_2_P100_TimeSeriesStaticModelx16_420	0.022583	0.991775	0.715832	0.718196	2.204350	728942.0	62400.0	2.97h
 
     val_loss曲线没有优化
+    使用 TimeSeriesStaticModelx4 模型各方面比较均衡，暂时沿用
 
 """
 
