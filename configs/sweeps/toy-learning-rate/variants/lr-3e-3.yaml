@@ -1,0 +1,3 @@
+# variant：lr=3e-3
+experiment:
+  lr: 0.003

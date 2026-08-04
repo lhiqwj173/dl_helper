@@ -1,0 +1,15 @@
+# toy learning-rate sweep manifest：同一 Experiment，多 variant 顺序比较。
+schema_version: 1
+sweep:
+  id: toy-lr-sweep-v1
+  experiment: experiments.toy_multiclass:build_experiment
+  base_config: ./base.yaml
+  comparison_metric: val/loss
+  mode: min
+  trials:
+    - name: lr-1e-2
+      variant: ./variants/lr-1e-2.yaml
+    - name: lr-3e-3
+      variant: ./variants/lr-3e-3.yaml
+    - name: lr-1e-3
+      variant: ./variants/lr-1e-3.yaml

@@ -1,0 +1,39 @@
+name: training-core
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.10"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Secret scan
+        run: python tools/scan_secrets.py
+      - name: Full pytest
+        run: python -m pytest -q tests/ -m "not slow"
+      - name: Two-process gloo (OSR-001/OSR-011)
+        run: python -m pytest -q tests/distributed/test_gloo_training.py tests/training/test_launcher.py
+        env:
+          DLH_ALLOW_MP: "1"
+          CUDA_VISIBLE_DEVICES: "-1"
+      - name: Coverage gates
+        run: python tools/check_coverage.py
+      - name: Wheel audit
+        run: python -m pytest -q tests/repository/test_wheel_contents.py
+      - name: Clean install probe
+        run: python tools/verify_clean_install.py

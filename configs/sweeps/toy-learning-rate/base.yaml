@@ -1,0 +1,49 @@
+# toy learning-rate sweep base 配置。
+schema_version: 1
+run:
+  name: toy-lr
+  id: null  # sweep 派生 run id
+  output_root: null
+  source_revision: null
+  seed: 42
+  tags: {}
+experiment:
+  lr: 0.01
+training:
+  max_epochs: 2
+  log_every_steps: 20
+backend:
+  type: torch
+  torch:
+    gradient_accumulation_steps: 1
+    mixed_precision: "no"
+    compile: false
+    clip_grad_norm: 1.0
+    deterministic: "off"
+    matmul_precision: high
+    find_unused_parameters: false
+  sklearn: null
+distributed:
+  num_processes: 1
+selection:
+  metric: val/loss
+  mode: min
+  patience: 20
+  min_delta: 0.0
+checkpoint:
+  every_epochs: null
+  every_optimizer_steps: null
+  keep_last: 1
+  resume: none
+runtime:
+  max_minutes: null
+  shutdown_grace_minutes: 10
+report:
+  enabled: true
+  curve_sample_limit: 100000
+  prediction_sample_limit: 10000
+  prediction_splits: [val]
+remote:
+  type: none
+notifications:
+  type: none

@@ -1,0 +1,50 @@
+# MNIST Kaggle base 配置：显式数据路径，运行时预算，固定 revision。
+schema_version: 1
+run:
+  name: mnist
+  id: null  # Kaggle 运行时由模板提供
+  output_root: null  # Kaggle 默认 /kaggle/working/dl-helper-runs
+  source_revision: null  # 模板强制 40 位 SHA
+  seed: 42
+  tags: {}
+experiment:
+  data_path: /kaggle/input/mnist-dataset/mnist.npz
+  lr: 0.001
+training:
+  max_epochs: 10
+  log_every_steps: 20
+backend:
+  type: torch
+  torch:
+    gradient_accumulation_steps: 1
+    mixed_precision: auto
+    compile: false
+    clip_grad_norm: 1.0
+    deterministic: strict
+    matmul_precision: high
+    find_unused_parameters: false
+  sklearn: null
+distributed:
+  num_processes: auto  # Kaggle 使用全部可见 CUDA
+selection:
+  metric: val/loss
+  mode: min
+  patience: 5
+  min_delta: 0.0
+checkpoint:
+  every_epochs: 1
+  every_optimizer_steps: null
+  keep_last: 2
+  resume: auto
+runtime:
+  max_minutes: 540
+  shutdown_grace_minutes: 10
+report:
+  enabled: true
+  curve_sample_limit: 100000
+  prediction_sample_limit: 10000
+  prediction_splits: [val]
+remote:
+  type: none
+notifications:
+  type: none

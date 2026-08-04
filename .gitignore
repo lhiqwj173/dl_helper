@@ -9,6 +9,7 @@ env/
 build/
 dist/
 *.log
+\.coverage
 *.egg-info
 .eggs/
 
