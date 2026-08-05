@@ -40,9 +40,13 @@ def test_no_floating_master_or_pull():
 
 def test_bootstrap_and_doctor_in_order():
     code = _all_code()
+    idx_clone = code.index("'clone'")
+    idx_checkout = code.index("'checkout'")
+    idx_head = code.index("'rev-parse'")
     idx_bootstrap = code.index("kaggle_bootstrap.py")
     idx_doctor = code.index("doctor")
-    assert idx_bootstrap < idx_doctor
+    assert idx_clone < idx_checkout < idx_head < idx_bootstrap < idx_doctor
+    assert "DL_HELPER_REPO_DIR" in code
 
 
 def test_subprocess_return_code_checked():

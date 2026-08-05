@@ -36,18 +36,36 @@ def git_ref() -> str:
     return ref
 
 
+def resolve_repo_dir(repo_url: str) -> str:
+    """返回模板已校验目录，或为脚本独立执行时创建新的 checkout。"""
+    supplied = os.environ.get("DL_HELPER_REPO_DIR", "").strip()
+    if not supplied:
+        working = "/kaggle/working"
+        os.makedirs(working, exist_ok=True)
+        repo_dir = os.path.join(working, "dl-helper")
+        if os.path.exists(repo_dir):
+            fail(f"默认 checkout 目录已存在，拒绝复用未经校验的目录: {repo_dir}")
+        run(["git", "clone", repo_url, repo_dir])
+        return repo_dir
+
+    repo_dir = os.path.abspath(supplied)
+    if not os.path.isdir(repo_dir):
+        fail(f"DL_HELPER_REPO_DIR 不存在或不是目录: {repo_dir}")
+    root = run(["git", "rev-parse", "--show-toplevel"], cwd=repo_dir).stdout.strip()
+    if os.path.normcase(os.path.abspath(root)) != os.path.normcase(repo_dir):
+        fail("DL_HELPER_REPO_DIR 必须指向 Git 工作树根目录")
+    return repo_dir
+
+
 def main() -> int:
     repo_url = os.environ.get("DL_HELPER_GIT_REPO", "").strip()
     if not repo_url:
         fail("缺少 DL_HELPER_GIT_REPO（仓库 URL）")
     ref = git_ref()
 
-    working = "/kaggle/working"
-    os.makedirs(working, exist_ok=True)
-    repo_dir = os.path.join(working, "dl-helper")
-
-    # 1. clone（浅取固定 revision）
-    run(["git", "clone", repo_url, repo_dir])
+    # 模板可先完成 clone/checkout；独立执行时此处创建全新 checkout。
+    repo_dir = resolve_repo_dir(repo_url)
+    # 固定到请求 revision，不依赖当前分支或远端默认分支。
     run(["git", "checkout", ref], cwd=repo_dir)
     # 2. 校验 HEAD 与固定 revision 一致
     head = run(["git", "rev-parse", "HEAD"], cwd=repo_dir).stdout.strip()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -35,15 +36,38 @@ def test_no_floating_master_or_git_pull():
     assert '"git", "clone"' in src
 
 
-def test_command_order():
+def test_command_order(monkeypatch):
     """clone → checkout → HEAD 校验 → pip install → doctor。"""
-    src = _source()
-    idx_clone = src.index('"git", "clone"')
-    idx_checkout = src.index('"git", "checkout"')
-    idx_rev_parse = src.index('"git", "rev-parse"')
-    idx_pip = src.index('"install"')
-    idx_doctor = src.index('"doctor"')
-    assert idx_clone < idx_checkout < idx_rev_parse < idx_pip < idx_doctor
+    sys.path.insert(0, "envs")
+    import kaggle_bootstrap
+
+    revision = "a" * 40
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd=None):
+        commands.append(command)
+        if command == ["git", "rev-parse", "HEAD"]:
+            return SimpleNamespace(stdout=revision + "\n")
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setenv("DL_HELPER_GIT_REPO", "https://repo.example.invalid/dl-helper.git")
+    monkeypatch.setenv("DL_HELPER_GIT_REF", revision)
+    monkeypatch.delenv("DL_HELPER_REPO_DIR", raising=False)
+    monkeypatch.setattr(kaggle_bootstrap, "run", fake_run)
+    monkeypatch.setattr(kaggle_bootstrap.os, "makedirs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(kaggle_bootstrap.os.path, "exists", lambda path: False)
+
+    assert kaggle_bootstrap.main() == 0
+    repo_dir = os.path.join("/kaggle/working", "dl-helper")
+    assert commands == [
+        ["git", "clone", "https://repo.example.invalid/dl-helper.git", repo_dir],
+        ["git", "checkout", revision],
+        ["git", "rev-parse", "HEAD"],
+        [sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"],
+        [sys.executable, "-m", "dl_helper.training.cli", "doctor",
+         "--config", os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml"),
+         "--experiment", "experiments.mnist:build_experiment"],
+    ]
 
 
 def test_return_codes_checked():
@@ -74,6 +98,9 @@ def test_invalid_ref_rejected():
         "except SystemExit as e:\n"
         "    print('EXIT', e.code)\n"
     )
-    proc = subprocess.run([sys.executable, "-c", code], cwd=os.path.dirname(os.path.abspath(__file__)) + "/../..",
-                          capture_output=True, text=True, encoding="utf-8", check=False)
+    proc = subprocess.run(
+        [sys.executable, "-c", code], cwd=os.path.dirname(os.path.abspath(__file__)) + "/../..",
+        capture_output=True, text=True, encoding="utf-8", check=False,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+    )
     assert "EXIT" in proc.stdout or "FAIL" in proc.stderr
