@@ -57,6 +57,30 @@ def resolve_repo_dir(repo_url: str) -> str:
     return repo_dir
 
 
+def resolve_doctor_config(repo_dir: str, working_dir: str = "/kaggle/working") -> str:
+    """为显式 Kaggle 数据路径生成 working 目录中的临时 doctor 配置。"""
+    source = os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml")
+    data_path = os.environ.get("DL_HELPER_MNIST_PATH", "").strip()
+    if not data_path:
+        return source
+    if not os.path.isabs(data_path):
+        fail("DL_HELPER_MNIST_PATH 必须是绝对路径")
+    if not os.path.isfile(data_path):
+        fail(f"DL_HELPER_MNIST_PATH 不存在或不是文件: {data_path}")
+
+    import yaml
+
+    with open(source, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    if not isinstance(config, dict) or not isinstance(config.get("experiment"), dict):
+        fail("Kaggle MNIST 基础配置必须包含 experiment mapping")
+    config["experiment"]["data_path"] = data_path
+    output = os.path.join(working_dir, "dl-helper-doctor.yaml")
+    with open(output, "w", encoding="utf-8") as f:
+        yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
+    return output
+
+
 def main() -> int:
     repo_url = os.environ.get("DL_HELPER_GIT_REPO", "").strip()
     if not repo_url:
@@ -74,8 +98,9 @@ def main() -> int:
     # 3. 安装（不升级框架）
     run([sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"], cwd=repo_dir)
     # 4. doctor
+    doctor_config = resolve_doctor_config(repo_dir)
     run([sys.executable, "-m", "dl_helper.training.cli", "doctor",
-         "--config", os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml"),
+         "--config", doctor_config,
          "--experiment", "experiments.mnist:build_experiment"],
         cwd=repo_dir)
     print("[bootstrap] OK: 固定 revision 就绪")

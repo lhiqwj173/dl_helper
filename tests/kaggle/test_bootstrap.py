@@ -70,6 +70,30 @@ def test_command_order(monkeypatch):
     ]
 
 
+def test_mnist_path_override_writes_working_config(tmp_path, monkeypatch):
+    """显式数据路径只写入 working 临时配置，不改写 checkout 内的基础配置。"""
+    import yaml
+
+    sys.path.insert(0, "envs")
+    import kaggle_bootstrap
+
+    repo_dir = tmp_path / "repo"
+    config_dir = repo_dir / "configs" / "kaggle"
+    config_dir.mkdir(parents=True)
+    source = config_dir / "mnist.yaml"
+    source.write_text("experiment:\n  data_path: /old/path.npz\n", encoding="utf-8")
+    data_path = tmp_path / "input" / "mnist.npz"
+    data_path.parent.mkdir()
+    data_path.write_bytes(b"mnist")
+    monkeypatch.setenv("DL_HELPER_MNIST_PATH", str(data_path))
+
+    output = kaggle_bootstrap.resolve_doctor_config(str(repo_dir), str(tmp_path))
+
+    assert output == str(tmp_path / "dl-helper-doctor.yaml")
+    assert yaml.safe_load(source.read_text(encoding="utf-8"))["experiment"]["data_path"] == "/old/path.npz"
+    assert yaml.safe_load((tmp_path / "dl-helper-doctor.yaml").read_text(encoding="utf-8"))["experiment"]["data_path"] == str(data_path)
+
+
 def test_return_codes_checked():
     src = _source()
     assert "returncode != 0" in src
