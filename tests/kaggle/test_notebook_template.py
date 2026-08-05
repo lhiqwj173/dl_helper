@@ -47,6 +47,7 @@ def test_bootstrap_and_doctor_in_order():
     idx_doctor = code.index("doctor")
     assert idx_clone < idx_checkout < idx_head < idx_bootstrap < idx_doctor
     assert "DL_HELPER_REPO_DIR" in code
+    assert "/kaggle/working/dl-helper-doctor.yaml" in code
 
 
 def test_subprocess_return_code_checked():
