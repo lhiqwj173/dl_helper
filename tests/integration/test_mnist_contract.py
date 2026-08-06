@@ -1,12 +1,14 @@
 """任务 8.3：MNIST 示例 —— 临时 fixture 完成训练，缺路径明确失败。"""
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
-from experiments.mnist import _load_npz
+from experiments.mnist import _load_npz, build_experiment
 from dl_helper.training.artifacts import RunLayout
-from dl_helper.training.backends.torch_backend import run_worker
+from dl_helper.training.backends.torch_backend import build_torch_components, run_worker, validate_fresh_components
 from dl_helper.training.config import default_schema, parse_config
 
 
@@ -45,7 +47,7 @@ def test_mnist_rejects_incomplete_npz_keys(tmp_path):
         _load_npz(str(path))
 
 
-def _cfg(run_id, data_path):
+def _cfg(run_id, data_path, max_minutes=None):
     schema = default_schema()
     schema["training"]["max_epochs"] = 1
     schema["selection"] = {"metric": "val/loss", "mode": "min", "patience": 5, "min_delta": 0.0}
@@ -55,7 +57,18 @@ def _cfg(run_id, data_path):
     schema["backend"]["torch"]["mixed_precision"] = "no"
     schema["distributed"]["num_processes"] = 1
     schema["experiment"]["data_path"] = data_path
+    if max_minutes is not None:
+        schema["runtime"] = {"max_minutes": max_minutes, "shutdown_grace_minutes": 1}
     return parse_config(schema)
+
+
+class _AdvancingClock:
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        return self.calls * 100.0
 
 
 def test_mnist_trains_with_fixture(tmp_path):
@@ -66,6 +79,35 @@ def test_mnist_trains_with_fixture(tmp_path):
     result = run_worker("experiments.mnist:build_experiment", cfg, layout, 0, 1, "none")
     assert result.status == "succeeded"
     assert layout.path("models", "last", "model.safetensors")
+
+
+def test_mnist_supports_runtime_budget_resume(tmp_path):
+    cfg = _cfg("mnist-budget", _mnist_npz(tmp_path), max_minutes=2)
+    experiment = build_experiment(cfg.experiment)
+    model, datamodule, task, optimizer, scheduler = build_torch_components(experiment, cfg)
+    assert datamodule.supports_mid_epoch_resume is True
+    validate_fresh_components(model, datamodule, task, optimizer, scheduler, cfg)
+
+
+def test_mnist_runtime_preempted_then_resumes(tmp_path):
+    data_path = _mnist_npz(tmp_path, n=128)
+    run_dir = str(tmp_path / "runs" / "mnist-budget-resume")
+    first = _cfg("mnist-budget-resume", data_path, max_minutes=2)
+    first_layout = RunLayout(run_dir)
+    first_layout.ensure()
+    paused = run_worker(
+        "experiments.mnist:build_experiment", first, first_layout, 0, 1, "auto",
+        budget_monotonic=_AdvancingClock(),
+    )
+    assert paused.status == "preempted"
+    assert os.path.exists(first_layout.path("checkpoints", "latest.json"))
+
+    resumed = _cfg("mnist-budget-resume", data_path)
+    resumed_layout = RunLayout(run_dir)
+    resumed_layout.ensure()
+    result = run_worker("experiments.mnist:build_experiment", resumed, resumed_layout, 0, 1, "auto")
+    assert result.status == "succeeded"
+    assert result.global_step == 2
 
 
 def test_mnist_missing_path_fails(tmp_path):

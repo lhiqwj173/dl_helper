@@ -6,9 +6,9 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import TensorDataset
 
-from dl_helper.training.contracts import DataIdentity, LoaderDataModule, TorchExperiment
+from dl_helper.training.contracts import DataIdentity, ResumableMapDataModule, TorchExperiment
 from dl_helper.training.task import MulticlassClassificationTask
 
 
@@ -64,12 +64,20 @@ def _mnist_dm(config: dict):
     n_train = int(n * 0.8)
     train_ds = TensorDataset(torch.from_numpy(images[:n_train]), torch.from_numpy(labels[:n_train]))
     val_ds = TensorDataset(torch.from_numpy(images[n_train:]), torch.from_numpy(labels[n_train:]))
-    return LoaderDataModule(
+    return ResumableMapDataModule(
         DataIdentity("mnist", "1.0", f"fp-mnist-{os.path.getsize(data_path)}"),
-        DataLoader(train_ds, batch_size=64),
-        val_dataloader=DataLoader(val_ds, batch_size=64),
-        nominal_train_batch_size=64,
+        lambda: train_ds,
+        _collate,
+        batch_size=64,
+        shuffle=False,
+        val_dataset_factory=lambda: val_ds,
+        val_batch_size=64,
     )
+
+
+def _collate(batch):
+    images, labels = zip(*batch)
+    return torch.stack(images), torch.stack(labels)
 
 
 def build_experiment(config: dict) -> TorchExperiment:
