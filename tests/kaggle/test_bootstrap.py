@@ -81,7 +81,10 @@ def test_mnist_path_override_writes_working_config(tmp_path, monkeypatch):
     config_dir = repo_dir / "configs" / "kaggle"
     config_dir.mkdir(parents=True)
     source = config_dir / "mnist.yaml"
-    source.write_text("experiment:\n  data_path: /old/path.npz\n", encoding="utf-8")
+    source.write_text(
+        "run:\n  output_root: null\nexperiment:\n  data_path: /old/path.npz\n",
+        encoding="utf-8",
+    )
     data_path = tmp_path / "input" / "mnist.npz"
     data_path.parent.mkdir()
     data_path.write_bytes(b"mnist")

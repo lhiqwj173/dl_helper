@@ -27,12 +27,31 @@ class MNISTMLP(nn.Module):
 
 
 def _load_npz(path: str) -> tuple[np.ndarray, np.ndarray]:
-    """从固定格式 NPZ 读取 images/labels；缺文件直接失败。"""
+    """读取 images/labels 或 x_train/x_test/y_train/y_test 格式的 MNIST。"""
     if not os.path.exists(path):
         raise FileNotFoundError(f"MNIST 数据路径不存在: {path!r}")
-    with np.load(path) as data:
-        images = data["images"].astype(np.float32) / 255.0
-        labels = data["labels"].astype(np.int64)
+    with np.load(path, allow_pickle=False) as data:
+        keys = set(data.files)
+        if {"images", "labels"}.issubset(keys):
+            images = data["images"]
+            labels = data["labels"]
+        elif {"x_train", "x_test", "y_train", "y_test"}.issubset(keys):
+            images = np.concatenate((data["x_train"], data["x_test"]), axis=0)
+            labels = np.concatenate((data["y_train"], data["y_test"]), axis=0)
+        else:
+            raise ValueError(
+                "MNIST NPZ 必须包含 images/labels 或完整的 "
+                "x_train/x_test/y_train/y_test 键；实际键为 "
+                f"{sorted(keys)!r}"
+            )
+        if images.ndim != 3 or images.shape[1:] != (28, 28):
+            raise ValueError(f"MNIST images 必须为 [N, 28, 28]，实际为 {images.shape!r}")
+        if labels.ndim != 1 or labels.shape[0] != images.shape[0]:
+            raise ValueError(
+                f"MNIST labels 必须为与 images 等长的一维数组，实际为 {labels.shape!r}"
+            )
+        images = images.astype(np.float32) / 255.0
+        labels = labels.astype(np.int64)
     return images, labels
 
 

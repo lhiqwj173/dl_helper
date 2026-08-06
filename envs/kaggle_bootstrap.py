@@ -60,6 +60,8 @@ def resolve_repo_dir(repo_url: str) -> str:
 def resolve_doctor_config(repo_dir: str, working_dir: str = "/kaggle/working") -> str:
     """为显式 Kaggle 数据路径生成 working 目录中的临时 doctor 配置。"""
     source = os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml")
+    run_root = os.path.join(working_dir, "dl-helper-runs")
+    os.makedirs(run_root, exist_ok=True)
     data_path = os.environ.get("DL_HELPER_MNIST_PATH", "").strip()
     if not data_path:
         return source
@@ -72,9 +74,11 @@ def resolve_doctor_config(repo_dir: str, working_dir: str = "/kaggle/working") -
 
     with open(source, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    if not isinstance(config, dict) or not isinstance(config.get("experiment"), dict):
-        fail("Kaggle MNIST 基础配置必须包含 experiment mapping")
+    if (not isinstance(config, dict) or not isinstance(config.get("run"), dict)
+            or not isinstance(config.get("experiment"), dict)):
+        fail("Kaggle MNIST 基础配置必须包含 run 和 experiment mapping")
     config["experiment"]["data_path"] = data_path
+    config["run"]["output_root"] = run_root
     output = os.path.join(working_dir, "dl-helper-doctor.yaml")
     with open(output, "w", encoding="utf-8") as f:
         yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)

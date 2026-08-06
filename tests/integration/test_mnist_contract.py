@@ -4,6 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from experiments.mnist import _load_npz
 from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.backends.torch_backend import run_worker
 from dl_helper.training.config import default_schema, parse_config
@@ -15,6 +16,33 @@ def _mnist_npz(tmp_path, n=64):
     np.savez(path, images=rng.random((n, 28, 28)).astype(np.float32),
              labels=rng.integers(0, 10, n).astype(np.int64))
     return str(path)
+
+
+def _kaggle_mnist_npz(tmp_path):
+    path = tmp_path / "kaggle-mnist.npz"
+    np.savez(
+        path,
+        x_train=np.zeros((3, 28, 28), dtype=np.uint8),
+        x_test=np.ones((2, 28, 28), dtype=np.uint8),
+        y_train=np.array([1, 2, 3], dtype=np.uint8),
+        y_test=np.array([4, 5], dtype=np.uint8),
+    )
+    return path
+
+
+def test_mnist_loads_kaggle_train_test_keys(tmp_path):
+    images, labels = _load_npz(str(_kaggle_mnist_npz(tmp_path)))
+    assert images.shape == (5, 28, 28)
+    assert labels.tolist() == [1, 2, 3, 4, 5]
+    assert images[0, 0, 0] == 0.0
+    assert images[-1, 0, 0] == 1.0 / 255.0
+
+
+def test_mnist_rejects_incomplete_npz_keys(tmp_path):
+    path = tmp_path / "invalid-mnist.npz"
+    np.savez(path, x_train=np.zeros((2, 28, 28), dtype=np.uint8), y_train=np.zeros(2, dtype=np.uint8))
+    with pytest.raises(ValueError, match="必须包含"):
+        _load_npz(str(path))
 
 
 def _cfg(run_id, data_path):
