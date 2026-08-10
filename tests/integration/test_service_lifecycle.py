@@ -29,6 +29,7 @@ class _FakeWecom:
 class _FakeStore:
     def __init__(self):
         self.bundles: list[str] = []
+        self.checkpoints: list[tuple[str, str, str]] = []
 
     def publish_run_bundle(self, local_dir, run_id):
         self.bundles.append(("run", run_id))
@@ -37,7 +38,7 @@ class _FakeStore:
         self.bundles.append(("sweep", sweep_id))
 
     def publish_checkpoint(self, *a):
-        pass
+        self.checkpoints.append(a)
 
 
 class _NoAsync:
@@ -73,6 +74,21 @@ def test_run_lifecycle_events(tmp_path):
     # 审计记录
     lines = [json.loads(l) for l in open(os.path.join(tmp_path, "runs", "sr", "services", "service-audit.jsonl"), encoding="utf-8")]
     assert len(lines) >= 2
+
+
+def test_sync_checkpoint_upload_when_async_disabled(tmp_path):
+    layout = RunLayout(str(tmp_path / "runs" / "sync-checkpoint"))
+    layout.ensure()
+    store = _FakeStore()
+    audit = ServiceAudit(layout.service_audit_jsonl, redactor=lambda t: t)
+    svc = LifecycleServices(
+        layout=layout, secret_resolver=_resolver(), stores=[store], async_sync=None,
+        wecom_client=None, audit=audit, failure_policy="required",
+    )
+
+    svc.submit_checkpoint("run-1", "ck-1")
+
+    assert store.checkpoints == [(layout.run_dir, "run-1", "ck-1")]
 
 
 def test_reentrant_finalize_does_not_duplicate(tmp_path):

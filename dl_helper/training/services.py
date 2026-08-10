@@ -475,6 +475,14 @@ class LifecycleServices:
         self.result.mark_degraded(service, type(exc).__name__)
 
     def submit_checkpoint(self, run_id: str, checkpoint_id: str) -> None:
-        """OSR-002：把新 checkpoint 提交到有界异步同步器（容量 1，合并 pending）。"""
+        """发布 checkpoint；异步模式入队，同步模式在当前安全边界完成。"""
         if self._async_sync is not None:
             self._async_sync.submit_checkpoint(self._layout.run_dir, run_id, checkpoint_id)
+            return
+        for store in self._stores:
+            if type(store).__name__ == "LocalArtifactStore":
+                continue
+            try:
+                store.publish_checkpoint(self._layout.run_dir, run_id, checkpoint_id)
+            except Exception as exc:
+                self._handle_store_failure(f"run/{run_id}/checkpoint/{checkpoint_id}", "alist", exc)
