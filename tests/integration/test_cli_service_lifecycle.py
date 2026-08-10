@@ -163,3 +163,60 @@ def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypa
 
     assert code == 0
     assert calls == ["restore:remote-resume", "worker:required"]
+
+
+def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, monkeypatch):
+    """多进程 75 由父进程先发布 latest checkpoint，再执行暂停终结。"""
+    import dl_helper.training.cli as cli
+    import dl_helper.training.launcher as launcher
+    from dl_helper.training.artifacts import write_json
+    from dl_helper.training.platform import Platform
+
+    calls: list[str] = []
+
+    class Services:
+        _resolver = None
+
+        def start_run(self, run_id):
+            calls.append(f"start:{run_id}")
+
+        def submit_checkpoint(self, run_id, checkpoint_id):
+            calls.append(f"checkpoint:{run_id}:{checkpoint_id}")
+
+        def finalize_run(self, run_id, status, **kwargs):
+            calls.append(f"finalize:{run_id}:{status}")
+
+    def fake_launch(experiment_ref, config, run_dir, num_procs, resume, **kwargs):
+        checkpoint_id = "epoch-000001-step-00000010"
+        os.makedirs(os.path.join(run_dir, "checkpoints", checkpoint_id))
+        write_json(os.path.join(run_dir, "checkpoints", "latest.json"), {
+            "schema_version": 1,
+            "checkpoint_id": checkpoint_id,
+            "path": checkpoint_id,
+        })
+        return 75
+
+    monkeypatch.setattr(cli, "_build_services", lambda config, platform, layout: Services())
+    monkeypatch.setattr(launcher, "launch_torch", fake_launch)
+    monkeypatch.setattr(
+        Platform, "resolve_torch_resources",
+        lambda self, config, nominal_batch_size: type("Resources", (), {"num_processes": 2})(),
+    )
+    cfg_path = _base_cfg(tmp_path, "mp-preempt")
+    schema = yaml.safe_load(open(cfg_path, encoding="utf-8"))
+    schema["distributed"]["num_processes"] = 2
+    with open(cfg_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(schema, f, allow_unicode=True)
+
+    code = cli.main([
+        "train", "--config", cfg_path,
+        "--experiment", "experiments.toy_multiclass:build_experiment",
+        "--resume", "none",
+    ])
+
+    assert code == 75
+    assert calls == [
+        "start:mp-preempt",
+        "checkpoint:mp-preempt:epoch-000001-step-00000010",
+        "finalize:mp-preempt:preempted",
+    ]

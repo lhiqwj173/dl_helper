@@ -168,6 +168,14 @@ def _cmd_train(args: argparse.Namespace) -> int:
                     services.start_run(run_id)
                 code = launch_torch(args.experiment, config, layout.run_dir, num_procs, resume,
                                     publish_terminal=False)
+                if code in (EXIT_OK, EXIT_PREEMPTED) and services is not None:
+                    from .checkpoint import read_latest
+
+                    latest = read_latest(layout.path("checkpoints"))
+                    if latest is None and code == EXIT_PREEMPTED:
+                        raise CliError("多进程暂停缺少本地 latest checkpoint，拒绝发布 PREEMPTED")
+                    if latest is not None:
+                        services.submit_checkpoint(run_id, latest["checkpoint_id"])
                 if code == EXIT_PREEMPTED:
                     status = "preempted"
                 elif code != EXIT_OK:

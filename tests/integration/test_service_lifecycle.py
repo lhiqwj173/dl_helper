@@ -80,6 +80,8 @@ def test_sync_checkpoint_upload_when_async_disabled(tmp_path):
     layout = RunLayout(str(tmp_path / "runs" / "sync-checkpoint"))
     layout.ensure()
     store = _FakeStore()
+    checkpoint_dir = layout.path("checkpoints", "ck-1")
+    os.makedirs(checkpoint_dir)
     audit = ServiceAudit(layout.service_audit_jsonl, redactor=lambda t: t)
     svc = LifecycleServices(
         layout=layout, secret_resolver=_resolver(), stores=[store], async_sync=None,
@@ -88,7 +90,7 @@ def test_sync_checkpoint_upload_when_async_disabled(tmp_path):
 
     svc.submit_checkpoint("run-1", "ck-1")
 
-    assert store.checkpoints == [(layout.run_dir, "run-1", "ck-1")]
+    assert store.checkpoints == [(checkpoint_dir, "run-1", "ck-1")]
 
 
 def test_reentrant_finalize_does_not_duplicate(tmp_path):
@@ -201,6 +203,7 @@ def test_submit_checkpoint_forwards_to_async(tmp_path):
 
     layout = RunLayout(str(tmp_path / "runs" / "sr-ck"))
     layout.ensure()
+    os.makedirs(layout.path("checkpoints", "epoch-000000-step-00000008"))
     audit = ServiceAudit(layout.service_audit_jsonl, redactor=lambda t: t)
     svc = LifecycleServices(layout=layout, secret_resolver=_resolver(),
                             stores=[_FakeStore()], async_sync=_Async(),

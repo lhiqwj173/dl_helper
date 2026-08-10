@@ -476,13 +476,16 @@ class LifecycleServices:
 
     def submit_checkpoint(self, run_id: str, checkpoint_id: str) -> None:
         """发布 checkpoint；异步模式入队，同步模式在当前安全边界完成。"""
+        checkpoint_dir = self._layout.path("checkpoints", checkpoint_id)
+        if not os.path.isdir(checkpoint_dir):
+            raise ServiceDeliveryError(f"待发布 checkpoint 目录不存在: {checkpoint_dir!r}")
         if self._async_sync is not None:
-            self._async_sync.submit_checkpoint(self._layout.run_dir, run_id, checkpoint_id)
+            self._async_sync.submit_checkpoint(checkpoint_dir, run_id, checkpoint_id)
             return
         for store in self._stores:
             if type(store).__name__ == "LocalArtifactStore":
                 continue
             try:
-                store.publish_checkpoint(self._layout.run_dir, run_id, checkpoint_id)
+                store.publish_checkpoint(checkpoint_dir, run_id, checkpoint_id)
             except Exception as exc:
                 self._handle_store_failure(f"run/{run_id}/checkpoint/{checkpoint_id}", "alist", exc)
