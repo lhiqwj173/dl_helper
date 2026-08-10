@@ -32,6 +32,7 @@ def test_remaining_gate_is_pinned_and_complete():
         assert artifact in code
     assert "kaggle-sweep-evidence-20260810.zip" in code
     assert "sklearn-incremental-evidence-20260810.zip" in code
+    assert "sweep-report/index.html" in code
 
 
 def test_remaining_gate_only_references_secret_names():
