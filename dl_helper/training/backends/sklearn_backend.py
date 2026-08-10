@@ -363,12 +363,18 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
             engine_state.increment_global_step()
             global_step = engine_state.global_step
             if budget is not None and budget.hit():
-                _save_sklearn_checkpoint(layout, estimator, source, engine_state, task, config, data_fp, model_sig)
+                _save_sklearn_checkpoint(
+                    layout, estimator, source, engine_state, task, config, data_fp, model_sig,
+                    services=services,
+                )
                 budget_hit = True
                 break
             # batch 边界检查点
             if config.checkpoint.every_epochs is not None or config.checkpoint.keep_last is not None:
-                _save_sklearn_checkpoint(layout, estimator, source, engine_state, task, config, data_fp, model_sig)
+                _save_sklearn_checkpoint(
+                    layout, estimator, source, engine_state, task, config, data_fp, model_sig,
+                    services=services,
+                )
         if budget_hit:
             break  # 跳过 epoch 评价，直接进入 PREEMPTED 终态
         # epoch 评价
@@ -527,16 +533,19 @@ def _load_sklearn_checkpoint(ckpt_dir, estimator, source, engine_state, task, la
     return engine_state
 
 
-def _save_sklearn_checkpoint(layout, estimator, source, engine_state, task, config, data_fp, model_sig):
+def _save_sklearn_checkpoint(layout, estimator, source, engine_state, task, config, data_fp, model_sig,
+                              services=None):
     import joblib
     metric_payload = {}
-    write_sklearn_checkpoint(
+    ckpt_id = write_sklearn_checkpoint(
         estimator, source.state_dict(), engine_state, metric_payload,
         layout.path("checkpoints"), engine_state.run_id,
         _config_fingerprint(config), data_fp, model_sig,
         engine_state.epoch, engine_state.global_step, engine_state.batch_in_epoch,
         joblib,
     )
+    if services is not None:
+        services.submit_checkpoint(engine_state.run_id, ckpt_id)
     apply_retention(layout.path("checkpoints"), config.checkpoint.keep_last)
 
 

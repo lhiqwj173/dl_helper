@@ -54,6 +54,42 @@ def test_sklearn_incremental_run(tmp_path):
     assert "val/accuracy" in val_lines[0]["metrics"]
 
 
+def test_sklearn_incremental_publishes_checkpoints_to_services(tmp_path):
+    class Services:
+        def __init__(self):
+            from types import SimpleNamespace
+
+            self.checkpoints = []
+            self.result = SimpleNamespace(degraded=[])
+
+        def start_run(self, run_id):
+            return None
+
+        def submit_checkpoint(self, run_id, checkpoint_id):
+            self.checkpoints.append((run_id, checkpoint_id))
+
+        def finalize_run(self, run_id, status, **kwargs):
+            prepare_terminal = kwargs.get("prepare_terminal")
+            if prepare_terminal is not None:
+                prepare_terminal()
+
+    cfg = _incr_cfg("sklearn-service-checkpoints", max_epochs=1)
+    layout = RunLayout(str(tmp_path / "runs" / "sklearn-service-checkpoints"))
+    layout.ensure()
+    experiment = build_sklearn_experiment(
+        "experiments.sklearn_incremental:build_experiment", cfg.experiment
+    )
+    services = Services()
+
+    result = run_sklearn_worker_experiment(
+        experiment, cfg, Platform(), layout, services=services
+    )
+
+    assert result.status == "succeeded"
+    assert services.checkpoints
+    assert all(run_id == "sklearn-service-checkpoints" for run_id, _ in services.checkpoints)
+
+
 class _AdvancingClock:
     def __init__(self):
         self.calls = 0
