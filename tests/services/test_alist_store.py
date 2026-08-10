@@ -179,14 +179,18 @@ def test_fetch_latest_checkpoint_uses_raw_url(tmp_path):
     store = _store(session)
     checkpoint_dir = tmp_path / "checkpoint"
     checkpoint_dir.mkdir()
-    (checkpoint_dir / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+    (checkpoint_dir / "checkpoint-manifest.json").write_text(
+        '{"complete": true, "run_id": "run-raw", "files": {}}', encoding="utf-8"
+    )
     store.publish_checkpoint(str(checkpoint_dir), "run-raw", "ck-1")
 
     target = tmp_path / "target"
     checkpoint_id = store.fetch_latest_checkpoint("run-raw", str(target))
 
     assert checkpoint_id == "ck-1"
-    assert (target / ".remote-staging" / "checkpoint-manifest.json").is_file()
+    assert (target / "ck-1" / "checkpoint-manifest.json").is_file()
+    assert json.loads((target / "latest.json").read_text(encoding="utf-8"))["path"] == "ck-1"
+    assert not any(path.name.startswith(".remote-staging-") for path in target.iterdir())
 
 
 def test_authentication_not_retried(tmp_path):

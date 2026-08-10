@@ -150,6 +150,21 @@ class LifecycleServices:
         self._restore_seen_events()
         self._restore_degraded()
 
+    def restore_latest_checkpoint(self, run_id: str) -> str | None:
+        """从唯一远端 store 恢复并安装 checkpoint；多个来源冲突立即失败。"""
+        checkpoints_dir = self._layout.path("checkpoints")
+        restored: str | None = None
+        for store in self._stores:
+            checkpoint_id = store.fetch_latest_checkpoint(run_id, checkpoints_dir)
+            if checkpoint_id is None:
+                continue
+            if restored is not None and checkpoint_id != restored:
+                raise ServiceDeliveryError(
+                    f"多个 ArtifactStore 返回冲突 checkpoint: {restored!r} != {checkpoint_id!r}"
+                )
+            restored = checkpoint_id
+        return restored
+
     def _restore_seen_events(self) -> None:
         """从持久 service audit JSONL 恢复已成功投递的 event_id（outcome=success）。"""
         import json as _json

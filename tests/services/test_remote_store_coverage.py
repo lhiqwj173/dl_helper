@@ -93,20 +93,23 @@ class _FakeSession:
         if "/api/fs/mkdir" in url:
             return _Resp({"code": 200})
         if "/api/fs/put" in url:
-            path = urllib.parse.unquote(url.split("path=", 1)[1].split("&", 1)[0])
+            path = urllib.parse.unquote(kwargs.get("headers", {}).get("File-Path", ""))
+            if not path:
+                return _Resp({"code": 500, "message": "missing File-Path", "data": None})
             self.remote[path] = kwargs.get("data", b"")
             return _Resp({"code": 200})
         if "/api/fs/get" in url:
             path = urllib.parse.unquote(url.split("path=", 1)[1].split("&", 1)[0])
-            raw = "raw=true" in url
+            if path not in self.remote:
+                return _Resp({"code": 500, "message": "object not found", "data": None})
+            content = self.remote[path]
+            raw_url = f"/d{urllib.parse.quote(path, safe='/')}"
+            return _Resp({"code": 200, "data": {"size": len(content), "raw_url": raw_url}})
+        if "/d/" in url:
+            path = urllib.parse.unquote(url.split("/d", 1)[1].split("?", 1)[0])
             if path not in self.remote:
                 return _Resp({"code": 404}, status_code=404)
-            content = self.remote[path]
-            if raw:
-                return _Resp(None, content=content)
-            if path.endswith(".json"):
-                return _Resp({"code": 200, "data": json.loads(content.decode("utf-8"))})
-            return _Resp({"code": 200, "data": {"size": len(content)}})
+            return _Resp(None, content=self.remote[path])
         return _Resp({"code": 404})
 
     def request(self, method, url, **kwargs):
@@ -114,6 +117,9 @@ class _FakeSession:
 
     def post(self, url, **kwargs):
         return self._handle("POST", url, **kwargs)
+
+    def get(self, url, **kwargs):
+        return self._handle("GET", url, **kwargs)
 
 
 class _Resp:
@@ -154,6 +160,8 @@ def _make_run_dir(tmp_path):
     (run_dir / "metrics").mkdir(exist_ok=True)
     (run_dir / "metrics" / "summary.json").write_text('{"s":1}', encoding="utf-8")
     (run_dir / "run-manifest.json").write_text('{"status":"ok"}', encoding="utf-8")
+    os.makedirs(run_dir / "services", exist_ok=True)
+    (run_dir / "services" / "service-manifest.json").write_text("{}", encoding="utf-8")
     os.makedirs(run_dir / "checkpoints", exist_ok=True)
     (run_dir / "checkpoints" / "c").write_text("x", encoding="utf-8")
     return str(run_dir)
@@ -175,6 +183,8 @@ def test_publish_sweep_bundle(tmp_path):
     sweep_dir = tmp_path / "sweep"
     os.makedirs(sweep_dir, exist_ok=True)
     (sweep_dir / "trials.jsonl").write_text("[]", encoding="utf-8")
+    os.makedirs(sweep_dir / "services", exist_ok=True)
+    (sweep_dir / "services" / "service-manifest.json").write_text("{}", encoding="utf-8")
     store.publish_sweep_bundle(str(sweep_dir), "sweep-1")
     assert any("sweep-bundle.tar.gz" in p for p in session.remote)
 
@@ -195,9 +205,24 @@ def test_fetch_latest_checkpoint(tmp_path):
 
 
 def _make_checkpoint_dir(tmp_path):
+    from dl_helper.training.artifacts import sha256_file
+
     ckpt = tmp_path / "ckpt"
     os.makedirs(ckpt, exist_ok=True)
     (ckpt / "estimator.joblib").write_bytes(b"model")
+    manifest = {
+        "complete": True,
+        "run_id": "r1",
+        "files": {
+            "estimator.joblib": {
+                "size": os.path.getsize(ckpt / "estimator.joblib"),
+                "sha256": sha256_file(str(ckpt / "estimator.joblib")),
+            }
+        },
+    }
+    (ckpt / "checkpoint-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
     return str(ckpt)
 
 

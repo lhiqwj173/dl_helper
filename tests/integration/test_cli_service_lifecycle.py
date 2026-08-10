@@ -129,3 +129,37 @@ def test_cli_required_notification_blocks_success(tmp_path, monkeypatch):
     cfg = _base_cfg(tmp_path, "svc-required", notify_type="wecom", policy="required")
     with pytest.raises(Exception):
         cli.main(["train", "--config", cfg, "--experiment", "experiments.toy_multiclass:build_experiment"])
+
+
+def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypatch):
+    """跨 Session required 恢复在 worker 启动前先调用远端恢复。"""
+    from types import SimpleNamespace
+
+    import dl_helper.training.cli as cli
+    import dl_helper.training.backends.torch_backend as torch_backend
+
+    calls: list[str] = []
+
+    class Services:
+        _resolver = None
+
+        def restore_latest_checkpoint(self, run_id):
+            calls.append(f"restore:{run_id}")
+            return "ck-remote"
+
+    def fake_worker(experiment_ref, config, layout, local_rank, world_size, resume, services=None):
+        calls.append(f"worker:{resume}")
+        return SimpleNamespace(status="succeeded")
+
+    monkeypatch.setattr(cli, "_build_services", lambda config, platform, layout: Services())
+    monkeypatch.setattr(torch_backend, "run_worker", fake_worker)
+    cfg = _base_cfg(tmp_path, "remote-resume")
+
+    code = cli.main([
+        "train", "--config", cfg,
+        "--experiment", "experiments.toy_multiclass:build_experiment",
+        "--resume", "required",
+    ])
+
+    assert code == 0
+    assert calls == ["restore:remote-resume", "worker:required"]

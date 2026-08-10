@@ -145,6 +145,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
     resume = args.resume or config.checkpoint.resume
     status = "succeeded"
     try:
+        if resume in ("auto", "required"):
+            from .checkpoint import read_latest
+
+            if read_latest(layout.path("checkpoints")) is None and services is not None:
+                services.restore_latest_checkpoint(run_id)
         if config.backend.type == "sklearn":
             from .backends.sklearn_backend import build_sklearn_experiment, run_sklearn_worker_experiment
             experiment = build_sklearn_experiment(args.experiment, config.experiment)

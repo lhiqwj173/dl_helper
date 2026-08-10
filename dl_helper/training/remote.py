@@ -335,6 +335,9 @@ class AListArtifactStore:
                                        "latest.json")
 
     def fetch_latest_checkpoint(self, run_id: str, target_dir: str) -> str | None:
+        from .artifacts import move_tree, read_json, remove_tree
+        from .checkpoint import CHECKPOINT_MANIFEST, update_latest, validate_manifest_complete
+
         latest_path = f"{self._base_path}/runs/{run_id}/checkpoints/latest.json"
         info = self._get_info(latest_path, missing_ok=True)
         if info is None:
@@ -348,12 +351,31 @@ class AListArtifactStore:
         ckpt_path = latest.get("path")
         if not isinstance(ckpt_path, str) or not ckpt_path:
             raise ArtifactStoreError("AList latest.json 缺少非空 path")
+        if ckpt_path in (".", "..") or os.path.basename(ckpt_path) != ckpt_path:
+            raise ArtifactStoreError(f"AList latest.json path 不是单个安全路径段: {ckpt_path!r}")
         # 下载 archive 到隔离 staging
         archive_path = f"{self._base_path}/runs/{run_id}/checkpoints/{ckpt_path}/archive.tar.gz"
-        staging = os.path.join(target_dir, ".remote-staging")
-        os.makedirs(staging, exist_ok=True)
-        _extract_tar_gz_safe(self._raw_read(archive_path), staging)
-        return ckpt_path
+        os.makedirs(target_dir, exist_ok=True)
+        staging_root = os.path.join(target_dir, f".remote-staging-{os.getpid()}")
+        staging_checkpoint = os.path.join(staging_root, ckpt_path)
+        destination = os.path.join(target_dir, ckpt_path)
+        if os.path.exists(staging_root):
+            raise ArtifactStoreError(f"AList 恢复 staging 已存在: {staging_root!r}")
+        try:
+            os.makedirs(staging_checkpoint)
+            _extract_tar_gz_safe(self._raw_read(archive_path), staging_checkpoint)
+            manifest_path = os.path.join(staging_checkpoint, CHECKPOINT_MANIFEST)
+            if not os.path.isfile(manifest_path):
+                raise ArtifactStoreError("AList checkpoint archive 缺少 checkpoint-manifest.json")
+            manifest = read_json(manifest_path)
+            validate_manifest_complete(manifest, staging_checkpoint)
+            if manifest.get("run_id") != run_id:
+                raise ArtifactStoreError("AList checkpoint manifest run_id 不匹配")
+            move_tree(staging_checkpoint, destination)
+            update_latest(target_dir, ckpt_path, str(latest.get("checkpoint_id", ckpt_path)))
+            return ckpt_path
+        finally:
+            remove_tree(staging_root)
 
     def publish_run_bundle(self, local_dir: str, run_id: str) -> dict[str, str]:
         service_manifest = os.path.join(local_dir, "services", "service-manifest.json")
