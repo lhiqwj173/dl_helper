@@ -173,7 +173,10 @@ class AListArtifactStore:
         if self._token is None:
             self._login()
         session = self._get_session()
-        headers = {"Authorization": self._token}
+        request_headers = kwargs.pop("headers", {})
+        if not isinstance(request_headers, dict):
+            raise ArtifactStoreError("AList 请求 headers 必须是 dict")
+        headers = {"Authorization": self._token, **request_headers}
         last_exc: Exception | None = None
         for attempt in range(self._max_attempts):
             try:
@@ -206,28 +209,92 @@ class AListArtifactStore:
                              retryable=False)
         data = resp.json()
         code = data.get("code")
-        if code not in (200, 400, 403):  # 400/403 表示已存在，视为成功
-            raise ArtifactStoreError(f"AList mkdir 业务码非法: {code!r}")
+        if code != 200:
+            raise ArtifactStoreError(
+                f"AList mkdir 失败: code={code!r}, message={data.get('message')!r}"
+            )
+
+    def _get_info(self, remote_path: str, *, missing_ok: bool = False) -> dict[str, Any] | None:
+        resp = self._request("GET", f"/api/fs/get?path={_quote(remote_path)}", retryable=False)
+        body = resp.json()
+        code = body.get("code")
+        info = body.get("data")
+        if missing_ok and code != 200 and info is None:
+            return None
+        if code != 200 or not isinstance(info, dict):
+            raise ArtifactStoreError(
+                f"AList get 失败: code={code!r}, message={body.get('message')!r}, "
+                f"path={remote_path!r}"
+            )
+        return info
 
     def _upload(self, remote_path: str, data: bytes, size: int) -> None:
-        import requests
-        self._request("PUT", f"/api/fs/put?path={_quote(remote_path)}",
-                      data=data, retryable=True)
+        resp = self._request(
+            "PUT",
+            "/api/fs/put",
+            headers={"File-Path": _quote(remote_path), "Content-Type": "application/octet-stream"},
+            data=data,
+            retryable=True,
+        )
+        body = resp.json()
+        if body.get("code") != 200:
+            raise ArtifactStoreError(
+                f"AList put 失败: code={body.get('code')!r}, message={body.get('message')!r}"
+            )
         # 轮询 info 到 size 匹配
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
-            resp = self._request("GET", f"/api/fs/get?path={_quote(remote_path)}", retryable=False)
-            info = resp.json().get("data", {})
+            info = self._get_info(remote_path, missing_ok=True)
+            if info is None:
+                time.sleep(0.5)
+                continue
             if info.get("size") == size:
                 return
             time.sleep(0.5)
         raise ArtifactStoreError(f"AList 上传后 size 未匹配: {remote_path}")
 
+    def _raw_read(self, remote_path: str) -> bytes:
+        import requests
+        from urllib.parse import urljoin, urlparse
+
+        info = self._get_info(remote_path)
+        assert info is not None
+        raw_url = info.get("raw_url")
+        if not isinstance(raw_url, str) or not raw_url:
+            raise ArtifactStoreError(f"AList metadata 缺少 raw_url: {remote_path!r}")
+        url = urljoin(f"{self._host}/", raw_url)
+        parsed = urlparse(url)
+        if parsed.scheme != "https":
+            raise ArtifactStoreError(f"AList raw_url 必须是 HTTPS: {url!r}")
+
+        host = urlparse(self._host)
+        headers = {"Authorization": self._token} if parsed.netloc == host.netloc else {}
+        last_exc: Exception | None = None
+        for attempt in range(self._max_attempts):
+            try:
+                resp = self._get_session().get(
+                    url,
+                    headers=headers,
+                    timeout=(self._connect_timeout, self._read_timeout),
+                )
+                if resp.status_code in (401, 403):
+                    raise ArtifactStoreError(f"AList raw 下载认证失败: HTTP {resp.status_code}")
+                if resp.status_code >= 500:
+                    raise requests.HTTPError(f"AList raw HTTP {resp.status_code}")
+                if resp.status_code >= 400:
+                    raise ArtifactStoreError(f"AList raw 下载失败: HTTP {resp.status_code}")
+                return resp.content
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+                last_exc = exc
+                if attempt >= self._max_attempts - 1:
+                    break
+                time.sleep(RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)])
+        raise ArtifactStoreError(f"AList raw 下载失败（重试耗尽）: {remote_path}") from last_exc
+
     def _raw_read_sha256(self, remote_path: str) -> str:
-        resp = self._request("GET", f"/api/fs/get?path={_quote(remote_path)}&raw=true", retryable=False)
         import hashlib
         h = hashlib.sha256()
-        h.update(resp.content)
+        h.update(self._raw_read(remote_path))
         return h.hexdigest()
 
     def _publish_file_with_verify(self, remote_dir: str, local_path: str, rel: str) -> None:
@@ -269,21 +336,23 @@ class AListArtifactStore:
 
     def fetch_latest_checkpoint(self, run_id: str, target_dir: str) -> str | None:
         latest_path = f"{self._base_path}/runs/{run_id}/checkpoints/latest.json"
-        resp = self._request("GET", f"/api/fs/get?path={_quote(latest_path)}", retryable=False)
-        if resp.status_code == 404:
+        info = self._get_info(latest_path, missing_ok=True)
+        if info is None:
             return None
-        latest = resp.json().get("data")
-        if not latest:
-            return None
+        try:
+            latest = json.loads(self._raw_read(latest_path).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ArtifactStoreError("AList latest.json 不是合法 UTF-8 JSON") from exc
+        if not isinstance(latest, dict):
+            raise ArtifactStoreError("AList latest.json 根必须是对象")
         ckpt_path = latest.get("path")
-        if not ckpt_path:
-            return None
+        if not isinstance(ckpt_path, str) or not ckpt_path:
+            raise ArtifactStoreError("AList latest.json 缺少非空 path")
         # 下载 archive 到隔离 staging
         archive_path = f"{self._base_path}/runs/{run_id}/checkpoints/{ckpt_path}/archive.tar.gz"
-        archive_resp = self._request("GET", f"/api/fs/get?path={_quote(archive_path)}&raw=true", retryable=False)
         staging = os.path.join(target_dir, ".remote-staging")
         os.makedirs(staging, exist_ok=True)
-        _extract_tar_gz_safe(archive_resp.content, staging)
+        _extract_tar_gz_safe(self._raw_read(archive_path), staging)
         return ckpt_path
 
     def publish_run_bundle(self, local_dir: str, run_id: str) -> dict[str, str]:

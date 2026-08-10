@@ -36,6 +36,7 @@ class _FakeSession:
         self.put_count = 0
         self.login_count = 0
         self.token = "${ALIST_TOKEN}"
+        self.upload_paths: list[str] = []
 
     def _handle(self, method, url, **kwargs):
         self.calls.append(f"{method} {url}")
@@ -49,22 +50,29 @@ class _FakeSession:
             if self.fail_put > 0:
                 self.fail_put -= 1
                 return _FakeResponse(500)
-            # 提取 path 参数
-            path = url.split("path=", 1)[1].split("&", 1)[0]
             import urllib.parse
-            self.remote[urllib.parse.unquote(path)] = kwargs.get("data", b"")
+            path = kwargs.get("headers", {}).get("File-Path")
+            if not path:
+                return _FakeResponse(200, {"code": 500, "message": "missing File-Path", "data": None})
+            decoded_path = urllib.parse.unquote(path)
+            self.upload_paths.append(decoded_path)
+            self.remote[decoded_path] = kwargs.get("data", b"")
             return _FakeResponse(200, {"code": 200})
         if "/api/fs/get" in url:
             path = url.split("path=", 1)[1].split("&", 1)[0]
             import urllib.parse
             path = urllib.parse.unquote(path)
-            raw = "&raw=true" in url or "?raw=true" in url
+            if path not in self.remote:
+                return _FakeResponse(200, {"code": 500, "message": "object not found", "data": None})
+            content = self.remote[path]
+            raw_url = f"/d{urllib.parse.quote(path, safe='/')}"
+            return _FakeResponse(200, {"code": 200, "data": {"size": len(content), "raw_url": raw_url}})
+        if "/d/" in url:
+            import urllib.parse
+            path = urllib.parse.unquote(url.split("/d", 1)[1].split("?", 1)[0])
             if path not in self.remote:
                 return _FakeResponse(404, {"code": 404})
-            content = self.remote[path]
-            if raw:
-                return _FakeResponse(200, content=content)
-            return _FakeResponse(200, {"code": 200, "data": {"size": len(content)}})
+            return _FakeResponse(200, content=self.remote[path])
         return _FakeResponse(404)
 
     def request(self, method, url, **kwargs):
@@ -110,14 +118,11 @@ def test_publish_checkpoint_order(tmp_path):
     (ckpt_dir / "checkpoint-manifest.json").write_text('{"complete": true}', encoding="utf-8")
     store.publish_checkpoint(str(ckpt_dir), "run-1", "ck-1")
     # 发布顺序：archive → manifest → latest
-    order = [c for c in session.calls if "fs/put" in c]
-    urls = [u for u in session.calls if "fs/put" in u or "latest" in u]
-    assert any("archive" in u for u in urls)
-    assert any("checkpoint-manifest" in u for u in urls)
-    assert any("latest.json" in u for u in urls)
-    # 回读校验通过（无 checksum 错误）
-    # 远程 latest 已写入
-    assert any("latest.json" in u for u in session.calls)
+    assert session.upload_paths == [
+        "/dlh/runs/run-1/checkpoints/ck-1/archive.tar.gz",
+        "/dlh/runs/run-1/checkpoints/ck-1/checkpoint-manifest.json",
+        "/dlh/runs/run-1/checkpoints/latest.json",
+    ]
 
 
 def test_publish_checkpoint_checksum_mismatch(tmp_path):
@@ -143,13 +148,45 @@ def test_publish_checkpoint_checksum_mismatch(tmp_path):
 
     def tampered(method, url, **kwargs):
         resp = orig(method, url, **kwargs)
-        if "raw=true" in url and "archive.tar.gz" in url:
+        if "/d/" in url and "archive.tar.gz" in url:
             resp.content = b"tampered-bytes"
         return resp
 
     session._handle = tampered
     with pytest.raises(ArtifactStoreError):
         store.publish_checkpoint(str(ckpt_dir), "run-1", "ck-1")
+
+
+def test_put_business_error_fails_fast(tmp_path):
+    session = _FakeSession()
+    original = session._handle
+
+    def put_business_error(method, url, **kwargs):
+        if "/api/fs/put" in url:
+            return _FakeResponse(200, {"code": 500, "message": "upload rejected", "data": None})
+        return original(method, url, **kwargs)
+
+    session._handle = put_business_error
+    store = _store(session)
+    path = tmp_path / "x.bin"
+    path.write_bytes(b"x")
+    with pytest.raises(ArtifactStoreError, match="upload rejected"):
+        store._publish_file_with_verify("/dlh/probe", str(path), "x.bin")
+
+
+def test_fetch_latest_checkpoint_uses_raw_url(tmp_path):
+    session = _FakeSession()
+    store = _store(session)
+    checkpoint_dir = tmp_path / "checkpoint"
+    checkpoint_dir.mkdir()
+    (checkpoint_dir / "checkpoint-manifest.json").write_text("{}", encoding="utf-8")
+    store.publish_checkpoint(str(checkpoint_dir), "run-raw", "ck-1")
+
+    target = tmp_path / "target"
+    checkpoint_id = store.fetch_latest_checkpoint("run-raw", str(target))
+
+    assert checkpoint_id == "ck-1"
+    assert (target / ".remote-staging" / "checkpoint-manifest.json").is_file()
 
 
 def test_authentication_not_retried(tmp_path):
