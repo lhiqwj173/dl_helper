@@ -23,15 +23,17 @@ def test_remaining_gate_is_pinned_and_complete():
     code = _code()
     assert "65f1063ffe3ebef746d080c503bfc27b29999829" in code
     assert "https://tmsatws.kdns.fr" in code
-    assert "kaggle-toy-sweep-20260810" in code
-    assert "sklearn-incremental-smoke-20260810" in code
+    assert "run_stamp = datetime.now(timezone.utc)" in code
+    assert "DL_HELPER_RUN_STAMP" in code
+    assert "f'kaggle-toy-sweep-{run_stamp}'" in code
+    assert "f'sklearn-incremental-smoke-{run_stamp}'" in code
     for command in ("doctor", "sweep", "train"):
         assert f"'{command}'" in code
     for artifact in ("sweep-manifest.json", "run-manifest.json", "service-audit.jsonl",
                      "report/index.html"):
         assert artifact in code
-    assert "kaggle-sweep-evidence-20260810.zip" in code
-    assert "sklearn-incremental-evidence-20260810.zip" in code
+    assert "f'/kaggle/working/kaggle-sweep-evidence-{evidence_stamp}.zip'" in code
+    assert "f'/kaggle/working/sklearn-incremental-evidence-{evidence_stamp}.zip'" in code
     assert "sweep-report/index.html" in code
 
 

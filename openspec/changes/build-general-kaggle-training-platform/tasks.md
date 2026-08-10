@@ -312,7 +312,7 @@
   - 约束：脚本使用 `sys.executable`、所有文本 subprocess `encoding='utf-8'`，不使用 shell；不得跳过测试、降阈值或依赖外网。
   - 验证：`& 'D:/programs/miniconda3/python.exe' tools/verify_release.py`；预期所有本地门禁返回 0，且 OpenSpec strict 无错误。
 
-- [ ] 10.7 执行 Kaggle 真机发布门禁并保存证据
+- [x] 10.7 执行 Kaggle 真机发布门禁并保存证据
   - 依据：`固定 revision 的 Kaggle 启动`、`运行预算与可恢复退出`、`通用 ArtifactStore 生命周期`、`固定企业微信生命周期通知`、D-002、D-006、D-012、D-016、REF-005、REF-009
   - 修改：使用候选 40 位 commit 在真实 Kaggle 运行模板：Torch toy/MNIST 使用全部可见 GPU并触发一次 PREEMPTED/AList 跨会话恢复；另运行 sklearn incremental CPU smoke；下载不含 Secret 的 doctor、manifest、audit 和 HTML 作为发布工件。
   - 约束：不得用本地模拟替代、不得浮动 revision或提交大运行产物；凭证仅 Kaggle Secrets；仓库所有者同时确认历史 AList/企业微信/其他已识别凭证已轮换。
