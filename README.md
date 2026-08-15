@@ -31,6 +31,7 @@ D:/programs/miniconda3/python.exe -m dl_helper.training.cli report --run runs/<r
 
 ## 核心文档
 
+- [训练指南](docs/training/guide.md) — 从零到出报告的全流程教程（新手上路先读这里）
 - [配置](docs/training/configuration.md) — schema v1、base/variant、跨字段约束
 - [指标](docs/training/metrics.md) — 流式指标、sklearn 金标、公式版本
 - [自定义任务](docs/training/custom-task.md) — Task 协议与 PredictedBatch
@@ -39,7 +40,6 @@ D:/programs/miniconda3/python.exe -m dl_helper.training.cli report --run runs/<r
 - [sweep](docs/training/sweeps.md) — manifest、可比性、排名
 - [Kaggle](docs/training/kaggle.md) — 固定 revision、预算、恢复
 - [Artifacts](docs/training/artifacts.md) — run/sweep schema、检查点
-- [破坏性迁移](docs/training/breaking-removal.md) — 旧体系移除边界
 
 ## 依赖
 
