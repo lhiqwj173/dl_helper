@@ -38,11 +38,11 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 - **THEN** CLI 原子发布 pause manifest 并返回 75，不与 FAILED/SUCCEEDED 混淆
 
 ### Requirement: 复现实验 manifest
-系统 MUST 记录 source revision、base/variant/resolved config、DataIdentity/split fingerprint、Task/MetricDefinition、model signature、backend runtime versions、OS/设备、seed、确定性和线程配置。Kaggle MUST 要求固定 clean source revision。
+系统 MUST 记录 source revision、base/variant/resolved config、DataIdentity/split fingerprint、Task/MetricDefinition、model signature、backend runtime versions、OS/设备、seed、确定性和线程配置。source revision MAY 是 tag、分支、短 SHA 或其他无空白版本标识，不要求 40 位 SHA。
 
 #### Scenario: Git Kaggle 运行
 - **WHEN** 工作树来自 Git checkout
-- **THEN** Kaggle source revision 必须与 clean HEAD 的 40 位 SHA 完全一致
+- **THEN** 未显式配置时记录 `--project-dir` 对应 Git 工作树的短 SHA；显式配置时原样记录无空白版本标识
 
 #### Scenario: 非 Git Local
 - **WHEN** 无法获取 Git SHA
@@ -98,7 +98,7 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 - **THEN** extra 不存在，wheel 版本为 1.0.0，且不含 RL/AutoML/GUI/TorchMetrics/py-ext/C++ 依赖
 
 #### Scenario: Kaggle 依赖不兼容
-- **WHEN** doctor 发现 backend runtime 超出支持范围
+- **WHEN** train 自动预检发现 backend runtime 超出支持范围
 - **THEN** 非零返回实际/支持版本，不执行 pip upgrade
 
 ### Requirement: 自动化科学正确性门禁
@@ -118,7 +118,7 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 
 #### Scenario: Kaggle 发布证据
 - **WHEN** 候选 revision 发布
-- **THEN** 真实 Kaggle CUDA 完成 doctor、Torch 多 GPU、一次暂停恢复、AList/企业微信审计、报告和 manifest，并另以 sklearn incremental CPU smoke 核验 backend contract
+- **THEN** 真实 Kaggle CUDA 完成自动预检、Torch 多 GPU、一次暂停恢复、AList/企业微信审计、报告和 manifest，并另以 sklearn incremental CPU smoke 核验 backend contract
 
 ### Requirement: 旧训练体系完整移除
 候选 revision MUST 从 Git 跟踪内容和 wheel 删除旧训练器、模型、变换、历史实验、RL/AutoML/GUI、旧 Notebook/env、C++、vendored 包和 checkpoint。删除 MUST NOT 通过 shim、改名或 gitignore 隐藏。

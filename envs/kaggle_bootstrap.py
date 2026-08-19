@@ -1,13 +1,12 @@
 #!/usr/bin/env python
-"""Kaggle 固定 revision 启动脚本：clone/checkout/HEAD 校验/安装/doctor。
+"""Kaggle 启动脚本：clone（可选 ref）/安装 dl-helper。
 
-不包含 Secret，不下载浮动 master，不执行 git pull 或静默升级框架。
+训练项目不属于 dl-helper；配置、项目目录和输出由调用方显式提供。
 所有子进程返回码被检查；文本 I/O 显式 UTF-8。
 """
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 
@@ -28,12 +27,12 @@ def run(cmd: list[str], cwd: str | None = None) -> subprocess.CompletedProcess:
     return proc
 
 
-def git_ref() -> str:
-    """从环境读取 40 位 commit SHA；拒绝其他值。"""
+def git_ref() -> str | None:
+    """读取可选的 tag/分支/短 SHA；不再限制为 40 位 SHA。"""
     ref = os.environ.get("DL_HELPER_GIT_REF", "").strip()
-    if not re.match(r"^[0-9a-fA-F]{40}$", ref):
-        fail("DL_HELPER_GIT_REF 必须是 40 位 commit SHA")
-    return ref
+    if ref and any(ch.isspace() for ch in ref):
+        fail("DL_HELPER_GIT_REF 不得包含空白字符")
+    return ref or None
 
 
 def resolve_repo_dir(repo_url: str) -> str:
@@ -57,34 +56,6 @@ def resolve_repo_dir(repo_url: str) -> str:
     return repo_dir
 
 
-def resolve_doctor_config(repo_dir: str, working_dir: str = "/kaggle/working") -> str:
-    """为显式 Kaggle 数据路径生成 working 目录中的临时 doctor 配置。"""
-    source = os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml")
-    run_root = os.path.join(working_dir, "dl-helper-runs")
-    os.makedirs(run_root, exist_ok=True)
-    data_path = os.environ.get("DL_HELPER_MNIST_PATH", "").strip()
-    if not data_path:
-        return source
-    if not os.path.isabs(data_path):
-        fail("DL_HELPER_MNIST_PATH 必须是绝对路径")
-    if not os.path.isfile(data_path):
-        fail(f"DL_HELPER_MNIST_PATH 不存在或不是文件: {data_path}")
-
-    import yaml
-
-    with open(source, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-    if (not isinstance(config, dict) or not isinstance(config.get("run"), dict)
-            or not isinstance(config.get("experiment"), dict)):
-        fail("Kaggle MNIST 基础配置必须包含 run 和 experiment mapping")
-    config["experiment"]["data_path"] = data_path
-    config["run"]["output_root"] = run_root
-    output = os.path.join(working_dir, "dl-helper-doctor.yaml")
-    with open(output, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
-    return output
-
-
 def main() -> int:
     repo_url = os.environ.get("DL_HELPER_GIT_REPO", "").strip()
     if not repo_url:
@@ -93,21 +64,14 @@ def main() -> int:
 
     # 模板可先完成 clone/checkout；独立执行时此处创建全新 checkout。
     repo_dir = resolve_repo_dir(repo_url)
-    # 固定到请求 revision，不依赖当前分支或远端默认分支。
-    run(["git", "checkout", ref], cwd=repo_dir)
-    # 2. 校验 HEAD 与固定 revision 一致
-    head = run(["git", "rev-parse", "HEAD"], cwd=repo_dir).stdout.strip()
-    if head.lower() != ref.lower():
-        fail(f"HEAD {head} 与固定 revision {ref} 不一致")
-    # 3. 安装（不升级框架）
+    if ref:
+        run(["git", "checkout", ref], cwd=repo_dir)
+        head = run(["git", "rev-parse", "--short", "HEAD"], cwd=repo_dir).stdout.strip()
+        if not head:
+            fail("无法读取 checkout 后的 Git 版本")
+    # 安装库本身，不安装依赖、不运行任何训练项目。
     run([sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"], cwd=repo_dir)
-    # 4. doctor
-    doctor_config = resolve_doctor_config(repo_dir)
-    run([sys.executable, "-m", "dl_helper.training.cli", "doctor",
-         "--config", doctor_config,
-         "--experiment", "experiments.mnist:build_experiment"],
-        cwd=repo_dir)
-    print("[bootstrap] OK: 固定 revision 就绪")
+    print("[bootstrap] OK: dl-helper 已安装；请使用自己的 --project-dir/--config/--experiment 运行 train")
     return 0
 
 

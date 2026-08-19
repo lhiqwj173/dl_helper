@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 import platform as _platform
 import socket
-import string
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
@@ -85,6 +84,16 @@ class EnvironmentManifest:
     sklearn_version: str | None = None
     numpy_version: str | None = None
     thread_env: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EpochBudgetForecast:
+    """完成一个完整 epoch 后的预算预测。"""
+
+    epoch_seconds: float
+    average_epoch_seconds: float
+    remaining_training_seconds: float
+    should_preempt: bool
 
 
 class Platform:
@@ -287,6 +296,10 @@ class SecretResolver:
         return value
 
     def _lookup(self, key: str) -> str | None:
+        # Kaggle Notebook 也允许显式注入同名环境变量，便于调试和自托管运行。
+        env_value = self._env.get(key)
+        if env_value:
+            return env_value
         if self._platform.is_kaggle:
             try:
                 from kaggle_secrets import UserSecretsClient
@@ -308,43 +321,134 @@ class SecretResolver:
         return text
 
 
-def resolve_source_revision(config: Config) -> str:
-    """解析 source revision：Kaggle 必须 40 位 SHA；本地显式提供或从 Git 获取。"""
+def resolve_source_revision(config: Config, cwd: str | None = None) -> str:
+    """解析可审计的代码版本标识。
+
+    版本标识可以是 tag、分支名、短 SHA 或任意非空字符串；平台不再强制
+    使用完整 40 位 SHA。未显式配置时尽力读取当前 Git HEAD，Git 不可用时
+    直接报错，避免把未知版本静默记录为可复现版本。
+    """
     revision = config.run.source_revision
     if revision:
-        if len(revision) != 40 or any(c not in string.hexdigits for c in revision):
-            raise PlatformError(f"source_revision 必须为 40 位 Git SHA: {revision!r}")
-        return revision
-    try:
-        import subprocess
-        proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, encoding="utf-8", check=False,
-        )
-        if proc.returncode == 0:
-            head = proc.stdout.strip()
-            if len(head) == 40:
-                return head
-    except Exception:
-        pass
-    raise PlatformError("无法获取 Git revision；请显式提供 run.source_revision")
+        if not revision.strip() or any(ch.isspace() for ch in revision):
+            raise PlatformError(f"source_revision 必须是无空白的非空版本标识: {revision!r}")
+        return revision.strip()
+
+    import subprocess
+
+    proc = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"],
+        cwd=cwd, capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    raise PlatformError("无法获取 Git revision；请显式提供 run.source_revision（tag/分支/短 SHA 均可）")
 
 
 def free_disk_bytes(path: str) -> int:
     """目标路径所在分区的可用空间（字节）。"""
+    probe = os.path.abspath(path)
+    while not os.path.exists(probe):
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            raise PlatformError(f"无法定位输出目录所在分区: {path!r}")
+        probe = parent
+    if not os.path.isdir(probe):
+        probe = os.path.dirname(probe)
     try:
         import ctypes
 
         if os.name == "nt":
             free_bytes = ctypes.c_ulonglong(0)
             ctypes.windll.kernel32.GetDiskFreeSpaceExW(
-                os.path.dirname(os.path.abspath(path)) or path, None, None, ctypes.byref(free_bytes)
+                probe, None, None, ctypes.byref(free_bytes)
             )
             return int(free_bytes.value)
-        st = os.statvfs(path)
+        st = os.statvfs(probe)
         return st.f_bavail * st.f_frsize
     except Exception:
         raise PlatformError(f"无法获取磁盘空间: {path!r}")
+
+
+# --------------------------------------------------------------------------
+# 执行策略（D-003：平台独立，不可由 YAML 构造）
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ExecutionPolicy:
+    """平台独立执行策略；只能由平台检测构造，不可写入用户配置 schema。
+
+    max_minutes 为 None 表示不启用运行预算（Local）。
+    """
+
+    platform: PlatformKind
+    max_minutes: float | None
+    shutdown_grace_minutes: float
+
+
+# 唯一 Kaggle 策略：660 分钟训练预算 + 10 分钟收尾窗口（720 平台上限内留约 60 分钟缓冲）
+KAGGLE_TRAINING_BUDGET_MINUTES = 660.0
+KAGGLE_SHUTDOWN_GRACE_MINUTES = 10.0
+LOCAL_SHUTDOWN_GRACE_MINUTES = 10.0
+
+
+def kaggle_execution_policy() -> ExecutionPolicy:
+    return ExecutionPolicy(
+        platform="kaggle",
+        max_minutes=KAGGLE_TRAINING_BUDGET_MINUTES,
+        shutdown_grace_minutes=KAGGLE_SHUTDOWN_GRACE_MINUTES,
+    )
+
+
+def local_execution_policy() -> ExecutionPolicy:
+    return ExecutionPolicy(
+        platform="local",
+        max_minutes=None,
+        shutdown_grace_minutes=LOCAL_SHUTDOWN_GRACE_MINUTES,
+    )
+
+
+def execution_policy_for(platform: Platform) -> ExecutionPolicy:
+    """当前平台的唯一执行策略；Kaggle 恒为 660/10，Local 不启用预算。"""
+    return kaggle_execution_policy() if platform.is_kaggle else local_execution_policy()
+
+
+def execution_policy_to_dict(policy: ExecutionPolicy) -> dict[str, Any]:
+    """策略序列化为纯 dict（spawn 子进程 / execution-policy.json 用）。"""
+    return {
+        "schema_version": 1,
+        "platform": policy.platform,
+        "max_minutes": policy.max_minutes,
+        "shutdown_grace_minutes": policy.shutdown_grace_minutes,
+    }
+
+
+def execution_policy_from_dict(data: Mapping[str, Any]) -> ExecutionPolicy:
+    """从纯 dict 严格重建策略；缺字段、未知字段或与平台不一致立即失败。"""
+    if not isinstance(data, Mapping):
+        raise PlatformError("execution-policy dict 必须是 mapping")
+    unknown = [k for k in data if k not in (
+        "schema_version", "platform", "max_minutes", "shutdown_grace_minutes"
+    )]
+    if unknown:
+        raise PlatformError(f"execution-policy 含未知字段: {sorted(unknown)}")
+    if data.get("schema_version") != 1:
+        raise PlatformError(f"execution-policy schema_version 必须为 1: {data.get('schema_version')!r}")
+    kind = data.get("platform")
+    if kind not in ("local", "kaggle"):
+        raise PlatformError(f"execution-policy platform 非法: {kind!r}")
+    rebuilt = ExecutionPolicy(
+        platform=kind,
+        max_minutes=data.get("max_minutes"),
+        shutdown_grace_minutes=data.get("shutdown_grace_minutes"),
+    )
+    expected = kaggle_execution_policy() if kind == "kaggle" else local_execution_policy()
+    if rebuilt != expected:
+        raise PlatformError(
+            f"execution-policy 与平台 {kind!r} 不一致: "
+            f"max_minutes={rebuilt.max_minutes!r}, grace={rebuilt.shutdown_grace_minutes!r}"
+        )
+    return rebuilt
 
 
 # --------------------------------------------------------------------------
@@ -352,15 +456,36 @@ def free_disk_bytes(path: str) -> int:
 # --------------------------------------------------------------------------
 
 class RuntimeBudget:
-    """monotonic 预算：elapsed >= max-grace 时停止新 step，不动态估算保存耗时。"""
+    """monotonic 预算：硬截止检查 + 完整 epoch 均值预测。"""
 
     def __init__(self, max_minutes: float, grace_minutes: float, monotonic=None) -> None:
         if max_minutes <= 0 or grace_minutes < 0 or grace_minutes >= max_minutes:
             raise PlatformError("预算要求 grace < max 且均为正")
         self._now = monotonic or time.monotonic
         self._deadline = self._now() + (max_minutes - grace_minutes) * 60.0
+        self._epoch_durations: list[float] = []
         self.max_minutes = max_minutes
         self.grace_minutes = grace_minutes
 
     def hit(self) -> bool:
         return self._now() >= self._deadline
+
+    def begin_epoch(self) -> float:
+        """返回 epoch 起始 monotonic 时间戳。"""
+        return self._now()
+
+    def complete_epoch(self, started_at: float) -> EpochBudgetForecast:
+        """记录完整 epoch，并判断剩余时间能否容纳下一个平均 epoch。"""
+        finished_at = self._now()
+        duration = finished_at - started_at
+        if duration < 0:
+            raise PlatformError("monotonic 时钟倒退，无法估算 epoch 耗时")
+        self._epoch_durations.append(duration)
+        average = sum(self._epoch_durations) / len(self._epoch_durations)
+        remaining = max(0.0, self._deadline - finished_at)
+        return EpochBudgetForecast(
+            epoch_seconds=duration,
+            average_epoch_seconds=average,
+            remaining_training_seconds=remaining,
+            should_preempt=average > remaining,
+        )

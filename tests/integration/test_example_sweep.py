@@ -11,7 +11,7 @@ import yaml
 
 from dl_helper.training.sweep import run_sweep
 
-SWEEP = os.path.join("configs", "sweeps", "toy-learning-rate")
+SWEEP = os.path.join("examples", "configs", "sweeps", "toy-learning-rate")
 
 
 @pytest.mark.slow

@@ -10,9 +10,12 @@ from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.backends.torch_backend import run_worker
 from dl_helper.training.checkpoint import CheckpointError, read_latest
 from dl_helper.training.config import default_schema, parse_config
+from dl_helper.training.platform import ExecutionPolicy
+
+_BUDGET = ExecutionPolicy(platform="local", max_minutes=10.0, shutdown_grace_minutes=2.0)
 
 
-def _cfg(run_id, max_epochs, resume="none", every_steps=None, max_minutes=None):
+def _cfg(run_id, max_epochs, every_steps=None):
     schema = default_schema()
     schema["training"]["max_epochs"] = max_epochs
     schema["selection"] = {"metric": "val/loss", "mode": "min", "patience": 30, "min_delta": 0.0}
@@ -21,9 +24,6 @@ def _cfg(run_id, max_epochs, resume="none", every_steps=None, max_minutes=None):
     schema["checkpoint"]["every_epochs"] = None
     schema["checkpoint"]["every_optimizer_steps"] = every_steps
     schema["checkpoint"]["keep_last"] = 10
-    schema["checkpoint"]["resume"] = resume
-    schema["runtime"]["max_minutes"] = max_minutes
-    schema["runtime"]["shutdown_grace_minutes"] = 2
     schema["backend"]["torch"]["mixed_precision"] = "no"
     schema["backend"]["torch"]["deterministic"] = "off"
     schema["distributed"]["num_processes"] = 1
@@ -46,11 +46,11 @@ class _AdvancingClock:
 def test_mid_epoch_resume_does_not_repeat_steps(tmp_path):
     """batch 检查点记录真实位置；resume 不重复已完成优化 step。"""
     run_dir = str(tmp_path / "runs" / "mid-epoch")
-    cfg1 = _cfg("mid-epoch", max_epochs=1, resume="auto", every_steps=4, max_minutes=10)
+    cfg1 = _cfg("mid-epoch", max_epochs=1, every_steps=4)
     layout1 = RunLayout(run_dir)
     layout1.ensure()
     r1 = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg1, layout1, 0, 1, "auto",
-                    budget_monotonic=_AdvancingClock())
+                    budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET)
     assert r1.status == "preempted"
     # 检查点记录了 batch_in_epoch 位置
     latest = read_latest(layout1.path("checkpoints"))
@@ -59,7 +59,7 @@ def test_mid_epoch_resume_does_not_repeat_steps(tmp_path):
     assert manifest["batch_in_epoch"] > 0
 
     # resume：从 epoch 1 位置继续，不重复 epoch 0 的 8 个 step
-    cfg2 = _cfg("mid-epoch", max_epochs=2, resume="auto", every_steps=4)
+    cfg2 = _cfg("mid-epoch", max_epochs=2, every_steps=4)
     layout2 = RunLayout(run_dir)
     layout2.ensure()
     r2 = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg2, layout2, 0, 1, "auto")
@@ -76,12 +76,12 @@ def test_mid_epoch_resume_does_not_repeat_steps(tmp_path):
 def test_auto_resume_corrupt_latest_fails(tmp_path):
     """auto 恢复遇到损坏 latest 必须失败，不静默从零重训。"""
     run_dir = str(tmp_path / "runs" / "corrupt-auto")
-    cfg1 = _cfg("corrupt-auto", max_epochs=1, resume="auto", every_steps=4, max_minutes=10)
+    cfg1 = _cfg("corrupt-auto", max_epochs=1, every_steps=4)
     layout1 = RunLayout(run_dir)
     layout1.ensure()
     # 预算预占：产生 checkpoint + pause 终态，无 success 终态
     run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg1, layout1, 0, 1, "auto",
-               budget_monotonic=_AdvancingClock())
+               budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET)
     # 篡改 latest 指向的 checkpoint
     latest = read_latest(layout1.path("checkpoints"))
     ckpt_dir = os.path.join(layout1.path("checkpoints"), latest["path"])
@@ -94,7 +94,7 @@ def test_auto_resume_corrupt_latest_fails(tmp_path):
 def test_auto_resume_no_checkpoint_starts_fresh(tmp_path):
     """auto 且确实无 latest → 从零开始。"""
     run_dir = str(tmp_path / "runs" / "auto-fresh")
-    cfg = _cfg("auto-fresh", max_epochs=1, resume="auto", every_steps=4)
+    cfg = _cfg("auto-fresh", max_epochs=1, every_steps=4)
     layout = RunLayout(run_dir)
     layout.ensure()
     r = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg, layout, 0, 1, "auto")
@@ -114,7 +114,7 @@ def test_resumed_trajectory_matches_continuous(tmp_path):
     layout_c = RunLayout(cont_dir)
     layout_c.ensure()
     rc = run_worker("experiments.toy_multiclass_resumable:build_experiment",
-                    _cfg("cont", max_epochs=2, resume="none"), layout_c, 0, 1, "none")
+                    _cfg("cont", max_epochs=2), layout_c, 0, 1, "none")
     assert rc.global_step == 16
 
     # 恢复：epoch 0 中途预算预占 → checkpoint，再恢复至完成 2 epoch
@@ -122,8 +122,8 @@ def test_resumed_trajectory_matches_continuous(tmp_path):
     layout_r = RunLayout(res_dir)
     layout_r.ensure()
     r1 = run_worker("experiments.toy_multiclass_resumable:build_experiment",
-                    _cfg("res", max_epochs=1, resume="auto", every_steps=4, max_minutes=10),
-                    layout_r, 0, 1, "auto", budget_monotonic=_AdvancingClock())
+                    _cfg("res", max_epochs=1, every_steps=4),
+                    layout_r, 0, 1, "auto", budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET)
     assert r1.status == "preempted"
     latest = read_latest(layout_r.path("checkpoints"))
     ckpt_dir = os.path.join(layout_r.path("checkpoints"), latest["path"])
@@ -131,7 +131,7 @@ def test_resumed_trajectory_matches_continuous(tmp_path):
     assert 0 < ckpt_manifest["batch_in_epoch"] < 8  # 真中途
 
     r2 = run_worker("experiments.toy_multiclass_resumable:build_experiment",
-                    _cfg("res", max_epochs=2, resume="auto", every_steps=4),
+                    _cfg("res", max_epochs=2, every_steps=4),
                     layout_r, 0, 1, "auto")
     assert r2.status == "succeeded"
     assert r2.global_step == 16

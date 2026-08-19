@@ -31,9 +31,8 @@ def _skl_cfg(**patch):
     schema["distributed"] = {"num_processes": 1}
     schema["training"] = {"max_epochs": 1, "log_every_steps": 1}
     schema["selection"] = None
-    schema["runtime"] = {"max_minutes": None, "shutdown_grace_minutes": 10}
     schema["checkpoint"] = {"every_epochs": None, "every_optimizer_steps": None,
-                            "keep_last": 1, "resume": "none"}
+                            "keep_last": 1}
     for k, v in patch.items():
         if isinstance(v, dict) and isinstance(schema.get(k), dict):
             schema[k] = {**schema[k], **v}

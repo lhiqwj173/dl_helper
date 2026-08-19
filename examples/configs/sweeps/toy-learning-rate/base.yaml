@@ -34,10 +34,6 @@ checkpoint:
   every_epochs: null
   every_optimizer_steps: null
   keep_last: 1
-  resume: none
-runtime:
-  max_minutes: null
-  shutdown_grace_minutes: 10
 report:
   enabled: true
   curve_sample_limit: 100000

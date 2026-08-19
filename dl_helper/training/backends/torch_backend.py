@@ -67,7 +67,8 @@ def build_torch_components(experiment: TorchExperiment, config: Config):
     return model, datamodule, task, optimizer, scheduler_binding
 
 
-def validate_fresh_components(model, datamodule, task, optimizer, scheduler_binding, config: Config) -> None:
+def validate_fresh_components(model, datamodule, task, optimizer, scheduler_binding, config: Config,
+                              execution_policy=None) -> None:
     """预检：模型未上设备/DDP/训练过，scheduler 可序列化，DataModule 结构完整。"""
     import torch
     import torch.nn as nn
@@ -101,7 +102,7 @@ def validate_fresh_components(model, datamodule, task, optimizer, scheduler_bind
 
     if config.checkpoint.every_optimizer_steps is not None and not datamodule.supports_mid_epoch_resume:
         raise TorchBackendError("every_optimizer_steps 要求 DataModule 支持中途恢复")
-    if config.runtime.max_minutes is not None and not datamodule.supports_mid_epoch_resume:
+    if execution_policy is not None and execution_policy.max_minutes is not None and not datamodule.supports_mid_epoch_resume:
         raise TorchBackendError("运行时预算要求 DataModule 支持中途恢复")
 
     validate_selection(config.selection, task.metric_definitions, datamodule.val_dataloader() is not None)
@@ -179,6 +180,7 @@ def run_worker(
     budget_monotonic=None,
     services=None,
     publish_terminal=True,
+    execution_policy=None,
 ) -> BackendResult:
     """在 worker 内执行完整 torch 训练并返回 BackendResult。"""
     # strict 确定性需 CuBLAS workspace 配置，必须在 torch 导入/CUDA 初始化前设置
@@ -205,7 +207,8 @@ def run_worker(
 
     experiment = build_experiment_from_ref(experiment_ref, config.experiment)
     model, datamodule, task, optimizer, scheduler_binding = build_torch_components(experiment, config)
-    validate_fresh_components(model, datamodule, task, optimizer, scheduler_binding, config)
+    validate_fresh_components(model, datamodule, task, optimizer, scheduler_binding, config,
+                              execution_policy=execution_policy)
 
     # compile 显式：失败不回退
     if backend.compile:
@@ -295,9 +298,9 @@ def run_worker(
     best_value = None
 
     budget = None
-    if config.runtime.max_minutes is not None:
+    if execution_policy is not None and execution_policy.max_minutes is not None:
         from ..platform import RuntimeBudget
-        budget = RuntimeBudget(config.runtime.max_minutes, config.runtime.shutdown_grace_minutes,
+        budget = RuntimeBudget(execution_policy.max_minutes, execution_policy.shutdown_grace_minutes,
                                monotonic=budget_monotonic)
 
     layout.log(f"worker rank={local_rank}/{world_size} started, model={model_sig['class']}")
@@ -309,9 +312,15 @@ def run_worker(
     first_loop_iter = True
     try:  # OSR-003：训练失败时记录精确位置后重抛
         while epoch < config.training.max_epochs and not budget_hit:
-            if not (first_loop_iter and resumed_mid_epoch):
+            resumed_partial_this_epoch = first_loop_iter and resumed_mid_epoch
+            if not resumed_partial_this_epoch:
                 metric_states["train"].reset()
             first_loop_iter = False
+            epoch_started_at = (
+                budget.begin_epoch()
+                if budget is not None and not resumed_partial_this_epoch
+                else None
+            )
             train_loader = accelerator.prepare(datamodule.train_dataloader())
             if hasattr(train_loader, "sampler") and hasattr(train_loader.sampler, "set_epoch"):
                 train_loader.sampler.set_epoch(epoch)  # DDP：每 epoch 不同 shuffle
@@ -414,10 +423,38 @@ def run_worker(
                 datamodule.advance_epoch()  # OSR-004：DataModule epoch 状态同步推进
             engine_state.advance_epoch()
             epoch = engine_state.epoch
+            checkpoint_saved_at_boundary = False
             if (config.checkpoint.every_epochs is not None
                     and engine_state.epoch % config.checkpoint.every_epochs == 0):
                 _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
                                        config, model_sig, data_fp, best_model_state=best_model_state, services=services)
+                checkpoint_saved_at_boundary = True
+
+            if budget is not None and epoch_started_at is not None and epoch < config.training.max_epochs:
+                forecast = budget.complete_epoch(epoch_started_at)
+                should_preempt = forecast.should_preempt
+                if accelerator.num_processes > 1:
+                    import torch as _torch
+                    decision = _torch.tensor(
+                        [1.0 if should_preempt else 0.0], device=accelerator.device
+                    )
+                    accelerator.reduce(decision, reduction="sum")
+                    should_preempt = decision.item() > 0
+                if should_preempt:
+                    if accelerator.is_main_process:
+                        layout.log(
+                            "预算预测暂停: "
+                            f"average_epoch={forecast.average_epoch_seconds:.3f}s, "
+                            f"remaining_training={forecast.remaining_training_seconds:.3f}s"
+                        )
+                    if not checkpoint_saved_at_boundary:
+                        _save_torch_checkpoint(
+                            accelerator, layout, engine_state, datamodule, metric_states,
+                            config, model_sig, data_fp, best_model_state=best_model_state,
+                            services=services,
+                        )
+                    budget_hit = True
+                    break
 
     except BaseException:
         try:

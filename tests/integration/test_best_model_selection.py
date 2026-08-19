@@ -8,6 +8,7 @@ import os
 from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.backends.torch_backend import run_worker
 from dl_helper.training.config import default_schema, parse_config
+from dl_helper.training.platform import ExecutionPolicy
 
 
 def _cfg(run_id, max_epochs=5, patience=20, lr=0.5):
@@ -78,12 +79,12 @@ def test_best_survives_pause_resume_without_improvement(tmp_path):
 
     run_dir = str(tmp_path / "runs" / "best-resume")
     cfg1 = _cfg("best-resume", max_epochs=6, patience=30, lr=1.5)
-    cfg1 = replace(cfg1, checkpoint=replace(cfg1.checkpoint, every_optimizer_steps=4),
-                   runtime=replace(cfg1.runtime, max_minutes=10, shutdown_grace_minutes=2))
+    cfg1 = replace(cfg1, checkpoint=replace(cfg1.checkpoint, every_optimizer_steps=4))
     layout = RunLayout(run_dir)
     layout.ensure()
     r1 = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg1, layout, 0, 1, "auto",
-                    budget_monotonic=_Clock(40))
+                    budget_monotonic=_Clock(40),
+                    execution_policy=ExecutionPolicy(platform="local", max_minutes=10, shutdown_grace_minutes=2))
     assert r1.status == "preempted"
 
     # 预算检查点保存了非空 best 权重

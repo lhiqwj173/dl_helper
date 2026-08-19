@@ -1,4 +1,4 @@
-"""任务 7.4：Kaggle Notebook 模板 —— 结构、命令顺序、SHA、无 Secret。"""
+"""Kaggle Notebook 模板：结构、自动预检、无明文 Secret。"""
 from __future__ import annotations
 
 import json
@@ -25,11 +25,9 @@ def test_valid_notebook_structure():
     assert len([c for c in nb.cells if c.cell_type == "code"]) >= 2
 
 
-def test_pinned_revision_sha():
+def test_revision_can_be_human_readable():
     code = _all_code()
     assert "DL_HELPER_GIT_REF" in code
-    # 占位 SHA 为 40 位十六进制
-    assert "0000000000000000000000000000000000000000" in code
 
 
 def test_no_floating_master_or_pull():
@@ -38,16 +36,17 @@ def test_no_floating_master_or_pull():
     assert "origin/master" not in code
 
 
-def test_bootstrap_and_doctor_in_order():
+def test_bootstrap_and_preflight_in_order():
     code = _all_code()
     idx_clone = code.index("'clone'")
     idx_checkout = code.index("'checkout'")
     idx_head = code.index("'rev-parse'")
     idx_bootstrap = code.index("kaggle_bootstrap.py")
-    idx_doctor = code.index("doctor")
-    assert idx_clone < idx_checkout < idx_head < idx_bootstrap < idx_doctor
+    idx_preflight = code.index("--preflight-only")
+    assert idx_clone < idx_checkout < idx_head < idx_bootstrap < idx_preflight
     assert "DL_HELPER_REPO_DIR" in code
-    assert "/kaggle/working/dl-helper-doctor.yaml" in code
+    assert "/kaggle/working/dl-helper-kaggle.yaml" in code
+    assert "'doctor'" not in code
 
 
 def test_subprocess_return_code_checked():

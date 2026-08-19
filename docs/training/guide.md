@@ -10,12 +10,12 @@
 把平台想象成一个**训练工厂**，输入两样东西，输出一套完整产物：
 
 ```
-你的训练项目
-  ├── Experiment 模块   experiments/<项目名>.py   →  定义「模型长什么样、数据从哪来、用什么指标」
-  └── 配置 YAML          configs/<项目名>.yaml     →  定义「怎么训：训几轮、用什么后端、多久存一次」
+你的训练项目目录
+  ├── Experiment 模块   <项目>/my_project.py       →  定义「模型长什么样、数据从哪来、用什么指标」
+  └── 配置 YAML          <项目>/configs/train.yaml →  定义「怎么训：训几轮、用什么后端、多久存一次」
                         │
                         ▼
-  5 个命令：doctor 预检 → train 训练 → report 报告（→ 可选 sweep 调参）
+  4 个命令：train（自动预检）→ report 报告（→ 可选 sweep 调参）
                         │
                         ▼
   产物：runs/<run-id>/  模型权重、流式指标、预测、HTML 报告、检查点
@@ -27,21 +27,21 @@
 2. **退出码**：`0` 成功 · `75` 可恢复暂停（PREEMPTED，预算到点，可继续训）· 其他非零 = 失败
 3. **产物目录**：`<run.output_root>/runs/<run-id>/`。本地不写 `output_root` 时默认落在**当前目录**。
 
-下面用一个真实可运行的例子带你走完整条路：`experiments/toy_multiclass.py`（多分类 MLP）+ `configs/sweeps/toy-learning-rate/base.yaml`。
+下面用一个真实可运行的例子带你走完整条路：`examples/experiments/toy_multiclass.py`（多分类 MLP）+ `examples/configs/sweeps/toy-learning-rate/base.yaml`，以仓库 `examples/` 作为 `--project-dir` 运行。
 
 ---
 
 ## 1. 第一步：写 Experiment 模块
 
-每个训练项目对应一个 Python 模块，放在 `experiments/` 下。它唯一的任务：**导出一个 `build_experiment(config)` 函数**，返回一个 `TorchExperiment`（PyTorch）或 `SklearnExperiment`（scikit-learn）。
+每个训练项目对应一个 Python 模块，放在**你自己的项目目录**里（仓库自带示例见 `examples/experiments/`）。它唯一的任务：**导出一个 `build_experiment(config)` 函数**，返回一个 `TorchExperiment`（PyTorch）或 `SklearnExperiment`（scikit-learn）。
 
-> `experiments/` 目录下已有 10 个现成示例，先抄后改是最快的入门方式：
+> `examples/experiments/` 下已有 10 个现成示例，先抄后改是最快的入门方式：
 > `toy_multiclass.py` / `toy_regression.py` / `toy_multilabel.py` / `mnist.py` / `sklearn_batch.py` / `sklearn_incremental.py` / `sklearn_pipeline.py` / `toy_custom_task.py` / `toy_multi_input.py` / `toy_multiclass_resumable.py`
 
 ### Torch 实验：6 个工厂
 
 ```python
-# experiments/my_project.py
+# my_project.py
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -107,14 +107,14 @@ def build_experiment(config: dict) -> TorchExperiment:
 ### 数据模块怎么选
 
 - **`LoaderDataModule`**：一次性把训练/验证集准备好（如 `toy_multiclass.py`）。适合短训练、不需要中途恢复。
-- **`ResumableMapDataModule`**：数据集由「工厂函数 + 状态」构成，训练被打断后能**从断点精确恢复**。长训练、Kaggle 预算训练**必须用它**（见 `toy_multiclass_resumable.py`、`mnist.py`）。启用 `runtime.max_minutes` 或 `checkpoint.resume` 时，需要可恢复的数据模块。
+- **`ResumableMapDataModule`**：数据集由「工厂函数 + 状态」构成，训练被打断后能**从断点精确恢复**。长训练、Kaggle 预算训练**必须用它**（见 `examples/experiments/toy_multiclass_resumable.py`、`mnist.py`）。Kaggle 执行策略开启运行预算或省略 `--resume`（自动恢复）时，需要可恢复的数据模块。
 
 ### sklearn 实验
 
 换 `SklearnExperiment`，工厂变成 4 个：`estimator_factory` / `datamodule_factory` / `task_factory` / `model_config`，任务类换成 `Sklearn*Task`（`SklearnMulticlassTask` 等）。sklearn 有两种 fit 模式（见 [sklearn.md](sklearn.md)）：
 
-- **`batch`**：一次 `fit(X, y)`。限制严格：`max_epochs=1`、`resume=none`、`max_minutes=null`。
-- **`incremental`**：`partial_fit` 逐 batch 训练，可预算暂停恢复。数据源需要实现 `iter_epoch` / `state_dict` / `load_state_dict`（照抄 `experiments/sklearn_incremental.py`）。
+- **`batch`**：一次 `fit(X, y)`。限制严格：`max_epochs=1`；不支持恢复（显式 `--resume required` 在预检阶段失败）。
+- **`incremental`**：`partial_fit` 逐 batch 训练，可预算暂停恢复。数据源需要实现 `iter_epoch` / `state_dict` / `load_state_dict`（照抄 `examples/experiments/sklearn_incremental.py`）。
 
 ---
 
@@ -123,13 +123,13 @@ def build_experiment(config: dict) -> TorchExperiment:
 配置是**唯一**的输入格式，严格解析（schema v1）：不认模板、不认环境变量插值、不认 YAML 合并/别名，重复 key 直接报错。照下面的最小可用配置改即可：
 
 ```yaml
-# configs/my_project.yaml
+# <project-dir>/configs/my_project.yaml
 schema_version: 1
 run:
   name: my-project        # 用于默认 run-id 前缀
   id: null                # 留空则自动生成 <name>-<UTC时间戳>；要恢复/对齐就手写一个固定 id
   output_root: null       # 输出根目录，null = 当前目录（Kaggle 默认 /kaggle/working/dl-helper-runs）
-  source_revision: null   # 代码版本（Kaggle 要求 40 位 commit SHA），本地可留空
+  source_revision: null   # tag/分支/短 SHA 均可；留空时从 project-dir 的 Git 读取
   seed: 42
   tags: {}
 experiment:               # ← 这个 dict 原样传给 build_experiment(config)
@@ -161,10 +161,6 @@ checkpoint:
   every_epochs: 1         # 每几轮存一次检查点
   every_optimizer_steps: null
   keep_last: 2            # 最多保留几个
-  resume: none            # none / auto（有就续）/ required（必须续，没有就报错）
-runtime:
-  max_minutes: null       # 预算分钟数；非空时要求数据模块可恢复
-  shutdown_grace_minutes: 10
 report:
   enabled: true
   curve_sample_limit: 100000
@@ -180,24 +176,25 @@ notifications:            # 默认无通知；进阶见第 8 节
 
 - `backend.type` 必须和 `build_experiment` 返回的类型一致；未选的后端分支必须写 `null`。
 - 有验证集时 `selection` 必须存在；`selection.mode` 必须和指标方向一致（loss→min，accuracy→max）。
-- `runtime.max_minutes` 一开，数据模块必须支持中途恢复。
-- sklearn `fit_mode=batch`：`max_epochs=1`、`resume=none`、`max_minutes=null`。
+- Kaggle 执行策略开启运行预算时，数据模块必须支持中途恢复。
+- sklearn `fit_mode=batch`：`max_epochs=1`，且不支持恢复。
 
 ---
 
-## 3. 第三步：doctor 预检（可选但强烈建议）
+## 3. 第三步：train（自动预检）
 
-不训练、只检查配置和后端是否合法，**几秒出结果**：
+训练会先检查配置和后端是否合法，预检失败会聚合错误并立即终止：
 
 ```bash
-D:/programs/miniconda3/python.exe -m dl_helper.training.cli doctor \
-    --config configs/my_project.yaml \
-    --experiment experiments.my_project:build_experiment
+D:/programs/miniconda3/python.exe -m dl_helper.training.cli train \
+    --project-dir D:/work/my-project \
+    --config D:/work/my-project/configs/my_project.yaml \
+    --experiment my_project:build_experiment
 ```
 
-它会检查：配置合法性、Experiment 与后端是否匹配、数据身份、选择指标是否可参与比较、资源分配等。**通过（退出码 0）再训**，能把绝大多数配置错误挡在训练前。`--profile kaggle` 切到 Kaggle 环境检查；`--emit-evaluation-contract` 是跑 sweep 前输出可比性合同用的。
+它会检查：配置合法性、Experiment 与后端是否匹配、数据身份、选择指标、资源、磁盘，以及 Kaggle 的执行策略和必需服务。sweep 的可比性合同由内部预检自动生成。
 
-> `--experiment` 的写法是 `模块路径:函数名`。必须从仓库根目录运行，`experiments` 才能被 import。
+> `--experiment` 的写法是 `模块路径:函数名`。必须把项目目录通过 `--project-dir` 传入，示例则用仓库的 `examples/` 作为 project dir。
 
 ---
 
@@ -205,8 +202,9 @@ D:/programs/miniconda3/python.exe -m dl_helper.training.cli doctor \
 
 ```bash
 D:/programs/miniconda3/python.exe -m dl_helper.training.cli train \
-    --config configs/my_project.yaml \
-    --experiment experiments.my_project:build_experiment
+    --project-dir D:/work/my-project \
+    --config D:/work/my-project/configs/my_project.yaml \
+    --experiment my_project:build_experiment
 ```
 
 跑完你的项目目录下会出现 `runs/<run-id>/`，里面是完整产物：
@@ -230,12 +228,12 @@ runs/<run-id>/
 |---|---|
 | `--variant <file>` | 叠加一个严格 patch YAML（只覆盖 `experiment` 里的值），不改 base 文件 |
 | `--run-id <id>` | 显式指定 run-id（恢复、对齐、发报告时用） |
-| `--resume none/auto/required` | 覆盖配置里的 `checkpoint.resume` |
+| `--resume none/required` | 显式覆盖恢复策略；省略时内部自动恢复 |
 
 **退出码含义**：`0` 成功；`75` 预算到点暂停（PREEMPTED，产物保留，可以续训）；其他非零失败——先看 `runs/<run-id>/failure.json`（已脱敏的异常与调用栈），再修。
 
 > 想先小跑一把验证流程，可以直接用仓库自带的 toy 示例：
-> `--config configs/sweeps/toy-learning-rate/base.yaml --experiment experiments.toy_multiclass:build_experiment`
+> `--project-dir <repo>/examples --config <repo>/examples/configs/sweeps/toy-learning-rate/base.yaml --experiment experiments.toy_multiclass:build_experiment`
 
 ---
 
@@ -258,7 +256,7 @@ D:/programs/miniconda3/python.exe -m dl_helper.training.cli report --run runs/<r
 variant 是只含覆盖字段的严格 YAML（递归合并）：
 
 ```yaml
-# configs/sweeps/my-sweep/variants/lr-1e-3.yaml
+# <project-dir>/configs/sweeps/my-sweep/variants/lr-1e-3.yaml
 experiment:
   lr: 0.001
 ```
@@ -266,7 +264,7 @@ experiment:
 sweep manifest 把 base + 有序 trials + 比较指标钉在一起：
 
 ```yaml
-# configs/sweeps/my-sweep/sweep.yaml
+# <project-dir>/configs/sweeps/my-sweep/sweep.yaml
 schema_version: 1
 sweep:
   id: my-sweep-v1
@@ -284,11 +282,13 @@ sweep:
 
 ```bash
 # 跑完整 sweep（顺序子进程；任一失败立即停；预算暂停可续）
-D:/programs/miniconda3/python.exe -m dl_helper.training.cli sweep --sweep configs/sweeps/my-sweep/sweep.yaml
+python -m dl_helper.training.cli sweep --sweep <project-dir>/configs/sweeps/my-sweep/sweep.yaml \
+  --project-dir <project-dir>
 # 恢复被暂停的 sweep
-D:/programs/miniconda3/python.exe -m dl_helper.training.cli sweep --sweep configs/sweeps/my-sweep/sweep.yaml --resume
+python -m dl_helper.training.cli sweep --sweep <project-dir>/configs/sweeps/my-sweep/sweep.yaml \
+  --project-dir <project-dir> --resume
 # 生成聚合对比报告
-D:/programs/miniconda3/python.exe -m dl_helper.training.cli sweep-report --sweep-dir <sweep 输出目录>
+python -m dl_helper.training.cli sweep-report --sweep-dir <sweep 输出目录>
 ```
 
 完整规则见 [sweeps.md](sweeps.md)。
@@ -323,7 +323,7 @@ notifications:             # 企业微信通知
   failure_policy: required
 ```
 
-运行前先在环境里设好对应变量（如 `export ALIST_USER=...`），`doctor` 会帮你校验 Secret 与服务连通。上传顺序是「先归档不可变文件 → 回读 SHA 校验 → 再写 manifest」；服务审计记录在 `runs/<run-id>/services/service-audit.jsonl`。细节见 [services.md](services.md)。
+运行前先在环境里设好对应变量（如 `ALIST_USER=...`），训练自动预检会校验 Secret。上传顺序是「先归档不可变文件 → 回读 SHA 校验 → 再写 manifest」；服务审计记录在 `runs/<run-id>/services/service-audit.jsonl`。细节见 [services.md](services.md)。
 
 ---
 
@@ -334,8 +334,8 @@ notifications:             # 企业微信通知
 - 任意环境变量以 `KAGGLE` 开头即自动识别为 Kaggle 环境。
 - 数据**必须**显式挂在 `/kaggle/input/...`；输出默认 `/kaggle/working/dl-helper-runs`。
 - `distributed.num_processes: auto` 会用满所有可见 GPU（CPU 环境 = 1）。
-- **预算训练**：`runtime.max_minutes` 必填（`shutdown_grace_minutes` 也要填且必须 < max）。到点后：停止新 step → 存检查点 → 刷服务 → 写 pause manifest → 退出码 `75`。新 session 里用 `--resume auto/required` + **同一个 `--run-id`** 继续训。
-- 预检用 `doctor --profile kaggle`：检查固定 revision、预算、磁盘、Secret 与服务。
+- **预算训练**：Kaggle 由平台执行策略固定为 **660 分钟训练 + 10 分钟收尾**。系统在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；若下一轮无法在 650 分钟截止前完成，则当前边界执行“存检查点 → 推送 AList → 刷新通知/服务 → 写 pause manifest”，退出码为 `75`。新 session 里用同样的命令 + **同一个 `--run-id`**（省略 `--resume` 即自动恢复）继续训。预测只是估算，硬截止仍可能提前触发。预算值记录在 run 目录 `execution-policy.json`，用户配置不包含 `runtime`。
+- Kaggle 强制启用 AList 和企业微信，且两者 `failure_policy=required`；训练预检会列出缺失 Secret 并终止。
 
 注意：`notebook/kaggle_training_template.ipynb` 是**平台自身发布门禁**用的模板（验证平台在多卡 + 预算恢复下能跑通），普通训练任务**不需要**它——你只需要在你自己的 Kaggle notebook 里：装好本仓库 → 按第 1、2 步准备实验与配置 → 跑第 3~5 步的命令。细节见 [kaggle.md](kaggle.md)。
 
@@ -362,3 +362,4 @@ notifications:             # 企业微信通知
 | sweep 超参对比 | [sweeps.md](sweeps.md) |
 | Kaggle 训练 | [kaggle.md](kaggle.md) |
 | 产物目录 / 检查点 / 恢复 | [artifacts.md](artifacts.md) |
+| 破坏性迁移 / 已删除字段 | [breaking-removal.md](breaking-removal.md) |

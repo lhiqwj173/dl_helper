@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dl-helper"
 version = "1.0.0"
-description = "Kaggle 通用深度学习训练平台：显式双后端 (PyTorch/sklearn)、严格配置、流式指标、可审计恢复与生命周期服务"
+description = "面向 Kaggle 外部训练项目的工具库：严格配置、自动预检、可审计恢复与生命周期服务"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }

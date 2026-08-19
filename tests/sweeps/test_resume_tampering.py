@@ -32,8 +32,8 @@ def _base_yaml(output_root):
         "distributed": {"num_processes": 1},
         "selection": {"metric": "val/loss", "mode": "min", "patience": 20, "min_delta": 0.0},
         "checkpoint": {"every_epochs": None, "every_optimizer_steps": None,
-                       "keep_last": 1, "resume": "none"},
-        "runtime": {"max_minutes": None, "shutdown_grace_minutes": 10},
+                       "keep_last": 1},
+
         "report": {"enabled": True, "curve_sample_limit": 100000,
                    "prediction_sample_limit": 10000, "prediction_splits": ["val"]},
         "remote": {"type": "none"},

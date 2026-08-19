@@ -1,4 +1,4 @@
-"""CLI：doctor/train/report/sweep/sweep-report 命令与退出码。
+"""CLI：train/report/sweep/sweep-report 命令与退出码。
 
 退出码：0 成功、75 PREEMPTED、其他非零为失败。顶层只写脱敏失败证据后原样 raise。
 """
@@ -9,12 +9,18 @@ import json
 import os
 import sys
 import traceback
+from dataclasses import replace
 from typing import Any, Sequence
 
-from .config import Config, ConfigError, config_to_dict, load_config_file, resolve_variant_files
+from .config import RESUME_AUTO, Config, config_to_dict, load_config_file, resolve_variant_files
 
 EXIT_OK = 0
 EXIT_PREEMPTED = 75
+
+# 实际导入的 dl_helper 包目录（realpath）；训练内容不得进入库模块
+_DL_HELPER_PACKAGE_REALPATH = os.path.realpath(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 
 class CliError(Exception):
@@ -25,19 +31,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dl_helper.training", description="Kaggle 通用训练平台")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_doctor = sub.add_parser("doctor", help="运行后端感知预检")
-    p_doctor.add_argument("--profile", choices=["local", "kaggle"], default=None)
-    p_doctor.add_argument("--config", required=True)
-    p_doctor.add_argument("--variant")
-    p_doctor.add_argument("--experiment", required=True)
-    p_doctor.add_argument("--emit-evaluation-contract", action="store_true")
-
     p_train = sub.add_parser("train", help="运行一次训练")
     p_train.add_argument("--config", required=True)
     p_train.add_argument("--variant")
     p_train.add_argument("--experiment", required=True)
-    p_train.add_argument("--resume", choices=["none", "auto", "required"], default=None)
+    p_train.add_argument("--project-dir", help="外部训练项目根目录（默认当前目录）")
+    p_train.add_argument("--output-root", help="覆盖配置中的 run.output_root")
+    p_train.add_argument("--resume", choices=["none", "required"], default=None,
+                         help="显式恢复策略：none 禁止恢复；required 无兼容 checkpoint 即失败；省略时内部自动恢复")
     p_train.add_argument("--run-id")
+    # sweep 的零拟合合同使用；隐藏以免形成公共命令面。
+    p_train.add_argument("--preflight-only", action="store_true", help=argparse.SUPPRESS)
 
     p_report = sub.add_parser("report", help="从 Artifact 生成离线报告")
     p_report.add_argument("--run", required=True)
@@ -45,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sweep = sub.add_parser("sweep", help="顺序运行多 variant sweep")
     p_sweep.add_argument("--sweep", required=True)
+    p_sweep.add_argument("--project-dir", help="外部训练项目根目录（默认当前目录）")
     p_sweep.add_argument("--resume", action="store_true")
 
     p_sr = sub.add_parser("sweep-report", help="生成 sweep 聚合报告")
@@ -78,8 +83,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _dispatch(args: argparse.Namespace) -> int:
     cmd = args.command
-    if cmd == "doctor":
-        return _cmd_doctor(args)
     if cmd == "train":
         return _cmd_train(args)
     if cmd == "report":
@@ -97,10 +100,45 @@ def _load_config(args: argparse.Namespace) -> Config:
     return load_config_file(args.config)
 
 
-def _resolve_run_layout(config: Config, platform) -> tuple[str, Any]:
-    from .artifacts import RunLayout
-    from .platform import resolve_source_revision
+def _prepare_project_dir(path: str | None) -> str:
+    """把外部训练项目加入 import 路径，库本身不携带任何训练项目。"""
+    project_dir = os.path.realpath(path or os.getcwd())
+    if not os.path.isdir(project_dir):
+        raise CliError(f"project-dir 不存在或不是目录: {project_dir}")
+    if project_dir not in sys.path:
+        sys.path.insert(0, project_dir)
+    current_pythonpath = os.environ.get("PYTHONPATH", "")
+    pythonpath_parts = [item for item in current_pythonpath.split(os.pathsep) if item]
+    if project_dir not in pythonpath_parts:
+        os.environ["PYTHONPATH"] = os.pathsep.join([project_dir, *pythonpath_parts])
+    return project_dir
 
+
+def _reject_inside_package(path: str, label: str, package_root: str) -> None:
+    """realpath + normcase 拒绝包内路径，处理大小写与路径逃逸。"""
+    normalized = os.path.normcase(os.path.realpath(path))
+    root = os.path.normcase(package_root)
+    if normalized == root or normalized.startswith(root + os.sep):
+        raise CliError(f"{label} {path!r} 位于库包 dl_helper 目录内；训练内容必须属于库外训练项目")
+
+
+def _check_library_boundaries(args: argparse.Namespace, config: Config, platform: Any) -> None:
+    """库模块边界校验：Experiment 引用、配置与 output root 不得进入 dl_helper。
+
+    在导入 Experiment 或创建任何 run 目录前执行（D-001）。
+    """
+    module_path = args.experiment.partition(":")[0]
+    if module_path == "dl_helper" or module_path.startswith("dl_helper."):
+        raise CliError(
+            f"experiment 模块 {module_path!r} 位于库包 dl_helper 内；训练内容必须属于库外训练项目"
+        )
+    package_root = _DL_HELPER_PACKAGE_REALPATH
+    _reject_inside_package(args.config, "配置文件", package_root)
+    _reject_inside_package(platform.resolve_output_root(config), "output root", package_root)
+
+
+def _compute_run_dir(config: Config, platform) -> tuple[str, str]:
+    """计算 run 目录（不创建产物）：供预检前确定失败证据落盘位置。"""
     run_id = config.run.id
     if run_id is None:
         run_id = _generate_run_id(config)
@@ -109,6 +147,13 @@ def _resolve_run_layout(config: Config, platform) -> tuple[str, Any]:
     if platform.is_kaggle:
         if not run_dir.startswith("/kaggle/working"):
             raise CliError(f"Kaggle 输出必须位于 /kaggle/working: {run_dir!r}")
+    return run_id, run_dir
+
+
+def _resolve_run_layout(config: Config, platform) -> tuple[str, Any]:
+    from .artifacts import RunLayout
+
+    run_id, run_dir = _compute_run_dir(config, platform)
     layout = RunLayout(run_dir)
     layout.ensure()
     return run_id, layout
@@ -121,31 +166,66 @@ def _generate_run_id(config: Config) -> str:
 
 
 def _cmd_train(args: argparse.Namespace) -> int:
-    from dataclasses import replace
+    from .platform import Platform, execution_policy_for
+    from .doctor import validate_training_start
 
-    from .platform import Platform
-
+    project_dir = _prepare_project_dir(args.project_dir)
     config = _load_config(args)
+    if config.run.source_revision is None:
+        from .platform import resolve_source_revision
+        config = replace(
+            config,
+            run=replace(config.run, source_revision=resolve_source_revision(config, cwd=project_dir)),
+        )
+    if args.output_root is not None:
+        config = replace(config, run=replace(config.run, output_root=os.path.abspath(args.output_root)))
     if getattr(args, "run_id", None):
         config = replace(config, run=replace(config.run, id=args.run_id))
     platform = Platform()
-    run_id, layout = _resolve_run_layout(config, platform)
-    # OSR-005：任何写入前拒绝已完成 run（暂停 run 可 resume）
-    from .artifacts import existing_terminal
-    if existing_terminal(layout.run_dir) == "run-manifest.json":
-        raise CliError(f"run {run_id} 已成功完成，禁止重跑改写")
-    layout.write_text("config.resolved.yaml", _yaml_dump(config_to_dict(config)))
-    args._run_dir = layout.run_dir  # OSR-003：布局后立即保存受控 run_dir
-
-    services = _build_services(config, platform, layout)
-    # OSR-003：记录同一 SecretResolver 与启用服务的 Secret key，供失败证据全链路脱敏
-    args._secret_resolver = getattr(services, "_resolver", None) if services else None
-    args._secret_keys = _configured_secret_keys(config)
-    args._secondary_errors = []
-    resume = args.resume or config.checkpoint.resume
+    # D-001：库模块边界校验必须在导入 Experiment 或创建任何产物前完成
+    _check_library_boundaries(args, config, platform)
+    execution_policy = execution_policy_for(platform)
+    resume = args.resume if args.resume is not None else RESUME_AUTO
+    # 预检前先确定 run 目录（不创建产物）：预检/导入失败也必须落 failure.json 失败证据
+    run_id, run_dir = _compute_run_dir(config, platform)
+    args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
+    validate_training_start(config, platform, args.experiment, resume=resume,
+                            execution_policy=execution_policy, emit_contract=args.preflight_only)
+    if args.preflight_only:
+        return EXIT_OK
+    from .artifacts import RunLayout
+    layout = RunLayout(run_dir)
     status = "succeeded"
+    services = None
     try:
-        if resume in ("auto", "required"):
+        layout.ensure()
+        # OSR-005：任何写入前拒绝已完成 run（暂停 run 可 resume）
+        from .artifacts import existing_terminal
+        if existing_terminal(layout.run_dir) == "run-manifest.json":
+            raise CliError(f"run {run_id} 已成功完成，禁止重跑改写")
+        layout.write_text("config.resolved.yaml", _yaml_dump(config_to_dict(config)))
+        # D-003：独立执行策略 Artifact 记录平台、resume policy、预算与收尾窗口
+        layout.write_text("execution-policy.json", json.dumps({
+            "schema_version": 1,
+            "platform": platform.kind,
+            "resume": resume,
+            "max_minutes": execution_policy.max_minutes,
+            "shutdown_grace_minutes": execution_policy.shutdown_grace_minutes,
+        }, ensure_ascii=False, sort_keys=True))
+        args._run_dir = layout.run_dir  # 布局后确认受控 run_dir（与预检前一致）
+
+        services = _build_services(config, platform, layout)
+        # OSR-003：记录同一 SecretResolver 与启用服务的 Secret key，供失败证据全链路脱敏
+        args._secret_resolver = getattr(services, "_resolver", None) if services else None
+        args._secret_keys = _configured_secret_keys(config)
+        args._secondary_errors = []
+        # sklearn batch 无受控恢复点：内部 auto 不查询本地或远程 checkpoint
+        batch_no_resume = (
+            config.backend.type == "sklearn"
+            and config.backend.sklearn is not None
+            and config.backend.sklearn.fit_mode == "batch"
+        )
+        if resume in (RESUME_AUTO, "required") and not batch_no_resume:
             from .checkpoint import read_latest
 
             if read_latest(layout.path("checkpoints")) is None and services is not None:
@@ -153,13 +233,15 @@ def _cmd_train(args: argparse.Namespace) -> int:
         if config.backend.type == "sklearn":
             from .backends.sklearn_backend import build_sklearn_experiment, run_sklearn_worker_experiment
             experiment = build_sklearn_experiment(args.experiment, config.experiment)
-            result = run_sklearn_worker_experiment(experiment, config, platform, layout, services=services)
+            result = run_sklearn_worker_experiment(experiment, config, platform, layout, resume=resume,
+                                                   execution_policy=execution_policy, services=services)
             status = result.status
         else:
             from .backends.torch_backend import run_worker
             num_procs = platform.resolve_torch_resources(config, None).num_processes
             if num_procs == 1:
-                result = run_worker(args.experiment, config, layout, 0, 1, resume, services=services)
+                result = run_worker(args.experiment, config, layout, 0, 1, resume,
+                                    execution_policy=execution_policy, services=services)
                 status = result.status
             else:
                 # 多进程：CLI 父进程处理服务与唯一终态（OSR-002）
@@ -167,7 +249,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
                 if services is not None:
                     services.start_run(run_id)
                 code = launch_torch(args.experiment, config, layout.run_dir, num_procs, resume,
-                                    publish_terminal=False)
+                                    execution_policy=execution_policy, publish_terminal=False)
                 if code in (EXIT_OK, EXIT_PREEMPTED) and services is not None:
                     from .checkpoint import read_latest
 
@@ -346,20 +428,6 @@ def _yaml_dump(data: Any) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
-def _cmd_doctor(args: argparse.Namespace) -> int:
-    from .platform import Platform
-    from .doctor import run_doctor
-
-    config = _load_config(args)
-    platform = Platform(args.profile) if args.profile else Platform()
-    errors = run_doctor(config, platform, args.experiment, emit_contract=args.emit_evaluation_contract)
-    if errors:
-        for err in errors:
-            print(f"doctor error: {err}", file=sys.stderr)
-        return 1
-    return EXIT_OK
-
-
 def _cmd_report(args: argparse.Namespace) -> int:
     from .reporting import generate_run_report
 
@@ -371,8 +439,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
 def _cmd_sweep(args: argparse.Namespace) -> int:
     from .sweep import run_sweep
-
-    return run_sweep(args.sweep, resume=args.resume)
+    # 省略 --project-dir 时按调用者当前目录解析（与 train 一致），
+    # 并把绝对路径传给预检/子进程，避免以仓库根为 cwd 而丢失外部项目导入
+    project_dir = _prepare_project_dir(args.project_dir)
+    return run_sweep(args.sweep, resume=args.resume, project_dir=project_dir)
 
 
 def _cmd_sweep_report(args: argparse.Namespace) -> int:
@@ -381,6 +451,24 @@ def _cmd_sweep_report(args: argparse.Namespace) -> int:
     index_path = generate_sweep_report(args.sweep_dir, args.out)
     print(f"sweep report written: {index_path}")
     return EXIT_OK
+
+
+def _root_exception_type(exc: BaseException) -> str:
+    """沿 cause/context 链取最深层根因异常的类型名（OSR-003：不被包装类掩盖）。"""
+    root: BaseException = exc
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if cur.__cause__ is not None:
+            root = cur.__cause__
+            cur = cur.__cause__
+        elif cur.__context__ is not None and cur.__context__ is not exc:
+            root = cur.__context__
+            cur = cur.__context__
+        else:
+            break
+    return type(root).__name__
 
 
 def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
@@ -442,7 +530,7 @@ def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
             position = _json.load(_f)
     failure = {
         "schema_version": 1,
-        "exception_type": type(exc).__name__,
+        "exception_type": _root_exception_type(exc),
         "message": redacted_message,
         "traceback": redacted_tb,
         "primary_exception": type(exc).__name__,
@@ -453,6 +541,8 @@ def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
         "global_step": position.get("global_step"),
     }
     # OSR-003：经 publish_terminal 原子发布唯一 FAILED 终态（禁止多终态）
+    # 预检失败可能尚未创建 run 目录：失败证据仍须落盘，先确保目录存在
+    os.makedirs(run_dir, exist_ok=True)
     from .artifacts import publish_terminal
     publish_terminal(run_dir, "failed", failure)
 

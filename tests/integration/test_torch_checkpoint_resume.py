@@ -7,9 +7,12 @@ import os
 from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.backends.torch_backend import run_worker
 from dl_helper.training.config import default_schema, parse_config
+from dl_helper.training.platform import ExecutionPolicy
+
+_BUDGET = ExecutionPolicy(platform="local", max_minutes=10.0, shutdown_grace_minutes=2.0)
 
 
-def _cfg(run_id, max_epochs, resume="none", max_minutes=None):
+def _cfg(run_id, max_epochs):
     schema = default_schema()
     schema["training"]["max_epochs"] = max_epochs
     schema["selection"] = {"metric": "val/loss", "mode": "min", "patience": 30, "min_delta": 0.0}
@@ -17,9 +20,6 @@ def _cfg(run_id, max_epochs, resume="none", max_minutes=None):
     schema["run"]["id"] = run_id
     schema["checkpoint"]["every_epochs"] = 1
     schema["checkpoint"]["keep_last"] = 2
-    schema["checkpoint"]["resume"] = resume
-    schema["runtime"]["max_minutes"] = max_minutes
-    schema["runtime"]["shutdown_grace_minutes"] = 2
     schema["backend"]["torch"]["mixed_precision"] = "no"
     schema["backend"]["torch"]["deterministic"] = "off"
     schema["distributed"]["num_processes"] = 1
@@ -38,14 +38,14 @@ class _AdvancingClock:
 def test_torch_resume_reaches_same_final_position(tmp_path):
     """第一段 PREEMPTED 生成检查点，第二段 resume 到最终位置。"""
     run_dir = str(tmp_path / "runs" / "resume-pos")
-    cfg1 = _cfg("resume-pos", max_epochs=2, resume="auto", max_minutes=10)
+    cfg1 = _cfg("resume-pos", max_epochs=2)
     layout1 = RunLayout(run_dir)
     layout1.ensure()
     r1 = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg1, layout1, 0, 1, "auto",
-                    budget_monotonic=_AdvancingClock())
+                    budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET)
     assert r1.status == "preempted"
 
-    cfg2 = _cfg("resume-pos", max_epochs=4, resume="auto")
+    cfg2 = _cfg("resume-pos", max_epochs=4)
     layout2 = RunLayout(run_dir)
     layout2.ensure()
     r2 = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg2, layout2, 0, 1, "auto")
@@ -58,7 +58,7 @@ def test_torch_resume_reaches_same_final_position(tmp_path):
 def test_torch_no_resume_starts_fresh(tmp_path):
     """resume=auto 但无 checkpoint → 从零开始。"""
     run_dir = str(tmp_path / "runs" / "fresh")
-    cfg = _cfg("fresh", max_epochs=1, resume="auto")
+    cfg = _cfg("fresh", max_epochs=1)
     layout = RunLayout(run_dir)
     layout.ensure()
     r = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg, layout, 0, 1, "auto")

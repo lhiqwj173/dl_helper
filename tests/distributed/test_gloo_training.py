@@ -36,6 +36,22 @@ class _Clock:
         return self.calls * 100.0
 
 
+def _budget_worker(experiment_ref, config, layout, local_rank, world_size, resume,
+                   publish_terminal=True, budget_monotonic=None, execution_policy=None):
+    """worker 包装：注入测试专用 Local 执行预算（D-003 后 YAML 不再承载 runtime）。
+
+    launch_torch 的 spawn 子进程通过纯 dict 严格重建平台规范策略；测试需要
+    假时钟预算来触发 preempt，因此在此包装内用 Local 自定义策略直接调用 run_worker。
+    """
+    from dl_helper.training.backends.torch_backend import run_worker
+    from dl_helper.training.platform import ExecutionPolicy
+    return run_worker(
+        experiment_ref, config, layout, local_rank, world_size, resume,
+        publish_terminal=publish_terminal, budget_monotonic=budget_monotonic,
+        execution_policy=ExecutionPolicy(platform="local", max_minutes=5, shutdown_grace_minutes=1),
+    )
+
+
 def _write_config(tmp_path, run_id, patience=20, lr=0.05, max_epochs=2):
     schema = {
         "schema_version": 1,
@@ -50,8 +66,7 @@ def _write_config(tmp_path, run_id, patience=20, lr=0.05, max_epochs=2):
         "distributed": {"num_processes": 2},
         "selection": {"metric": "val/loss", "mode": "min", "patience": patience, "min_delta": 0.0},
         "checkpoint": {"every_epochs": None, "every_optimizer_steps": None,
-                       "keep_last": 1, "resume": "none"},
-        "runtime": {"max_minutes": None, "shutdown_grace_minutes": 10},
+                       "keep_last": 1},
         "report": {"enabled": True, "curve_sample_limit": 100000,
                    "prediction_sample_limit": 10000, "prediction_splits": ["val"]},
         "remote": {"type": "none"},
@@ -104,20 +119,18 @@ def test_gloo_two_process_checkpoint_resume(tmp_path):
         schema["run"]["id"] = run_id
         schema["checkpoint"]["every_optimizer_steps"] = 4
         schema["checkpoint"]["keep_last"] = 5
-        schema["checkpoint"]["resume"] = "auto"  # 两阶段一致（resume 指纹含此字段）
-        # 两阶段配置一致（resume 指纹含 runtime）；假时钟下预算在 step≈3 触发，
-        # 阶段 2 用真实时钟，240s 预算不会命中
-        schema["runtime"]["max_minutes"] = 5
-        schema["runtime"]["shutdown_grace_minutes"] = 1
+        # 两阶段配置一致；resume 由 launch_torch 显式传入，不承载于 YAML（D-003）
         schema["backend"]["torch"]["mixed_precision"] = "no"
         schema["backend"]["torch"]["deterministic"] = "off"
         return parse_config(schema)
 
     # 阶段 1：预算预占（假时钟，epoch 0 中途）→ 两进程 checkpoint（preempted 经退出码 75 传播）
+    # D-003：YAML 不再承载 runtime；测试预算经 worker 包装在子进程内以 Local 策略注入，
+    # 从而绕过 spawn 纯 dict 重建的「仅平台规范策略」校验（测试专用，非用户配置路径）。
     res_dir = str(tmp_path / "runs" / "gloo-resume")
     code1 = launch_torch("experiments.toy_multiclass_resumable:build_experiment",
                          _cfg("gloo-resume", max_epochs=1), res_dir, 2, "auto",
-                         budget_monotonic=_Clock())
+                         worker_fn=_budget_worker, budget_monotonic=_Clock())
     assert code1 == 75
     ckpt_root = os.path.join(res_dir, "checkpoints")
     assert os.path.isdir(ckpt_root) and any(d.startswith("epoch-") for d in os.listdir(ckpt_root))

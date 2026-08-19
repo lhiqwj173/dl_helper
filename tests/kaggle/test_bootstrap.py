@@ -1,8 +1,7 @@
-"""任务 7.4：bootstrap 脚本 —— 固定 revision、命令顺序、无 Secret、失败传播。"""
+"""Kaggle bootstrap：库安装与可选 Git ref，不耦合训练项目。"""
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -11,47 +10,42 @@ import pytest
 BOOTSTRAP = os.path.join("envs", "kaggle_bootstrap.py")
 
 
-def _source():
-    with open(BOOTSTRAP, "r", encoding="utf-8") as f:
-        return f.read()
+def _source() -> str:
+    with open(BOOTSTRAP, "r", encoding="utf-8") as file:
+        return file.read()
 
 
-def test_no_secret_literals():
-    src = _source()
-    # 不包含真实凭证字面量
-    assert "alist.example.invalid" not in src or "https://" not in src
-
-
-def test_requires_40_sha():
-    src = _source()
-    assert "DL_HELPER_GIT_REF" in src
-    assert "40" in src
-
-
-def test_no_floating_master_or_git_pull():
-    src = _source()
-    # 不执行 git pull / master 下载（docstring 提及禁止行为不算）
-    assert '"git", "pull"' not in src
-    assert "origin/master" not in src
-    assert '"git", "clone"' in src
-
-
-def test_command_order(monkeypatch):
-    """clone → checkout → HEAD 校验 → pip install → doctor。"""
+def test_ref_is_optional_and_not_limited_to_full_sha(monkeypatch):
     sys.path.insert(0, "envs")
     import kaggle_bootstrap
 
-    revision = "a" * 40
+    monkeypatch.delenv("DL_HELPER_GIT_REF", raising=False)
+    assert kaggle_bootstrap.git_ref() is None
+    monkeypatch.setenv("DL_HELPER_GIT_REF", "v1.2.0")
+    assert kaggle_bootstrap.git_ref() == "v1.2.0"
+
+
+def test_ref_with_whitespace_rejected(monkeypatch):
+    sys.path.insert(0, "envs")
+    import kaggle_bootstrap
+
+    monkeypatch.setenv("DL_HELPER_GIT_REF", "bad ref")
+    with pytest.raises(SystemExit):
+        kaggle_bootstrap.git_ref()
+
+
+def test_command_order_with_optional_ref(monkeypatch):
+    sys.path.insert(0, "envs")
+    import kaggle_bootstrap
+
     commands: list[list[str]] = []
 
     def fake_run(command, cwd=None):
         commands.append(command)
-        if command == ["git", "rev-parse", "HEAD"]:
-            return SimpleNamespace(stdout=revision + "\n")
-        return SimpleNamespace(stdout="")
+        return SimpleNamespace(stdout="abc123\n")
 
     monkeypatch.setenv("DL_HELPER_GIT_REPO", "https://repo.example.invalid/dl-helper.git")
-    monkeypatch.setenv("DL_HELPER_GIT_REF", revision)
+    monkeypatch.setenv("DL_HELPER_GIT_REF", "v1.2.0")
     monkeypatch.delenv("DL_HELPER_REPO_DIR", raising=False)
     monkeypatch.setattr(kaggle_bootstrap, "run", fake_run)
     monkeypatch.setattr(kaggle_bootstrap.os, "makedirs", lambda *args, **kwargs: None)
@@ -61,73 +55,60 @@ def test_command_order(monkeypatch):
     repo_dir = os.path.join("/kaggle/working", "dl-helper")
     assert commands == [
         ["git", "clone", "https://repo.example.invalid/dl-helper.git", repo_dir],
-        ["git", "checkout", revision],
-        ["git", "rev-parse", "HEAD"],
+        ["git", "checkout", "v1.2.0"],
+        ["git", "rev-parse", "--short", "HEAD"],
         [sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"],
-        [sys.executable, "-m", "dl_helper.training.cli", "doctor",
-         "--config", os.path.join(repo_dir, "configs", "kaggle", "mnist.yaml"),
-         "--experiment", "experiments.mnist:build_experiment"],
     ]
 
 
-def test_mnist_path_override_writes_working_config(tmp_path, monkeypatch):
-    """显式数据路径只写入 working 临时配置，不改写 checkout 内的基础配置。"""
-    import yaml
+def test_bootstrap_does_not_run_training_project():
+    source = _source()
+    assert "experiments.mnist" not in source
+    assert '"doctor"' not in source
+    assert "--no-deps" in source
+    assert 'encoding="utf-8"' in source
 
+
+def test_bootstrap_reuses_supplied_repo_dir(monkeypatch, tmp_path):
+    """OSR-001：文档安装单元复用已 clone 仓库（DL_HELPER_REPO_DIR=repo_dir）+ URL（DL_HELPER_GIT_REPO）。"""
     sys.path.insert(0, "envs")
     import kaggle_bootstrap
 
-    repo_dir = tmp_path / "repo"
-    config_dir = repo_dir / "configs" / "kaggle"
-    config_dir.mkdir(parents=True)
-    source = config_dir / "mnist.yaml"
-    source.write_text(
-        "run:\n  output_root: null\nexperiment:\n  data_path: /old/path.npz\n",
-        encoding="utf-8",
+    repo_dir = tmp_path / "dl-helper"
+    repo_dir.mkdir()
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=repo_dir, check=True, capture_output=True,
+                   text=True, encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd=None):
+        commands.append(command)
+        return SimpleNamespace(stdout=f"{repo_dir}\n")
+
+    monkeypatch.setenv("DL_HELPER_REPO_DIR", str(repo_dir))
+    monkeypatch.setenv("DL_HELPER_GIT_REPO", "https://repo.example.invalid/dl-helper.git")
+    monkeypatch.delenv("DL_HELPER_GIT_REF", raising=False)
+    monkeypatch.setattr(kaggle_bootstrap, "run", fake_run)
+
+    assert kaggle_bootstrap.main() == 0
+    clone_cmds = [c for c in commands if c and c[0:2] == ["git", "clone"]]
+    assert clone_cmds == [], "复用已 clone 仓库时 bootstrap 不得再次 clone"
+    assert commands[-1] == [sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"]
+
+
+def test_doc_install_unit_sets_bootstrap_env():
+    """OSR-001：kaggle.md 安装单元在调用 bootstrap 前必须设置其强制要求的两个环境变量。"""
+    import os
+
+    doc = open(os.path.join("docs", "training", "kaggle.md"), "r", encoding="utf-8").read()
+    install_block, *_ = doc.split("print(\"dl-helper 安装完成\")", 1)
+    assert "DL_HELPER_REPO_DIR" in install_block
+    assert "DL_HELPER_GIT_REPO" in install_block
+    # bootstrap 调用前已设置（赋值在调用之前出现）
+    assert install_block.index("os.environ[\"DL_HELPER_REPO_DIR\"]") < install_block.index(
+        "kaggle_bootstrap.py"
     )
-    data_path = tmp_path / "input" / "mnist.npz"
-    data_path.parent.mkdir()
-    data_path.write_bytes(b"mnist")
-    monkeypatch.setenv("DL_HELPER_MNIST_PATH", str(data_path))
-
-    output = kaggle_bootstrap.resolve_doctor_config(str(repo_dir), str(tmp_path))
-
-    assert output == str(tmp_path / "dl-helper-doctor.yaml")
-    assert yaml.safe_load(source.read_text(encoding="utf-8"))["experiment"]["data_path"] == "/old/path.npz"
-    assert yaml.safe_load((tmp_path / "dl-helper-doctor.yaml").read_text(encoding="utf-8"))["experiment"]["data_path"] == str(data_path)
-
-
-def test_return_codes_checked():
-    src = _source()
-    assert "returncode != 0" in src
-
-
-def test_pip_install_no_deps():
-    src = _source()
-    assert "--no-deps" in src
-
-
-def test_utf8_encoding():
-    src = _source()
-    assert "encoding='utf-8'" in src or "encoding=\"utf-8\"" in src
-
-
-def test_invalid_ref_rejected():
-    """无效 DL_HELPER_GIT_REF 立即失败。"""
-    code = (
-        "import os, sys\n"
-        "sys.path.insert(0, 'envs')\n"
-        "os.environ['DL_HELPER_GIT_REF'] = 'not-a-sha'\n"
-        "import kaggle_bootstrap\n"
-        "try:\n"
-        "    kaggle_bootstrap.git_ref()\n"
-        "    print('NO-RAISE')\n"
-        "except SystemExit as e:\n"
-        "    print('EXIT', e.code)\n"
+    assert install_block.index("os.environ[\"DL_HELPER_GIT_REPO\"]") < install_block.index(
+        "kaggle_bootstrap.py"
     )
-    proc = subprocess.run(
-        [sys.executable, "-c", code], cwd=os.path.dirname(os.path.abspath(__file__)) + "/../..",
-        capture_output=True, text=True, encoding="utf-8", check=False,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
-    )
-    assert "EXIT" in proc.stdout or "FAIL" in proc.stderr

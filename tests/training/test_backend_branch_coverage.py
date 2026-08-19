@@ -38,21 +38,27 @@ def test_launcher_spawn_entry_in_process(tmp_path, monkeypatch):
 
     calls = {}
 
-    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True, budget_monotonic=None):
+    def fake_worker(ref, config, layout, rank, world, resume,
+                    publish_terminal=True, budget_monotonic=None, execution_policy=None):
         calls["ref"] = ref
         calls["rank"] = rank
+        calls["execution_policy"] = execution_policy
         return BackendResult(status="succeeded")
 
     cfg = parse_config(default_schema())
     from dl_helper.training.config import config_to_dict
+    from dl_helper.training.platform import execution_policy_to_dict, kaggle_execution_policy
+    policy_dict = execution_policy_to_dict(kaggle_execution_policy())
     try:
         _spawn_entry("exp:build", config_to_dict(cfg), str(tmp_path / "runs" / "spawn"),
-                     0, 1, "none", fake_worker)
+                     0, 1, "none", fake_worker, execution_policy_dict=policy_dict)
     finally:
         for key in ("LOCAL_RANK", "RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT"):
             os.environ.pop(key, None)
     assert calls["ref"] == "exp:build"
     assert calls["rank"] == 0
+    # D-003：spawn 子进程用纯 dict 严格重建平台执行策略
+    assert calls["execution_policy"] == kaggle_execution_policy()
     # 环境已恢复：后续进程内 Accelerator() 不受影响
     assert "RANK" not in os.environ
     assert "WORLD_SIZE" not in os.environ

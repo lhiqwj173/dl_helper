@@ -36,20 +36,21 @@ def test_selection_metric_empty():
 
 def test_checkpoint_invalid():
     s = _s(checkpoint={"every_epochs": -1, "every_optimizer_steps": None,
-                       "keep_last": 2, "resume": "none"})
+                       "keep_last": 2})
     with pytest.raises(ConfigError):
         parse_config(s)
     s = _s(checkpoint={"every_epochs": None, "every_optimizer_steps": 0,
-                       "keep_last": 2, "resume": "none"})
+                       "keep_last": 2})
     with pytest.raises(ConfigError):
         parse_config(s)
     s = _s(checkpoint={"every_epochs": None, "every_optimizer_steps": None,
-                       "keep_last": 0, "resume": "none"})
+                       "keep_last": 0})
     with pytest.raises(ConfigError):
         parse_config(s)
 
 
-def test_runtime_negative():
+def test_runtime_rejected_as_unknown_field():
+    # D-003：runtime 已移出用户 schema，任何 runtime 键按未知字段拒绝
     s = _s(runtime={"max_minutes": -1, "shutdown_grace_minutes": 10})
     with pytest.raises(ConfigError):
         parse_config(s)
@@ -125,7 +126,7 @@ def test_sklearn_incremental_every_steps_rejected():
            training={"max_epochs": 2, "log_every_steps": 1},
            selection=None,
            checkpoint={"every_epochs": 1, "every_optimizer_steps": 1,
-                       "keep_last": 2, "resume": "none"})
+                       "keep_last": 2})
     with pytest.raises(ConfigError):
         parse_config(s)
 

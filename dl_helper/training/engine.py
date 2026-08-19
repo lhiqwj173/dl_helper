@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
-from .config import Config, SelectionConfig
+from .config import RESUME_AUTO, Config, SelectionConfig
 from .contracts import JSONValue, MetricDefinition, validate_experiment
 from .platform import Platform
 
@@ -271,6 +271,7 @@ class RunEngine:
     worker: Any = None
     services: Any = None
     reporter: Any = None
+    resume_policy: str = RESUME_AUTO
 
     def run(self) -> Any:
         self.engine_state.transition(STAGE_PREFLIGHTED)
@@ -309,4 +310,4 @@ class RunEngine:
         self.artifact_writer.write_config(self.config)
 
     def _should_resume(self) -> bool:
-        return self.config.checkpoint.resume != "none"
+        return self.resume_policy != "none"

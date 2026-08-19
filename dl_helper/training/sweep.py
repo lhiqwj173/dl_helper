@@ -190,19 +190,30 @@ def _acquire_lock(sweep_dir: str) -> int:
     return fd
 
 
-def run_sweep(manifest_path: str, resume: bool = False) -> int:
+def run_sweep(manifest_path: str, resume: bool = False, project_dir: str | None = None) -> int:
     """顺序运行 sweep trial。返回退出码（0 成功 / 75 暂停 / 其他失败）。"""
+    # 省略 project-dir 时按调用者当前目录解析（CLI 已解析；此处兜底保证直接调用一致）
+    if project_dir is None:
+        project_dir = os.getcwd()
+    project_dir = os.path.realpath(project_dir)
+    if not os.path.isdir(project_dir):
+        raise SweepError(f"project-dir 不存在或不是目录: {project_dir}")
     manifest = parse_sweep_manifest(manifest_path)
+    base_config = load_config_file(manifest.base_config)
+    if project_dir is not None and project_dir not in sys.path:
+        sys.path.insert(0, project_dir)
+    pythonpath_parts = [item for item in os.environ.get("PYTHONPATH", "").split(os.pathsep) if item]
+    if project_dir is not None and project_dir not in pythonpath_parts:
+        os.environ["PYTHONPATH"] = os.pathsep.join([project_dir, *pythonpath_parts])
     output_root = _resolve_output_root(manifest)
     sweep_dir = _sweep_dir(output_root, manifest.sweep_id)
     os.makedirs(sweep_dir, exist_ok=True)
     lock_fd = _acquire_lock(sweep_dir)
     layout = _SweepLayout(sweep_dir)
     # OSR-002：sweep 级生命周期服务（启用时构造）
-    base_config = load_config_file(manifest.base_config)
     services = _build_sweep_services(base_config, sweep_dir)
     try:
-        return _run_sweep_locked(manifest, sweep_dir, layout, resume, output_root, services)
+        return _run_sweep_locked(manifest, sweep_dir, layout, resume, output_root, services, project_dir)
     except BaseException as exc:
         # 恢复/预检/服务异常均把 PREEMPTED 原子转换为 FAILED，禁止双终态。
         _publish_sweep_failure(sweep_dir, {
@@ -259,7 +270,8 @@ def _resolve_output_root(manifest: SweepManifest) -> str:
 
 
 def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLayout,
-                      resume: bool, output_root: str, services=None) -> int:
+                      resume: bool, output_root: str, services=None,
+                      project_dir: str | None = None) -> int:
 
     # OSR-002：sweep 生命周期事件
     if services is not None:
@@ -276,7 +288,7 @@ def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLay
     contract_dir = os.path.join(sweep_dir, "contracts")
     os.makedirs(contract_dir, exist_ok=True)
     for trial, config in trial_configs:
-        contract = _emit_evaluation_contract(trial, config, manifest)
+        contract = _emit_evaluation_contract(trial, config, manifest, project_dir)
         if contract is None or contract.get("valid") is not True:
             _publish_sweep_failure(sweep_dir,
                        {"sweep_id": manifest.sweep_id,
@@ -305,7 +317,7 @@ def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLay
         append_jsonl(layout.trials_jsonl, {"trial": trial.name, "run_id": run_id, "status": "started"})
         if services is not None:
             services.trial_event(manifest.sweep_id, trial.name, "started")
-        code = _run_trial_subprocess(manifest, trial, config, run_id, sweep_dir)
+        code = _run_trial_subprocess(manifest, trial, config, run_id, sweep_dir, project_dir)
         if code == 0:
             append_jsonl(layout.trials_jsonl, {"trial": trial.name, "run_id": run_id, "status": "succeeded"})
             if services is not None:
@@ -439,16 +451,24 @@ def _subprocess_env() -> dict[str, str]:
 
 
 def _run_trial_subprocess(manifest: SweepManifest, trial: TrialSpec, config: Any,
-                          run_id: str, sweep_dir: str) -> int:
-    """以 sys.executable -m ... train 在全新子进程运行 trial。"""
+                          run_id: str, sweep_dir: str,
+                          project_dir: str | None = None) -> int:
+    """以 sys.executable -m ... train 在全新子进程运行 trial。
+
+    暂停的 trial 省略 --resume（内部 auto 自动恢复）；未暂停的 trial 显式
+    --resume none 禁止误恢复旧 checkpoint。
+    """
     args = [
         sys.executable, "-m", "dl_helper.training.cli", "train",
         "--config", manifest.base_config,
         "--variant", trial.resolved_config,
         "--experiment", manifest.experiment,
         "--run-id", run_id,
-        "--resume", "auto" if _trial_paused(sweep_dir, run_id) else "none",
     ]
+    if not _trial_paused(sweep_dir, run_id):
+        args.extend(["--resume", "none"])
+    if project_dir is not None:
+        args.extend(["--project-dir", project_dir])
     proc = subprocess.run(args, cwd=_repo_root(), check=False, encoding="utf-8",
                           env=_subprocess_env())
     return proc.returncode
@@ -590,15 +610,18 @@ def _validate_resume(manifest: SweepManifest, sweep_dir: str) -> None:
 # 零优化步可比性预检（任务 6.2）
 # --------------------------------------------------------------------------
 
-def _emit_evaluation_contract(trial: TrialSpec, config: Any, manifest: SweepManifest) -> dict[str, Any] | None:
-    """doctor --emit-evaluation-contract 子进程；返回解析后的 contract。"""
+def _emit_evaluation_contract(trial: TrialSpec, config: Any, manifest: SweepManifest,
+                              project_dir: str | None = None) -> dict[str, Any] | None:
+    """通过隐藏的 train preflight 子进程获取零拟合 evaluation contract。"""
     args = [
-        sys.executable, "-m", "dl_helper.training.cli", "doctor",
+        sys.executable, "-m", "dl_helper.training.cli", "train",
         "--config", manifest.base_config,
         "--variant", trial.resolved_config,
         "--experiment", manifest.experiment,
-        "--emit-evaluation-contract",
+        "--preflight-only",
     ]
+    if project_dir is not None:
+        args.extend(["--project-dir", project_dir])
     proc = subprocess.run(args, cwd=_repo_root(), check=False, encoding="utf-8",
                           capture_output=True, env=_subprocess_env())
     if proc.returncode != 0:

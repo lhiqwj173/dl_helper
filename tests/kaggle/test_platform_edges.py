@@ -284,7 +284,8 @@ def test_launcher_single_success_returns_0(tmp_path):
     layout = RunLayout(str(tmp_path / "runs" / "lp-ok2"))
     layout.ensure()
 
-    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True, budget_monotonic=None):
+    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True,
+                    budget_monotonic=None, execution_policy=None):
         return BackendResult(status="succeeded", epoch=1, global_step=3)
 
     code = launch_torch("ref", cfg, layout.run_dir, 1, "none", worker_fn=fake_worker)

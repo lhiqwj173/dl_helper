@@ -16,6 +16,9 @@ from .contracts import JSONValue, validate_json_value
 
 CONFIG_SCHEMA_VERSION = 1
 
+# 内部自动恢复策略：省略 CLI --resume 时使用；只接受显式 none/required
+RESUME_AUTO = "auto"
+
 
 class ConfigError(Exception):
     """严格配置 schema 违规。"""
@@ -92,13 +95,6 @@ class CheckpointConfig:
     every_epochs: int | None
     every_optimizer_steps: int | None
     keep_last: int | None
-    resume: Literal["none", "auto", "required"]
-
-
-@dataclass(frozen=True)
-class RuntimeConfig:
-    max_minutes: float | None
-    shutdown_grace_minutes: float
 
 
 @dataclass(frozen=True)
@@ -162,7 +158,6 @@ class Config:
     distributed: DistributedConfig
     selection: SelectionConfig | None
     checkpoint: CheckpointConfig
-    runtime: RuntimeConfig
     report: ReportConfig
     remote: RemoteConfig
     notifications: NotificationsConfig
@@ -462,8 +457,7 @@ def _build_selection(raw: Mapping[str, Any], path: str) -> SelectionConfig:
 
 
 def _build_checkpoint(raw: Mapping[str, Any], path: str) -> CheckpointConfig:
-    _check_keys(raw, {"every_epochs", "every_optimizer_steps", "keep_last", "resume"}, path)
-    resume = _enum(_require(raw, "resume", path), ("none", "auto", "required"), f"{path}.resume")
+    _check_keys(raw, {"every_epochs", "every_optimizer_steps", "keep_last"}, path)
     every_epochs = _optional_int(_require(raw, "every_epochs", path), f"{path}.every_epochs")
     if every_epochs is not None and every_epochs <= 0:
         raise ConfigError(f"{path}.every_epochs 必须为正整数或 null")
@@ -477,19 +471,7 @@ def _build_checkpoint(raw: Mapping[str, Any], path: str) -> CheckpointConfig:
         every_epochs=every_epochs,
         every_optimizer_steps=every_steps,
         keep_last=keep_last,
-        resume=resume,
     )
-
-
-def _build_runtime(raw: Mapping[str, Any], path: str) -> RuntimeConfig:
-    _check_keys(raw, {"max_minutes", "shutdown_grace_minutes"}, path)
-    max_minutes = _optional_float(_require(raw, "max_minutes", path), f"{path}.max_minutes")
-    if max_minutes is not None and max_minutes <= 0:
-        raise ConfigError(f"{path}.max_minutes 必须为正数或 null")
-    grace = _float(_require(raw, "shutdown_grace_minutes", path), f"{path}.shutdown_grace_minutes")
-    if grace < 0:
-        raise ConfigError(f"{path}.shutdown_grace_minutes 必须非负")
-    return RuntimeConfig(max_minutes=max_minutes, shutdown_grace_minutes=grace)
 
 
 def _build_report(raw: Mapping[str, Any], path: str) -> ReportConfig:
@@ -586,7 +568,7 @@ def parse_config(data: Mapping[str, Any]) -> Config:
     _check_keys(
         data,
         {"schema_version", "run", "experiment", "training", "backend", "distributed",
-         "selection", "checkpoint", "runtime", "report", "remote", "notifications"},
+         "selection", "checkpoint", "report", "remote", "notifications"},
         "$",
     )
     schema_version = _int(_require(data, "schema_version", "$"), "$.schema_version")
@@ -607,7 +589,6 @@ def parse_config(data: Mapping[str, Any]) -> Config:
         distributed=_build_distributed(_require(data, "distributed", "$"), "$.distributed"),
         selection=(_build_selection(data["selection"], "$.selection") if data.get("selection") is not None else None),
         checkpoint=_build_checkpoint(_require(data, "checkpoint", "$"), "$.checkpoint"),
-        runtime=_build_runtime(_require(data, "runtime", "$"), "$.runtime"),
         report=_build_report(_require(data, "report", "$"), "$.report"),
         remote=_build_remote(_require(data, "remote", "$"), "$.remote"),
         notifications=_build_notifications(_require(data, "notifications", "$"), "$.notifications"),
@@ -651,15 +632,7 @@ def _cross_validate(cfg: Config) -> None:
         if backend.sklearn.fit_mode == "batch":
             if cfg.training.max_epochs != 1:
                 raise ConfigError("sklearn batch fit_mode 要求 training.max_epochs=1")
-            if cfg.checkpoint.resume != "none":
-                raise ConfigError("sklearn batch fit_mode 要求 checkpoint.resume=none")
-            if cfg.runtime.max_minutes is not None:
-                raise ConfigError("sklearn batch fit_mode 不允许运行时预算（fit 无受控暂停点）")
-
-    # runtime grace 关系
-    if cfg.runtime.max_minutes is not None:
-        if cfg.runtime.shutdown_grace_minutes >= cfg.runtime.max_minutes:
-            raise ConfigError("runtime.shutdown_grace_minutes 必须小于 runtime.max_minutes")
+            # resume=required 对 batch 在预检阶段失败（batch 无受控恢复点），YAML 不再承载 resume
 
     # selection
     if cfg.selection is not None:
@@ -722,7 +695,7 @@ def _sha256_text(text: str) -> str:
 def config_fingerprint(cfg: Config, resume: bool = False) -> str:
     """配置指纹。
 
-    resume=True 时排除允许恢复时变化的字段：training.max_epochs、runtime.*、
+    resume=True 时排除允许恢复时变化的字段：training.max_epochs、
     checkpoint.every_*、checkpoint.keep_last、report.*、remote/notifications 超时与重试。
     """
     data = config_to_dict(cfg)
@@ -731,8 +704,7 @@ def config_fingerprint(cfg: Config, resume: bool = False) -> str:
         training = dict(data["training"])
         training.pop("max_epochs", None)
         data["training"] = training
-        # runtime.* 全部允许恢复时变化（预算/grace 不影响恢复兼容）
-        data.pop("runtime", None)
+        # runtime/执行策略不再属于用户配置，无需排除；checkpoint 频率/保留允许恢复时变化
         ckpt = dict(data["checkpoint"])
         ckpt.pop("every_epochs", None)
         ckpt.pop("every_optimizer_steps", None)
@@ -780,7 +752,6 @@ VARIANT_ALLOWED_TOP = {
     "backend": None,
     "selection": None,
     "checkpoint": None,
-    "runtime": None,
     "report": None,
     "remote": None,
     "notifications": None,
@@ -931,8 +902,7 @@ def default_schema() -> dict[str, Any]:
         },
         "distributed": {"num_processes": "auto"},
         "selection": {"metric": "val/loss", "mode": "min", "patience": 5, "min_delta": 0.0},
-        "checkpoint": {"every_epochs": 1, "every_optimizer_steps": None, "keep_last": 2, "resume": "none"},
-        "runtime": {"max_minutes": None, "shutdown_grace_minutes": 10},
+        "checkpoint": {"every_epochs": 1, "every_optimizer_steps": None, "keep_last": 2},
         "report": {
             "enabled": True,
             "curve_sample_limit": 100000,

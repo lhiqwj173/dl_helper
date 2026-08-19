@@ -56,6 +56,10 @@ class _FakeStore:
     def publish_sweep_bundle(self, local_dir, sweep_id):
         pass
 
+    def fetch_latest_checkpoint(self, run_id, checkpoints_dir):
+        # D-003：省略 --resume 时内部 auto 会向远端查询最新 checkpoint；测试无远端返回 None
+        return None
+
 
 def test_cli_train_invokes_services(tmp_path, monkeypatch):
     """启用服务时 CLI 调用 start_run/finalize_run 并写审计。"""
@@ -118,6 +122,7 @@ def test_cli_required_notification_blocks_success(tmp_path, monkeypatch):
             (),
             {
                 "start_run": lambda self, run_id, platform="local": None,
+                "restore_latest_checkpoint": lambda self, run_id: None,
                 "finalize_run": lambda self, run_id, status, **f: (
                     (_ for _ in ()).throw(ServiceDeliveryError("wecom required 失败"))
                     if status == "succeeded" else None
@@ -147,7 +152,8 @@ def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypa
             calls.append(f"restore:{run_id}")
             return "ck-remote"
 
-    def fake_worker(experiment_ref, config, layout, local_rank, world_size, resume, services=None):
+    def fake_worker(experiment_ref, config, layout, local_rank, world_size, resume,
+                    services=None, execution_policy=None):
         calls.append(f"worker:{resume}")
         return SimpleNamespace(status="succeeded")
 

@@ -22,9 +22,8 @@ def _skl_cfg(run_id, fit_mode="batch", max_epochs=1):
     schema["distributed"] = {"num_processes": 1}
     schema["training"] = {"max_epochs": max_epochs, "log_every_steps": 1}
     schema["selection"] = {"metric": "val/accuracy", "mode": "max", "patience": 5, "min_delta": 0.0}
-    schema["runtime"] = {"max_minutes": None, "shutdown_grace_minutes": 5}
     schema["checkpoint"] = {"every_epochs": 1, "every_optimizer_steps": None,
-                            "keep_last": 1, "resume": "none"}
+                            "keep_last": 1}
     schema["report"]["prediction_splits"] = ["val"]
     schema["run"]["id"] = run_id
     return parse_config(schema)

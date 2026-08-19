@@ -57,7 +57,7 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 - **THEN** 系统只按 code point 边界裁剪异常消息/路径并保留 event/status/scope ID/异常类型；关键字段仍放不下则失败
 
 ### Requirement: 服务失败策略与审计
-AList 和企业微信 MUST 分别配置 `required` 或 `record`，每次调用 MUST 写结构化 UTF-8 service audit。required 失败 MUST 阻止成功/暂停终态；record 失败 MAY 继续但 MUST 在 audit 与 terminal manifest 标为 degraded。任何 secondary 服务异常 MUST NOT 覆盖原训练异常。
+AList 和企业微信 MUST 分别配置 `required` 或 `record`，每次调用 MUST 写结构化 UTF-8 service audit。Kaggle 运行 MUST 同时启用 AList 和企业微信且两者均为 `required`，并在训练前聚合报告所有缺失 Secret key；本地调试 MAY 关闭服务。required 失败 MUST 阻止成功/暂停终态；record 失败 MAY 继续但 MUST 在 audit 与 terminal manifest 标为 degraded。任何 secondary 服务异常 MUST NOT 覆盖原训练异常。
 
 #### Scenario: required STARTED 失败
 - **WHEN** required 企业微信或启动阶段 AList 预检失败

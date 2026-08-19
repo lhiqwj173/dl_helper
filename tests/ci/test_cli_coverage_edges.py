@@ -1,4 +1,4 @@
-"""补充 cli.py 分支覆盖（OSR-009 覆盖率门禁）：dispatch、失败证据、doctor 输出。"""
+"""补充 cli.py 分支覆盖（OSR-009 覆盖率门禁）：dispatch、失败证据、自动预检。"""
 from __future__ import annotations
 
 import os
@@ -79,8 +79,9 @@ def test_write_failure_evidence_with_secret_keys(tmp_path):
     assert os.path.exists(os.path.join(layout.run_dir, "failure.json"))
 
 
-def test_cmd_doctor_prints_errors(tmp_path):
+def test_train_preflight_raises_on_errors(tmp_path):
     from dl_helper.training.cli import main
     cfg = _write_cfg(tmp_path, run_id="doc-err")
-    code = main(["doctor", "--config", cfg, "--experiment", "nonexistent_module:build"])
-    assert code == 1
+    with pytest.raises(Exception, match="训练启动预检失败"):
+        main(["train", "--config", cfg, "--experiment", "nonexistent_module:build",
+              "--preflight-only"])

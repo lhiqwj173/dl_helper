@@ -68,7 +68,8 @@ def test_launcher_preempted_exit_75(tmp_path):
     """worker 返回 preempted → launcher 返回 75。"""
     from dl_helper.training.backends.base import BackendResult
 
-    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True, budget_monotonic=None):
+    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True,
+                    budget_monotonic=None, execution_policy=None):
         return BackendResult(status="preempted", epoch=1, global_step=5)
 
     from dl_helper.training.artifacts import RunLayout

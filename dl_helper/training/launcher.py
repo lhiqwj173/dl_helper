@@ -9,6 +9,7 @@ import os
 from typing import Any, Callable
 
 from .config import Config
+from .platform import ExecutionPolicy, execution_policy_from_dict, execution_policy_to_dict
 
 
 def _spawn_entry(
@@ -21,6 +22,7 @@ def _spawn_entry(
     worker_fn: Callable,
     publish_terminal: bool = True,
     budget_monotonic=None,
+    execution_policy_dict: dict[str, Any] | None = None,
 ) -> None:
     """spawn 子进程入口；由 launcher 注入 worker_fn 保持模块级可导入。"""
     import sys as _sys
@@ -35,8 +37,15 @@ def _spawn_entry(
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
     os.environ.setdefault("MASTER_PORT", "29500")
     layout = RunLayout(run_dir)
+    # D-003：纯 dict 严格重建平台执行策略，禁止借用业务配置序列化
+    execution_policy = (
+        execution_policy_from_dict(execution_policy_dict)
+        if execution_policy_dict is not None
+        else None
+    )
     result = worker_fn(experiment_ref, config, layout, local_rank, world_size, resume,
-                       publish_terminal=publish_terminal, budget_monotonic=budget_monotonic)
+                       publish_terminal=publish_terminal, budget_monotonic=budget_monotonic,
+                       execution_policy=execution_policy)
     # OSR-004：多进程 preempted 状态经退出码 75 传播给父进程
     if getattr(result, "status", "succeeded") == "preempted":
         _sys.exit(75)
@@ -51,6 +60,7 @@ def launch_torch(
     worker_fn: Callable | None = None,
     publish_terminal: bool = True,
     budget_monotonic=None,
+    execution_policy: ExecutionPolicy | None = None,
 ) -> int:
     """启动 torch 训练。返回进程退出码。"""
     from .backends.torch_backend import run_worker
@@ -61,7 +71,8 @@ def launch_torch(
 
         layout = RunLayout(run_dir)
         result = worker_fn(experiment_ref, config, layout, 0, 1, resume,
-                           publish_terminal=publish_terminal, budget_monotonic=budget_monotonic)
+                           publish_terminal=publish_terminal, budget_monotonic=budget_monotonic,
+                           execution_policy=execution_policy)
         if getattr(result, "status", "succeeded") == "preempted":
             return 75
         return 0
@@ -69,11 +80,14 @@ def launch_torch(
     ctx = multiprocessing.get_context("spawn")
     processes = []
     config_dict = _config_to_dict(config)
+    execution_policy_dict = (
+        execution_policy_to_dict(execution_policy) if execution_policy is not None else None
+    )
     for rank in range(num_processes):
         p = ctx.Process(
             target=_spawn_entry,
             args=(experiment_ref, config_dict, run_dir, rank, num_processes, resume, worker_fn,
-                  publish_terminal, budget_monotonic),
+                  publish_terminal, budget_monotonic, execution_policy_dict),
         )
         processes.append(p)
     for p in processes:

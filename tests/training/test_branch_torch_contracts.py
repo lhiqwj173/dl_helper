@@ -70,7 +70,7 @@ def test_validation_metric_scheduler_valid_monitor():
 
 def test_every_optimizer_steps_requires_resumable_dm():
     cfg = _cfg(checkpoint={"every_epochs": None, "every_optimizer_steps": 5,
-                           "keep_last": 2, "resume": "none"})
+                           "keep_last": 2})
     model, dm, task, opt, sched_b = build_torch_components(_exp(), cfg)
     with pytest.raises(TorchBackendError):
         validate_fresh_components(model, dm, task, opt, sched_b, cfg)

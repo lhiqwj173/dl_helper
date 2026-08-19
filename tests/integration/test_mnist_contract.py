@@ -10,6 +10,7 @@ from experiments.mnist import _load_npz, build_experiment
 from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.backends.torch_backend import build_torch_components, run_worker, validate_fresh_components
 from dl_helper.training.config import default_schema, parse_config
+from dl_helper.training.platform import ExecutionPolicy
 
 
 def _mnist_npz(tmp_path, n=64):
@@ -47,7 +48,7 @@ def test_mnist_rejects_incomplete_npz_keys(tmp_path):
         _load_npz(str(path))
 
 
-def _cfg(run_id, data_path, max_minutes=None):
+def _cfg(run_id, data_path):
     schema = default_schema()
     schema["training"]["max_epochs"] = 1
     schema["selection"] = {"metric": "val/loss", "mode": "min", "patience": 5, "min_delta": 0.0}
@@ -57,8 +58,6 @@ def _cfg(run_id, data_path, max_minutes=None):
     schema["backend"]["torch"]["mixed_precision"] = "no"
     schema["distributed"]["num_processes"] = 1
     schema["experiment"]["data_path"] = data_path
-    if max_minutes is not None:
-        schema["runtime"] = {"max_minutes": max_minutes, "shutdown_grace_minutes": 1}
     return parse_config(schema)
 
 
@@ -69,6 +68,9 @@ class _AdvancingClock:
     def __call__(self):
         self.calls += 1
         return self.calls * 100.0
+
+
+_BUDGET = ExecutionPolicy(platform="local", max_minutes=2.0, shutdown_grace_minutes=1.0)
 
 
 def test_mnist_trains_with_fixture(tmp_path):
@@ -82,22 +84,23 @@ def test_mnist_trains_with_fixture(tmp_path):
 
 
 def test_mnist_supports_runtime_budget_resume(tmp_path):
-    cfg = _cfg("mnist-budget", _mnist_npz(tmp_path), max_minutes=2)
+    cfg = _cfg("mnist-budget", _mnist_npz(tmp_path))
     experiment = build_experiment(cfg.experiment)
     model, datamodule, task, optimizer, scheduler = build_torch_components(experiment, cfg)
     assert datamodule.supports_mid_epoch_resume is True
-    validate_fresh_components(model, datamodule, task, optimizer, scheduler, cfg)
+    validate_fresh_components(model, datamodule, task, optimizer, scheduler, cfg,
+                              execution_policy=_BUDGET)
 
 
 def test_mnist_runtime_preempted_then_resumes(tmp_path):
     data_path = _mnist_npz(tmp_path, n=128)
     run_dir = str(tmp_path / "runs" / "mnist-budget-resume")
-    first = _cfg("mnist-budget-resume", data_path, max_minutes=2)
+    first = _cfg("mnist-budget-resume", data_path)
     first_layout = RunLayout(run_dir)
     first_layout.ensure()
     paused = run_worker(
         "experiments.mnist:build_experiment", first, first_layout, 0, 1, "auto",
-        budget_monotonic=_AdvancingClock(),
+        budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET,
     )
     assert paused.status == "preempted"
     assert os.path.exists(first_layout.path("checkpoints", "latest.json"))
@@ -105,7 +108,8 @@ def test_mnist_runtime_preempted_then_resumes(tmp_path):
     resumed = _cfg("mnist-budget-resume", data_path)
     resumed_layout = RunLayout(run_dir)
     resumed_layout.ensure()
-    result = run_worker("experiments.mnist:build_experiment", resumed, resumed_layout, 0, 1, "auto")
+    result = run_worker("experiments.mnist:build_experiment", resumed, resumed_layout, 0, 1, "auto",
+                        execution_policy=_BUDGET)
     assert result.status == "succeeded"
     assert result.global_step == 2
 

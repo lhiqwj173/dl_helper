@@ -24,8 +24,8 @@ def _base_yaml(output_root):
         "distributed": {"num_processes": 1},
         "selection": {"metric": "val/loss", "mode": "min", "patience": 5, "min_delta": 0.0},
         "checkpoint": {"every_epochs": None, "every_optimizer_steps": None,
-                       "keep_last": 1, "resume": "none"},
-        "runtime": {"max_minutes": None, "shutdown_grace_minutes": 10},
+                       "keep_last": 1},
+
         "report": {"enabled": True, "curve_sample_limit": 100000,
                    "prediction_sample_limit": 10000, "prediction_splits": ["val"]},
         "remote": {"type": "none"},
@@ -112,7 +112,7 @@ def test_cli_train_variant(tmp_path):
     assert code == 0
 
 
-def test_cli_doctor_emit_contract(tmp_path, capsys):
+def test_cli_train_preflight_emit_contract(tmp_path, capsys):
     from dl_helper.training.cli import main
     base = str(tmp_path / "base.yaml")
     schema = default_schema()
@@ -124,7 +124,7 @@ def test_cli_doctor_emit_contract(tmp_path, capsys):
     schema["backend"]["torch"]["deterministic"] = "off"
     schema["distributed"]["num_processes"] = 1
     open(base, "w", encoding="utf-8").write(yaml.safe_dump(schema, allow_unicode=True))
-    code = main(["doctor", "--config", base, "--emit-evaluation-contract",
+    code = main(["train", "--config", base, "--preflight-only",
                  "--experiment", "experiments.toy_multiclass:build_experiment"])
     assert code == 0
     out = capsys.readouterr().out

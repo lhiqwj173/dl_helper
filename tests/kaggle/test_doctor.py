@@ -9,7 +9,47 @@ import yaml
 
 from dl_helper.training.config import default_schema, parse_config
 from dl_helper.training.doctor import run_doctor
-from dl_helper.training.platform import Platform
+from dl_helper.training.platform import Platform, kaggle_execution_policy, local_execution_policy
+
+
+def test_kaggle_requires_policy_alist_and_wecom():
+    from dl_helper.training.doctor import _check_kaggle_requirements
+
+    errors = _check_kaggle_requirements(parse_config(default_schema()), Platform("kaggle"))
+    assert any("ExecutionPolicy" in error for error in errors)
+    assert any("remote.type=alist" in error for error in errors)
+    assert any("notifications.type=wecom" in error for error in errors)
+
+
+def test_kaggle_policy_mismatch_rejected():
+    from dl_helper.training.doctor import _check_kaggle_requirements
+
+    errors = _check_kaggle_requirements(parse_config(default_schema()), Platform("kaggle"),
+                                        execution_policy=local_execution_policy())
+    assert any("660" in error for error in errors)
+
+
+def test_kaggle_required_services_accept_environment_secrets(monkeypatch):
+    from dl_helper.training.doctor import _check_kaggle_requirements
+
+    schema = default_schema()
+    schema["remote"] = {
+        "type": "alist", "host": "https://alist.example.invalid", "base_path": "/runs",
+        "user_secret_key": "ALIST_USER", "password_secret_key": "ALIST_PWD",
+        "connect_timeout_seconds": 1, "read_timeout_seconds": 1, "max_attempts": 2,
+        "async_upload": False, "failure_policy": "required",
+    }
+    schema["notifications"] = {
+        "type": "wecom", "corp_id_secret_key": "WECOM_CORP_ID",
+        "corp_secret_key": "WECOM_CORP_SECRET", "agent_id_secret_key": "WECOM_AGENT_ID",
+        "to_user": "@all", "connect_timeout_seconds": 1, "read_timeout_seconds": 1,
+        "max_attempts": 2, "failure_policy": "required",
+    }
+    for key in ("ALIST_USER", "ALIST_PWD", "WECOM_CORP_ID", "WECOM_CORP_SECRET",
+                "WECOM_AGENT_ID"):
+        monkeypatch.setenv(key, "configured")
+    assert _check_kaggle_requirements(parse_config(schema), Platform("kaggle"),
+                                      execution_policy=kaggle_execution_policy()) == []
 
 
 def _torch_cfg(tmp_path, run_id="doctor-torch"):

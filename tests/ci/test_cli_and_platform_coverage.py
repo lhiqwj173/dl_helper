@@ -40,13 +40,14 @@ def test_cli_report_command(tmp_path):
     assert os.path.exists(layout.path("report", "index.html"))
 
 
-def test_cli_doctor_variant(tmp_path):
+def test_cli_train_preflight_variant(tmp_path):
     from dl_helper.training.cli import main
     base = _write_cfg(tmp_path, "cli-doc")
     variant = tmp_path / "v.yaml"
     variant.write_text(yaml.safe_dump({"training": {"max_epochs": 1}}, allow_unicode=True), encoding="utf-8")
-    code = main(["doctor", "--config", base, "--variant", str(variant),
-                 "--experiment", "experiments.toy_multiclass:build_experiment"])
+    code = main(["train", "--config", base, "--variant", str(variant),
+                 "--experiment", "experiments.toy_multiclass:build_experiment",
+                 "--preflight-only"])
     assert code == 0
 
 

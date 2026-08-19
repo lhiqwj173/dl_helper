@@ -24,7 +24,8 @@ def test_launcher_multi_process_returns_nonzero_on_worker_error(tmp_path):
     from dl_helper.training.launcher import launch_torch
     cfg = parse_config(default_schema())
 
-    def fail_worker(ref, config, layout, rank, world, resume, publish_terminal=True, budget_monotonic=None):
+    def fail_worker(ref, config, layout, rank, world, resume, publish_terminal=True,
+                    budget_monotonic=None, execution_policy=None):
         raise RuntimeError("boom")
 
     layout = RunLayout(str(tmp_path / "runs" / "lp"))
@@ -35,7 +36,7 @@ def test_launcher_multi_process_returns_nonzero_on_worker_error(tmp_path):
 
 
 # ---------- doctor ----------
-def test_doctor_kaggle_revision_required(tmp_path):
+def test_short_source_revision_is_accepted(tmp_path):
     schema = default_schema()
     schema["run"]["output_root"] = str(tmp_path)
     schema["run"]["id"] = "doc-k"
@@ -45,9 +46,8 @@ def test_doctor_kaggle_revision_required(tmp_path):
     schema["backend"]["torch"]["mixed_precision"] = "no"
     schema["distributed"]["num_processes"] = 1
     cfg = parse_config(schema)
-    from dl_helper.training.doctor import run_doctor
-    errors = run_doctor(cfg, _KagglePlatform(), "experiments.toy_multiclass:build_experiment")
-    assert errors  # 非法 revision → 错误
+    from dl_helper.training.platform import resolve_source_revision
+    assert resolve_source_revision(cfg) == "short"
 
 
 class _KagglePlatform:
@@ -188,7 +188,8 @@ def test_launcher_single_preempted_returns_75(tmp_path):
     layout = RunLayout(str(tmp_path / "runs" / "lp-pre"))
     layout.ensure()
 
-    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True, budget_monotonic=None):
+    def fake_worker(ref, config, layout, rank, world, resume, publish_terminal=True,
+                    budget_monotonic=None, execution_policy=None):
         return BackendResult(status="preempted", epoch=1, global_step=5)
 
     code = launch_torch("ref", cfg, layout.run_dir, 1, "none", worker_fn=fake_worker)

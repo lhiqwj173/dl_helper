@@ -109,18 +109,23 @@ def test_datamodule_missing_member_rejected():
 
 
 def test_every_optimizer_steps_requires_mid_resume():
-    cfg = _cfg(checkpoint={"every_epochs": 1, "every_optimizer_steps": 5, "keep_last": 2, "resume": "none"})
+    cfg = _cfg(checkpoint={"every_epochs": 1, "every_optimizer_steps": 5, "keep_last": 2})
     # LoaderDataModule 不支持中途恢复
     model, dm, task, opt, sched = build_torch_components(_experiment(), cfg)
     with pytest.raises(TorchBackendError):
         validate_fresh_components(model, dm, task, opt, sched, cfg)
 
 
-def test_runtime_budget_requires_mid_resume():
-    cfg = _cfg(runtime={"max_minutes": 30, "shutdown_grace_minutes": 5})
+def test_budget_policy_requires_mid_epoch_resume():
+    from dl_helper.training.platform import ExecutionPolicy
+    cfg = _cfg()
     model, dm, task, opt, sched = build_torch_components(_experiment(), cfg)
+    # D-003：运行预算来自 ExecutionPolicy；有预算时 DataModule 必须支持中途恢复
     with pytest.raises(TorchBackendError):
-        validate_fresh_components(model, dm, task, opt, sched, cfg)
+        validate_fresh_components(
+            model, dm, task, opt, sched, cfg,
+            execution_policy=ExecutionPolicy(platform="local", max_minutes=30.0,
+                                             shutdown_grace_minutes=5.0))
 
 
 def test_selection_missing_with_val_rejected():

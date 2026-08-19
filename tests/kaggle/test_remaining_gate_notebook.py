@@ -27,8 +27,10 @@ def test_remaining_gate_is_pinned_and_complete():
     assert "DL_HELPER_RUN_STAMP" in code
     assert "f'kaggle-toy-sweep-{run_stamp}'" in code
     assert "f'sklearn-incremental-smoke-{run_stamp}'" in code
-    for command in ("doctor", "sweep", "train"):
+    for command in ("sweep", "train"):
         assert f"'{command}'" in code
+    assert "'doctor'" not in code
+    assert "'--preflight-only'" in code
     for artifact in ("sweep-manifest.json", "run-manifest.json", "service-audit.jsonl",
                      "report/index.html"):
         assert artifact in code

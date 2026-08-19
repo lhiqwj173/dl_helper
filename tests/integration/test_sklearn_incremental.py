@@ -13,10 +13,12 @@ from dl_helper.training.backends.sklearn_backend import (
     run_sklearn_worker_experiment,
 )
 from dl_helper.training.config import default_schema, parse_config
-from dl_helper.training.platform import Platform
+from dl_helper.training.platform import ExecutionPolicy, Platform
+
+_BUDGET = ExecutionPolicy(platform="local", max_minutes=10.0, shutdown_grace_minutes=2.0)
 
 
-def _incr_cfg(run_id, max_epochs, resume="none", every_epochs=1, max_minutes=None):
+def _incr_cfg(run_id, max_epochs, every_epochs=1):
     schema = default_schema()
     schema["backend"] = {
         "type": "sklearn", "torch": None,
@@ -26,9 +28,8 @@ def _incr_cfg(run_id, max_epochs, resume="none", every_epochs=1, max_minutes=Non
     schema["distributed"] = {"num_processes": 1}
     schema["training"] = {"max_epochs": max_epochs, "log_every_steps": 1}
     schema["selection"] = {"metric": "val/accuracy", "mode": "max", "patience": 20, "min_delta": 0.0}
-    schema["runtime"] = {"max_minutes": max_minutes, "shutdown_grace_minutes": 5}
     schema["checkpoint"] = {"every_epochs": every_epochs, "every_optimizer_steps": None,
-                            "keep_last": 3, "resume": resume}
+                            "keep_last": 3}
     schema["report"]["prediction_splits"] = ["val"]
     schema["run"]["id"] = run_id
     return parse_config(schema)
@@ -102,18 +103,21 @@ class _AdvancingClock:
 def test_sklearn_incremental_resume(tmp_path):
     """第一段 PREEMPTED + 第二段 resume：位置与最终产物一致。"""
     run_dir = str(tmp_path / "runs" / "it-skl-incr-resume")
-    cfg1 = _incr_cfg("it-skl-incr-resume", max_epochs=2, resume="auto", max_minutes=10)
+    cfg1 = _incr_cfg("it-skl-incr-resume", max_epochs=2)
     layout1 = RunLayout(run_dir)
     layout1.ensure()
     exp1 = build_sklearn_experiment("experiments.sklearn_incremental:build_experiment", cfg1.experiment)
-    r1 = run_sklearn_worker_experiment(exp1, cfg1, Platform(), layout1, budget_monotonic=_AdvancingClock())
+    r1 = run_sklearn_worker_experiment(
+        exp1, cfg1, Platform(), layout1,
+        resume="auto", budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET,
+    )
     assert r1.status == "preempted"
 
-    cfg2 = _incr_cfg("it-skl-incr-resume", max_epochs=4, resume="auto")
+    cfg2 = _incr_cfg("it-skl-incr-resume", max_epochs=4)
     layout2 = RunLayout(run_dir)
     layout2.ensure()
     exp2 = build_sklearn_experiment("experiments.sklearn_incremental:build_experiment", cfg2.experiment)
-    result2 = run_sklearn_worker_experiment(exp2, cfg2, Platform(), layout2)
+    result2 = run_sklearn_worker_experiment(exp2, cfg2, Platform(), layout2, resume="auto")
     assert result2.status == "succeeded"
     assert result2.epoch == 4
 

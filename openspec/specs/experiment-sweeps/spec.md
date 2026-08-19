@@ -19,7 +19,7 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 - **THEN** sweep 拒绝运行，不生成重复排名项
 
 ### Requirement: 零优化步可比性预检
-coordinator MUST 在训练前通过独立 doctor 子进程构造每个 trial 的 evaluation contract，并要求 Experiment 引用、backend、DataIdentity、split fingerprint、Task、标签/目标 schema、MetricDefinition、comparison metric/direction 相同。comparison MUST 是 `val/` 前缀的全量精确指标；test 或 sampled 指标 MUST NOT 排名。
+coordinator MUST 在训练前通过独立的 train preflight 子进程构造每个 trial 的 evaluation contract，并要求 Experiment 引用、backend、DataIdentity、split fingerprint、Task、标签/目标 schema、MetricDefinition、comparison metric/direction 相同。comparison MUST 是 `val/` 前缀的全量精确指标；test 或 sampled 指标 MUST NOT 排名。
 
 #### Scenario: 可比较 trial
 - **WHEN** 只有模型 signature 或允许调参值不同，评价合同其余字段相同

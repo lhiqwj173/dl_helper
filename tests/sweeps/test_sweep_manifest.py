@@ -53,8 +53,8 @@ def _base_yaml():
             "find_unused_parameters": False}, "sklearn": None},
         "distributed": {"num_processes": 1},
         "selection": {"metric": "val/loss", "mode": "min", "patience": 5, "min_delta": 0.0},
-        "checkpoint": {"every_epochs": None, "every_optimizer_steps": None, "keep_last": 1, "resume": "none"},
-        "runtime": {"max_minutes": None, "shutdown_grace_minutes": 10},
+        "checkpoint": {"every_epochs": None, "every_optimizer_steps": None, "keep_last": 1},
+
         "report": {"enabled": True, "curve_sample_limit": 100000, "prediction_sample_limit": 10000,
                    "prediction_splits": ["val"]},
         "remote": {"type": "none"},

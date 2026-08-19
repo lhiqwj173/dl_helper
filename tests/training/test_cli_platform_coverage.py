@@ -45,17 +45,15 @@ def test_platform_hostname_and_revision():
     assert hostname() != ""
     cfg = parse_config(default_schema())
     rev = resolve_source_revision(cfg)  # 仓库是 git → HEAD
-    assert len(rev) == 40
+    assert rev
 
 
-def test_platform_invalid_revision():
-    import yaml
-    from dl_helper.training.platform import PlatformError, resolve_source_revision
+def test_platform_accepts_short_revision():
+    from dl_helper.training.platform import resolve_source_revision
     schema = default_schema()
-    schema["run"]["source_revision"] = "short"  # 非 40 位
+    schema["run"]["source_revision"] = "short"
     cfg = parse_config(schema)
-    with pytest.raises(PlatformError):
-        resolve_source_revision(cfg)
+    assert resolve_source_revision(cfg) == "short"
 
 
 def test_reporting_stage_metrics_bad_lines(tmp_path):

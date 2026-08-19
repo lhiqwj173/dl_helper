@@ -1,10 +1,11 @@
-# MNIST Kaggle base 配置：显式数据路径，运行时预算，固定 revision。
+# MNIST Kaggle base 配置：显式数据路径与必需的生命周期服务。
+# Kaggle 运行预算由库的平台执行策略固定为 660/10，不再配置 runtime。
 schema_version: 1
 run:
   name: mnist
   id: null  # Kaggle 运行时由模板提供
   output_root: null  # Kaggle 默认 /kaggle/working/dl-helper-runs
-  source_revision: null  # 模板强制 40 位 SHA
+  source_revision: null  # 可填 tag/分支/短 SHA；不要求 40 位 SHA
   seed: 42
   tags: {}
 experiment:
@@ -35,16 +36,29 @@ checkpoint:
   every_epochs: 1
   every_optimizer_steps: null
   keep_last: 2
-  resume: auto
-runtime:
-  max_minutes: 540
-  shutdown_grace_minutes: 10
 report:
   enabled: true
   curve_sample_limit: 100000
   prediction_sample_limit: 10000
   prediction_splits: [val]
 remote:
-  type: none
+  type: alist
+  host: https://alist.example.com
+  base_path: /dl-helper/mnist
+  user_secret_key: ALIST_USER
+  password_secret_key: ALIST_PWD
+  connect_timeout_seconds: 10
+  read_timeout_seconds: 60
+  max_attempts: 3
+  async_upload: false
+  failure_policy: required
 notifications:
-  type: none
+  type: wecom
+  corp_id_secret_key: WECOM_CORP_ID
+  corp_secret_key: WECOM_CORP_SECRET
+  agent_id_secret_key: WECOM_AGENT_ID
+  to_user: "@all"
+  connect_timeout_seconds: 10
+  read_timeout_seconds: 30
+  max_attempts: 3
+  failure_policy: required

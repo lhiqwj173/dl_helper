@@ -188,7 +188,8 @@ class SklearnBackend:
 
 def run_sklearn_worker_experiment(
     experiment: SklearnExperiment, config: Config, platform: Any, layout: RunLayout,
-    budget_monotonic=None, services=None, publish_terminal=True,
+    resume: str = "none", budget_monotonic=None, services=None, publish_terminal=True,
+    execution_policy=None,
 ) -> BackendResult:
     from sklearn.base import clone as sklearn_clone
 
@@ -235,7 +236,8 @@ def run_sklearn_worker_experiment(
                             services=services, publish_terminal=publish_terminal)
     else:
         result = _run_incremental(estimator, task, datamodule, config, layout, engine_state, data_fp, model_sig,
-                                  budget_monotonic, services=services, publish_terminal=publish_terminal)
+                                  resume=resume, budget_monotonic=budget_monotonic, services=services,
+                                  publish_terminal=publish_terminal, execution_policy=execution_policy)
     return result
 
 
@@ -323,11 +325,15 @@ def _run_batch(estimator, task, datamodule, config, layout, engine_state, data_f
 # --------------------------------------------------------------------------
 
 def _run_incremental(estimator, task, datamodule, config, layout, engine_state, data_fp, model_sig,
-                     budget_monotonic=None, services=None, publish_terminal=True) -> BackendResult:
+                     resume: str = "none", budget_monotonic=None, services=None, publish_terminal=True,
+                     execution_policy=None) -> BackendResult:
     source = datamodule.incremental_train_data()
-    if source.supports_mid_fit_resume and config.checkpoint.resume != "none":
+    if source.supports_mid_fit_resume and resume in ("auto", "required"):
         latest = _read_latest_ckpt(layout)
-        if latest is not None:
+        if latest is None:
+            if resume == "required":
+                raise CheckpointError("required 恢复但无 latest 检查点")
+        else:
             ckpt_dir = validate_sklearn_checkpoint_source(
                 layout.path("checkpoints"), latest["path"], engine_state.run_id,
                 _config_fingerprint(config), data_fp, model_sig,
@@ -342,10 +348,23 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
     metric_states: dict[str, StageMetricState] = {}
 
     from ..platform import RuntimeBudget
-    budget = RuntimeBudget(config.runtime.max_minutes, config.runtime.shutdown_grace_minutes,
-                           monotonic=budget_monotonic) if config.runtime.max_minutes is not None else None
+    budget = (
+        RuntimeBudget(execution_policy.max_minutes, execution_policy.shutdown_grace_minutes,
+                      monotonic=budget_monotonic)
+        if execution_policy is not None and execution_policy.max_minutes is not None
+        else None
+    )
+    resumed_mid_epoch = batch_in_epoch > 0
+    first_loop_iter = True
 
     while epoch < config.training.max_epochs and not budget_hit:
+        resumed_partial_this_epoch = first_loop_iter and resumed_mid_epoch
+        first_loop_iter = False
+        epoch_started_at = (
+            budget.begin_epoch()
+            if budget is not None and not resumed_partial_this_epoch
+            else None
+        )
         for idx, batch in enumerate(source.iter_epoch(epoch)):
             if idx < batch_in_epoch:
                 continue  # 跳过已消费 batch
@@ -393,6 +412,21 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
             _apply_selection(engine_state, metric_states["val"], config)
             if engine_state.should_early_stop():
                 layout.log(f"early stop at epoch {epoch}")
+                break
+
+        if budget is not None and epoch_started_at is not None and epoch < config.training.max_epochs:
+            forecast = budget.complete_epoch(epoch_started_at)
+            if forecast.should_preempt:
+                layout.log(
+                    "预算预测暂停: "
+                    f"average_epoch={forecast.average_epoch_seconds:.3f}s, "
+                    f"remaining_training={forecast.remaining_training_seconds:.3f}s"
+                )
+                _save_sklearn_checkpoint(
+                    layout, estimator, source, engine_state, task, config, data_fp, model_sig,
+                    services=services,
+                )
+                budget_hit = True
                 break
 
     model_artifact = _export_joblib_model(layout, estimator, model_sig, config, engine_state)

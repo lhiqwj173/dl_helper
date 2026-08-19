@@ -128,11 +128,22 @@ def test_sklearn_batch_constraints():
     with pytest.raises(ConfigError):
         parse_config(schema)
     schema["training"] = {"max_epochs": 1, "log_every_steps": 1}
-    schema["checkpoint"] = {"every_epochs": None, "every_optimizer_steps": 1, "keep_last": 1, "resume": "none"}
+    schema["checkpoint"] = {"every_epochs": None, "every_optimizer_steps": 1, "keep_last": 1}
     with pytest.raises(ConfigError):
         parse_config(schema)
-    schema["checkpoint"] = {"every_epochs": 1, "every_optimizer_steps": None, "keep_last": 1, "resume": "none"}
-    schema["runtime"] = {"max_minutes": 30, "shutdown_grace_minutes": 5}  # batch 不允许预算
+    schema["checkpoint"] = {"every_epochs": 1, "every_optimizer_steps": None, "keep_last": 1}
+    # D-003：budget 由平台执行策略决定，batch 配置本身可解析
+    cfg = parse_config(schema)
+    assert cfg.backend.sklearn.fit_mode == "batch"
+
+
+def test_runtime_and_resume_removed_from_user_config():
+    # D-002/D-003：根级 runtime 与 checkpoint.resume 必须按未知字段立即失败
+    schema = _schema(runtime={"max_minutes": 10, "shutdown_grace_minutes": 5})
+    with pytest.raises(ConfigError):
+        parse_config(schema)
+    schema = _schema(checkpoint={"every_epochs": 1, "every_optimizer_steps": None,
+                                 "keep_last": 2, "resume": "auto"})
     with pytest.raises(ConfigError):
         parse_config(schema)
 
@@ -147,18 +158,6 @@ def test_sklearn_distributed_must_be_one():
     schema["distributed"] = {"num_processes": 2}
     with pytest.raises(ConfigError):
         parse_config(schema)
-
-
-def test_runtime_grace_relationship():
-    schema = _schema(runtime={"max_minutes": 10, "shutdown_grace_minutes": 10})
-    with pytest.raises(ConfigError):
-        parse_config(schema)
-    schema = _schema(runtime={"max_minutes": 10, "shutdown_grace_minutes": 11})
-    with pytest.raises(ConfigError):
-        parse_config(schema)
-    schema = _schema(runtime={"max_minutes": 10, "shutdown_grace_minutes": 5})
-    cfg = parse_config(schema)
-    assert cfg.runtime.max_minutes == 10
 
 
 def test_run_id_charset():

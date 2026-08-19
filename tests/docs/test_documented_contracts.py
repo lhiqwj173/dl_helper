@@ -26,7 +26,7 @@ def test_docs_reference_real_commands():
     assert "schema_version: 1" in config_doc
     assert "mixed_precision" in config_doc
     metrics_doc = open(os.path.join(DOC_DIR, "metrics.md"), encoding="utf-8").read()
-    assert "formula_version" in metrics_doc
+    assert "formula_id/version" in metrics_doc or "formula_version" in metrics_doc
     assert "1e-6" in metrics_doc or "金标" in metrics_doc
     sweep_doc = open(os.path.join(DOC_DIR, "sweeps.md"), encoding="utf-8").read()
     assert "comparison_metric" in sweep_doc
@@ -52,5 +52,7 @@ def test_breaking_removal_doc():
     doc = open(os.path.join(DOC_DIR, "breaking-removal.md"), encoding="utf-8").read()
     assert "dl_helper.training" in doc
     assert "1.0.0" in doc
-    assert "62ee1e4bbf42065ec07dbd0fc8d5b4f9b642f7fd" in open(
-        os.path.join(REPO, "README.md"), encoding="utf-8").read()
+    assert "checkpoint.resume" in doc
+    assert "runtime" in doc
+    assert "--resume" in doc
+    assert "execution-policy.json" in doc

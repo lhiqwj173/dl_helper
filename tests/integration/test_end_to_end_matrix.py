@@ -13,7 +13,7 @@ from dl_helper.training.backends.sklearn_backend import (
 )
 from dl_helper.training.backends.torch_backend import run_worker
 from dl_helper.training.config import default_schema, parse_config
-from dl_helper.training.platform import Platform
+from dl_helper.training.platform import ExecutionPolicy, Platform
 
 
 def _torch_cfg(run_id, experiment_cfg=None, selection="default", max_epochs=1):
@@ -45,9 +45,8 @@ def _skl_cfg(run_id, fit_mode="batch", max_epochs=1):
     schema["distributed"] = {"num_processes": 1}
     schema["training"] = {"max_epochs": max_epochs, "log_every_steps": 1}
     schema["selection"] = {"metric": "val/accuracy", "mode": "max", "patience": 20, "min_delta": 0.0}
-    schema["runtime"] = {"max_minutes": None, "shutdown_grace_minutes": 5}
     schema["checkpoint"] = {"every_epochs": 1, "every_optimizer_steps": None,
-                            "keep_last": 1, "resume": "none"}
+                            "keep_last": 1}
     schema["report"]["prediction_splits"] = ["val"]
     schema["run"]["id"] = run_id
     return parse_config(schema)
@@ -109,28 +108,21 @@ class _AdvancingClock:
 
 def test_sklearn_incremental_and_resume(tmp_path):
     run_dir = str(tmp_path / "runs" / "e2e-skl-incr")
-    cfg1 = _resume_cfg(_skl_cfg("e2e-skl-incr", fit_mode="incremental", max_epochs=2))
-    cfg1 = _set_max_minutes(cfg1, 10)
+    cfg1 = _skl_cfg("e2e-skl-incr", fit_mode="incremental", max_epochs=2)
     layout1 = RunLayout(run_dir)
     layout1.ensure()
     exp1 = build_sklearn_experiment("experiments.sklearn_incremental:build_experiment", cfg1.experiment)
-    r1 = run_sklearn_worker_experiment(exp1, cfg1, Platform(), layout1, budget_monotonic=_AdvancingClock())
+    r1 = run_sklearn_worker_experiment(
+        exp1, cfg1, Platform(), layout1, resume="auto",
+        budget_monotonic=_AdvancingClock(),
+        execution_policy=ExecutionPolicy(platform="local", max_minutes=10, shutdown_grace_minutes=5),
+    )
     assert r1.status == "preempted"
 
-    cfg2 = _resume_cfg(_skl_cfg("e2e-skl-incr", fit_mode="incremental", max_epochs=3))
+    cfg2 = _skl_cfg("e2e-skl-incr", fit_mode="incremental", max_epochs=3)
     layout2 = RunLayout(run_dir)
     layout2.ensure()
     exp2 = build_sklearn_experiment("experiments.sklearn_incremental:build_experiment", cfg2.experiment)
-    r2 = run_sklearn_worker_experiment(exp2, cfg2, Platform(), layout2)
+    r2 = run_sklearn_worker_experiment(exp2, cfg2, Platform(), layout2, resume="auto")
     assert r2.status == "succeeded"
     assert r2.epoch == 3
-
-
-def _resume_cfg(cfg):
-    from dataclasses import replace
-    return replace(cfg, checkpoint=replace(cfg.checkpoint, resume="auto"))
-
-
-def _set_max_minutes(cfg, minutes):
-    from dataclasses import replace
-    return replace(cfg, runtime=replace(cfg.runtime, max_minutes=float(minutes)))

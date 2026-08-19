@@ -84,8 +84,7 @@ def test_sklearn_manifest_schema_complete(tmp_path):
     schema["selection"] = {"metric": "val/accuracy", "mode": "max", "patience": 5, "min_delta": 0.0}
     schema["run"]["id"] = "schema-skl"
     schema["checkpoint"] = {"every_epochs": None, "every_optimizer_steps": None,
-                            "keep_last": 1, "resume": "none"}
-    schema["runtime"] = {"max_minutes": None, "shutdown_grace_minutes": 5}
+                            "keep_last": 1}
     cfg = parse_config(schema)
     layout = RunLayout(str(tmp_path / "runs" / "schema-skl"))
     layout.ensure()

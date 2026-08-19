@@ -17,7 +17,7 @@ from dl_helper.training.config import default_schema, parse_config
 from dl_helper.training.platform import Platform
 
 
-def _skl_cfg(run_id, fit_mode="batch", max_epochs=1, max_minutes=None):
+def _skl_cfg(run_id, fit_mode="batch", max_epochs=1):
     schema = default_schema()
     schema["backend"] = {
         "type": "sklearn", "torch": None,
@@ -27,9 +27,8 @@ def _skl_cfg(run_id, fit_mode="batch", max_epochs=1, max_minutes=None):
     schema["distributed"] = {"num_processes": 1}
     schema["training"] = {"max_epochs": max_epochs, "log_every_steps": 1}
     schema["selection"] = {"metric": "val/accuracy", "mode": "max", "patience": 5, "min_delta": 0.0}
-    schema["runtime"] = {"max_minutes": max_minutes, "shutdown_grace_minutes": 5}
     schema["checkpoint"] = {"every_epochs": None, "every_optimizer_steps": None,
-                            "keep_last": 1, "resume": "none"}
+                            "keep_last": 1}
     schema["report"]["prediction_splits"] = ["val"]
     schema["run"]["id"] = run_id
     return parse_config(schema)
@@ -79,7 +78,13 @@ def test_sklearn_batch_sample_weight(tmp_path):
         run_sklearn_worker_experiment(exp, cfg, Platform(), layout)
 
 
-def test_sklearn_batch_illegal_runtime_budget(tmp_path):
-    # batch + max_minutes → 配置级失败
-    with pytest.raises(Exception):
-        _skl_cfg("it-skl-budget", max_minutes=30)
+def test_sklearn_batch_never_reads_checkpoint(tmp_path):
+    # batch 从不读 checkpoint：配置可解析，直接 fit 成功且不产生任何检查点
+    cfg = _skl_cfg("it-skl-budget")
+    layout = RunLayout(str(tmp_path / "runs" / "it-skl-budget"))
+    layout.ensure()
+    exp = build_sklearn_experiment("experiments.sklearn_batch:build_experiment", cfg.experiment)
+    result = run_sklearn_worker_experiment(exp, cfg, Platform(), layout)
+    assert result.status == "succeeded"
+    assert not os.path.exists(layout.path("checkpoints", "latest.json"))
+    assert not os.path.isdir(layout.path("checkpoints"))
