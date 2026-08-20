@@ -250,8 +250,18 @@ def test_dangerous_archive_rejected():
         _extract_tar_gz_safe(blob, "target")
 
 
-def test_https_host_required():
-    with pytest.raises(ArtifactStoreError):
-        AListArtifactStore(host="http://insecure.example", base_path="/x",
-                           secret_resolver=None, user_secret_key="a", password_secret_key="b",
-                           connect_timeout=1, read_timeout=1, max_attempts=2, failure_policy="required")
+def test_http_ip_host_allowed():
+    store = AListArtifactStore(host="http://192.168.1.10:5244", base_path="/x",
+                                secret_resolver=None, user_secret_key="a", password_secret_key="b",
+                                connect_timeout=1, read_timeout=1, max_attempts=2,
+                                failure_policy="required")
+    assert store._host == "http://192.168.1.10:5244"
+
+
+def test_alist_host_requires_http_scheme_and_host():
+    for host in ("ftp://alist.example", "alist.example", "https://"):
+        with pytest.raises(ArtifactStoreError):
+            AListArtifactStore(host=host, base_path="/x",
+                               secret_resolver=None, user_secret_key="a", password_secret_key="b",
+                               connect_timeout=1, read_timeout=1, max_attempts=2,
+                               failure_policy="required")

@@ -11,6 +11,7 @@ import tarfile
 import threading
 import time
 from typing import Any, Callable, Mapping
+from urllib.parse import urlparse
 
 from .artifacts import RunLayout, sha256_file
 from .config import Config
@@ -121,8 +122,11 @@ class AListArtifactStore:
         max_attempts: int,
         failure_policy: str,
     ) -> None:
-        if not host.startswith("https://"):
-            raise ArtifactStoreError(f"AList host 必须是 HTTPS: {host!r}")
+        parsed_host = urlparse(host)
+        if parsed_host.scheme not in ("http", "https") or not parsed_host.netloc:
+            raise ArtifactStoreError(
+                f"AList host 必须是带主机的 HTTP(S) URL: {host!r}"
+            )
         self._host = host.rstrip("/")
         self._base_path = base_path.rstrip("/")
         self._resolver = secret_resolver
@@ -255,7 +259,7 @@ class AListArtifactStore:
 
     def _raw_read(self, remote_path: str) -> bytes:
         import requests
-        from urllib.parse import urljoin, urlparse
+        from urllib.parse import urljoin
 
         info = self._get_info(remote_path)
         assert info is not None
@@ -264,8 +268,8 @@ class AListArtifactStore:
             raise ArtifactStoreError(f"AList metadata 缺少 raw_url: {remote_path!r}")
         url = urljoin(f"{self._host}/", raw_url)
         parsed = urlparse(url)
-        if parsed.scheme != "https":
-            raise ArtifactStoreError(f"AList raw_url 必须是 HTTPS: {url!r}")
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ArtifactStoreError(f"AList raw_url 必须是带主机的 HTTP(S) URL: {url!r}")
 
         host = urlparse(self._host)
         headers = {"Authorization": self._token} if parsed.netloc == host.netloc else {}

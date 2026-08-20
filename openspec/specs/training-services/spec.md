@@ -4,7 +4,7 @@
 TBD - created by archiving change build-general-kaggle-training-platform. Update Purpose after archive.
 ## Requirements
 ### Requirement: 通用 ArtifactStore 生命周期
-系统 MUST 将 LocalArtifactStore 始终用于本地产物，并可配置 AListArtifactStore 统一发布 run、checkpoint 和 sweep；Experiment/Task MUST NOT 接收服务客户端或自行上传。AList MUST 使用显式 HTTPS host/base path、Kaggle Secret或同名环境变量、有限 timeout/retry、回读 checksum 与 terminal-last 发布。
+系统 MUST 将 LocalArtifactStore 始终用于本地产物，并可配置 AListArtifactStore 统一发布 run、checkpoint 和 sweep；Experiment/Task MUST NOT 接收服务客户端或自行上传。AList MUST 使用显式 HTTP(S) host/base path（允许 `http://IP`）、Kaggle Secret或同名环境变量、有限 timeout/retry、回读 checksum 与 terminal-last 发布。
 
 #### Scenario: 发布可恢复 checkpoint
 - **WHEN** checkpoint archive 上传且远程 size 可见
