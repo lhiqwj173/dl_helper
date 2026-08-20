@@ -337,7 +337,7 @@ notifications:             # 企业微信通知
 - **预算训练**：Kaggle 由平台执行策略固定为 **660 分钟训练 + 10 分钟收尾**。系统在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；若下一轮无法在 650 分钟截止前完成，则当前边界执行“存检查点 → 推送 AList → 刷新通知/服务 → 写 pause manifest”，退出码为 `75`。新 session 里用同样的命令 + **同一个 `--run-id`**（省略 `--resume` 即自动恢复）继续训。预测只是估算，硬截止仍可能提前触发。预算值记录在 run 目录 `execution-policy.json`，用户配置不包含 `runtime`。
 - Kaggle 强制启用 AList 和企业微信，且两者 `failure_policy=required`；训练预检会列出缺失 Secret 并终止。
 
-注意：`notebook/kaggle_training_template.ipynb` 是**平台自身发布门禁**用的模板（验证平台在多卡 + 预算恢复下能跑通），普通训练任务**不需要**它——你只需要在你自己的 Kaggle notebook 里：装好本仓库 → 按第 1、2 步准备实验与配置 → 跑第 3~5 步的命令。细节见 [kaggle.md](kaggle.md)。
+仓库中的 `notebook/kaggle_train_stage1_epoch5.ipynb` 与 `notebook/kaggle_train_stage2_resume_to_epoch15.ipynb` 是当前 15 epoch 两阶段训练示例：第一本在第 5 轮保存并推送可恢复检查点，第二本使用同一 run ID 恢复并完成到第 15 轮。普通训练任务也可以按本页第 1~5 步在自己的 Kaggle Notebook 中运行。
 
 ---
 

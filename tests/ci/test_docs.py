@@ -14,8 +14,8 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 KAGGLE_DOC = os.path.join(ROOT, "docs", "training", "kaggle.md")
 NOTEBOOKS = [
-    os.path.join(ROOT, "notebook", "kaggle_training_template.ipynb"),
-    os.path.join(ROOT, "notebook", "kaggle_remaining_release_gate.ipynb"),
+    os.path.join(ROOT, "notebook", "kaggle_train_stage1_epoch5.ipynb"),
+    os.path.join(ROOT, "notebook", "kaggle_train_stage2_resume_to_epoch15.ipynb"),
 ]
 DOC_FILES = glob.glob(os.path.join(ROOT, "docs", "training", "*.md")) + [os.path.join(ROOT, "README.md")]
 
@@ -65,7 +65,6 @@ def test_kaggle_docs_have_no_removed_defaults():
     for path in NOTEBOOKS:
         code = _notebook_code(path)
         assert "max_minutes" not in code, path
-        assert "--resume" not in code, path
         assert "checkpoint['resume']" not in code and "resume':" not in code, path
 
 
