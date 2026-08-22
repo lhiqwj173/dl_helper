@@ -177,6 +177,61 @@ def _write_shard_batch(layout, stage, rank, shard_count, arrays_list, total_n):
                               sampling_notes="分片存储全部样本；曲线抽样在报告阶段进行")
 
 
+# 数值型 learning-rate 参数白名单与迭代历史属性白名单（design：含 Pipeline 嵌套步骤探测）
+_LR_PARAM_NAMES = ("learning_rate", "learning_rate_init", "eta0")
+_LR_HISTORY_ATTRS = ("learning_rate_history_", "learning_rates_", "lr_history_")
+
+
+def _iter_estimator_objects(estimator):
+    """深度优先展开 estimator 及 Pipeline/FeatureUnion 嵌套步骤。"""
+    yield estimator
+    steps = getattr(estimator, "steps", None)
+    if steps:
+        for _, sub in steps:
+            yield from _iter_estimator_objects(sub)
+    transformer_list = getattr(estimator, "transformer_list", None)
+    if transformer_list:
+        for _, sub in transformer_list:
+            yield from _iter_estimator_objects(sub)
+
+
+def probe_sklearn_learning_rate(estimator) -> dict[str, Any]:
+    """从 fitted estimator 探测学习率可视化数据。
+
+    迭代历史优先于配置值；只接受有限正数数值参数；完全不可用时 source="unavailable"
+    （报告标注 N/A，不用静态配置伪造实际优化轨迹）。
+    """
+    import math
+
+    def _usable(value: Any) -> bool:
+        return (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(float(value)) and float(value) > 0.0)
+
+    for obj in _iter_estimator_objects(estimator):
+        for attr in _LR_HISTORY_ATTRS:
+            hist = getattr(obj, attr, None)
+            if isinstance(hist, (list, tuple, np.ndarray)) and len(hist) > 0:
+                values = [float(v) for v in hist]
+                if all(math.isfinite(v) for v in values):
+                    return {
+                        "source": "estimator_history",
+                        "param_name": attr,
+                        "config_value": None,
+                        "history": [[i, v] for i, v in enumerate(values)],
+                    }
+        params = obj.get_params(deep=False)
+        for name in _LR_PARAM_NAMES:
+            value = params.get(name)
+            if _usable(value):
+                return {
+                    "source": "estimator_config",
+                    "param_name": name,
+                    "config_value": float(value),
+                    "history": None,
+                }
+    return {"source": "unavailable", "param_name": None, "config_value": None, "history": None}
+
+
 class SklearnBackend:
     """sklearn backend worker。"""
 
@@ -229,6 +284,13 @@ def run_sklearn_worker_experiment(
     from ..artifacts import existing_terminal
     if existing_terminal(layout.run_dir) == "run-manifest.json":
         raise SklearnBackendError(f"run 已成功完成，禁止重跑改写: {engine_state.run_id}")
+    # OSR-006：保证 config.resolved.yaml 存在且严格可重放（与 torch backend 一致；
+    # 报告固定 epoch 轴上限的数据源）
+    import yaml
+    from ..config import config_to_dict
+    if not os.path.exists(layout.path("config.resolved.yaml")):
+        layout.write_text("config.resolved.yaml",
+                          yaml.safe_dump(config_to_dict(config), allow_unicode=True, sort_keys=False))
     if services is not None:
         services.start_run(engine_state.run_id)
     if fit_mode == "batch":
@@ -570,13 +632,33 @@ def _load_sklearn_checkpoint(ckpt_dir, estimator, source, engine_state, task, la
 def _save_sklearn_checkpoint(layout, estimator, source, engine_state, task, config, data_fp, model_sig,
                               services=None):
     import joblib
+    from ..checkpoint import checkpoint_id
+    from ..reporting import PROGRESS_REPORT_SCHEMA_VERSION
     metric_payload = {}
+    # 进度快照：sklearn checkpoint 均在 batch 边界，无 partial epoch loss；学习率由
+    # fitted estimator 探测（历史优先，配置次之，均无则 unavailable/N/A）
+    snapshot = {
+        "schema_version": PROGRESS_REPORT_SCHEMA_VERSION,
+        "backend": "sklearn",
+        "run_id": engine_state.run_id,
+        "checkpoint_id": checkpoint_id(engine_state.epoch, engine_state.global_step),
+        "created_utc": _utc_now(),
+        "position": {
+            "epoch": engine_state.epoch,
+            "batch_in_epoch": engine_state.batch_in_epoch,
+            "global_step": engine_state.global_step,
+        },
+        "max_epochs": config.training.max_epochs,
+        "partial_epoch": None,
+        "learning_rate": probe_sklearn_learning_rate(estimator),
+    }
     ckpt_id = write_sklearn_checkpoint(
         estimator, source.state_dict(), engine_state, metric_payload,
         layout.path("checkpoints"), engine_state.run_id,
         _config_fingerprint(config), data_fp, model_sig,
         engine_state.epoch, engine_state.global_step, engine_state.batch_in_epoch,
         joblib,
+        progress_snapshot=snapshot, run_dir=layout.run_dir,
     )
     if services is not None:
         services.submit_checkpoint(engine_state.run_id, ckpt_id)

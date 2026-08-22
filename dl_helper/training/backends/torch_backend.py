@@ -307,6 +307,8 @@ def run_worker(
 
     budget_hit = False
     batch_sizes: list[int] = []  # OSR-006：动态批量统计（跨全部 epoch）
+    # 每次 optimizer step 后的标量学习率（进度报告与 metrics.jsonl 数据源）；resume 后从恢复的 optimizer 读取
+    current_lr = float(optimizer.param_groups[0]["lr"])
     # OSR-010：每 epoch 独立清零阶段状态；中途恢复本 epoch 时保留已恢复的部分状态
     resumed_mid_epoch = resumed_position is not None and resumed_position["batch_in_epoch"] > 0
     first_loop_iter = True
@@ -361,6 +363,7 @@ def run_worker(
                         optimizer.zero_grad(set_to_none=True)
                         if scheduler_binding is not None and scheduler_binding.interval == "optimizer_step":
                             scheduler_binding.scheduler.step()
+                        current_lr = float(optimizer.param_groups[0]["lr"])
                         engine_state.increment_global_step()
                         window_denom = 0.0
                         budget_hit_any = False
@@ -377,19 +380,22 @@ def run_worker(
                         if budget_hit_any:
                             # 停止新 step；保存完整检查点后进入 PREEMPTED
                             _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
-                                                   config, model_sig, data_fp, best_model_state=best_model_state, services=services)
+                                                   config, model_sig, data_fp, best_model_state=best_model_state,
+                                                   services=services, current_lr=current_lr, mid_epoch=True)
                             budget_hit = True
                             break
                         if (config.checkpoint.every_optimizer_steps is not None
                                 and engine_state.global_step % config.checkpoint.every_optimizer_steps == 0):
                             _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
-                                                   config, model_sig, data_fp, best_model_state=best_model_state, services=services)
+                                                   config, model_sig, data_fp, best_model_state=best_model_state,
+                                                   services=services, current_lr=current_lr, mid_epoch=True)
             if budget_hit:
                 break  # 跳过 epoch 结束代码，直接进入 PREEMPTED 终态
             # epoch 结束
             reduce_stage_metrics(accelerator, train_state)
             if accelerator.is_main_process:
-                _persist_stage_metrics(layout, train_state, "train", epoch, engine_state.global_step, config)
+                _persist_stage_metrics(layout, train_state, "train", epoch, engine_state.global_step, config,
+                                       learning_rate=current_lr)
                 _persist_extended(layout, train_state, "train", epoch, engine_state.global_step)
             _write_epoch_log(layout, engine_state, train_state, accelerator, epoch, config)
 
@@ -415,7 +421,7 @@ def run_worker(
                     # OSR-004：所有 rank 参与 checkpoint（屏障一致），避免 DDP 死锁；主 rank 负责写入
                     _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
                                            config, model_sig, data_fp, best_model_state=best_model_state,
-                                           services=services)
+                                           services=services, current_lr=current_lr)
                     break
             if scheduler_binding is not None and scheduler_binding.interval == "epoch":
                 scheduler_binding.scheduler.step()
@@ -427,7 +433,8 @@ def run_worker(
             if (config.checkpoint.every_epochs is not None
                     and engine_state.epoch % config.checkpoint.every_epochs == 0):
                 _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
-                                       config, model_sig, data_fp, best_model_state=best_model_state, services=services)
+                                       config, model_sig, data_fp, best_model_state=best_model_state,
+                                       services=services, current_lr=current_lr)
                 checkpoint_saved_at_boundary = True
 
             if budget is not None and epoch_started_at is not None and epoch < config.training.max_epochs:
@@ -451,7 +458,7 @@ def run_worker(
                         _save_torch_checkpoint(
                             accelerator, layout, engine_state, datamodule, metric_states,
                             config, model_sig, data_fp, best_model_state=best_model_state,
-                            services=services,
+                            services=services, current_lr=current_lr,
                         )
                     budget_hit = True
                     break
@@ -729,16 +736,43 @@ def _validate_gradients_finite(model) -> None:
 
 
 def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
-                           config, model_sig, data_fp, best_model_state=None, services=None) -> None:
+                           config, model_sig, data_fp, best_model_state=None, services=None,
+                           current_lr=None, mid_epoch=False) -> None:
     # OSR-004：所有 rank 参与 write_torch_checkpoint（内部屏障 + 各 rank save + 主 rank 写 manifest）
     metric_states_payload = {stage: st.state_dict() for stage, st in metric_states.items()}
-    from ..checkpoint import write_torch_checkpoint
+    from ..checkpoint import checkpoint_id, write_torch_checkpoint
+    from ..reporting import PROGRESS_REPORT_SCHEMA_VERSION
+    # 进度快照：checkpoint 当前值显式构造；partial loss 取主 rank 本地累计（DDP 下未跨 rank 归约，
+    # 展示性质）。mid_epoch 仅在当前 epoch 的 train 记录尚未落盘时为 True。
+    partial_epoch = None
+    if mid_epoch:
+        partial_epoch = {
+            "epoch": engine_state.epoch,
+            "train_loss": float(metric_states["train"].compute()["train/loss"]),
+            "learning_rate": float(current_lr),
+        }
+    snapshot = {
+        "schema_version": PROGRESS_REPORT_SCHEMA_VERSION,
+        "backend": "torch",
+        "run_id": engine_state.run_id,
+        "checkpoint_id": checkpoint_id(engine_state.epoch, engine_state.global_step),
+        "created_utc": _utc_now(),
+        "position": {
+            "epoch": engine_state.epoch,
+            "batch_in_epoch": engine_state.batch_in_epoch,
+            "global_step": engine_state.global_step,
+        },
+        "max_epochs": config.training.max_epochs,
+        "partial_epoch": partial_epoch,
+        "learning_rate": {"source": "optimizer", "current": current_lr},
+    }
     ckpt_id = write_torch_checkpoint(
         accelerator, layout.path("checkpoints"), engine_state.run_id, engine_state,
         datamodule.state_dict(), metric_states_payload,
         config_fingerprint_resume(config), data_fp, model_sig,
         engine_state.epoch, engine_state.global_step, engine_state.batch_in_epoch,
         best_model_state=best_model_state,
+        progress_snapshot=snapshot, run_dir=layout.run_dir,
     )
     # OSR-002：主 rank 提交 checkpoint 到有界异步同步器
     if services is not None and accelerator.is_main_process:
@@ -790,7 +824,8 @@ def _write_shard_batch(layout, stage, rank, shard_count, arrays_list, total_n):
                               sampling_notes="分片存储全部样本；曲线抽样在报告阶段进行")
 
 
-def _persist_stage_metrics(layout, state, stage, epoch, global_step, config):
+def _persist_stage_metrics(layout, state, stage, epoch, global_step, config,
+                           learning_rate=None):
     record = {
         "stage": stage,
         "epoch": epoch,
@@ -799,6 +834,9 @@ def _persist_stage_metrics(layout, state, stage, epoch, global_step, config):
         "metrics": state.compute(),
         "extended": state.extended_compute(),
     }
+    if learning_rate is not None:
+        # 进度报告的 per-epoch 学习率数据源（落盘 Artifact；报告生成器只读 Artifact）
+        record["learning_rate"] = float(learning_rate)
     append_jsonl(layout.metrics_jsonl, record)
 
 

@@ -14,6 +14,8 @@ def _fake_run(tmp_path, user_text=None):
     layout = RunLayout(run_dir)
     layout.ensure()
     layout.write_json("run-manifest.json", {"status": "succeeded", "run_id": "sec"})
+    layout.write_text("config.resolved.yaml",
+                      "training:\n  max_epochs: 2\n")
     layout.write_json("metrics/summary.json", {
         "run_id": user_text or "sec", "backend": "torch", "status": "succeeded",
         "epoch": 1, "global_step": 8,

@@ -157,11 +157,16 @@ def write_torch_checkpoint(
     global_step: int,
     batch_in_epoch: int,
     best_model_state: Mapping[str, Any] | None = None,
+    progress_snapshot: Mapping[str, Any] | None = None,
+    run_dir: str | None = None,
 ) -> str:
     """保存 torch 不可变检查点并返回 checkpoint_id。
 
     OSR-004：所有 rank 共同参与 Accelerate save 协议（各自保存 RNG/state 到 rank 子目录），
     仅主 rank 写 metadata/manifest 并 move 到不可变目录。
+    progress_snapshot + run_dir 提供时，主 rank 在 manifest 计算前生成内嵌进度报告
+    （progress/index.html + progress/progress-snapshot.json，随 sha256 manifest 校验）；
+    报告生成失败直接中止 checkpoint（fail-fast）。
     """
     ckpt_id = checkpoint_id(epoch, global_step)
     os.makedirs(checkpoints_dir, exist_ok=True)
@@ -193,6 +198,13 @@ def write_torch_checkpoint(
             if best_model_state is not None:
                 import torch
                 torch.save(best_model_state, os.path.join(staging, "best-model-state.pt"))
+            if progress_snapshot is not None:
+                if run_dir is None:
+                    raise CheckpointError("提供 progress_snapshot 时必须同时提供 run_dir")
+                from .reporting import generate_checkpoint_progress_report
+                generate_checkpoint_progress_report(
+                    run_dir, progress_snapshot, os.path.join(staging, "progress")
+                )
             manifest = {
                 "schema_version": 1,
                 "run_id": run_id,
@@ -349,7 +361,15 @@ def write_sklearn_checkpoint(
     global_step: int,
     batch_in_epoch: int,
     joblib: Any,
+    progress_snapshot: Mapping[str, Any] | None = None,
+    run_dir: str | None = None,
 ) -> str:
+    """保存 sklearn incremental 可信检查点并返回 checkpoint_id。
+
+    progress_snapshot + run_dir 提供时在 manifest 计算前生成内嵌进度报告
+    （progress/index.html + progress/progress-snapshot.json，随 sha256 manifest 校验）；
+    报告生成失败直接中止 checkpoint（fail-fast）。
+    """
     ckpt_id = checkpoint_id(epoch, global_step)
     os.makedirs(checkpoints_dir, exist_ok=True)
     final_dir = os.path.join(checkpoints_dir, ckpt_id)
@@ -363,6 +383,13 @@ def write_sklearn_checkpoint(
         write_json(os.path.join(staging, "engine-state.json"), engine_state.state_dict())
         write_json(os.path.join(staging, "source-state.json"), dict(source_state))
         write_json(os.path.join(staging, "metric-states.json"), json_safe(metric_states))
+        if progress_snapshot is not None:
+            if run_dir is None:
+                raise CheckpointError("提供 progress_snapshot 时必须同时提供 run_dir")
+            from .reporting import generate_checkpoint_progress_report
+            generate_checkpoint_progress_report(
+                run_dir, progress_snapshot, os.path.join(staging, "progress")
+            )
         manifest = {
             "schema_version": 1,
             "run_id": run_id,
