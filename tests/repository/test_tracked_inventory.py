@@ -76,6 +76,8 @@ def test_new_files_present():
     for expected in (
         "pyproject.toml",
         "envs/kaggle_bootstrap.py",
+        "notebook/kaggle_minimal_training.ipynb",
+        "notebook/kaggle_inline_mnist_training.ipynb",
         "notebook/kaggle_train_stage1_epoch5.ipynb",
         "notebook/kaggle_train_stage2_resume_to_epoch15.ipynb",
         "dl_helper/training/__init__.py",

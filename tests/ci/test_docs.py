@@ -14,6 +14,8 @@ import re
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 KAGGLE_DOC = os.path.join(ROOT, "docs", "training", "kaggle.md")
 NOTEBOOKS = [
+    os.path.join(ROOT, "notebook", "kaggle_minimal_training.ipynb"),
+    os.path.join(ROOT, "notebook", "kaggle_inline_mnist_training.ipynb"),
     os.path.join(ROOT, "notebook", "kaggle_train_stage1_epoch5.ipynb"),
     os.path.join(ROOT, "notebook", "kaggle_train_stage2_resume_to_epoch15.ipynb"),
 ]

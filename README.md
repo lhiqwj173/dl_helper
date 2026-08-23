@@ -30,6 +30,9 @@ python -m dl_helper.training.cli train \
 
 第一个 Session 因预算返回 `75` 后，在新的 Session 使用同一 `--run-id` 再次运行同一条命令即可自动恢复（无需再填任何恢复参数）。完整的 Kaggle 安装、Secrets、恢复和 sweep 流程见 [Kaggle 指南](docs/training/kaggle.md)。
 
+可直接复制的最小起点是 [kaggle_minimal_training.ipynb](notebook/kaggle_minimal_training.ipynb)
+和 [kaggle_inline_mnist_training.ipynb](notebook/kaggle_inline_mnist_training.ipynb)。
+
 ## 文档
 
 - [训练指南](docs/training/guide.md)

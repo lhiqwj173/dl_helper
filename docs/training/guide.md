@@ -38,6 +38,32 @@
 > `examples/experiments/` 下已有 10 个现成示例，先抄后改是最快的入门方式：
 > `toy_multiclass.py` / `toy_regression.py` / `toy_multilabel.py` / `mnist.py` / `sklearn_batch.py` / `sklearn_incremental.py` / `sklearn_pipeline.py` / `toy_custom_task.py` / `toy_multi_input.py` / `toy_multiclass_resumable.py`
 
+### Experiment 代码位置与引用
+
+CLI 只要求两件事成立：`--project-dir` 加入导入路径后，`--experiment module:function`
+可以导入；工厂函数返回与配置后端一致的 Experiment。常见布局如下：
+
+| 项目布局 | 调用参数 |
+|---|---|
+| `my-project/my_experiment.py` | `--project-dir my-project --experiment my_experiment:build_experiment` |
+| `my-project/my_package/experiment.py` | `--project-dir my-project --experiment my_package.experiment:build_experiment` |
+| `my-project/src/my_package/experiment.py` | `--project-dir my-project/src --experiment my_package.experiment:build_experiment` |
+
+同一个模块可以导出多个工厂，并按需选择引用，例如
+`my_experiment:build_small_model` 和 `my_experiment:build_large_model`。使用仓库自带示例时，
+把示例目录作为外部项目传入：
+
+```bash
+python -m dl_helper.training.cli train \
+    --project-dir /path/to/dl_helper/examples \
+    --config /path/to/dl_helper/examples/configs/sweeps/toy-learning-rate/base.yaml \
+    --experiment experiments.toy_multiclass:build_experiment
+```
+
+不要只把 Experiment 定义在 Jupyter、REPL 或其他进程的全局变量里。CLI 和多进程 worker 需要
+按模块引用重新导入；交互代码必须先落盘为项目目录中的 `.py` 文件。Experiment 引用也不能位于
+`dl_helper` 包内。
+
 ### Torch 实验：6 个工厂
 
 ```python
@@ -337,7 +363,9 @@ notifications:             # 企业微信通知
 - **预算训练**：Kaggle 由平台执行策略固定为 **660 分钟训练 + 10 分钟收尾**。系统在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；若下一轮无法在 650 分钟截止前完成，则当前边界执行“存检查点 → 推送 AList → 刷新通知/服务 → 写 pause manifest”，退出码为 `75`。新 session 里用同样的命令 + **同一个 `--run-id`**（省略 `--resume` 即自动恢复）继续训。预测只是估算，硬截止仍可能提前触发。预算值记录在 run 目录 `execution-policy.json`，用户配置不包含 `runtime`。
 - Kaggle 强制启用 AList 和企业微信，且两者 `failure_policy=required`；训练预检会列出缺失 Secret 并终止。
 
-仓库中的 `notebook/kaggle_train_stage1_epoch5.ipynb` 与 `notebook/kaggle_train_stage2_resume_to_epoch15.ipynb` 是当前 15 epoch 两阶段训练示例：第一本在第 5 轮保存并推送可恢复检查点，第二本使用同一 run ID 恢复并完成到第 15 轮。普通训练任务也可以按本页第 1~5 步在自己的 Kaggle Notebook 中运行。
+Kaggle Notebook 参考见 [kaggle.md](kaggle.md#notebook-参考)。其中
+`kaggle_minimal_training.ipynb` 是外部项目最小模板，`kaggle_inline_mnist_training.ipynb`
+演示训练代码直接写在 Notebook 中并落盘为模块；两份 `stage*` notebook 保留为暂停/恢复示例。
 
 ---
 

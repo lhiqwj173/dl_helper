@@ -6,6 +6,17 @@
 - `config_path`：你的 YAML 配置；
 - `output_root`：`/kaggle/working` 下的产物目录（默认 `/kaggle/working/dl-helper-runs`）。
 
+## Notebook 参考
+
+| Notebook | 适用场景 |
+|---|---|
+| [kaggle_minimal_training.ipynb](../../notebook/kaggle_minimal_training.ipynb) | 外部 Git 训练项目的最小起点 |
+| [kaggle_inline_mnist_training.ipynb](../../notebook/kaggle_inline_mnist_training.ipynb) | MNIST NPZ 内联实验代码模板 |
+| [kaggle_train_stage1_epoch5.ipynb](../../notebook/kaggle_train_stage1_epoch5.ipynb) | 第 5 epoch 受控暂停演示 |
+| [kaggle_train_stage2_resume_to_epoch15.ipynb](../../notebook/kaggle_train_stage2_resume_to_epoch15.ipynb) | 恢复同一 run 并完成 15 epoch 的演示 |
+
+前两份是新任务推荐入口；后两份保留用于展示预算暂停与恢复产物契约。
+
 > 本页所有可执行代码都是 Python Notebook 单元：用 `subprocess` 调当前 kernel 的
 > `sys.executable`，不依赖系统 shell 续行或开发者本机解释器路径。
 > 说明中凡是「运行单元」即指把该代码块粘贴到 Kaggle Notebook 的一个代码单元执行。
@@ -88,6 +99,67 @@ print("dl-helper 安装完成")
 `build_experiment(config)` 返回 `TorchExperiment` 或 `SklearnExperiment`（写法见
 [训练指南](guide.md)）。本库不自动发现业务代码或数据：`project_dir`、配置、Experiment 引用都要显式给出。
 Kaggle 输入数据必须显式挂在 `/kaggle/input/...`，输出默认落在 `/kaggle/working/dl-helper-runs`。
+
+### 实验代码的常见来源
+
+**Git 项目**：在 Kaggle 单元中 clone 到 `/kaggle/working` 后直接引用。固定 ref 可以保证库版本、
+项目版本和恢复校验一致：
+
+```python
+checked([
+    "git", "clone",
+    "https://github.com/your-account/my-training-project.git",
+    "/kaggle/working/my-project",
+])
+checked(["git", "checkout", "main"], cwd="/kaggle/working/my-project")
+```
+
+随后使用：
+
+```python
+run_train([
+    "--project-dir", "/kaggle/working/my-project",
+    "--config", "/kaggle/working/my-project/configs/kaggle.yaml",
+    "--experiment", "my_experiment:build_experiment",
+    "--run-id", "my-project-v1",
+])
+```
+
+**Kaggle Dataset**：Dataset 挂载在只读路径下。优先把它复制到 working，再让 `project_dir`
+指向可写副本。因为该目录不是 Git 工作树，配置里的 `run.source_revision` 必须显式设置成无空白
+版本标识：
+
+```python
+import shutil
+from pathlib import Path
+
+source = Path("/kaggle/input/my-project-code/my-project")
+target = Path("/kaggle/working/my-project")
+if target.exists():
+    raise RuntimeError(f"目标目录已存在: {target}")
+shutil.copytree(source, target)
+```
+
+**Notebook 内联实验**：支持在 Notebook 中编写代码，但不能只留在 kernel 全局命名空间里；
+必须用 `%%writefile` 或普通文件 API 写入 `.py` 模块。先准备目录：
+
+```python
+from pathlib import Path
+
+Path("/kaggle/working/my-project").mkdir(parents=True, exist_ok=True)
+```
+
+再在独立单元中落盘 Experiment：
+
+```python
+%%writefile /kaggle/working/my-project/my_experiment.py
+def build_experiment(config):
+    ...
+```
+
+之后仍通过 `--project-dir /kaggle/working/my-project` 和
+`--experiment my_experiment:build_experiment` 启动。这样预检、报告、checkpoint 恢复和多进程
+worker 才能在新进程中导入同一份代码。
 
 在 Notebook 里生成配置文件（直接在项目中手工维护 YAML 也可，这里是生成示例）：
 
