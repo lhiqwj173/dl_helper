@@ -144,7 +144,7 @@ def test_failed_bundle_gated_on_evidence(tmp_path, monkeypatch):
     class _FakeServices:
         _resolver = _Resolver()
 
-        def finalize_run(self, run_id, status):
+        def finalize_run(self, run_id, status, **kwargs):
             finalized.append((run_id, status))
 
         result = type("R", (), {"degraded": []})()

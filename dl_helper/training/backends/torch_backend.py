@@ -24,6 +24,7 @@ from ..config import Config
 from ..contracts import LossResult, TorchExperiment, validate_backend_match, validate_experiment, validate_loss_result, validate_torch_task
 from ..engine import EngineStateError, resolve_definition, validate_selection
 from ..metrics import StageMetricState, combine_reduction_states
+from ..notifications import format_duration, format_metric_summary
 from .base import BackendResult, ModelArtifact
 
 # 预测分片每片样本数
@@ -183,6 +184,9 @@ def run_worker(
     execution_policy=None,
 ) -> BackendResult:
     """在 worker 内执行完整 torch 训练并返回 BackendResult。"""
+    import time
+
+    worker_started = time.monotonic()
     # strict 确定性需 CuBLAS workspace 配置，必须在 torch 导入/CUDA 初始化前设置
     if config.backend.torch is not None and config.backend.torch.deterministic == "strict":
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
@@ -504,13 +508,15 @@ def run_worker(
         }
 
     # 导出 best/last safetensors
+    status = "preempted" if budget_hit else "succeeded"
     model_artifact = None
     if accelerator.is_main_process:
         model_artifact = _export_models(layout, model, best_model_state, model_sig, config, engine_state)
-        _write_summary(layout, config, model_sig, data_fp, engine_state, metric_states, model_artifact,
-                       platform, resources=resources, loader_resources_applied=loader_resources_applied,
-                       applied_loader=applied_loader, batch_stats=batch_stats,
-                       status="preempted" if budget_hit else "succeeded")
+        summary_payload = _write_summary(layout, config, model_sig, data_fp, engine_state, metric_states,
+                                         model_artifact, platform, resources=resources,
+                                         loader_resources_applied=loader_resources_applied,
+                                         applied_loader=applied_loader, batch_stats=batch_stats,
+                                         status=status)
         # OSR-002：核心 Artifact（eval contract/environment/report）先于服务 bundle 完成
         report_path = _write_run_core_artifacts(layout, config, task, platform, resources, applied_loader,
                                                 loader_resources_applied, batch_stats,
@@ -518,21 +524,32 @@ def run_worker(
         # 服务终结前先写候选终态，使远端 bundle 携带完整 run 终态；required
         # 服务失败会向上抛出，CLI 负责清理候选并写 FAILED。
         def publish_local_terminal() -> None:
-            _publish_terminal(layout, "preempted" if budget_hit else "succeeded", config, engine_state,
+            _publish_terminal(layout, status, config, engine_state,
                               model_sig, data_fp, task, platform, metric_states, model_artifact,
                               resources=resources, loader_resources_applied=loader_resources_applied,
                               services=services, applied_loader=applied_loader, batch_stats=batch_stats,
                               report_path=report_path)
+        notify_fields = {
+            "elapsed": format_duration(time.monotonic() - worker_started),
+            "metrics": format_metric_summary(
+                summary_payload,
+                config.selection.metric if config.selection is not None else None,
+            ),
+        }
+        if status == "preempted":
+            latest = read_latest(layout.path("checkpoints"))
+            if latest is not None:
+                notify_fields["checkpoint"] = latest["checkpoint_id"]
         if services is not None:
             services.finalize_run(
                 engine_state.run_id,
-                "preempted" if budget_hit else "succeeded",
+                status,
                 prepare_terminal=publish_local_terminal if publish_terminal else None,
+                **notify_fields,
             )
         elif publish_terminal:
             publish_local_terminal()
 
-    status = "preempted" if budget_hit else "succeeded"
     return BackendResult(
         status=status,
         epoch=engine_state.epoch,
@@ -939,6 +956,7 @@ def _write_summary(layout, config, model_sig, data_fp, engine_state, metric_stat
         },
     }
     write_json(layout.summary_json, summary)
+    return summary
 
 
 def _runtime_environment(platform, config, resources=None, loader_resources_applied=False,

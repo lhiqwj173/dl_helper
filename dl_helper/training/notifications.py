@@ -153,29 +153,103 @@ def _backoff(attempt: int) -> float:
 
 
 # --------------------------------------------------------------------------
+# 通知字段格式化
+# --------------------------------------------------------------------------
+
+# 异常详情单字段上限：超出部分截断，避免长堆栈挤占消息可读性（2048 字节仍由客户端兜底）
+MESSAGE_MAX_CHARS = 300
+
+
+def format_duration(seconds: float) -> str:
+    """把秒数格式化为紧凑的人类可读时长（如 42s、5m03s、1h02m03s）。"""
+    if seconds < 0:
+        raise ValueError(f"耗时不得为负: {seconds!r}")
+    total = int(seconds + 0.5)
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours}h{minutes:02d}m{secs:02d}s"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
+def format_metric(name: str, value: Any) -> str:
+    """格式化单个指标副本：`name=value`（浮点按 6 位有效数字）。"""
+    return f"{name}={_format_number(value)}"
+
+
+def format_metric_summary(summary: Mapping[str, Any] | None, metric_name: str | None = None) -> str:
+    """从 run summary 提炼通知指标：期望指标最优值 + 对应 test 指标。
+
+    selection 记录验证集最优值，展示为 `期望指标名=值@epoch=N`（stage_metrics 键名
+    自带 stage 前缀）；test 阶段同名指标是训练成果的最终评价，存在即附带。
+    没有 selection 时回退 test/val 阶段全部指标（稀有路径）。
+    """
+    if not summary:
+        return ""
+    selection = summary.get("selection") or {}
+    best_value = selection.get("best_value")
+    stage_metrics = summary.get("stage_metrics") or {}
+    if best_value is not None:
+        parts = []
+        best = format_metric(metric_name or "best", best_value)
+        best_epoch = selection.get("best_epoch")
+        parts.append(best if best_epoch is None else f"{best}@epoch={best_epoch}")
+        if metric_name and metric_name.startswith("val/"):
+            test_name = f"test/{metric_name.removeprefix('val/')}"
+            test_value = (stage_metrics.get("test") or {}).get(test_name)
+            if test_value is not None:
+                parts.append(format_metric(test_name, test_value))
+        return " ".join(parts)
+    for stage in ("test", "val"):
+        stage_values = stage_metrics.get(stage) or {}
+        if stage_values:
+            return " ".join(format_metric(name, value) for name, value in sorted(stage_values.items()))
+    return ""
+
+
+def _normalize_message(text: Any) -> str:
+    """异常详情扁平化为单行并截断；调用方应传入已脱敏文本。"""
+    flat = " ".join(str(text).split())
+    if len(flat) <= MESSAGE_MAX_CHARS:
+        return flat
+    return flat[:MESSAGE_MAX_CHARS] + "…"
+
+
+def _format_number(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+# --------------------------------------------------------------------------
 # 生命周期事件模板
 # --------------------------------------------------------------------------
 
 _EVENT_TEMPLATES: dict[str, str] = {
-    "RUN_STARTED": "[训练开始] run={run_id} 平台={platform} UTC={utc}",
-    "RUN_SUCCEEDED": "[训练成功] run={run_id} UTC={utc} 耗时={elapsed} 指标={summary} 报告={report}",
-    "RUN_PREEMPTED": "[训练暂停] run={run_id} UTC={utc} 恢复检查点={checkpoint}",
-    "RUN_FAILED": "[训练失败] run={run_id} UTC={utc} 异常={error_type} 详情={message}",
-    "SWEEP_STARTED": "[Sweep开始] sweep={sweep_id} 平台={platform} UTC={utc}",
-    "TRIAL_STARTED": "[Trial开始] sweep={sweep_id} trial={trial} UTC={utc}",
-    "TRIAL_SUCCEEDED": "[Trial成功] sweep={sweep_id} trial={trial} UTC={utc} 指标={summary}",
-    "TRIAL_PREEMPTED": "[Trial暂停] sweep={sweep_id} trial={trial} UTC={utc} 检查点={checkpoint}",
-    "TRIAL_FAILED": "[Trial失败] sweep={sweep_id} trial={trial} UTC={utc} 异常={error_type}",
-    "SWEEP_SUCCEEDED": "[Sweep成功] sweep={sweep_id} UTC={utc} best={best}",
-    "SWEEP_PREEMPTED": "[Sweep暂停] sweep={sweep_id} UTC={utc} 恢复位置={checkpoint}",
-    "SWEEP_FAILED": "[Sweep失败] sweep={sweep_id} UTC={utc} 异常={error_type}",
+    "RUN_STARTED": "[训练开始] run={run_id}",
+    "RUN_SUCCEEDED": "[训练成功] run={run_id} {metrics} 耗时={elapsed}",
+    "RUN_PREEMPTED": "[训练暂停] run={run_id} {metrics} 耗时={elapsed} 恢复检查点={checkpoint}",
+    "RUN_FAILED": "[训练失败] run={run_id} epoch={epoch} step={step} 异常={error_type} 详情={message}",
+    "SWEEP_STARTED": "[Sweep开始] sweep={sweep_id} trials={trials} 对比指标={comparison}({mode})",
+    "TRIAL_STARTED": "[Trial开始] sweep={sweep_id} trial={trial} 进度={progress}",
+    "TRIAL_SUCCEEDED": "[Trial成功] sweep={sweep_id} trial={trial} 进度={progress} {metrics}",
+    "TRIAL_PREEMPTED": "[Trial暂停] sweep={sweep_id} trial={trial} 进度={progress} 恢复检查点={checkpoint}",
+    "TRIAL_FAILED": ("[Trial失败] sweep={sweep_id} trial={trial} 进度={progress} "
+                     "epoch={epoch} 异常={error_type} 详情={message}"),
+    "SWEEP_SUCCEEDED": "[Sweep成功] sweep={sweep_id} best={best} {metrics}",
+    "SWEEP_PREEMPTED": "[Sweep暂停] sweep={sweep_id} 进度={progress} 暂停于={trial} 恢复检查点={checkpoint}",
+    "SWEEP_FAILED": ("[Sweep失败] sweep={sweep_id} trial={trial} 退出码={exit_code} 进度={progress} "
+                     "异常={error_type} 详情={message}"),
 }
 
 
 def render_event_template(event: str, **fields: Any) -> str:
     """渲染固定事件模板；关键身份字段（event/status/scope id/error type）不可裁掉。
 
-    非关键可选字段（elapsed/summary/report 等）缺失时补空串；关键字段缺一即失败。
+    非关键可选字段（elapsed/metrics/checkpoint 等）缺失时连同标签一起省略，
+    不产生 "指标=" 这类空残段；异常详情（message）扁平化为单行并截断。
     """
     if event not in _EVENT_TEMPLATES:
         raise WecomError(f"未知事件模板: {event!r}")
@@ -185,11 +259,19 @@ def render_event_template(event: str, **fields: Any) -> str:
         if fields.get(key) in (None, ""):
             raise WecomError(f"事件 {event} 缺少关键字段 {key!r}")
     safe = {k: ("" if v is None else v) for k, v in fields.items()}
+    if safe.get("message"):
+        safe["message"] = _normalize_message(safe["message"])
+    if safe.get("metrics"):
+        safe["metrics"] = " ".join(str(safe["metrics"]).split())
     # 模板中未提供的非关键字段补空串
     for key in re.findall(r"\{(\w+)\}", template):
-        if key not in safe:
-            safe[key] = ""
-    return template.format(**safe)
+        safe.setdefault(key, "")
+    # 空可选字段：标签与占位符一起移除，避免消息出现无信息量的残段
+    for key, value in safe.items():
+        if key in required or value != "":
+            continue
+        template = re.sub(rf"(?<!\S)[^\s{{}}]*\{{{re.escape(key)}\}}", "", template)
+    return re.sub(r" {2,}", " ", template.format(**safe)).strip()
 
 
 def _required_fields(event: str) -> list[str]:

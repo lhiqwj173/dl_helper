@@ -249,11 +249,11 @@ class LifecycleServices:
 
     # ---- run ----
 
-    def start_run(self, run_id: str, platform: str = "local") -> None:
+    def start_run(self, run_id: str) -> None:
         scope = f"run/{run_id}"
         if self._wecom is not None and not self._event_seen(scope, "RUN_STARTED"):
             if self._audit_and_notify(scope, "RUN_STARTED", self._wecom_policy.policy,
-                                      {"run_id": run_id, "platform": platform, "utc": utc_now()}):
+                                      {"run_id": run_id}):
                 self._mark_event_seen(scope, "RUN_STARTED")
         # OSR-002：启用服务的全部 Secret 在首个拟合 step 前解析（含 WeCom，非空操作）
         self._preflight_secrets()
@@ -417,11 +417,11 @@ class LifecycleServices:
 
     # ---- sweep/trial ----
 
-    def start_sweep(self, sweep_id: str, platform: str = "local") -> None:
+    def start_sweep(self, sweep_id: str, **fields: Any) -> None:
         scope = f"sweep/{sweep_id}"
         if self._wecom is not None and not self._event_seen(scope, "SWEEP_STARTED"):
             if self._audit_and_notify(scope, "SWEEP_STARTED", self._wecom_policy.policy,
-                                      {"sweep_id": sweep_id, "platform": platform, "utc": utc_now()}):
+                                      {"sweep_id": sweep_id, **fields}):
                 self._mark_event_seen(scope, "SWEEP_STARTED")
         self._preflight_secrets()  # OSR-002：sweep 级 Secret 预检
 

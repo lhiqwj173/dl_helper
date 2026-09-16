@@ -248,8 +248,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
                 from .launcher import launch_torch
                 if services is not None:
                     services.start_run(run_id)
+                import time
+                train_started = time.monotonic()
                 code = launch_torch(args.experiment, config, layout.run_dir, num_procs, resume,
                                     execution_policy=execution_policy, publish_terminal=False)
+                latest = None
                 if code in (EXIT_OK, EXIT_PREEMPTED) and services is not None:
                     from .checkpoint import read_latest
 
@@ -269,6 +272,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
                         prepare_terminal=lambda: _publish_cli_terminal(
                             layout, status, config, run_id, services=services
                         ),
+                        **_terminal_notification_fields(
+                            layout, status, time.monotonic() - train_started,
+                            metric_name=config.selection.metric if config.selection is not None else None,
+                            checkpoint_id=(latest or {}).get("checkpoint_id"),
+                        ),
                     )
                 else:
                     _publish_cli_terminal(layout, status, config, run_id, services=services)
@@ -280,9 +288,10 @@ def _cmd_train(args: argparse.Namespace) -> int:
         if services is not None and existing_terminal(layout.run_dir) == "run-manifest.json":
             os.remove(os.path.join(layout.run_dir, "run-manifest.json"))
         evidence_ok = False
+        failure_payload = None
         args._failure_evidence_attempted = True
         try:
-            _write_failure_evidence(args, exc)
+            failure_payload = _write_failure_evidence(args, exc)
             evidence_ok = os.path.exists(os.path.join(layout.run_dir, "failure.json"))
         except Exception as evidence_exc:
             args._secondary_errors.append({
@@ -293,8 +302,14 @@ def _cmd_train(args: argparse.Namespace) -> int:
             })
         # OSR-003：failure.json 未成功持久化时不得发布声称完整的 FAILED bundle
         if services is not None and evidence_ok:
+            # 复用已脱敏的失败证据：详情先脱敏后截断，避免截断切出 Secret 片段
+            evidence = failure_payload or {}
             try:
-                services.finalize_run(run_id, "failed")
+                services.finalize_run(run_id, "failed",
+                                      error_type=_root_exception_type(exc),
+                                      message=evidence.get("message") or str(exc),
+                                      epoch=evidence.get("epoch"),
+                                      step=evidence.get("global_step"))
             except Exception as sec:
                 # OSR-003：服务终结失败作为可审计 secondary，不吞掉原训练异常
                 resolver = getattr(args, "_secret_resolver", None)
@@ -312,6 +327,24 @@ def _cmd_train(args: argparse.Namespace) -> int:
     if status == "preempted":
         return EXIT_PREEMPTED
     return EXIT_OK
+
+
+def _terminal_notification_fields(layout, status: str, elapsed_seconds: float,
+                                  metric_name: str | None = None,
+                                  checkpoint_id: str | None = None) -> dict[str, Any]:
+    """多进程终态通知字段：耗时、指标与暂停恢复检查点。"""
+    from .artifacts import read_json
+    from .notifications import format_duration, format_metric_summary
+
+    if not os.path.exists(layout.summary_json):
+        raise CliError("多进程终态通知缺少 summary.json，无法补全指标字段")
+    fields = {
+        "elapsed": format_duration(elapsed_seconds),
+        "metrics": format_metric_summary(read_json(layout.summary_json), metric_name),
+    }
+    if status == "preempted" and checkpoint_id:
+        fields["checkpoint"] = checkpoint_id
+    return fields
 
 
 def _configured_secret_keys(config: Config) -> list[str]:
@@ -471,8 +504,8 @@ def _root_exception_type(exc: BaseException) -> str:
     return type(root).__name__
 
 
-def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
-    """写脱敏 failure artifact（OSR-003）。
+def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> dict[str, Any] | None:
+    """写脱敏 failure artifact（OSR-003），返回失败证据供 FAILED 通知复用。
 
     使用与训练相同的 SecretResolver 全链路脱敏；不做静默回退到明文；
     包含 stage/训练位置与可审计 secondary 错误。写入异常由 main 捕获并记录，
@@ -484,9 +517,9 @@ def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
 
     run_dir = getattr(args, "_run_dir", None)
     if run_dir is None:
-        return
+        return None
     if existing_terminal(run_dir) == "run-manifest.json":
-        return  # 成功终态不可改写
+        return None  # 成功终态不可改写
     # OSR-003：publish_terminal 负责 pause → FAILED 的原子过渡；
     # 证据写失败时保留旧 pause，禁止留下声称 FAILED 的不完整 bundle。
     tb = traceback.format_exc()
@@ -545,6 +578,7 @@ def _write_failure_evidence(args: argparse.Namespace, exc: Exception) -> None:
     os.makedirs(run_dir, exist_ok=True)
     from .artifacts import publish_terminal
     publish_terminal(run_dir, "failed", failure)
+    return failure
 
 
 def entry() -> None:

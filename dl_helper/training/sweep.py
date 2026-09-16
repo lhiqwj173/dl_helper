@@ -25,6 +25,7 @@ from .config import (
     tuning_fingerprint,
 )
 from .contracts import MetricDefinition
+from .notifications import format_metric
 
 SWEEP_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -221,6 +222,15 @@ def run_sweep(manifest_path: str, resume: bool = False, project_dir: str | None 
             "error_type": type(exc).__name__,
             "error": str(exc),
         })
+        # FAILED 事件必须覆盖协调器异常路径；服务终结失败不得覆盖原异常
+        if services is not None:
+            try:
+                services.finalize_sweep(manifest.sweep_id, "failed",
+                                        error_type=type(exc).__name__, message=str(exc))
+            except BaseException as notify_exc:
+                # 次级服务失败已记入 service audit，这里显式提示而不吞掉原异常
+                print(f"sweep {manifest.sweep_id} FAILED 通知失败: "
+                      f"{type(notify_exc).__name__}: {notify_exc}", file=sys.stderr)
         raise
     finally:
         os.close(lock_fd)
@@ -269,13 +279,64 @@ def _resolve_output_root(manifest: SweepManifest) -> str:
     return Platform().resolve_output_root(base)
 
 
+def _read_trial_json(output_root: str, run_id: str, *parts: str) -> Any:
+    """读 trial run 产物 JSON 供通知展示；缺失/损坏返回 None。
+
+    通知字段是可选展示项（权威校验在排名/暂停路径做），读取失败不阻断 sweep。
+    """
+    path = os.path.join(output_root, "runs", run_id, *parts)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _trial_metrics_field(output_root: str, run_id: str, manifest: SweepManifest) -> str:
+    """trial 成功通知的比较指标副本：与排名同源的最终 val 值（严格校验留给排名阶段）。"""
+    summary = _read_trial_json(output_root, run_id, "metrics", "summary.json")
+    if not isinstance(summary, Mapping):
+        return ""
+    value = ((summary.get("stage_metrics") or {}).get("val") or {}).get(manifest.comparison_metric)
+    if not isinstance(value, (int, float)):
+        return ""
+    return format_metric(manifest.comparison_metric, value)
+
+
+def _trial_checkpoint_field(output_root: str, run_id: str) -> str:
+    """trial 暂停恢复检查点（run pause manifest 绑定的 resume_checkpoint）。"""
+    pause = _read_trial_json(output_root, run_id, "pause-manifest.json")
+    if not isinstance(pause, Mapping):
+        return ""
+    checkpoint = pause.get("resume_checkpoint")
+    return str(checkpoint) if checkpoint else ""
+
+
+def _trial_failure_fields(output_root: str, run_id: str) -> dict[str, Any]:
+    """trial 失败通知字段（来源为已脱敏的 run failure.json）。"""
+    failure = _read_trial_json(output_root, run_id, "failure.json")
+    if not isinstance(failure, Mapping):
+        return {}
+    fields: dict[str, Any] = {}
+    if failure.get("exception_type"):
+        fields["error_type"] = failure["exception_type"]
+    if failure.get("message"):
+        fields["message"] = failure["message"]
+    if failure.get("epoch") is not None:
+        fields["epoch"] = failure["epoch"]
+    if failure.get("global_step") is not None:
+        fields["step"] = failure["global_step"]
+    return fields
+
+
 def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLayout,
                       resume: bool, output_root: str, services=None,
                       project_dir: str | None = None) -> int:
 
     # OSR-002：sweep 生命周期事件
     if services is not None:
-        services.start_sweep(manifest.sweep_id)
+        services.start_sweep(manifest.sweep_id, trials=len(manifest.trials),
+                             comparison=manifest.comparison_metric, mode=manifest.mode)
 
     # 恢复校验
     if resume:
@@ -290,11 +351,14 @@ def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLay
     for trial, config in trial_configs:
         contract = _emit_evaluation_contract(trial, config, manifest, project_dir)
         if contract is None or contract.get("valid") is not True:
+            errors = contract.get("errors") if contract else ["contract 无效"]
             _publish_sweep_failure(sweep_dir,
                        {"sweep_id": manifest.sweep_id,
-                        "preflight_errors": contract.get("errors") if contract else ["contract 无效"]})
+                        "preflight_errors": errors})
             if services is not None:
-                services.finalize_sweep(manifest.sweep_id, "failed")
+                detail = "; ".join(str(e) for e in errors) if errors else "未提供错误明细"
+                services.finalize_sweep(manifest.sweep_id, "failed", trial=trial.name,
+                                        message=f"评估合同预检失败: {detail}")
             return 1
         # OSR-008：contract 落盘，供暂停/恢复 checksum 校验
         write_json(os.path.join(contract_dir, f"{trial.name}.json"), contract)
@@ -305,43 +369,53 @@ def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLay
         _publish_sweep_failure(sweep_dir,
                    {"sweep_id": manifest.sweep_id, "comparability_errors": [str(exc)]})
         if services is not None:
-            services.finalize_sweep(manifest.sweep_id, "failed")
+            services.finalize_sweep(manifest.sweep_id, "failed",
+                                    message=f"跨 trial 可比性校验失败: {exc}")
         return 1
 
     statuses: list[dict[str, Any]] = []
-    for trial, config in trial_configs:
+    total_trials = len(trial_configs)
+    for index, (trial, config) in enumerate(trial_configs, start=1):
         run_id = manifest.derived_run_id(trial.name)
         if resume and _trial_completed(layout, run_id):
             statuses.append({"trial": trial.name, "run_id": run_id, "status": "succeeded"})
             continue
+        progress = f"{index}/{total_trials}"
         append_jsonl(layout.trials_jsonl, {"trial": trial.name, "run_id": run_id, "status": "started"})
         if services is not None:
-            services.trial_event(manifest.sweep_id, trial.name, "started")
+            services.trial_event(manifest.sweep_id, trial.name, "started", progress=progress)
         code = _run_trial_subprocess(manifest, trial, config, run_id, sweep_dir, project_dir)
         if code == 0:
             append_jsonl(layout.trials_jsonl, {"trial": trial.name, "run_id": run_id, "status": "succeeded"})
             if services is not None:
-                services.trial_event(manifest.sweep_id, trial.name, "succeeded")
+                services.trial_event(manifest.sweep_id, trial.name, "succeeded", progress=progress,
+                                     metrics=_trial_metrics_field(output_root, run_id, manifest))
             statuses.append({"trial": trial.name, "run_id": run_id, "status": "succeeded"})
         elif code == 75:
+            checkpoint = _trial_checkpoint_field(output_root, run_id) if services is not None else ""
             if services is not None:
-                services.trial_event(manifest.sweep_id, trial.name, "preempted")
+                services.trial_event(manifest.sweep_id, trial.name, "preempted", progress=progress,
+                                     checkpoint=checkpoint)
             # 先形成可校验的 sweep pause，让远端 bundle 与本地终态一致。
             _write_pause_manifest(manifest, sweep_dir, run_id, statuses, output_root)
             if services is not None:
                 try:
-                    services.finalize_sweep(manifest.sweep_id, "preempted")
+                    services.finalize_sweep(manifest.sweep_id, "preempted", trial=trial.name,
+                                            progress=progress, checkpoint=checkpoint)
                 except BaseException:
                     os.remove(os.path.join(sweep_dir, "pause-manifest.json"))
                     raise
             return 75
         else:
+            failure_fields = _trial_failure_fields(output_root, run_id)
             _publish_sweep_failure(sweep_dir,
                        {"sweep_id": manifest.sweep_id, "failed_trial": trial.name,
                         "run_id": run_id, "exit_code": code})
             if services is not None:
-                services.trial_event(manifest.sweep_id, trial.name, "failed")
-                services.finalize_sweep(manifest.sweep_id, "failed")
+                services.trial_event(manifest.sweep_id, trial.name, "failed", progress=progress,
+                                     **failure_fields)
+                services.finalize_sweep(manifest.sweep_id, "failed", trial=trial.name,
+                                        exit_code=code, progress=progress, **failure_fields)
             return code
 
     # 全部成功 → 排名 + best + 报告 + manifest
@@ -369,8 +443,10 @@ def _run_sweep_locked(manifest: SweepManifest, sweep_dir: str, layout: _SweepLay
     write_json(os.path.join(sweep_dir, "sweep-manifest.json"), success)
     # 终态文件先落盘，服务 bundle 才能携带完整 sweep 终态。
     if services is not None:
+        best_metrics = format_metric(manifest.comparison_metric, ranking[0]["value"]) if ranking else ""
         try:
-            services.finalize_sweep(manifest.sweep_id, "succeeded", best=best_trial)
+            services.finalize_sweep(manifest.sweep_id, "succeeded", best=best_trial,
+                                    metrics=best_metrics)
         except BaseException:
             os.remove(os.path.join(sweep_dir, "sweep-manifest.json"))
             raise

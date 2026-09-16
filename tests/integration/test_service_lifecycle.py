@@ -68,7 +68,7 @@ def test_run_lifecycle_events(tmp_path):
     wecom = _FakeWecom()
     svc = _services(tmp_path, wecom)
     svc.start_run("run-1")
-    svc.finalize_run("run-1", "succeeded", elapsed="5m", summary="acc=0.9")
+    svc.finalize_run("run-1", "succeeded", elapsed="5m", metrics="val/acc=0.9")
     assert any("训练开始" in s for s in wecom.sent)
     assert any("训练成功" in s for s in wecom.sent)
     # 审计记录

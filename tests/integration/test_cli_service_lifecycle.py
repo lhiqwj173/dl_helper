@@ -72,9 +72,9 @@ def test_cli_train_invokes_services(tmp_path, monkeypatch):
     calls = {"start": [], "finalize": []}
 
     class _Recording(LifecycleServices):
-        def start_run(self, run_id, platform="local"):
+        def start_run(self, run_id):
             calls["start"].append(run_id)
-            super().start_run(run_id, platform=platform)
+            super().start_run(run_id)
 
         def finalize_run(self, run_id, status, **fields):
             calls["finalize"].append((run_id, status))
@@ -179,6 +179,7 @@ def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, mon
     from dl_helper.training.platform import Platform
 
     calls: list[str] = []
+    notify_fields: list[dict] = []
 
     class Services:
         _resolver = None
@@ -191,6 +192,7 @@ def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, mon
 
         def finalize_run(self, run_id, status, **kwargs):
             calls.append(f"finalize:{run_id}:{status}")
+            notify_fields.append(kwargs)
 
     def fake_launch(experiment_ref, config, run_dir, num_procs, resume, **kwargs):
         checkpoint_id = "epoch-000001-step-00000010"
@@ -199,6 +201,12 @@ def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, mon
             "schema_version": 1,
             "checkpoint_id": checkpoint_id,
             "path": checkpoint_id,
+        })
+        write_json(os.path.join(run_dir, "metrics", "summary.json"), {
+            "schema_version": 1,
+            "run_id": "mp-preempt",
+            "status": "preempted",
+            "selection": {"best_value": 0.5, "best_epoch": 1},
         })
         return 75
 
@@ -226,3 +234,42 @@ def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, mon
         "checkpoint:mp-preempt:epoch-000001-step-00000010",
         "finalize:mp-preempt:preempted",
     ]
+    assert notify_fields[0]["metrics"] == "val/loss=0.5@epoch=1"
+    assert notify_fields[0]["checkpoint"] == "epoch-000001-step-00000010"
+    assert notify_fields[0]["elapsed"].endswith("s")
+
+
+def test_cli_failure_notification_includes_error_fields(tmp_path, monkeypatch):
+    """训练异常时 FAILED 通知携带根因异常类型与详情。"""
+    import dl_helper.training.cli as cli
+    import dl_helper.training.backends.torch_backend as torch_backend
+
+    notify_fields: list[dict] = []
+
+    class Services:
+        _resolver = _Resolver()
+        result = type("R", (), {"degraded": []})()
+
+        def start_run(self, run_id):
+            pass
+
+        def restore_latest_checkpoint(self, run_id):
+            return None
+
+        def finalize_run(self, run_id, status, **kwargs):
+            notify_fields.append({"run_id": run_id, "status": status, **kwargs})
+
+    def fake_worker(experiment_ref, config, layout, local_rank, world_size, resume, **kwargs):
+        raise ValueError("boom detail")
+
+    monkeypatch.setattr(cli, "_build_services", lambda config, platform, layout: Services())
+    monkeypatch.setattr(torch_backend, "run_worker", fake_worker)
+    cfg = _base_cfg(tmp_path, "svc-fail", notify_type="none", policy="record")
+
+    with pytest.raises(ValueError):
+        cli.main(["train", "--config", cfg, "--experiment", "experiments.toy_multiclass:build_experiment"])
+
+    failed = [f for f in notify_fields if f["status"] == "failed"]
+    assert len(failed) == 1
+    assert failed[0]["error_type"] == "ValueError"
+    assert "boom detail" in failed[0]["message"]

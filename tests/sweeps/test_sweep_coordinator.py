@@ -153,10 +153,10 @@ def test_resume_required_service_failure_replaces_pause(tmp_path, monkeypatch):
     from dl_helper.training.services import ServiceDeliveryError
 
     class RequiredServices:
-        def start_sweep(self, sweep_id):
+        def start_sweep(self, sweep_id, **fields):
             return None
 
-        def trial_event(self, sweep_id, trial, status):
+        def trial_event(self, sweep_id, trial, status, **fields):
             return None
 
         def finalize_sweep(self, sweep_id, status, **fields):
@@ -175,3 +175,98 @@ def test_resume_required_service_failure_replaces_pause(tmp_path, monkeypatch):
         run_sweep(manifest, resume=True)
     assert os.path.exists(os.path.join(sweep_dir, "failure.json"))
     assert not os.path.exists(os.path.join(sweep_dir, "pause-manifest.json"))
+
+
+class _RecordingServices:
+    def __init__(self):
+        self.events: list[tuple[str, dict]] = []
+
+    def start_sweep(self, sweep_id, **fields):
+        self.events.append((f"sweep_started:{sweep_id}", fields))
+
+    def trial_event(self, sweep_id, trial, status, **fields):
+        self.events.append((f"trial_{status}:{trial}", fields))
+
+    def finalize_sweep(self, sweep_id, status, **fields):
+        self.events.append((f"sweep_{status}", fields))
+
+
+def _patch_sweep_services(monkeypatch, services, handler):
+    from dl_helper.training import sweep as sweep_module
+
+    monkeypatch.setattr(sweep_module, "_build_sweep_services", lambda *_args: services)
+    monkeypatch.setattr(sweep_module, "_emit_evaluation_contract", lambda *_args: {"valid": True})
+    monkeypatch.setattr(sweep_module, "_compare_contracts", lambda *_args: None)
+    monkeypatch.setattr(sweep_module, "_run_trial_subprocess", handler)
+
+
+def test_sweep_notification_fields_on_success(tmp_path, monkeypatch):
+    """sweep/trial 成功通知：进度、比较指标副本与 best 值。"""
+    from dl_helper.training.artifacts import write_json
+
+    output_root = str(tmp_path / "out-notify-ok")
+    manifest = _write_sweep(tmp_path, output_root)
+    services = _RecordingServices()
+
+    def fake_trial(_manifest, trial, _config, run_id, _sweep_dir, _project_dir=None):
+        write_json(os.path.join(output_root, "runs", run_id, "metrics", "summary.json"), {
+            "schema_version": 1,
+            "metric_definitions": {
+                "loss": {"exact": True, "evaluation_scope": "full", "direction": "min"},
+            },
+            "stage_metrics": {"val": {"val/loss": 0.25 if trial.name == "lr-1e-2" else 0.1}},
+        })
+        return 0
+
+    _patch_sweep_services(monkeypatch, services, fake_trial)
+
+    assert run_sweep(manifest) == 0
+    assert services.events[0] == ("sweep_started:toy-lr-sweep",
+                                  {"trials": 2, "comparison": "val/loss", "mode": "min"})
+    assert ("trial_started:lr-1e-2", {"progress": "1/2"}) in services.events
+    assert ("trial_succeeded:lr-5e-2", {"progress": "2/2", "metrics": "val/loss=0.1"}) in services.events
+    assert ("sweep_succeeded", {"best": "lr-5e-2", "metrics": "val/loss=0.1"}) in services.events
+
+
+def test_sweep_notification_fields_on_trial_failure(tmp_path, monkeypatch):
+    """Trial 失败通知：进度、退出码与 run failure.json 的失败信息。"""
+    from dl_helper.training.artifacts import write_json
+
+    output_root = str(tmp_path / "out-notify-fail")
+    manifest = _write_sweep(tmp_path, output_root)
+    services = _RecordingServices()
+
+    def fake_trial(_manifest, trial, _config, run_id, _sweep_dir, _project_dir=None):
+        write_json(os.path.join(output_root, "runs", run_id, "failure.json"), {
+            "schema_version": 1,
+            "exception_type": "RuntimeError",
+            "message": "CUDA out of memory",
+            "epoch": 3,
+            "global_step": 120,
+        })
+        return 7
+
+    _patch_sweep_services(monkeypatch, services, fake_trial)
+
+    assert run_sweep(manifest) == 7
+    failure_fields = {"error_type": "RuntimeError", "message": "CUDA out of memory",
+                      "epoch": 3, "step": 120}
+    assert ("trial_failed:lr-1e-2", {"progress": "1/2", **failure_fields}) in services.events
+    assert ("sweep_failed", {"trial": "lr-1e-2", "exit_code": 7, "progress": "1/2",
+                             **failure_fields}) in services.events
+
+
+def test_trial_checkpoint_field_reads_run_pause_manifest(tmp_path):
+    """暂停通知的恢复检查点取自 run pause manifest；缺失/损坏不阻断通知。"""
+    from dl_helper.training.artifacts import write_json
+    from dl_helper.training.sweep import _trial_checkpoint_field
+
+    output_root = str(tmp_path)
+    write_json(os.path.join(output_root, "runs", "r1", "pause-manifest.json"),
+               {"schema_version": 1, "resume_checkpoint": "epoch-000003-step-00000120"})
+    assert _trial_checkpoint_field(output_root, "r1") == "epoch-000003-step-00000120"
+    assert _trial_checkpoint_field(output_root, "missing") == ""
+    with open(os.path.join(output_root, "runs", "r1", "pause-manifest.json"), "w",
+              encoding="utf-8") as f:
+        f.write("{not json")
+    assert _trial_checkpoint_field(output_root, "r1") == ""

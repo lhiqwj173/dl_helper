@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from typing import Any, Mapping
 
 import numpy as np
@@ -19,6 +20,7 @@ from ..contracts import (
 )
 from ..engine import EngineState, validate_selection
 from ..metrics import StageMetricState
+from ..notifications import format_duration, format_metric_summary
 from .base import BackendResult, ModelArtifact
 
 _SHARD_BATCH = 4096
@@ -348,6 +350,7 @@ def _library_versions() -> dict[str, str]:
 
 def _run_batch(estimator, task, datamodule, config, layout, engine_state, data_fp, model_sig,
                 services=None, publish_terminal=True) -> BackendResult:
+    started = time.monotonic()
     train = datamodule.full_train_data()
     fit_kwargs = resolve_fit_kwargs(config, train)
     layout.log(f"sklearn batch fit start estimator={model_sig['class']}")
@@ -369,11 +372,19 @@ def _run_batch(estimator, task, datamodule, config, layout, engine_state, data_f
 
     if config.selection is not None and "val" in metric_states:
         _apply_selection(engine_state, metric_states["val"], config)
-    _write_summary(layout, config, "sklearn", engine_state, model_artifact, model_sig, data_fp)
+    summary_payload = _write_summary(layout, config, "sklearn", engine_state, model_artifact, model_sig,
+                                     data_fp, metric_states=metric_states)
     # OSR-002：核心 Artifact（eval contract/report）先于服务 bundle 完成
     report_path = _write_sklearn_core_artifacts(layout, config, task, datamodule, estimator=estimator)
     if services is not None:
-        services.finalize_run(engine_state.run_id, "succeeded")
+        services.finalize_run(
+            engine_state.run_id, "succeeded",
+            elapsed=format_duration(time.monotonic() - started),
+            metrics=format_metric_summary(
+                summary_payload,
+                config.selection.metric if config.selection is not None else None,
+            ),
+        )
     if publish_terminal:
         _publish_sklearn_terminal(layout, "succeeded", config, engine_state, model_sig, data_fp,
                                   task=task, datamodule=datamodule, services=services,
@@ -389,6 +400,7 @@ def _run_batch(estimator, task, datamodule, config, layout, engine_state, data_f
 def _run_incremental(estimator, task, datamodule, config, layout, engine_state, data_fp, model_sig,
                      resume: str = "none", budget_monotonic=None, services=None, publish_terminal=True,
                      execution_policy=None) -> BackendResult:
+    started = time.monotonic()
     source = datamodule.incremental_train_data()
     if source.supports_mid_fit_resume and resume in ("auto", "required"):
         latest = _read_latest_ckpt(layout)
@@ -493,8 +505,8 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
 
     model_artifact = _export_joblib_model(layout, estimator, model_sig, config, engine_state)
     status = "preempted" if budget_hit else "succeeded"
-    _write_summary(layout, config, "sklearn", engine_state, model_artifact, model_sig, data_fp,
-                   status=status)
+    summary_payload = _write_summary(layout, config, "sklearn", engine_state, model_artifact, model_sig, data_fp,
+                                     metric_states=metric_states, status=status)
     # OSR-002：核心 Artifact（eval contract/report）先于服务 bundle 完成
     report_path = _write_sklearn_core_artifacts(layout, config, task, datamodule, estimator=estimator)
     def publish_local_terminal() -> None:
@@ -502,10 +514,22 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
                                   task=task, datamodule=datamodule, services=services,
                                   report_path=report_path)
     if services is not None:
+        notify_fields = {
+            "elapsed": format_duration(time.monotonic() - started),
+            "metrics": format_metric_summary(
+                summary_payload,
+                config.selection.metric if config.selection is not None else None,
+            ),
+        }
+        if status == "preempted":
+            latest = _read_latest_ckpt(layout)
+            if latest is not None:
+                notify_fields["checkpoint"] = latest["checkpoint_id"]
         services.finalize_run(
             engine_state.run_id,
             status,
             prepare_terminal=publish_local_terminal if publish_terminal else None,
+            **notify_fields,
         )
     elif publish_terminal:
         publish_local_terminal()
@@ -739,6 +763,7 @@ def _write_summary(layout, config, backend, engine_state, model_artifact, model_
         },
     }
     write_json(layout.summary_json, summary)
+    return summary
 
 
 
