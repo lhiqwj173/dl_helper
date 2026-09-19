@@ -117,6 +117,31 @@ def test_resumable_datamodule_state_roundtrip():
     assert dm2.state_dict() == state
 
 
+def test_resumable_train_loader_never_persistent():
+    """OSR-012：train loader 每 epoch 重建 → worker 非持久化；val 按平台资源持久化。"""
+    ds = torch.utils.data.TensorDataset(torch.randn(10, 3), torch.randint(0, 2, (10,)))
+
+    def collate(batch):
+        xs, ys = zip(*batch)
+        return torch.stack(xs), torch.tensor(ys)
+
+    dm = ResumableMapDataModule(
+        DataIdentity("d", "v1", "fp"),
+        lambda: ds,
+        collate,
+        batch_size=4,
+        val_dataset_factory=lambda: ds,
+    )
+    applied = dm.configure_resources(
+        num_workers=2, pin_memory=False, persistent_workers=True, prefetch_factor=2
+    )
+    # 平台资源原样记录（OSR-006），但每 epoch 重建的 train loader 固定非持久化。
+    assert applied["persistent_workers"] is True
+    assert dm.applied_loader_resources()["persistent_workers"] is True
+    assert dm.train_dataloader().persistent_workers is False
+    assert dm.val_dataloader().persistent_workers is True
+
+
 def test_prepared_batch_validation():
     with pytest.raises(ValueError):
         PreparedBatch(inputs=torch.randn(2), targets=torch.tensor([0, 1]), sample_count=0)

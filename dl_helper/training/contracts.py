@@ -236,6 +236,9 @@ class ResumableMapDataModule:
     """由 dataset/collate 工厂与 DataLoader 参数构造，保存 epoch/已消费批次数与 sampler 状态。
 
     严格确定性模式下要求随机增强由样本键、epoch 和 seed 决定，不依赖未保存的 worker 全局 RNG。
+
+    loader 生命周期：train loader 每 epoch 重建（OSR-004），因此始终以非持久化
+    worker 构造（OSR-012）；val/test/predict 只构造一次，按平台资源持久化。
     """
 
     def __init__(
@@ -336,7 +339,16 @@ class ResumableMapDataModule:
             "prefetch_factor": self._prefetch_factor,
         }
 
-    def _dataloader(self, dataset: torch.utils.data.Dataset, batch_size: int) -> DataLoader:
+    def _dataloader(
+        self,
+        dataset: torch.utils.data.Dataset,
+        batch_size: int,
+        *,
+        persistent_workers: bool | None = None,
+    ) -> DataLoader:
+        effective_persistent_workers = (
+            self._persistent_workers if persistent_workers is None else persistent_workers
+        )
         gen = None
         if self._shuffle:
             # OSR-004：每 epoch 由 epoch 确定性种子派生 shuffle；恢复后引擎按
@@ -353,14 +365,32 @@ class ResumableMapDataModule:
             pin_memory=self._pin_memory,
             collate_fn=self._collate_fn,
             prefetch_factor=self._prefetch_factor,
-            persistent_workers=self._persistent_workers,
+            persistent_workers=effective_persistent_workers,
             generator=gen,
             drop_last=False,
         )
         return loader
 
+    def train_loader_persistent_workers(self) -> bool:
+        """OSR-012：每 epoch 重建的 train loader 固定非持久化 worker。
+
+        引擎每个 epoch 都重建 train loader（OSR-004 的 epoch 确定性采样），worker
+        池每轮必然新建，persistent 没有任何复用收益；而 accelerate 会把每个
+        ``prepare()`` 过的 loader 永久记在 ``Accelerator._dataloaders`` 上，持久
+        worker 因此永不退出：每 epoch 泄漏 num_workers 个进程，长训练必然 OOM。
+        val/test/predict 只构造一次，仍按平台资源持久化。
+
+        子类若自行构造 train loader（自定义 sampler 等），必须用本方法的返回值
+        设置 DataLoader 的 ``persistent_workers``。
+        """
+        return False
+
     def train_dataloader(self) -> DataLoader:
-        return self._dataloader(self._dataset, self._batch_size)
+        return self._dataloader(
+            self._dataset,
+            self._batch_size,
+            persistent_workers=self.train_loader_persistent_workers(),
+        )
 
     def val_dataloader(self) -> DataLoader | None:
         if self._val_dataset is None:
