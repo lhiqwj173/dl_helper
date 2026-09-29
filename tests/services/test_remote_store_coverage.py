@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import tarfile
 import io
+import zipfile
 
 import pytest
 
@@ -17,6 +19,7 @@ from dl_helper.training.remote import (
     _archive_relative_files,
     _extract_tar_gz_safe,
     _make_tar_gz,
+    _make_zip,
     build_artifact_stores,
 )
 
@@ -59,6 +62,24 @@ def test_make_tar_gz_excludes_prefixes(tmp_path):
     assert not any("checkpoints" in n for n in names)
 
 
+def test_make_zip_is_deterministic_and_excludes_checkpoints(tmp_path):
+    root = tmp_path / "root"
+    (root / "checkpoints").mkdir(parents=True)
+    (root / "sub").mkdir()
+    (root / "a.txt").write_text("hello", encoding="utf-8")
+    (root / "sub" / "b.txt").write_text("世界", encoding="utf-8")
+    (root / "checkpoints" / "state.bin").write_bytes(b"checkpoint")
+    first = _make_zip(str(root), exclude_prefixes=("checkpoints",))
+    second = _make_zip(str(root), exclude_prefixes=("checkpoints",))
+    assert first == second
+    with zipfile.ZipFile(io.BytesIO(first)) as archive:
+        assert archive.namelist() == ["a.txt", "sub/b.txt"]
+        assert archive.read("a.txt") == b"hello"
+        assert archive.read("sub/b.txt") == "世界".encode("utf-8")
+        assert all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist())
+        assert archive.testzip() is None
+
+
 def test_archive_rejects_symlink(tmp_path):
     root = tmp_path / "root"
     os.makedirs(root, exist_ok=True)
@@ -69,6 +90,8 @@ def test_archive_rejects_symlink(tmp_path):
     os.symlink(str(target), str(root / "link"))
     with pytest.raises(ArtifactStoreError):
         _make_tar_gz(str(root), exclude_prefixes=())
+    with pytest.raises(ArtifactStoreError):
+        _make_zip(str(root), exclude_prefixes=())
 
 
 def test_build_artifact_stores_none(tmp_path):
@@ -171,9 +194,15 @@ def test_publish_run_bundle(tmp_path):
     session = _FakeSession()
     store = _alist(tmp_path, session)
     run_dir = _make_run_dir(tmp_path)
-    store.publish_run_bundle(run_dir, "run-1")
+    result = store.publish_run_bundle(run_dir, "run-1")
     # bundle 排除了 checkpoints
-    assert any("run-bundle.tar.gz" in p for p in session.remote)
+    bundle_path = "/dlh/runs/run-1/run-bundle.zip"
+    assert bundle_path in session.remote
+    assert "/dlh/runs/run-1/run-bundle.tar.gz" not in session.remote
+    assert result["archive_sha256"] == hashlib.sha256(session.remote[bundle_path]).hexdigest()
+    with zipfile.ZipFile(io.BytesIO(session.remote[bundle_path])) as archive:
+        assert "run-manifest.json" in archive.namelist()
+        assert "checkpoints/c" not in archive.namelist()
     assert not any("checkpoints" in p and "tar" not in p for p in session.remote)
 
 
@@ -185,8 +214,13 @@ def test_publish_sweep_bundle(tmp_path):
     (sweep_dir / "trials.jsonl").write_text("[]", encoding="utf-8")
     os.makedirs(sweep_dir / "services", exist_ok=True)
     (sweep_dir / "services" / "service-manifest.json").write_text("{}", encoding="utf-8")
-    store.publish_sweep_bundle(str(sweep_dir), "sweep-1")
-    assert any("sweep-bundle.tar.gz" in p for p in session.remote)
+    result = store.publish_sweep_bundle(str(sweep_dir), "sweep-1")
+    bundle_path = "/dlh/sweeps/sweep-1/sweep-bundle.zip"
+    assert bundle_path in session.remote
+    assert "/dlh/sweeps/sweep-1/sweep-bundle.tar.gz" not in session.remote
+    assert result["archive_sha256"] == hashlib.sha256(session.remote[bundle_path]).hexdigest()
+    with zipfile.ZipFile(io.BytesIO(session.remote[bundle_path])) as archive:
+        assert "trials.jsonl" in archive.namelist()
 
 
 def test_fetch_latest_checkpoint(tmp_path):

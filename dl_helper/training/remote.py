@@ -7,9 +7,11 @@ import hashlib
 import json
 import os
 import queue
+import shutil
 import tarfile
 import threading
 import time
+import zipfile
 from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
 
@@ -79,6 +81,35 @@ def _make_tar_gz(root: str, exclude_prefixes: tuple[str, ...]) -> bytes:
             with open(full, "rb") as f:
                 tar.addfile(info, f)
     return gzip.compress(tar_buf.getvalue(), compresslevel=1, mtime=0)
+
+
+def _make_zip(root: str, exclude_prefixes: tuple[str, ...]) -> bytes:
+    """构建成员顺序与时间固定的 ZIP；只收录允许的普通文件。"""
+    buffer = io.BytesIO()
+    seen: set[str] = set()
+    rels = sorted(_archive_relative_files(root), key=lambda rel: rel.replace("\\", "/"))
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=1) as archive:
+        for rel in rels:
+            name = rel.replace("\\", "/")
+            if any(name == prefix or name.startswith(prefix.rstrip("/") + "/")
+                   for prefix in exclude_prefixes):
+                continue
+            if name.startswith("/") or any(part in ("", ".", "..") for part in name.split("/")):
+                raise ArtifactStoreError(f"归档成员路径非法: {rel!r}")
+            if name in seen:
+                raise ArtifactStoreError(f"归档成员重复: {name!r}")
+            seen.add(name)
+            full = os.path.join(root, rel)
+            if os.path.islink(full) or not os.path.isfile(full):
+                raise ArtifactStoreError(f"归档成员不是普通文件: {rel!r}")
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info._compresslevel = 1
+            info.external_attr = 0o100644 << 16
+            with open(full, "rb") as source, archive.open(info, "w") as destination:
+                shutil.copyfileobj(source, destination)
+    return buffer.getvalue()
 
 
 class LocalArtifactStore:
@@ -326,6 +357,17 @@ class AListArtifactStore:
             raise ArtifactStoreError("AList archive 回读 SHA 不匹配")
         return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
 
+    def _publish_zip(self, remote_dir: str, local_root: str, name: str,
+                     exclude_prefixes: tuple[str, ...]) -> dict[str, str]:
+        blob = _make_zip(local_root, exclude_prefixes)
+        bundle_checksum = bundle_checksum_for_directory(local_root, exclude_prefixes)
+        self._ensure_dir(remote_dir)
+        self._publish_file_with_verify(remote_dir, _bytes_to_temp(blob), f"{name}.zip")
+        local_sha = hashlib.sha256(blob).hexdigest()
+        if self._raw_read_sha256(f"{remote_dir}/{name}.zip") != local_sha:
+            raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
+        return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
+
     def publish_checkpoint(self, local_dir: str, run_id: str, checkpoint_id: str) -> None:
         remote_dir = f"{self._base_path}/runs/{run_id}/checkpoints/{checkpoint_id}"
         self._publish_tar_gz(remote_dir, local_dir, "archive", exclude_prefixes=())
@@ -386,8 +428,8 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 run bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/runs/{run_id}"
-        result = self._publish_tar_gz(remote_dir, local_dir, "run-bundle",
-                                      exclude_prefixes=("checkpoints",))
+        result = self._publish_zip(remote_dir, local_dir, "run-bundle",
+                                   exclude_prefixes=("checkpoints",))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -396,7 +438,7 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 sweep bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/sweeps/{sweep_id}"
-        result = self._publish_tar_gz(remote_dir, local_dir, "sweep-bundle", exclude_prefixes=("checkpoints",))
+        result = self._publish_zip(remote_dir, local_dir, "sweep-bundle", exclude_prefixes=("checkpoints",))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
