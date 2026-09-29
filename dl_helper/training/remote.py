@@ -152,6 +152,7 @@ class AListArtifactStore:
         read_timeout: float,
         max_attempts: int,
         failure_policy: str,
+        retained_bundle_dir: str | None = None,
     ) -> None:
         parsed_host = urlparse(host)
         if parsed_host.scheme not in ("http", "https") or not parsed_host.netloc:
@@ -167,6 +168,9 @@ class AListArtifactStore:
         self._read_timeout = read_timeout
         self._max_attempts = max_attempts
         self._policy = failure_policy
+        self._retained_bundle_dir = (
+            os.path.abspath(retained_bundle_dir) if retained_bundle_dir is not None else None
+        )
         self._session = None
         self._token: str | None = None
         self.sync_error: Exception | None = None
@@ -343,6 +347,16 @@ class AListArtifactStore:
         if remote_sha != sha256_file(local_path):
             raise ArtifactStoreError(f"AList 回读 checksum 不匹配: {rel}")
 
+    def _publish_bytes_with_verify(self, remote_dir: str, data: bytes, rel: str) -> str:
+        """上传内存归档并回读校验；返回已校验的 SHA256。"""
+        remote_path = f"{remote_dir}/{rel}"
+        self._upload(remote_path, data, len(data))
+        remote_sha = self._raw_read_sha256(remote_path)
+        local_sha = hashlib.sha256(data).hexdigest()
+        if remote_sha != local_sha:
+            raise ArtifactStoreError(f"AList 回读 checksum 不匹配: {rel}")
+        return local_sha
+
     def _publish_tar_gz(self, remote_dir: str, local_root: str, name: str,
                         exclude_prefixes: tuple[str, ...]) -> dict[str, str]:
         blob = _make_tar_gz(local_root, exclude_prefixes)
@@ -358,14 +372,26 @@ class AListArtifactStore:
         return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
 
     def _publish_zip(self, remote_dir: str, local_root: str, name: str,
-                     exclude_prefixes: tuple[str, ...]) -> dict[str, str]:
+                     exclude_prefixes: tuple[str, ...],
+                     local_copy_name: str | None = None) -> dict[str, str]:
         blob = _make_zip(local_root, exclude_prefixes)
         bundle_checksum = bundle_checksum_for_directory(local_root, exclude_prefixes)
         self._ensure_dir(remote_dir)
-        self._publish_file_with_verify(remote_dir, _bytes_to_temp(blob), f"{name}.zip")
         local_sha = hashlib.sha256(blob).hexdigest()
-        if self._raw_read_sha256(f"{remote_dir}/{name}.zip") != local_sha:
-            raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
+        if self._retained_bundle_dir is None:
+            self._publish_file_with_verify(remote_dir, _bytes_to_temp(blob), f"{name}.zip")
+            if self._raw_read_sha256(f"{remote_dir}/{name}.zip") != local_sha:
+                raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
+        else:
+            if local_copy_name is None:
+                raise ArtifactStoreError("Kaggle ZIP 保留缺少本地文件名")
+            _validate_retained_bundle_name(local_copy_name)
+            verified_sha = self._publish_bytes_with_verify(remote_dir, blob, f"{name}.zip")
+            if verified_sha != local_sha:
+                raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
+            _write_retained_bundle(
+                self._retained_bundle_dir, local_copy_name, blob, expected_sha256=local_sha
+            )
         return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
 
     def publish_checkpoint(self, local_dir: str, run_id: str, checkpoint_id: str) -> None:
@@ -428,8 +454,13 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 run bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/runs/{run_id}"
+        local_copy_name = (
+            _retained_bundle_filename("run-bundle", run_id)
+            if self._retained_bundle_dir is not None else None
+        )
         result = self._publish_zip(remote_dir, local_dir, "run-bundle",
-                                   exclude_prefixes=("checkpoints",))
+                                   exclude_prefixes=("checkpoints",),
+                                   local_copy_name=local_copy_name)
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -438,7 +469,13 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 sweep bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/sweeps/{sweep_id}"
-        result = self._publish_zip(remote_dir, local_dir, "sweep-bundle", exclude_prefixes=("checkpoints",))
+        local_copy_name = (
+            _retained_bundle_filename("sweep-bundle", sweep_id)
+            if self._retained_bundle_dir is not None else None
+        )
+        result = self._publish_zip(remote_dir, local_dir, "sweep-bundle",
+                                   exclude_prefixes=("checkpoints",),
+                                   local_copy_name=local_copy_name)
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -458,6 +495,45 @@ def _bytes_to_temp(data: bytes) -> str:
     with os.fdopen(fd, "wb") as f:
         f.write(data)
     return path
+
+
+def _retained_bundle_filename(prefix: str, bundle_id: str) -> str:
+    if (not isinstance(bundle_id, str) or not bundle_id or bundle_id in (".", "..")
+            or "/" in bundle_id or "\\" in bundle_id or "\x00" in bundle_id):
+        raise ArtifactStoreError(f"成果包 ID 不是安全的文件名片段: {bundle_id!r}")
+    return f"{prefix}-{bundle_id}.zip"
+
+
+def _validate_retained_bundle_name(filename: str) -> None:
+    if (not filename or filename in (".", "..") or os.path.basename(filename) != filename
+            or "/" in filename or "\\" in filename or "\x00" in filename):
+        raise ArtifactStoreError(f"Kaggle 成果包文件名非法: {filename!r}")
+
+
+def _write_retained_bundle(directory: str, filename: str, data: bytes,
+                           expected_sha256: str) -> str:
+    """原子写入已校验 ZIP；成功成果包保留在目标目录。"""
+    import tempfile
+
+    _validate_retained_bundle_name(filename)
+    os.makedirs(directory, exist_ok=True)
+    target_path = os.path.join(directory, filename)
+    file_descriptor, staging_path = tempfile.mkstemp(
+        prefix=f".{filename}.", suffix=".tmp", dir=directory
+    )
+    try:
+        with os.fdopen(file_descriptor, "wb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(staging_path, target_path)
+    finally:
+        if os.path.exists(staging_path):
+            os.unlink(staging_path)
+    actual_sha256 = sha256_file(target_path)
+    if actual_sha256 != expected_sha256:
+        raise ArtifactStoreError(f"Kaggle 成果包本地 SHA256 不匹配: {filename}")
+    return target_path
 
 
 def _extract_tar_gz_safe(blob: bytes, target_dir: str) -> None:
@@ -564,6 +640,10 @@ def build_artifact_stores(config: Config, platform: Any, secret_resolver: Any, l
             read_timeout=remote.read_timeout_seconds,
             max_attempts=remote.max_attempts,
             failure_policy=remote.failure_policy,
+            retained_bundle_dir=(
+                "/kaggle/working"
+                if platform is not None and platform.is_kaggle else None
+            ),
         )
         stores.append(alist)
         if remote.async_upload:
