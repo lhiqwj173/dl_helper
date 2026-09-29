@@ -281,6 +281,10 @@ def _cmd_train(args: argparse.Namespace) -> int:
                 else:
                     _publish_cli_terminal(layout, status, config, run_id, services=services)
     except Exception as exc:
+        from .checkpoint import HistoryRecoveryError
+        if isinstance(exc, HistoryRecoveryError):
+            # 旧 run 的历史不完整时不得发布 FAILED bundle 覆盖远端成功成果。
+            raise
         # OSR-003：先原子写脱敏 failure.json，再执行 FAILED finalization
         # 服务终结可能已写入候选 success/pause，required 服务随后失败时撤销候选，
         # 让 failure evidence 能完成唯一 FAILED 过渡。

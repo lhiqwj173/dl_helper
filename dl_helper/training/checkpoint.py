@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 from dataclasses import dataclass
 from typing import Any, Mapping
@@ -17,6 +18,7 @@ from .artifacts import (
     ensure_within,
     json_safe,
     move_tree,
+    list_relative_files,
     read_json,
     remove_tree,
     sha256_file,
@@ -26,10 +28,17 @@ from .artifacts import (
 
 CHECKPOINT_MANIFEST = "checkpoint-manifest.json"
 LATEST_FILE = "latest.json"
+HISTORY_MANIFEST = "run-history-manifest.json"
+HISTORY_DIR = "run-history"
+HISTORY_FILES = ("metrics/metrics.jsonl", "logs/train.log")
 
 
 class CheckpointError(Exception):
     """检查点不可恢复或校验失败。"""
+
+
+class HistoryRecoveryError(CheckpointError):
+    """历史恢复未完成；禁止把旧 run 改写成失败终态。"""
 
 
 def _utc_now() -> str:
@@ -111,6 +120,102 @@ def _stage_and_finalize(staging: str, final_dir: str) -> None:
     if not os.path.isdir(staging):
         raise CheckpointError(f"staging 目录不存在: {staging}")
     move_tree(staging, final_dir)
+
+
+def _snapshot_run_history(staging: str, run_dir: str, *, position_epoch: int,
+                          require_metrics: bool = True) -> None:
+    """将检查点位置之前的机器可读历史纳入不可变检查点。"""
+    history_dir = os.path.join(staging, HISTORY_DIR)
+    os.makedirs(history_dir)
+    if require_metrics and position_epoch > 0 and not os.path.isfile(os.path.join(run_dir, "metrics", "metrics.jsonl")):
+        raise CheckpointError("已完成轮次缺少 metrics.jsonl，拒绝提交不完整检查点")
+    paths = [rel for rel in HISTORY_FILES if os.path.isfile(os.path.join(run_dir, *rel.split("/")))]
+    predictions_dir = os.path.join(run_dir, "predictions")
+    if os.path.islink(predictions_dir):
+        raise CheckpointError("预测历史目录为符号链接")
+    if os.path.isdir(predictions_dir):
+        for directory, subdirectories, _files in os.walk(predictions_dir):
+            if any(os.path.islink(os.path.join(directory, name)) for name in subdirectories):
+                raise CheckpointError("预测历史包含符号链接目录")
+        paths.extend(f"predictions/{rel.replace(os.sep, '/')}"
+                     for rel in list_relative_files(predictions_dir))
+    for rel in paths:
+        raw_source = os.path.join(run_dir, *rel.split("/"))
+        if os.path.islink(raw_source):
+            raise CheckpointError(f"运行历史不是普通文件: {rel}")
+        source = ensure_within(run_dir, raw_source, "运行历史")
+        if not os.path.isfile(source):
+            raise CheckpointError(f"运行历史不是普通文件: {rel}")
+        target = os.path.join(history_dir, *rel.split("/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(source, target)
+    write_json(os.path.join(staging, HISTORY_MANIFEST), {
+        "schema_version": 1,
+        "files": sha256_manifest(history_dir),
+    })
+
+
+def restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
+                        require_metrics: bool = True) -> None:
+    """按检查点回滚历史文件；旧检查点若无法证明历史完整则拒绝继续。"""
+    try:
+        _restore_run_history(ckpt_dir, run_dir, position_epoch=position_epoch,
+                             require_metrics=require_metrics)
+    except HistoryRecoveryError:
+        raise
+    except (CheckpointError, ArtifactError, OSError, ValueError, TypeError) as exc:
+        raise HistoryRecoveryError(f"运行历史恢复失败: {exc}") from exc
+
+
+def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
+                         require_metrics: bool) -> None:
+    manifest_path = os.path.join(ckpt_dir, HISTORY_MANIFEST)
+    if not os.path.isfile(manifest_path):
+        if position_epoch > 0 and not os.path.isfile(os.path.join(run_dir, "metrics", "metrics.jsonl")):
+            raise HistoryRecoveryError("旧检查点未包含运行历史，当前会话也无逐轮指标；拒绝生成缺曲线的成果")
+        return
+    manifest = read_json(manifest_path)
+    if not isinstance(manifest, Mapping) or manifest.get("schema_version") != 1:
+        raise HistoryRecoveryError("运行历史清单非法")
+    expected = manifest.get("files")
+    if not isinstance(expected, Mapping):
+        raise HistoryRecoveryError("运行历史文件清单非法")
+    history_dir = os.path.join(ckpt_dir, HISTORY_DIR)
+    actual = sha256_manifest(history_dir)
+    if actual != expected:
+        raise HistoryRecoveryError("运行历史与检查点清单不一致")
+    if require_metrics and position_epoch > 0 and "metrics/metrics.jsonl" not in {rel.replace("\\", "/") for rel in expected}:
+        raise HistoryRecoveryError("检查点缺少已完成轮次的逐轮指标")
+    allowed = set(HISTORY_FILES)
+    for rel in expected:
+        normalized = rel.replace("\\", "/")
+        if normalized not in allowed and not normalized.startswith("predictions/"):
+            raise HistoryRecoveryError(f"运行历史包含不允许的路径: {rel}")
+        if normalized.startswith("/") or any(part in ("", ".", "..") for part in normalized.split("/")):
+            raise HistoryRecoveryError(f"运行历史路径非法: {rel}")
+    staging = os.path.join(run_dir, f".history-restore-{os.getpid()}")
+    if os.path.exists(staging):
+        raise HistoryRecoveryError(f"运行历史恢复暂存目录已存在: {staging}")
+    try:
+        shutil.copytree(history_dir, staging)
+        if sha256_manifest(staging) != expected:
+            raise HistoryRecoveryError("运行历史复制后校验失败")
+        for rel in HISTORY_FILES:
+            destination = ensure_within(run_dir, os.path.join(run_dir, *rel.split("/")), "运行历史")
+            staged = os.path.join(staging, *rel.split("/"))
+            if os.path.isfile(staged):
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                os.replace(staged, destination)
+            elif os.path.exists(destination):
+                os.remove(destination)
+        destination = ensure_within(run_dir, os.path.join(run_dir, "predictions"), "预测历史")
+        staged = os.path.join(staging, "predictions")
+        if os.path.exists(destination):
+            remove_tree(destination)
+        if os.path.isdir(staged):
+            move_tree(staged, destination)
+    finally:
+        remove_tree(staging)
 
 
 # --------------------------------------------------------------------------
@@ -205,6 +310,8 @@ def write_torch_checkpoint(
                 generate_checkpoint_progress_report(
                     run_dir, progress_snapshot, os.path.join(staging, "progress")
                 )
+            if run_dir is not None:
+                _snapshot_run_history(staging, run_dir, position_epoch=epoch)
             manifest = {
                 "schema_version": 1,
                 "run_id": run_id,
@@ -267,6 +374,14 @@ def load_torch_checkpoint(
     if manifest["model_signature"] != model_signature:
         raise CheckpointError("checkpoint 模型签名不匹配")
     verify_runtime_versions("torch", manifest["runtime_versions"])
+    try:
+        if accelerator.is_main_process:
+            restore_run_history(ckpt_dir, os.path.dirname(checkpoints_dir),
+                                position_epoch=manifest["epoch"])
+        accelerator.wait_for_everyone()
+    except BaseException:
+        _abort_distributed(accelerator)
+        raise
 
     # OSR-004：各 rank 从共享 Accelerate state 目录加载（各 rank 载入自身 RNG）；
     # 兼容旧的非共享 rank-N 结构。
@@ -390,6 +505,9 @@ def write_sklearn_checkpoint(
             generate_checkpoint_progress_report(
                 run_dir, progress_snapshot, os.path.join(staging, "progress")
             )
+        if run_dir is not None:
+            _snapshot_run_history(staging, run_dir, position_epoch=epoch,
+                                  require_metrics=False)
         manifest = {
             "schema_version": 1,
             "run_id": run_id,

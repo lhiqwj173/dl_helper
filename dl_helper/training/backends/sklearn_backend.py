@@ -634,6 +634,10 @@ def _read_latest_ckpt(layout):
 
 def _load_sklearn_checkpoint(ckpt_dir, estimator, source, engine_state, task, layout, config):
     import joblib
+    from ..checkpoint import restore_run_history
+    manifest = _read_json(os.path.join(ckpt_dir, "checkpoint-manifest.json"))
+    restore_run_history(ckpt_dir, layout.run_dir, position_epoch=manifest["epoch"],
+                        require_metrics=False)
     est_path = os.path.join(ckpt_dir, "estimator.joblib")
     loaded = joblib.load(est_path)
     source.load_state_dict(_read_json(os.path.join(ckpt_dir, "source-state.json")))
