@@ -233,13 +233,13 @@ print("首次训练结束")
 训练会自动预检（配置、ExecutionPolicy、Secret、数据路径、后端、磁盘、版本和服务），预检失败会聚合
 列出全部错误并立即终止，不再有独立的 `doctor` 命令。
 
-AList 上传和远端 SHA256 校验成功后，run 成果 ZIP 会保留在 `/kaggle/working/run-bundle-<run-id>.zip`。
-例如上面的 `my-project-v1` 会生成：
+AList 上传和远端 SHA256 校验成功后，上传的 `run-bundle.zip` 会以原文件名保留在
+`/kaggle/working/run-bundle.zip`：
 
 ```python
 from IPython.display import FileLink, display
 
-display(FileLink("/kaggle/working/run-bundle-my-project-v1.zip"))
+display(FileLink("/kaggle/working/run-bundle.zip"))
 ```
 
 该文件会留在 Kaggle 工作目录中，不会由训练终结流程删除；可以通过 Notebook 中的链接或 Kaggle 输出文件下载。
@@ -296,8 +296,8 @@ if report.returncode != 0:
 print("sweep report written")
 ```
 
-完成并成功上传校验后，sweep 成果 ZIP 会保留在
-`/kaggle/working/sweep-bundle-<sweep-id>.zip`，可用 `IPython.display.FileLink` 在 Notebook 中创建下载链接。
+完成并成功上传校验后，上传的 `sweep-bundle.zip` 会以原文件名保留在
+`/kaggle/working/sweep-bundle.zip`，可用 `IPython.display.FileLink` 在 Notebook 中创建下载链接。
 
 ## 7. 本地调试
 

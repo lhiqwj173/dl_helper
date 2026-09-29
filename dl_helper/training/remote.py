@@ -372,8 +372,7 @@ class AListArtifactStore:
         return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
 
     def _publish_zip(self, remote_dir: str, local_root: str, name: str,
-                     exclude_prefixes: tuple[str, ...],
-                     local_copy_name: str | None = None) -> dict[str, str]:
+                     exclude_prefixes: tuple[str, ...]) -> dict[str, str]:
         blob = _make_zip(local_root, exclude_prefixes)
         bundle_checksum = bundle_checksum_for_directory(local_root, exclude_prefixes)
         self._ensure_dir(remote_dir)
@@ -383,8 +382,7 @@ class AListArtifactStore:
             if self._raw_read_sha256(f"{remote_dir}/{name}.zip") != local_sha:
                 raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
         else:
-            if local_copy_name is None:
-                raise ArtifactStoreError("Kaggle ZIP 保留缺少本地文件名")
+            local_copy_name = f"{name}.zip"
             _validate_retained_bundle_name(local_copy_name)
             verified_sha = self._publish_bytes_with_verify(remote_dir, blob, f"{name}.zip")
             if verified_sha != local_sha:
@@ -454,13 +452,8 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 run bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/runs/{run_id}"
-        local_copy_name = (
-            _retained_bundle_filename("run-bundle", run_id)
-            if self._retained_bundle_dir is not None else None
-        )
         result = self._publish_zip(remote_dir, local_dir, "run-bundle",
-                                   exclude_prefixes=("checkpoints",),
-                                   local_copy_name=local_copy_name)
+                                   exclude_prefixes=("checkpoints",))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -469,13 +462,8 @@ class AListArtifactStore:
         if not os.path.isfile(service_manifest):
             raise ArtifactStoreError("发布 sweep bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/sweeps/{sweep_id}"
-        local_copy_name = (
-            _retained_bundle_filename("sweep-bundle", sweep_id)
-            if self._retained_bundle_dir is not None else None
-        )
         result = self._publish_zip(remote_dir, local_dir, "sweep-bundle",
-                                   exclude_prefixes=("checkpoints",),
-                                   local_copy_name=local_copy_name)
+                                   exclude_prefixes=("checkpoints",))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -497,15 +485,9 @@ def _bytes_to_temp(data: bytes) -> str:
     return path
 
 
-def _retained_bundle_filename(prefix: str, bundle_id: str) -> str:
-    if (not isinstance(bundle_id, str) or not bundle_id or bundle_id in (".", "..")
-            or "/" in bundle_id or "\\" in bundle_id or "\x00" in bundle_id):
-        raise ArtifactStoreError(f"成果包 ID 不是安全的文件名片段: {bundle_id!r}")
-    return f"{prefix}-{bundle_id}.zip"
-
-
 def _validate_retained_bundle_name(filename: str) -> None:
-    if (not filename or filename in (".", "..") or os.path.basename(filename) != filename
+    if (not isinstance(filename, str) or not filename or filename in (".", "..")
+            or os.path.basename(filename) != filename
             or "/" in filename or "\\" in filename or "\x00" in filename):
         raise ArtifactStoreError(f"Kaggle 成果包文件名非法: {filename!r}")
 
