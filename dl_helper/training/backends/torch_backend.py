@@ -315,9 +315,19 @@ def run_worker(
     current_lr = float(optimizer.param_groups[0]["lr"])
     # OSR-010：每 epoch 独立清零阶段状态；中途恢复本 epoch 时保留已恢复的部分状态
     resumed_mid_epoch = resumed_position is not None and resumed_position["batch_in_epoch"] > 0
+    # 早停检查点已包含本轮 train/val 和 selection 更新。恢复时直接进入
+    # test/finalize，不能再次验证、累加 no_improve 或提交同一 epoch-step。
+    # best_value 区分已完成验证与 patience=0 时尚未验证的中途检查点。
+    resumed_early_stop = (
+        resumed_position is not None
+        and engine_state.best_value is not None
+        and engine_state.should_early_stop()
+    )
+    if resumed_early_stop:
+        layout.log(f"恢复早停终点，直接进入 test/finalize: epoch={epoch}, step={engine_state.global_step}")
     first_loop_iter = True
     try:  # OSR-003：训练失败时记录精确位置后重抛
-        while epoch < config.training.max_epochs and not budget_hit:
+        while epoch < config.training.max_epochs and not budget_hit and not resumed_early_stop:
             resumed_partial_this_epoch = first_loop_iter and resumed_mid_epoch
             if not resumed_partial_this_epoch:
                 metric_states["train"].reset()
