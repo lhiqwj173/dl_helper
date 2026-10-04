@@ -57,7 +57,15 @@ TBD - created by archiving change build-general-kaggle-training-platform. Update
 - **THEN** 系统只按 code point 边界裁剪异常消息/路径并保留 event/status/scope ID/异常类型；关键字段仍放不下则失败
 
 ### Requirement: 服务失败策略与审计
-AList 和企业微信 MUST 分别配置 `required` 或 `record`，每次调用 MUST 写结构化 UTF-8 service audit。Kaggle 运行 MUST 同时启用 AList 和企业微信且两者均为 `required`，并在训练前聚合报告所有缺失 Secret key；本地调试 MAY 关闭服务。required 失败 MUST 阻止成功/暂停终态；record 失败 MAY 继续但 MUST 在 audit 与 terminal manifest 标为 degraded。任何 secondary 服务异常 MUST NOT 覆盖原训练异常。
+AList 和企业微信 MUST 分别配置 `required` 或 `record`，每次调用 MUST 写结构化 UTF-8 service audit。训练 CLI 的 `--use-alist` MUST 默认开启并保留既有行为；此模式下 Kaggle 运行 MUST 同时启用 AList 和企业微信且两者均为 `required`，并在训练前聚合报告所有缺失 Secret key；本地调试 MAY 关闭服务。`--no-use-alist` MUST 将有效 remote 配置设为 none、将恢复策略设为 none，并跳过 AList 凭证解析、检查点下载、同步与上传；本地检查点恢复 MUST 同时禁用，显式 `--resume required` MUST 在预检和训练前失败。单机模式 MUST 保留本地产物、后端资源配置与平台预算，并按原配置执行企业微信，允许 Kaggle 关闭通知。required 失败 MUST 阻止成功/暂停终态；record 失败 MAY 继续但 MUST 在 audit 与 terminal manifest 标为 degraded。任何 secondary 服务异常 MUST NOT 覆盖原训练异常。
+
+#### Scenario: 单机训练跳过 AList 与恢复
+- **WHEN** 用户传入 `train --no-use-alist`，原配置启用了 AList 且未提供 AList Secret
+- **THEN** 系统不创建 AList 客户端或异步上传线程、不读取 AList Secret、不恢复本地或远端检查点，从头训练并保存本地产物
+
+#### Scenario: 单机模式请求恢复
+- **WHEN** 用户同时传入 `--no-use-alist --resume required`
+- **THEN** 系统在预检和训练前显式失败
 
 #### Scenario: required STARTED 失败
 - **WHEN** required 企业微信或启动阶段 AList 预检失败

@@ -27,12 +27,14 @@ notifications: {type: none}
 
 ## 关键约束
 
+`train --use-alist` 默认开启，使用 YAML 的 `remote` 配置。`train --no-use-alist` 覆盖 `remote` 为 `none` 并强制 `resume=none`，不读取 AList Secret、不恢复本地或远程检查点、不创建 AList 客户端或上传任务；显式 `--resume required` 会被拒绝。单机模式仍使用原后端、单机多卡资源配置和平台预算，本地产物照常生成，企业微信按 `notifications` 配置执行。Kaggle 单机模式允许两项服务关闭，启用的通知仍需提供有效凭证。YAML 本身仍须符合 schema v1。
+
 - `backend.type` 为 `torch/sklearn`；未选分支必须为 `null`。
 - `mixed_precision` 取值 `auto/no/fp16/bf16`（`no`/`off` 等 YAML 歧义词需加引号）。
 - sklearn `fit_mode=batch` 要求 `max_epochs=1`，且不支持恢复（显式 `--resume required` 在预检阶段失败）。
 - `selection` 有验证集时必须存在，无验证集时必须为 `null`；`mode` 必须等于 `MetricDefinition.direction`。
 - Kaggle：输出必须位于 `/kaggle/working`；`source_revision` 只要是无空白版本标识即可（tag、分支、短 SHA 均可）。
-- Kaggle 强制启用 AList 与企业微信且两者 `failure_policy=required`。平台执行策略固定 660 分钟训练 + 10 分钟收尾（截止 650 分钟）：系统在每个成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 后按平均 epoch 耗时预测下一轮，预测不足时在边界保存并上传 checkpoint 后以 `75` 暂停。要求开启预算时 DataModule 支持中途恢复。`runtime`/`checkpoint.resume` 写入即按未知字段失败。
+- Kaggle 默认强制启用 AList 与企业微信且两者 `failure_policy=required`；`--no-use-alist` 单机模式允许关闭服务。平台执行策略固定 660 分钟训练 + 10 分钟收尾（截止 650 分钟）：系统在每个成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 后按平均 epoch 耗时预测下一轮，预测不足时在边界保存 checkpoint 后以 `75` 暂停，AList 开启时上传。要求开启预算时 DataModule 支持中途恢复。`runtime`/`checkpoint.resume` 写入即按未知字段失败。
 
 ## variant
 

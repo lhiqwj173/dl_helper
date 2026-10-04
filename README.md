@@ -16,9 +16,11 @@ python -m dl_helper.training.cli train \
 
 退出码：`0` 成功，`75` 预算保护暂停且已保存检查点（可继续训），其他非零表示失败。省略 `--resume` 时按内部自动恢复策略：本地 latest 优先，无则查 AList，两处都无则从头开始；`--resume none` 禁止恢复，`--resume required` 无兼容检查点即失败。
 
+`train` 的 `--use-alist` 默认开启，沿用现有服务与恢复流程。添加 `--no-use-alist` 即使用单机模式：覆盖 `remote` 为 `none`，跳过 AList 凭证读取、下载恢复、同步与上传，并强制从头训练（包括禁止本地恢复）。与 `--resume required` 同用会立即报错。模型、检查点、指标和报告仍保存到本地；企业微信按原配置执行，可通过 `notifications: {type: none}` 关闭。两个最小训练 Notebook 也提供 `USE_ALIST = True`，改为 `False` 即可切换。单机模式因预算退出 `75` 后无法续训。
+
 ## Kaggle
 
-Kaggle 训练必须在配置中启用 AList 和企业微信，且两者 `failure_policy` 都必须是 `required`。AList 用户名/密码和企业微信凭证从 Kaggle Secrets（本地调试时也可用同名环境变量）读取；任何 Secret 缺失或配置字段错误都会在训练前终止。Kaggle 的运行预算由库的平台执行策略自动固定为 **660 分钟训练 + 10 分钟收尾窗口**（run 目录下 `execution-policy.json` 可审计），用户配置不再包含 `runtime`。训练会在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；预测无法在截止前完成时，于当前 epoch 边界保存并推送 checkpoint，再以 `75` 暂停。
+Kaggle 默认要求在配置中启用 AList 和企业微信，且两者 `failure_policy` 都必须是 `required`；`--no-use-alist` 单机模式跳过 AList 要求，企业微信可按配置关闭。启用服务的凭证从 Kaggle Secrets（本地调试时也可用同名环境变量）读取；任何所需 Secret 缺失或配置字段错误都会在训练前终止。Kaggle 的运行预算由库的平台执行策略自动固定为 **660 分钟训练 + 10 分钟收尾窗口**（run 目录下 `execution-policy.json` 可审计），用户配置不再包含 `runtime`。训练会在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；预测无法在截止前完成时，于当前 epoch 边界保存 checkpoint，再以 `75` 暂停，AList 开启时同步推送。
 
 ```bash
 python -m dl_helper.training.cli train \

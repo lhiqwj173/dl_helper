@@ -22,6 +22,7 @@ def validate_training_start(
     emit_contract: bool = False,
     resume: str = RESUME_AUTO,
     execution_policy=None,
+    use_alist: bool = True,
 ) -> None:
     """训练入口统一调用的前置检查。
 
@@ -29,11 +30,16 @@ def validate_training_start(
     `ConfigError`，在创建 run 目录或启动训练进程前抛出。
     """
     collected: list[BaseException] = []
+    if not use_alist:
+        if config.remote.type != "none":
+            raise ConfigError("单机模式必须禁用 remote 服务")
+        if resume != "none":
+            raise ConfigError("单机模式不支持恢复训练，必须使用 resume=none")
     errors = run_doctor(config, platform, experiment_ref, emit_contract=False,
                         resume=resume, execution_policy=execution_policy,
                         collect_exceptions=collected)
     if platform.is_kaggle:
-        errors.extend(_check_kaggle_requirements(config, platform, execution_policy))
+        errors.extend(_check_kaggle_requirements(config, platform, execution_policy, use_alist=use_alist))
     if errors:
         # preflight 可比性模式（sweep）聚合为 ConfigError 列出全部问题；
         # 真实训练中实验导入失败是运行前致命错误，直接传播原始
@@ -66,8 +72,9 @@ def _find_import_cause(exceptions: list) -> BaseException | None:
     return None
 
 
-def _check_kaggle_requirements(config: Config, platform: Platform, execution_policy=None) -> list[str]:
-    """Kaggle 必须应用独立执行策略（660/10），并启用 AList、企业微信与预解析全部 Secret。"""
+def _check_kaggle_requirements(config: Config, platform: Platform, execution_policy=None,
+                               *, use_alist: bool = True) -> list[str]:
+    """Kaggle 应用独立执行策略；默认要求两项服务，单机模式只检查已启用的通知。"""
     errors: list[str] = []
     expected = execution_policy_for(platform)
     if execution_policy is None:
@@ -78,13 +85,13 @@ def _check_kaggle_requirements(config: Config, platform: Platform, execution_pol
             f"{expected.max_minutes:g}/{expected.shutdown_grace_minutes:g}，"
             f"得到 {execution_policy.max_minutes or 0:g}/{execution_policy.shutdown_grace_minutes:g}"
         )
-    if config.remote.type != "alist":
+    if use_alist and config.remote.type != "alist":
         errors.append("Kaggle 必须启用 remote.type=alist")
-    elif config.remote.failure_policy != "required":
+    elif use_alist and config.remote.failure_policy != "required":
         errors.append("Kaggle AList failure_policy 必须为 required")
-    if config.notifications.type != "wecom":
+    if use_alist and config.notifications.type != "wecom":
         errors.append("Kaggle 必须启用 notifications.type=wecom")
-    elif config.notifications.failure_policy != "required":
+    elif use_alist and config.notifications.failure_policy != "required":
         errors.append("Kaggle 企业微信 failure_policy 必须为 required")
 
     resolver = SecretResolver(platform)
