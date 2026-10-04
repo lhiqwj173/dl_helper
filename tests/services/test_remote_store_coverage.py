@@ -154,6 +154,13 @@ class _Resp:
     def json(self):
         return self._json
 
+    def iter_content(self, chunk_size):
+        for offset in range(0, len(self.content), chunk_size):
+            yield self.content[offset:offset + chunk_size]
+
+    def close(self):
+        self.closed = True
+
     def raise_for_status(self):
         pass
 

@@ -236,7 +236,8 @@ class AListArtifactStore:
                 if resp.status_code >= 400:
                     raise ArtifactStoreError(f"AList 业务/参数错误: HTTP {resp.status_code}（不重试）")
                 return resp
-            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError,
+                    requests.exceptions.ChunkedEncodingError) as exc:
                 last_exc = exc
                 if not retryable or attempt >= self._max_attempts - 1:
                     break
@@ -293,37 +294,47 @@ class AListArtifactStore:
         raise ArtifactStoreError(f"AList 上传后 size 未匹配: {remote_path}")
 
     def _raw_read(self, remote_path: str) -> bytes:
+        return self._raw_read_with(remote_path, lambda resp: b"".join(
+            resp.iter_content(chunk_size=1024 * 1024)
+        ))
+
+    def _raw_read_with(self, remote_path: str, consume: Callable[[Any], Any]) -> Any:
+        """流式读取；断流时重新解析下载地址并从头消费，关闭每次响应。"""
         import requests
         from urllib.parse import urljoin
 
-        info = self._get_info(remote_path)
-        assert info is not None
-        raw_url = info.get("raw_url")
-        if not isinstance(raw_url, str) or not raw_url:
-            raise ArtifactStoreError(f"AList metadata 缺少 raw_url: {remote_path!r}")
-        url = urljoin(f"{self._host}/", raw_url)
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ArtifactStoreError(f"AList raw_url 必须是带主机的 HTTP(S) URL: {url!r}")
-
-        host = urlparse(self._host)
-        headers = {"Authorization": self._token} if parsed.netloc == host.netloc else {}
         last_exc: Exception | None = None
         for attempt in range(self._max_attempts):
             try:
+                info = self._get_info(remote_path)
+                assert info is not None
+                raw_url = info.get("raw_url")
+                if not isinstance(raw_url, str) or not raw_url:
+                    raise ArtifactStoreError(f"AList metadata 缺少 raw_url: {remote_path!r}")
+                url = urljoin(f"{self._host}/", raw_url)
+                parsed = urlparse(url)
+                if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                    raise ArtifactStoreError(f"AList raw_url 必须是带主机的 HTTP(S) URL: {url!r}")
+                host = urlparse(self._host)
+                headers = {"Authorization": self._token} if parsed.netloc == host.netloc else {}
                 resp = self._get_session().get(
                     url,
                     headers=headers,
                     timeout=(self._connect_timeout, self._read_timeout),
+                    stream=True,
                 )
-                if resp.status_code in (401, 403):
-                    raise ArtifactStoreError(f"AList raw 下载认证失败: HTTP {resp.status_code}")
-                if resp.status_code >= 500:
-                    raise requests.HTTPError(f"AList raw HTTP {resp.status_code}")
-                if resp.status_code >= 400:
-                    raise ArtifactStoreError(f"AList raw 下载失败: HTTP {resp.status_code}")
-                return resp.content
-            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+                try:
+                    if resp.status_code in (401, 403):
+                        raise ArtifactStoreError(f"AList raw 下载认证失败: HTTP {resp.status_code}")
+                    if resp.status_code >= 500:
+                        raise requests.HTTPError(f"AList raw HTTP {resp.status_code}")
+                    if resp.status_code >= 400:
+                        raise ArtifactStoreError(f"AList raw 下载失败: HTTP {resp.status_code}")
+                    return consume(resp)
+                finally:
+                    resp.close()
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError,
+                    requests.exceptions.ChunkedEncodingError) as exc:
                 last_exc = exc
                 if attempt >= self._max_attempts - 1:
                     break
@@ -331,21 +342,19 @@ class AListArtifactStore:
         raise ArtifactStoreError(f"AList raw 下载失败（重试耗尽）: {remote_path}") from last_exc
 
     def _raw_read_sha256(self, remote_path: str) -> str:
-        import hashlib
-        h = hashlib.sha256()
-        h.update(self._raw_read(remote_path))
-        return h.hexdigest()
+        def digest(resp) -> str:
+            h = hashlib.sha256()
+            for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                h.update(chunk)
+            return h.hexdigest()
+
+        return self._raw_read_with(remote_path, digest)
 
     def _publish_file_with_verify(self, remote_dir: str, local_path: str, rel: str) -> None:
         """上传 → size 匹配 → raw 回读 SHA 校验。"""
-        remote_path = f"{remote_dir}/{rel}"
-        local_size = os.path.getsize(local_path)
         with open(local_path, "rb") as f:
             data = f.read()
-        self._upload(remote_path, data, local_size)
-        remote_sha = self._raw_read_sha256(remote_path)
-        if remote_sha != sha256_file(local_path):
-            raise ArtifactStoreError(f"AList 回读 checksum 不匹配: {rel}")
+        self._publish_bytes_with_verify(remote_dir, data, rel)
 
     def _publish_bytes_with_verify(self, remote_dir: str, data: bytes, rel: str) -> str:
         """上传内存归档并回读校验；返回已校验的 SHA256。"""
@@ -362,13 +371,7 @@ class AListArtifactStore:
         blob = _make_tar_gz(local_root, exclude_prefixes)
         bundle_checksum = bundle_checksum_for_directory(local_root, exclude_prefixes)
         self._ensure_dir(remote_dir)
-        self._publish_file_with_verify(remote_dir, _bytes_to_temp(blob), f"{name}.tar.gz")
-        # 回读校验 archive SHA
-        remote_sha = self._raw_read_sha256(f"{remote_dir}/{name}.tar.gz")
-        import hashlib
-        local_sha = hashlib.sha256(blob).hexdigest()
-        if remote_sha != local_sha:
-            raise ArtifactStoreError("AList archive 回读 SHA 不匹配")
+        local_sha = self._publish_bytes_with_verify(remote_dir, blob, f"{name}.tar.gz")
         return {"bundle_checksum": bundle_checksum, "archive_sha256": local_sha}
 
     def _publish_zip(self, remote_dir: str, local_root: str, name: str,
@@ -376,17 +379,10 @@ class AListArtifactStore:
         blob = _make_zip(local_root, exclude_prefixes)
         bundle_checksum = bundle_checksum_for_directory(local_root, exclude_prefixes)
         self._ensure_dir(remote_dir)
-        local_sha = hashlib.sha256(blob).hexdigest()
-        if self._retained_bundle_dir is None:
-            self._publish_file_with_verify(remote_dir, _bytes_to_temp(blob), f"{name}.zip")
-            if self._raw_read_sha256(f"{remote_dir}/{name}.zip") != local_sha:
-                raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
-        else:
+        local_sha = self._publish_bytes_with_verify(remote_dir, blob, f"{name}.zip")
+        if self._retained_bundle_dir is not None:
             local_copy_name = f"{name}.zip"
             _validate_retained_bundle_name(local_copy_name)
-            verified_sha = self._publish_bytes_with_verify(remote_dir, blob, f"{name}.zip")
-            if verified_sha != local_sha:
-                raise ArtifactStoreError("AList ZIP archive 回读 SHA 不匹配")
             _write_retained_bundle(
                 self._retained_bundle_dir, local_copy_name, blob, expected_sha256=local_sha
             )
@@ -400,9 +396,9 @@ class AListArtifactStore:
                                        "checkpoint-manifest.json")
         # latest 最后发布
         latest = {"schema_version": 1, "checkpoint_id": checkpoint_id, "path": checkpoint_id}
-        self._publish_file_with_verify(f"{self._base_path}/runs/{run_id}/checkpoints",
-                                       _bytes_to_temp(json.dumps(latest, ensure_ascii=False).encode("utf-8")),
-                                       "latest.json")
+        self._publish_bytes_with_verify(f"{self._base_path}/runs/{run_id}/checkpoints",
+                                        json.dumps(latest, ensure_ascii=False).encode("utf-8"),
+                                        "latest.json")
 
     def fetch_latest_checkpoint(self, run_id: str, target_dir: str) -> str | None:
         from .artifacts import move_tree, read_json, remove_tree
@@ -475,14 +471,6 @@ class AListArtifactStore:
 def _quote(path: str) -> str:
     import urllib.parse
     return urllib.parse.quote(path, safe="/")
-
-
-def _bytes_to_temp(data: bytes) -> str:
-    import tempfile
-    fd, path = tempfile.mkstemp(prefix="dlh-upload-")
-    with os.fdopen(fd, "wb") as f:
-        f.write(data)
-    return path
 
 
 def _validate_retained_bundle_name(filename: str) -> None:

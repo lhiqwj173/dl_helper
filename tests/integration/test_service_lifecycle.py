@@ -93,6 +93,35 @@ def test_sync_checkpoint_upload_when_async_disabled(tmp_path):
     assert store.checkpoints == [(checkpoint_dir, "run-1", "ck-1")]
 
 
+def test_required_checkpoint_failure_identifies_checkpoint_and_preserves_local_state(tmp_path):
+    from unittest.mock import Mock
+
+    layout = RunLayout(str(tmp_path / "runs" / "failed-checkpoint"))
+    layout.ensure()
+    checkpoint_dir = layout.path("checkpoints", "ck-1")
+    os.makedirs(checkpoint_dir)
+    model_path = os.path.join(checkpoint_dir, "model.bin")
+    with open(model_path, "wb") as model:
+        model.write(b"saved-model")
+    store = _FakeStore()
+    failure = ConnectionError("readback interrupted")
+    store.publish_checkpoint = Mock(side_effect=failure)
+    audit = ServiceAudit(layout.service_audit_jsonl, redactor=lambda text: text)
+    svc = LifecycleServices(
+        layout=layout, secret_resolver=_resolver(), stores=[store], async_sync=None,
+        wecom_client=None, audit=audit, failure_policy="required",
+    )
+    with pytest.raises(ServiceDeliveryError, match="scope=run/run-1/checkpoint/ck-1") as error:
+        svc.submit_checkpoint("run-1", "ck-1")
+    assert error.value.__cause__ is failure
+    with open(model_path, "rb") as model:
+        assert model.read() == b"saved-model"
+    with open(layout.service_audit_jsonl, encoding="utf-8") as stream:
+        records = [json.loads(line) for line in stream]
+    assert records[-1]["outcome"] == "failed"
+    assert records[-1]["error_type"] == "ConnectionError"
+
+
 def test_reentrant_finalize_does_not_duplicate(tmp_path):
     wecom = _FakeWecom()
     svc = _services(tmp_path, wecom)

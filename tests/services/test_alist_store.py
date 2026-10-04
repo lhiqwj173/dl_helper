@@ -16,6 +16,14 @@ class _FakeResponse:
         self.status_code = status_code
         self._json = json_data
         self.content = content
+        self.closed = False
+
+    def iter_content(self, chunk_size):
+        for offset in range(0, len(self.content), chunk_size):
+            yield self.content[offset:offset + chunk_size]
+
+    def close(self):
+        self.closed = True
 
     def json(self):
         return self._json
@@ -123,6 +131,9 @@ def test_publish_checkpoint_order(tmp_path):
         "/dlh/runs/run-1/checkpoints/ck-1/checkpoint-manifest.json",
         "/dlh/runs/run-1/checkpoints/latest.json",
     ]
+    archive_reads = [call for call in session.calls
+                     if "GET " in call and "/d/" in call and "archive.tar.gz" in call]
+    assert len(archive_reads) == 1
 
 
 def test_publish_checkpoint_checksum_mismatch(tmp_path):
@@ -155,6 +166,7 @@ def test_publish_checkpoint_checksum_mismatch(tmp_path):
     session._handle = tampered
     with pytest.raises(ArtifactStoreError):
         store.publish_checkpoint(str(ckpt_dir), "run-1", "ck-1")
+    assert "/dlh/runs/run-1/checkpoints/latest.json" not in session.remote
 
 
 def test_put_business_error_fails_fast(tmp_path):

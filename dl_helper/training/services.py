@@ -468,7 +468,7 @@ class LifecycleServices:
             self._audit.record(scope, service, "PUBLISH", 1, "failed",
                                started_utc=started, finished_utc=utc_now(), duration_ms=0,
                                error_type=type(exc).__name__)
-            raise ServiceDeliveryError(f"{service} 终态发布 required 失败") from exc
+            raise ServiceDeliveryError(f"{service} 发布失败（required，scope={scope}）") from exc
         self._audit.record(scope, service, "PUBLISH", 1, "failed",
                            started_utc=started, finished_utc=utc_now(), duration_ms=0,
                            error_type=type(exc).__name__)
