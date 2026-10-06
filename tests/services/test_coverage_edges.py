@@ -76,6 +76,13 @@ def test_lifecycle_all_disabled_paths(tmp_path):
                            failure_policy="record")
     ls.start_run("r1")
     ls.finalize_run("r1", "succeeded")
+    assert ls.result.has_degraded is False
+    # run 与 sweep 是独立作用域，必须各自持有 service-manifest。
+    ls = LifecycleServices(layout=_Layout(tmp_path / "sweep"), secret_resolver=_Resolver(),
+                           stores=[_StoreWithResolved(), _StorePlain()],
+                           async_sync=None, wecom_client=None,
+                           audit=ServiceAudit(str(tmp_path / "sweep-audit.jsonl")),
+                           failure_policy="record")
     ls.start_sweep("s1")
     ls.trial_event("s1", "t1", "succeeded")
     ls.finalize_sweep("s1", "succeeded")

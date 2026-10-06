@@ -12,13 +12,13 @@ from dl_helper.training.doctor import run_doctor
 from dl_helper.training.platform import Platform, kaggle_execution_policy, local_execution_policy
 
 
-def test_kaggle_requires_policy_alist_and_wecom():
+def test_kaggle_requires_policy_and_alist_but_notification_is_optional():
     from dl_helper.training.doctor import _check_kaggle_requirements
 
     errors = _check_kaggle_requirements(parse_config(default_schema()), Platform("kaggle"))
     assert any("ExecutionPolicy" in error for error in errors)
     assert any("remote.type=alist" in error for error in errors)
-    assert any("notifications.type=wecom" in error for error in errors)
+    assert not any("notifications" in error or "企业微信" in error for error in errors)
 
 
 def test_kaggle_policy_mismatch_rejected():

@@ -33,8 +33,6 @@ def validate_training_start(
     if not use_alist:
         if config.remote.type != "none":
             raise ConfigError("单机模式必须禁用 remote 服务")
-        if resume != "none":
-            raise ConfigError("单机模式不支持恢复训练，必须使用 resume=none")
     errors = run_doctor(config, platform, experiment_ref, emit_contract=False,
                         resume=resume, execution_policy=execution_policy,
                         collect_exceptions=collected)
@@ -74,7 +72,7 @@ def _find_import_cause(exceptions: list) -> BaseException | None:
 
 def _check_kaggle_requirements(config: Config, platform: Platform, execution_policy=None,
                                *, use_alist: bool = True) -> list[str]:
-    """Kaggle 应用独立执行策略；默认要求两项服务，单机模式只检查已启用的通知。"""
+    """Kaggle 应用独立执行策略；AList 开关不影响通知配置及凭证校验。"""
     errors: list[str] = []
     expected = execution_policy_for(platform)
     if execution_policy is None:
@@ -89,10 +87,6 @@ def _check_kaggle_requirements(config: Config, platform: Platform, execution_pol
         errors.append("Kaggle 必须启用 remote.type=alist")
     elif use_alist and config.remote.failure_policy != "required":
         errors.append("Kaggle AList failure_policy 必须为 required")
-    if use_alist and config.notifications.type != "wecom":
-        errors.append("Kaggle 必须启用 notifications.type=wecom")
-    elif use_alist and config.notifications.failure_policy != "required":
-        errors.append("Kaggle 企业微信 failure_policy 必须为 required")
 
     resolver = SecretResolver(platform)
     keys: list[str] = []

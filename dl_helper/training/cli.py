@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--project-dir", help="外部训练项目根目录（默认当前目录）")
     p_train.add_argument("--output-root", help="覆盖配置中的 run.output_root")
     p_train.add_argument("--use-alist", action=argparse.BooleanOptionalAction, default=True,
-                         help="默认使用配置中的 AList；--no-use-alist 使用单机模式，跳过全部 AList 步骤并禁止恢复训练")
+                         help="默认使用配置中的 AList；--no-use-alist 仅禁用 AList，通知与本地恢复仍按各自配置执行")
     p_train.add_argument("--resume", choices=["none", "required"], default=None,
                          help="显式恢复策略：none 禁止恢复；required 无兼容 checkpoint 即失败；省略时内部自动恢复")
     p_train.add_argument("--run-id")
@@ -175,8 +175,6 @@ def _cmd_train(args: argparse.Namespace) -> int:
     config = _load_config(args)
     use_alist = args.use_alist
     if not use_alist:
-        if args.resume == "required":
-            raise CliError("--no-use-alist 单机模式不支持恢复训练，不能与 --resume required 同时使用")
         config = replace(config, remote=NoRemoteConfig(type="none"))
     if config.run.source_revision is None:
         from .platform import resolve_source_revision
@@ -192,7 +190,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
     # D-001：库模块边界校验必须在导入 Experiment 或创建任何产物前完成
     _check_library_boundaries(args, config, platform)
     execution_policy = execution_policy_for(platform)
-    resume = (args.resume if args.resume is not None else RESUME_AUTO) if use_alist else "none"
+    resume = args.resume if args.resume is not None else RESUME_AUTO
     # 预检前先确定 run 目录（不创建产物）：预检/导入失败也必须落 failure.json 失败证据
     run_id, run_dir = _compute_run_dir(config, platform)
     args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
@@ -237,7 +235,8 @@ def _cmd_train(args: argparse.Namespace) -> int:
         if resume in (RESUME_AUTO, "required") and not batch_no_resume:
             from .checkpoint import read_latest
 
-            if read_latest(layout.path("checkpoints")) is None and services is not None:
+            if (read_latest(layout.path("checkpoints")) is None
+                    and config.remote.type == "alist" and services is not None):
                 services.restore_latest_checkpoint(run_id)
         if config.backend.type == "sklearn":
             from .backends.sklearn_backend import build_sklearn_experiment, run_sklearn_worker_experiment

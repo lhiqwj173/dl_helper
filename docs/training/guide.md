@@ -361,7 +361,7 @@ notifications:             # 企业微信通知
 - 数据**必须**显式挂在 `/kaggle/input/...`；输出默认 `/kaggle/working/dl-helper-runs`。
 - `distributed.num_processes: auto` 会用满所有可见 GPU（CPU 环境 = 1）。
 - **预算训练**：Kaggle 由平台执行策略固定为 **660 分钟训练 + 10 分钟收尾**。系统在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；若下一轮无法在 650 分钟截止前完成，则当前边界执行“存检查点 → 推送 AList → 刷新通知/服务 → 写 pause manifest”，退出码为 `75`。新 session 里用同样的命令 + **同一个 `--run-id`**（省略 `--resume` 即自动恢复）继续训。预测只是估算，硬截止仍可能提前触发。预算值记录在 run 目录 `execution-policy.json`，用户配置不包含 `runtime`。
-- Kaggle 强制启用 AList 和企业微信，且两者 `failure_policy=required`；训练预检会列出缺失 Secret 并终止。
+- Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 仅关闭 AList。企业微信独立按 `notifications` 配置执行，启用服务的 Secret 缺失时训练预检会终止。本地恢复仍按 `--resume` 执行。
 
 Kaggle Notebook 参考见 [kaggle.md](kaggle.md#notebook-参考)。其中
 `kaggle_minimal_training.ipynb` 是外部项目最小模板，`kaggle_inline_mnist_training.ipynb`

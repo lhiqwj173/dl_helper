@@ -1,6 +1,6 @@
 # Kaggle 使用指南
 
-`train` 默认开启 `--use-alist`，使用下文的服务与恢复流程。添加 `--no-use-alist` 即切换单机模式：跳过 AList 凭证读取、恢复、同步和上传，并禁止所有训练恢复；`--resume required` 会被拒绝。企业微信仍按 YAML 配置执行，允许设置 `notifications: {type: none}`。本地产物与 Kaggle 预算保护保留，但单机模式退出 `75` 后不能续训。最小模板中的 `USE_ALIST = False` 对应此参数。
+`train` 默认开启 `--use-alist`。添加 `--no-use-alist` 仅跳过 AList 凭证读取、远程恢复、同步和上传。企业微信独立按 YAML 配置执行，允许设置 `notifications: {type: none}`。本地恢复独立按 `--resume` 执行，支持省略时的自动恢复及显式 `required`，`none` 从头训练。本地产物与 Kaggle 预算保护保留；退出 `75` 后须保留或手动迁移完整本地 run 目录，并使用相同 RUN_ID 恢复，新 Session 不会自动保留旧工作目录。最小模板中的 `USE_ALIST = False` 对应此参数。
 
 本库只提供训练引擎和生命周期服务，不包含你的训练项目。Kaggle Notebook 中应准备三个独立路径：
 
@@ -212,7 +212,7 @@ print("配置已写入:", config_path)
 
 ## 3. Secrets
 
-Kaggle 默认强制启用 AList 和企业微信，且两者 `failure_policy=required`。单机模式跳过 AList，企业微信按配置启用或关闭。启用服务时，在 Kaggle Secrets 中创建
+Kaggle 默认要求启用 AList 且其 `failure_policy=required`；关闭 AList 时跳过其凭证要求。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。启用服务时，在 Kaggle Secrets 中创建
 5 个键（本地调试时可用同名环境变量代替）：`ALIST_USER`、`ALIST_PWD`、`WECOM_CORP_ID`、
 `WECOM_CORP_SECRET`、`WECOM_AGENT_ID`。运行前预检会逐个读取并报告缺失键；Secret 值不会写入
 配置、日志或错误证据。

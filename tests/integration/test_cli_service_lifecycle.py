@@ -136,8 +136,9 @@ def test_cli_required_notification_blocks_success(tmp_path, monkeypatch):
         cli.main(["train", "--config", cfg, "--experiment", "experiments.toy_multiclass:build_experiment"])
 
 
-def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypatch):
-    """跨 Session required 恢复在 worker 启动前先调用远端恢复。"""
+@pytest.mark.parametrize("remote_enabled", [True, False])
+def test_cli_fetches_remote_checkpoint_only_when_alist_enabled(tmp_path, monkeypatch, remote_enabled):
+    """仅 AList 启用时远程恢复，通知服务的存在不能触发远程恢复。"""
     from types import SimpleNamespace
 
     import dl_helper.training.cli as cli
@@ -160,6 +161,17 @@ def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypa
     monkeypatch.setattr(cli, "_build_services", lambda config, platform, layout: Services())
     monkeypatch.setattr(torch_backend, "run_worker", fake_worker)
     cfg = _base_cfg(tmp_path, "remote-resume")
+    if remote_enabled:
+        with open(cfg, encoding="utf-8") as handle:
+            schema = yaml.safe_load(handle)
+        schema["remote"] = {
+            "type": "alist", "host": "https://alist.example.invalid", "base_path": "/runs",
+            "user_secret_key": "ALIST_USER", "password_secret_key": "ALIST_PWD",
+            "connect_timeout_seconds": 1, "read_timeout_seconds": 1, "max_attempts": 1,
+            "async_upload": False, "failure_policy": "required",
+        }
+        with open(cfg, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(schema, handle, allow_unicode=True)
 
     code = cli.main([
         "train", "--config", cfg,
@@ -168,7 +180,8 @@ def test_cli_fetches_remote_checkpoint_before_required_resume(tmp_path, monkeypa
     ])
 
     assert code == 0
-    assert calls == ["restore:remote-resume", "worker:required"]
+    expected = ["restore:remote-resume"] if remote_enabled else []
+    assert calls == expected + ["worker:required"]
 
 
 def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, monkeypatch):
