@@ -12,6 +12,9 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
         python: ["3.10"]
+        include:
+          - os: ubuntu-latest
+            python: "3.13"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
