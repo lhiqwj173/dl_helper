@@ -37,10 +37,11 @@ def store(monkeypatch):
     monkeypatch.setattr("dl_helper.training.remote.time.sleep", Mock())
     result = AListArtifactStore(
         host="https://alist.example.invalid", base_path="/dlh",
-        secret_resolver=None, user_secret_key="user", password_secret_key="password",
+        secret_resolver=None, user_secret_key="TEST_USER_SECRET_KEY",
+        password_secret_key="TEST_PASSWORD_SECRET_KEY",
         connect_timeout=1, read_timeout=1, max_attempts=3, failure_policy="required",
     )
-    result._token = "test-token"
+    result._token = "ALIST_TEST_TOKEN"
     result._session = Mock()
     result._get_info = Mock(return_value={"raw_url": "/d/archive.tar.gz"})
     return result
