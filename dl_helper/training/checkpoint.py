@@ -45,8 +45,13 @@ def _utc_now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def checkpoint_id(epoch: int, global_step: int) -> str:
-    return f"epoch-{epoch:06d}-step-{global_step:08d}"
+def checkpoint_id(epoch: int, global_step: int, checkpoint_kind: str | None = None) -> str:
+    if checkpoint_kind not in (None, "early-stop"):
+        raise ValueError(f"不支持的 checkpoint_kind: {checkpoint_kind!r}")
+    checkpoint = f"epoch-{epoch:06d}-step-{global_step:08d}"
+    if checkpoint_kind is None:
+        return checkpoint
+    return f"{checkpoint}-{checkpoint_kind}"
 
 
 def runtime_versions(backend: str) -> dict[str, str]:
@@ -264,6 +269,7 @@ def write_torch_checkpoint(
     best_model_state: Mapping[str, Any] | None = None,
     progress_snapshot: Mapping[str, Any] | None = None,
     run_dir: str | None = None,
+    checkpoint_kind: str | None = None,
 ) -> str:
     """保存 torch 不可变检查点并返回 checkpoint_id。
 
@@ -273,7 +279,7 @@ def write_torch_checkpoint(
     （progress/index.html + progress/progress-snapshot.json，随 sha256 manifest 校验）；
     报告生成失败直接中止 checkpoint（fail-fast）。
     """
-    ckpt_id = checkpoint_id(epoch, global_step)
+    ckpt_id = checkpoint_id(epoch, global_step, checkpoint_kind)
     os.makedirs(checkpoints_dir, exist_ok=True)
     final_dir = os.path.join(checkpoints_dir, ckpt_id)
     if os.path.exists(final_dir):

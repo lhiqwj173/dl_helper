@@ -435,7 +435,8 @@ def run_worker(
                     # OSR-004：所有 rank 参与 checkpoint（屏障一致），避免 DDP 死锁；主 rank 负责写入
                     _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
                                            config, model_sig, data_fp, best_model_state=best_model_state,
-                                           services=services, current_lr=current_lr)
+                                           services=services, current_lr=current_lr,
+                                           checkpoint_kind="early-stop")
                     break
             if scheduler_binding is not None and scheduler_binding.interval == "epoch":
                 scheduler_binding.scheduler.step()
@@ -764,7 +765,7 @@ def _validate_gradients_finite(model) -> None:
 
 def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
                            config, model_sig, data_fp, best_model_state=None, services=None,
-                           current_lr=None, mid_epoch=False) -> None:
+                           current_lr=None, mid_epoch=False, checkpoint_kind=None) -> str:
     # OSR-004：所有 rank 参与 write_torch_checkpoint（内部屏障 + 各 rank save + 主 rank 写 manifest）
     metric_states_payload = {stage: st.state_dict() for stage, st in metric_states.items()}
     from ..checkpoint import checkpoint_id, write_torch_checkpoint
@@ -782,7 +783,9 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
         "schema_version": PROGRESS_REPORT_SCHEMA_VERSION,
         "backend": "torch",
         "run_id": engine_state.run_id,
-        "checkpoint_id": checkpoint_id(engine_state.epoch, engine_state.global_step),
+        "checkpoint_id": checkpoint_id(
+            engine_state.epoch, engine_state.global_step, checkpoint_kind
+        ),
         "created_utc": _utc_now(),
         "position": {
             "epoch": engine_state.epoch,
@@ -800,6 +803,7 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
         engine_state.epoch, engine_state.global_step, engine_state.batch_in_epoch,
         best_model_state=best_model_state,
         progress_snapshot=snapshot, run_dir=layout.run_dir,
+        checkpoint_kind=checkpoint_kind,
     )
     # OSR-002：主 rank 提交 checkpoint 到有界异步同步器
     if services is not None and accelerator.is_main_process:
@@ -807,6 +811,7 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
     if accelerator.is_main_process:
         apply_retention(layout.path("checkpoints"), config.checkpoint.keep_last)
         layout.log(f"checkpoint saved {ckpt_id} (step={engine_state.global_step})")
+    return ckpt_id
 
 
 def _evaluate(accelerator, model, task, loader, stage, layout, config, target_state=None):
