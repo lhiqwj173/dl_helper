@@ -140,11 +140,15 @@ Torch backend MUST 在 CPU、单 CUDA 和多 CUDA 使用一致的 AMP、梯度�
 - **THEN** 系统先安全保存当前状态，再停止拟合并进入 test/finalize
 
 ### Requirement: backend-aware 可审计恢复
-系统 MUST 使用不可变 checkpoint、完整 manifest、SHA256、latest-last 和严格兼容指纹。每个 complete checkpoint MUST 包含当前进度的离线 HTML report 与机器可读 progress snapshot，且两者 MUST 进入 checksum manifest。Torch MUST 恢复模型/优化器/scaler/scheduler/RNG/DataModule/EngineState；sklearn incremental MUST 恢复可信 estimator joblib、batch source、RNG、EngineState 和部分指标；sklearn batch MUST 明确拒绝恢复。
+系统 MUST 使用不可变 checkpoint、完整 manifest、SHA256、latest-last 和严格兼容指纹。每个 complete checkpoint MUST 包含当前进度的离线 HTML report 与机器可读 progress snapshot，且两者 MUST 进入 checksum manifest。Torch MUST 恢复模型/优化器/scaler/scheduler/RNG/DataModule/EngineState；sklearn incremental MUST 恢复可信 estimator joblib、batch source、RNG、EngineState 和部分指标；sklearn batch MUST 明确拒绝恢复。Torch runtime 版本漂移（如 Kaggle 镜像升级后的跨镜像续训）MUST 输出漂移明细告警后继续恢复，sklearn/joblib 仍 MUST 精确匹配。
 
 #### Scenario: Torch 或 incremental 兼容恢复
 - **WHEN** latest 完整且 config/backend/data/model/runtime version 全部兼容
 - **THEN** 系统从下一未完成位置继续，不重复 optimizer/partial_fit step 或指标累计
+
+#### Scenario: Torch 跨镜像 runtime 版本漂移
+- **WHEN** checkpoint 记录的 Python/torch/accelerate/numpy 与当前镜像不同，但 config、backend、data、model 指纹一致
+- **THEN** 系统列出不含 Secret 的漂移明细并继续从下一未完成位置恢复，新 checkpoint 记录当前 runtime 版本
 
 #### Scenario: checkpoint 含当前进度报告
 - **WHEN** Torch 或 sklearn incremental 成功提交任一 complete checkpoint

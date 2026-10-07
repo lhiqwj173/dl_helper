@@ -72,10 +72,24 @@ def runtime_versions(backend: str) -> dict[str, str]:
 
 
 def verify_runtime_versions(backend: str, recorded: Mapping[str, str]) -> None:
+    """校验检查点记录的运行时版本。
+
+    Torch 允许跨镜像漂移：Kaggle 镜像升级（Python/torch/accelerate/numpy）不应让旧
+    检查点永久不可恢复；漂移输出告警后继续，新检查点记录当前版本。
+    sklearn/joblib 反序列化是代码执行边界，仍要求精确匹配。
+    """
     current = runtime_versions(backend)
-    for key, value in recorded.items():
-        if current.get(key) != value:
-            raise CheckpointError(f"runtime 版本不精确匹配: {key} recorded={value} current={current.get(key)}")
+    mismatches = [
+        f"{key} recorded={value} current={current.get(key)}"
+        for key, value in recorded.items()
+        if current.get(key) != value
+    ]
+    if not mismatches:
+        return
+    detail = "; ".join(mismatches)
+    if backend == "sklearn":
+        raise CheckpointError(f"runtime 版本不精确匹配: {detail}")
+    print(f"[checkpoint] runtime 版本漂移，继续恢复: {detail}", flush=True)
 
 
 # --------------------------------------------------------------------------

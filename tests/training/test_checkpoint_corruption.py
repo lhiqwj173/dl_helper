@@ -123,3 +123,18 @@ def test_runtime_version_drift_fails(tmp_path):
     with pytest.raises(CheckpointError):
         validate_sklearn_checkpoint_source(
             str(tmp_path), "ckpt", "run-1", "fp", "data", {"class": "x"})
+
+
+def test_torch_runtime_version_drift_allows_resume(monkeypatch, capsys):
+    from dl_helper.training import checkpoint as checkpoint_module
+
+    monkeypatch.setattr(
+        checkpoint_module, "runtime_versions",
+        lambda backend: {"python": "9.9.9", "torch": "9.9.9",
+                         "accelerate": "9.9.9", "numpy": "9.9.9"})
+    checkpoint_module.verify_runtime_versions(
+        "torch", {"python": "3.12.13", "torch": "2.10.0+cu128",
+                  "accelerate": "1.6.0", "numpy": "2.0.2"})
+    output = capsys.readouterr().out
+    assert "runtime 版本漂移" in output
+    assert "python recorded=3.12.13 current=9.9.9" in output
