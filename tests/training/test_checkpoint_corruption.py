@@ -54,6 +54,23 @@ def test_validate_manifest_complete_ok(tmp_path):
     validate_manifest_complete(manifest, ckpt_dir)  # 不抛
 
 
+@pytest.mark.parametrize("separator", ["/", "\\"])
+def test_nested_inventory_is_portable_across_operating_systems(tmp_path, separator):
+    root = tmp_path / "checkpoint"
+    member = root / "accelerator-state" / "model.bin"
+    member.parent.mkdir(parents=True)
+    member.write_bytes(b"model")
+    manifest = {"complete": True, "files": {
+        f"accelerator-state{separator}model.bin": {"size": 5, "sha256": sha256_file(str(member))}}}
+    validate_manifest_complete(manifest, str(root))
+
+
+def test_inventory_rejects_duplicate_normalized_paths(tmp_path):
+    manifest = {"complete": True, "files": {"state/model.bin": {}, "state\\model.bin": {}}}
+    with pytest.raises(CheckpointError, match="规范化后重复"):
+        validate_manifest_complete(manifest, str(tmp_path))
+
+
 def test_missing_file_fails(tmp_path):
     ckpt_dir, manifest = _make_checkpoint_dir(tmp_path)
     os.remove(os.path.join(ckpt_dir, "engine-state.json"))

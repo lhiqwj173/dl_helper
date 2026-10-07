@@ -12,7 +12,8 @@ from dl_helper.training.checkpoint import (
 )
 
 
-def test_history_restores_into_new_session_and_rolls_back_later_files(tmp_path):
+@pytest.mark.parametrize("separator", ["/", "\\"])
+def test_history_restores_into_new_session_and_rolls_back_later_files(tmp_path, separator):
     source = tmp_path / "source"
     metrics = source / "metrics" / "metrics.jsonl"
     metrics.parent.mkdir(parents=True)
@@ -28,6 +29,9 @@ def test_history_restores_into_new_session_and_rolls_back_later_files(tmp_path):
     _snapshot_run_history(str(checkpoint), str(source), position_epoch=1, include_models=True)
     saved = json.loads((checkpoint / HISTORY_MANIFEST).read_text(encoding="utf-8"))
     assert saved["files"] == sha256_manifest(str(checkpoint / HISTORY_DIR))
+    saved["files"] = {name.replace("\\", "/").replace("/", separator): metadata
+                      for name, metadata in saved["files"].items()}
+    (checkpoint / HISTORY_MANIFEST).write_text(json.dumps(saved), encoding="utf-8")
 
     destination = tmp_path / "new-session"
     destination.mkdir()

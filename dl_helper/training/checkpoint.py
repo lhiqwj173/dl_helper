@@ -102,11 +102,32 @@ def write_manifest(checkpoint_root: str, manifest: Mapping[str, Any]) -> str:
     return path
 
 
+def _portable_inventory(files: Mapping[str, Any]) -> dict[str, Any]:
+    """统一旧 v1 清单的宿主路径格式，同时拒绝规范化后重复的路径。"""
+    from pathlib import PurePosixPath
+
+    if not isinstance(files, Mapping):
+        raise CheckpointError("checkpoint 文件清单必须是对象")
+    normalized = {}
+    for name, metadata in files.items():
+        if not isinstance(name, str):
+            raise CheckpointError("checkpoint 文件路径必须是字符串")
+        relative = name.replace("\\", "/")
+        path = PurePosixPath(relative)
+        if (not relative or path.is_absolute() or ":" in relative
+                or path.as_posix() != relative or ".." in path.parts):
+            raise CheckpointError(f"checkpoint 文件路径非法: {name}")
+        if relative in normalized:
+            raise CheckpointError(f"checkpoint 文件路径规范化后重复: {name}")
+        normalized[relative] = metadata
+    return normalized
+
+
 def validate_manifest_complete(manifest: Mapping[str, Any], checkpoint_root: str) -> None:
     if not manifest.get("complete"):
         raise CheckpointError("checkpoint manifest 标记 incomplete")
-    for rel, meta in manifest.get("files", {}).items():
-        full = ensure_within(checkpoint_root, os.path.join(checkpoint_root, rel), "checkpoint 文件")
+    for rel, meta in _portable_inventory(manifest.get("files", {})).items():
+        full = ensure_within(checkpoint_root, os.path.join(checkpoint_root, *rel.split("/")), "checkpoint 文件")
         if not os.path.exists(full):
             raise CheckpointError(f"checkpoint 文件缺失: {rel}")
         if sha256_file(full) != meta.get("sha256"):
@@ -209,7 +230,8 @@ def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
     if not isinstance(expected, Mapping):
         raise HistoryRecoveryError("运行历史文件清单非法")
     history_dir = os.path.join(ckpt_dir, HISTORY_DIR)
-    actual = sha256_manifest(history_dir)
+    expected = _portable_inventory(expected)
+    actual = _portable_inventory(sha256_manifest(history_dir))
     if actual != expected:
         raise HistoryRecoveryError("运行历史与检查点清单不一致")
     if require_metrics and position_epoch > 0 and "metrics/metrics.jsonl" not in {rel.replace("\\", "/") for rel in expected}:
@@ -226,7 +248,7 @@ def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
         raise HistoryRecoveryError(f"运行历史恢复暂存目录已存在: {staging}")
     try:
         shutil.copytree(history_dir, staging)
-        if sha256_manifest(staging) != expected:
+        if _portable_inventory(sha256_manifest(staging)) != expected:
             raise HistoryRecoveryError("运行历史复制后校验失败")
         for rel in HISTORY_FILES:
             destination = ensure_within(run_dir, os.path.join(run_dir, *rel.split("/")), "运行历史")
