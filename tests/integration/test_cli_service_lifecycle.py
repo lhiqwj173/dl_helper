@@ -154,7 +154,8 @@ def test_cli_fetches_remote_checkpoint_only_when_alist_enabled(tmp_path, monkeyp
             return "ck-remote"
 
     def fake_worker(experiment_ref, config, layout, local_rank, world_size, resume,
-                    services=None, execution_policy=None):
+                    services=None, execution_policy=None, checkpoint_export_dir=None,
+                    checkpoint_validator=None):
         calls.append(f"worker:{resume}")
         return SimpleNamespace(status="succeeded")
 
