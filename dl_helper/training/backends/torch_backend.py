@@ -183,12 +183,14 @@ def run_worker(
     publish_terminal=True,
     execution_policy=None,
     checkpoint_export_dir=None,
+    checkpoint_validator=None,
 ) -> BackendResult:
     """在 worker 内执行完整 torch 训练并返回 BackendResult。"""
     import time
 
     worker_started = time.monotonic()
     layout.checkpoint_export_dir = checkpoint_export_dir or layout.path("checkpoint-archives")
+    layout.checkpoint_validator = checkpoint_validator
     # strict 确定性需 CuBLAS workspace 配置，必须在 torch 导入/CUDA 初始化前设置
     if config.backend.torch is not None and config.backend.torch.deterministic == "strict":
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
@@ -842,6 +844,9 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
 
 def _export_checkpoint(layout, checkpoint_dir, config):
     from ..checkpoint_archive import export_checkpoint_archive
+    validator = getattr(layout, "checkpoint_validator", None)
+    if validator is not None:
+        validator(layout.run_dir, checkpoint_dir)
     return export_checkpoint_archive(layout.run_dir, checkpoint_dir, layout.checkpoint_export_dir, config)
 
 

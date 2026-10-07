@@ -195,6 +195,14 @@ def test_allowed_budget_change_reuses_immutable_zip(tmp_path, config):
     assert archive.read_bytes() == before
 
 
+@pytest.mark.parametrize("directory", ["checkpoints", "models"])
+def test_export_cannot_mutate_checkpoint_or_include_itself(tmp_path, config, directory):
+    root = tmp_path / "run"
+    checkpoint = make_checkpoint(root, config)
+    with pytest.raises(ValueError, match="不得导出"):
+        export_checkpoint_archive(root, checkpoint, root / directory / "archives", config)
+
+
 def test_archive_callback_failure_keeps_previous_latest_and_allows_retry(tmp_path):
     from dl_helper.training.checkpoint import read_latest, write_torch_checkpoint
     from dl_helper.training.engine import EngineState
@@ -232,6 +240,9 @@ def test_old_full_working_directory_dataset(tmp_path, config):
     dataset = tmp_path / "dataset"
     source = dataset / "dl-helper-runs" / "runs" / config.run.id
     cp = make_checkpoint(source, config)
+    auxiliary = source / "models" / "diagnostic" / "model.safetensors"
+    auxiliary.parent.mkdir(parents=True)
+    auxiliary.write_bytes(b"auxiliary-weights")
     (source / "failure.json").write_text('{"message":"old crash"}', encoding="utf-8")
     destination = tmp_path / "working"
     destination.mkdir()
@@ -243,3 +254,8 @@ def test_old_full_working_directory_dataset(tmp_path, config):
     assert (destination / "checkpoints" / cp.name).is_dir()
     assert not (destination / "failure.json").exists()
     assert (source / "failure.json").is_file()
+    assert (destination / "models" / "diagnostic" / "model.safetensors").read_bytes() == auxiliary.read_bytes()
+    exported = export_checkpoint_archive(destination, destination / "checkpoints" / cp.name,
+                                          tmp_path / "new-downloads", config)
+    with ZipFile(exported) as archive:
+        assert archive.read("run/models/diagnostic/model.safetensors") == auxiliary.read_bytes()

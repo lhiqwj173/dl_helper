@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="只读 checkpoint Dataset、ZIP 或旧 run 目录，可重复；省略 resume 时自动选择最新兼容位置")
     p_train.add_argument("--checkpoint-export-dir", metavar="PATH",
                          help="单机 Torch 每次检查点 ZIP 的导出目录，须位于 output-root；默认 run/checkpoint-archives")
+    p_train.add_argument("--checkpoint-validator", help=argparse.SUPPRESS)
     # sweep 的零拟合合同使用；隐藏以免形成公共命令面。
     p_train.add_argument("--preflight-only", action="store_true", help=argparse.SUPPRESS)
 
@@ -202,7 +203,9 @@ def _cmd_train(args: argparse.Namespace) -> int:
     args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
     checkpoint_inputs = getattr(args, "checkpoint_input", [])
     checkpoint_export_dir = getattr(args, "checkpoint_export_dir", None)
-    if checkpoint_inputs or checkpoint_export_dir is not None:
+    validator_ref = getattr(args, "checkpoint_validator", None)
+    checkpoint_validator = None
+    if checkpoint_inputs or checkpoint_export_dir is not None or validator_ref is not None:
         if config.backend.type != "torch" or platform.resolve_torch_resources(config, None).num_processes != 1:
             raise CliError("checkpoint 输入/导出路径仅支持单机 Torch")
         from pathlib import Path
@@ -213,6 +216,17 @@ def _cmd_train(args: argparse.Namespace) -> int:
             checkpoint_export_dir = str(Path(checkpoint_export_dir).resolve())
             if not Path(checkpoint_export_dir).is_relative_to(Path(platform.resolve_output_root(config)).resolve()):
                 raise CliError("checkpoint 导出目录必须位于 output-root")
+            if any(Path(checkpoint_export_dir).is_relative_to((Path(run_dir) / name).resolve())
+                   for name in ("checkpoints", "models")):
+                raise CliError("checkpoint 导出目录不能位于原始检查点或模型目录，避免修改不可变状态或递归封包")
+        if validator_ref is not None:
+            import importlib
+            module_name, separator, function_name = validator_ref.partition(":")
+            if not separator or not module_name or not function_name:
+                raise CliError("checkpoint-validator 必须为 module:function")
+            checkpoint_validator = getattr(importlib.import_module(module_name), function_name)
+            if not callable(checkpoint_validator):
+                raise CliError("checkpoint-validator 入口不可调用")
     validate_training_start(config, platform, args.experiment, resume=resume,
                             execution_policy=execution_policy, emit_contract=args.preflight_only,
                             use_alist=use_alist)
@@ -238,6 +252,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
             "use_alist": use_alist,
             "checkpoint_inputs": checkpoint_inputs,
             "checkpoint_export_dir": checkpoint_export_dir or layout.path("checkpoint-archives"),
+            "checkpoint_validator": validator_ref,
             "max_minutes": execution_policy.max_minutes,
             "shutdown_grace_minutes": execution_policy.shutdown_grace_minutes,
         }, ensure_ascii=False, sort_keys=True))
@@ -279,6 +294,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
                     candidate = select_checkpoint_source([], Path(layout.run_dir), config)
                     restore_checkpoint_source(candidate, Path(layout.run_dir),
                                               Path(layout.path("config.resolved.yaml")), config)
+        if checkpoint_validator is not None and resume in (RESUME_AUTO, "required"):
+            from .checkpoint import read_latest
+            latest = read_latest(layout.path("checkpoints"))
+            if latest is not None:
+                checkpoint_validator(layout.run_dir, layout.path("checkpoints", latest["path"]))
         if config.backend.type == "sklearn":
             from .backends.sklearn_backend import build_sklearn_experiment, run_sklearn_worker_experiment
             experiment = build_sklearn_experiment(args.experiment, config.experiment)
@@ -291,7 +311,8 @@ def _cmd_train(args: argparse.Namespace) -> int:
             if num_procs == 1:
                 result = run_worker(args.experiment, config, layout, 0, 1, resume,
                                     execution_policy=execution_policy, services=services,
-                                    checkpoint_export_dir=checkpoint_export_dir)
+                                    checkpoint_export_dir=checkpoint_export_dir,
+                                    checkpoint_validator=checkpoint_validator)
                 status = result.status
             else:
                 # 多进程：CLI 父进程处理服务与唯一终态（OSR-002）

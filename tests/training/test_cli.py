@@ -44,6 +44,11 @@ def test_train_success(tmp_path, monkeypatch):
         "--experiment", "experiments.toy_multiclass:build_experiment",
     ])
     assert code == 0
+    import json
+    from zipfile import ZipFile
+    with ZipFile(tmp_path / "runs/cli-train/checkpoint-archives/last-checkpoint.zip") as archive:
+        manifest = json.loads(archive.read("resume-manifest.json").decode("utf-8"))
+    assert manifest["phase"] == "final" and manifest["position"]["epoch"] == 1
 
 
 def test_train_unknown_command_exits_nonzero():
@@ -231,3 +236,27 @@ def test_dataset_resume_keeps_alist_fallback(tmp_path, monkeypatch, dataset_avai
                      "--checkpoint-input", str(inputs)]) == 0
     assert calls == ([] if dataset_available else ["archive-test"])
     assert seen == [dataset_available]
+
+
+def test_project_checkpoint_validator_rejects_before_worker(tmp_path, monkeypatch):
+    import dl_helper.training.cli as cli
+    import dl_helper.training.backends.torch_backend as backend
+    from dl_helper.training.config import parse_config
+    from test_checkpoint_archive import make_checkpoint
+
+    schema = default_schema()
+    schema["run"].update(id="archive-test", source_revision="source-v1", output_root=str(tmp_path))
+    schema["distributed"]["num_processes"] = 1
+    config = parse_config(schema)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(schema), encoding="utf-8")
+    source = tmp_path / "source"
+    make_checkpoint(source, config)
+    (tmp_path / "fixture_checkpoint_validator.py").write_text(
+        'def validate(run_dir, checkpoint_dir):\n    raise ValueError("辅助权重与历史指标不一致")\n', encoding="utf-8")
+    monkeypatch.setattr(backend, "run_worker", lambda *a, **k: pytest.fail("校验失败后不得进入训练"))
+    with pytest.raises(ValueError, match="辅助权重与历史指标不一致"):
+        cli.main(["train", "--config", str(cfg_path), "--project-dir", str(tmp_path),
+                  "--experiment", "experiments.toy_multiclass:build_experiment",
+                  "--checkpoint-input", str(source),
+                  "--checkpoint-validator", "fixture_checkpoint_validator:validate"])

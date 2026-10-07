@@ -20,9 +20,12 @@ def test_history_restores_into_new_session_and_rolls_back_later_files(tmp_path):
     prediction = source / "predictions" / "val" / "part.npz"
     prediction.parent.mkdir(parents=True)
     prediction.write_bytes(b"prediction-at-checkpoint")
+    auxiliary = source / "models" / "diagnostic" / "model.safetensors"
+    auxiliary.parent.mkdir(parents=True)
+    auxiliary.write_bytes(b"auxiliary-model-at-checkpoint")
     checkpoint = tmp_path / "checkpoint"
     checkpoint.mkdir()
-    _snapshot_run_history(str(checkpoint), str(source), position_epoch=1)
+    _snapshot_run_history(str(checkpoint), str(source), position_epoch=1, include_models=True)
     saved = json.loads((checkpoint / HISTORY_MANIFEST).read_text(encoding="utf-8"))
     assert saved["files"] == sha256_manifest(str(checkpoint / HISTORY_DIR))
 
@@ -34,6 +37,7 @@ def test_history_restores_into_new_session_and_rolls_back_later_files(tmp_path):
     restore_run_history(str(checkpoint), str(destination), position_epoch=1)
     assert (destination / "metrics" / "metrics.jsonl").read_text(encoding="utf-8") == metrics.read_text(encoding="utf-8")
     assert (destination / "predictions" / "val" / "part.npz").read_bytes() == prediction.read_bytes()
+    assert (destination / "models" / "diagnostic" / "model.safetensors").read_bytes() == auxiliary.read_bytes()
     assert not newer.exists()
 
 

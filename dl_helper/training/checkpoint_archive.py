@@ -177,7 +177,7 @@ def _validate_resume_manifest(manifest: dict) -> tuple[dict, list[str]]:
     required = {"run/config.resolved.yaml", "run/checkpoints/latest.json",
                 prefix + "checkpoint-manifest.json"}
     allowed = required | {"run/recovery/terminal-history.json"}
-    if any(name not in allowed and not name.startswith(prefix) for name in names):
+    if any(name not in allowed and not name.startswith((prefix, "run/models/")) for name in names):
         raise ValueError("恢复包含非检查点文件或活动终态")
     if not required <= set(names):
         raise ValueError(f"恢复包缺少必需文件：{sorted(required - set(names))}")
@@ -300,6 +300,7 @@ def restore_checkpoint_archive(source: Path, destination: Path, expected_run_id:
                                files[name], name)
 
         latest, checkpoint_dir, checkpoint_manifest = _validate_latest(staged_run, expected_run_id)
+        _model_files(staged_run / "models", prefix="")
         if (latest["checkpoint_id"] != manifest.get("checkpoint_id")
                 or checkpoint_manifest["config_fingerprint"] != expected_config_fingerprint):
             raise ValueError("恢复包 latest checkpoint 与恢复清单或当前配置不匹配")
@@ -413,6 +414,8 @@ def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: P
     import yaml
 
     run_dir, checkpoint_dir, output_dir = map(Path, (run_dir, checkpoint_dir, output_dir))
+    if any(output_dir.resolve().is_relative_to((run_dir / name).resolve()) for name in ("checkpoints", "models")):
+        raise ValueError("检查点 ZIP 不得导出到原始检查点或模型目录")
     inner = _read_json(checkpoint_dir / "checkpoint-manifest.json")
     _validate_file_inventory(checkpoint_dir, inner["files"], excluded={"checkpoint-manifest.json"})
     if (inner.get("complete") is not True or inner.get("backend") != "torch"
@@ -439,6 +442,12 @@ def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: P
     source_files = {f"run/checkpoints/{identifier}/{name.replace(chr(92), '/')}":
                     checkpoint_dir.joinpath(*name.replace("\\", "/").split("/"))
                     for name in ["checkpoint-manifest.json", *inner["files"]]}
+    # 优先使用不可变历史中的辅助权重；旧检查点则封装已恢复到当前 run 的辅助权重。
+    model_root = checkpoint_dir / "run-history" / "models"
+    if model_root.exists():
+        _model_files(model_root, prefix="")  # 已纳入 inner inventory，无需重复压缩一份。
+    else:
+        source_files.update(_model_files(run_dir / "models", prefix="run/models/"))
     inventory = {name: {"size": path.stat().st_size, "sha256": _sha256_file(path)}
                  for name, path in source_files.items()}
     inventory.update({name: {"size": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
@@ -669,6 +678,13 @@ def restore_checkpoint_source(candidate: CheckpointSource, run_dir: Path, config
                 raise ValueError(f"本地不可变检查点内容冲突：{target}")
         else:
             os.replace(incoming, target)
+        models = staged / "models"
+        if models.exists():
+            # 模型历史在 load_torch_checkpoint 前恢复，项目自定义指标也能读到权重。
+            destination = run_dir / "models"
+            if destination.exists():
+                shutil.rmtree(destination)
+            os.replace(models, destination)
         # 历史原子写入成功后才能撤销本地 failure/pause。
         migrate_terminal_history(run_dir, _terminal_history(staged))
         update_latest(str(target.parent), identifier, identifier)
@@ -683,6 +699,35 @@ def apply_archive_retention(output_dir: Path, checkpoint_root: Path, keep_last: 
             outer, _ = _validate_resume_manifest(_read_json_bytes(archive.read("resume-manifest.json"), str(path)))
         if outer["run_id"] == run_id and not (Path(checkpoint_root) / outer["checkpoint_id"]).exists():
             path.unlink()
+
+
+def _model_files(root: Path, *, prefix: str) -> dict[str, Path]:
+    """辅助模型目录可选；存在时要求普通文件，并校验有模型摘要的元数据。"""
+    if root.is_symlink():
+        raise ValueError(f"辅助模型目录为符号链接：{root}")
+    if not root.exists():
+        return {}
+    if not root.is_dir():
+        raise ValueError(f"辅助模型路径不是目录：{root}")
+    result = {}
+    for directory, subdirectories, filenames in os.walk(root, followlinks=False):
+        base = Path(directory)
+        if any((base / name).is_symlink() for name in subdirectories):
+            raise ValueError("辅助模型目录含符号链接")
+        for name in filenames:
+            path = base / name
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"辅助模型不是普通文件：{path}")
+            result[prefix + path.relative_to(root).as_posix()] = path
+            if name.endswith(".json"):
+                metadata = _read_json(path)
+                if "model_sha256" in metadata:
+                    weights = base / "model.safetensors"
+                    if not weights.is_file() or weights.is_symlink():
+                        raise FileNotFoundError(f"模型元数据缺少对应权重：{weights}")
+                    if _sha256_file(weights) != metadata["model_sha256"]:
+                        raise ValueError(f"辅助模型 SHA256 不匹配：{weights}")
+    return result
 
 
 def restore_legacy_run(source_run: Path, destination: Path, expected_run_id: str,
@@ -791,6 +836,9 @@ def restore_legacy_run(source_run: Path, destination: Path, expected_run_id: str
                 source_checkpoint.joinpath(*member.parts),
                 staged_checkpoint.joinpath(*member.parts), metadata, relative,
             )
+        for relative, path in _model_files(source_run / "models", prefix="models/").items():
+            _copy_verified(path, staged_run / relative,
+                           {"size": path.stat().st_size, "sha256": _sha256_file(path)}, relative)
 
         staged_fingerprint = _config_fingerprint(
             staged_run / "config.resolved.yaml", expected_run_id, expected_source_revision

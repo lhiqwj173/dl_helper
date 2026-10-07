@@ -142,7 +142,7 @@ def _stage_and_finalize(staging: str, final_dir: str) -> None:
 
 
 def _snapshot_run_history(staging: str, run_dir: str, *, position_epoch: int,
-                          require_metrics: bool = True) -> None:
+                          require_metrics: bool = True, include_models: bool = False) -> None:
     """将检查点位置之前的机器可读历史纳入不可变检查点。"""
     history_dir = os.path.join(staging, HISTORY_DIR)
     os.makedirs(history_dir)
@@ -158,6 +158,15 @@ def _snapshot_run_history(staging: str, run_dir: str, *, position_epoch: int,
                 raise CheckpointError("预测历史包含符号链接目录")
         paths.extend(f"predictions/{rel.replace(os.sep, '/')}"
                      for rel in list_relative_files(predictions_dir))
+    # 项目可能另存诊断/辅助权重，必须与对应指标一起保存，恢复时不能依赖旧 Session。
+    models_dir = os.path.join(run_dir, "models")
+    if include_models and os.path.islink(models_dir):
+        raise CheckpointError("辅助模型目录为符号链接")
+    if include_models and os.path.isdir(models_dir):
+        for directory, subdirectories, _files in os.walk(models_dir):
+            if any(os.path.islink(os.path.join(directory, name)) for name in subdirectories):
+                raise CheckpointError("辅助模型目录含符号链接")
+        paths.extend(f"models/{rel.replace(os.sep, '/')}" for rel in list_relative_files(models_dir))
     for rel in paths:
         raw_source = os.path.join(run_dir, *rel.split("/"))
         if os.path.islink(raw_source):
@@ -208,7 +217,7 @@ def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
     allowed = set(HISTORY_FILES)
     for rel in expected:
         normalized = rel.replace("\\", "/")
-        if normalized not in allowed and not normalized.startswith("predictions/"):
+        if normalized not in allowed and not normalized.startswith(("predictions/", "models/")):
             raise HistoryRecoveryError(f"运行历史包含不允许的路径: {rel}")
         if normalized.startswith("/") or any(part in ("", ".", "..") for part in normalized.split("/")):
             raise HistoryRecoveryError(f"运行历史路径非法: {rel}")
@@ -232,6 +241,12 @@ def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
         if os.path.exists(destination):
             remove_tree(destination)
         if os.path.isdir(staged):
+            move_tree(staged, destination)
+        if any(rel.replace("\\", "/").startswith("models/") for rel in expected):
+            destination = ensure_within(run_dir, os.path.join(run_dir, "models"), "辅助模型历史")
+            staged = os.path.join(staging, "models")
+            if os.path.exists(destination):
+                remove_tree(destination)
             move_tree(staged, destination)
     finally:
         remove_tree(staging)
@@ -332,7 +347,8 @@ def write_torch_checkpoint(
                     run_dir, progress_snapshot, os.path.join(staging, "progress")
                 )
             if run_dir is not None:
-                _snapshot_run_history(staging, run_dir, position_epoch=epoch)
+                _snapshot_run_history(staging, run_dir, position_epoch=epoch,
+                                      include_models=archive_callback is not None)
             manifest = {
                 "schema_version": 1,
                 "run_id": run_id,
