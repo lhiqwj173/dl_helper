@@ -127,6 +127,7 @@ def test_cross_session_early_stop_resume_only_finalizes(tmp_path, monkeypatch, p
         assert all(torch.equal(before[key], after[key]) for key in before)
     assert Path(restored.report_index).is_file()
     assert Path(restored.path("run-manifest.json")).is_file()
+    assert Path(restored.path("checkpoint-archives", "last-checkpoint.zip")).is_file()
 
 
 def test_patience_zero_mid_epoch_resume_still_runs_first_validation(tmp_path):

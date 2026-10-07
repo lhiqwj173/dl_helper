@@ -42,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--resume", choices=["none", "required"], default=None,
                          help="显式恢复策略：none 禁止恢复；required 无兼容 checkpoint 即失败；省略时内部自动恢复")
     p_train.add_argument("--run-id")
+    p_train.add_argument("--checkpoint-input", action="append", default=[], metavar="PATH",
+                         help="只读 checkpoint Dataset、ZIP 或旧 run 目录，可重复；省略 resume 时自动选择最新兼容位置")
+    p_train.add_argument("--checkpoint-export-dir", metavar="PATH",
+                         help="单机 Torch 每次检查点 ZIP 的导出目录，须位于 output-root；默认 run/checkpoint-archives")
     # sweep 的零拟合合同使用；隐藏以免形成公共命令面。
     p_train.add_argument("--preflight-only", action="store_true", help=argparse.SUPPRESS)
 
@@ -193,7 +197,22 @@ def _cmd_train(args: argparse.Namespace) -> int:
     resume = args.resume if args.resume is not None else RESUME_AUTO
     # 预检前先确定 run 目录（不创建产物）：预检/导入失败也必须落 failure.json 失败证据
     run_id, run_dir = _compute_run_dir(config, platform)
+    # 为自动生成的 run ID 也保存可复现的配置身份。
+    config = replace(config, run=replace(config.run, id=run_id))
     args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
+    checkpoint_inputs = getattr(args, "checkpoint_input", [])
+    checkpoint_export_dir = getattr(args, "checkpoint_export_dir", None)
+    if checkpoint_inputs or checkpoint_export_dir is not None:
+        if config.backend.type != "torch" or platform.resolve_torch_resources(config, None).num_processes != 1:
+            raise CliError("checkpoint 输入/导出路径仅支持单机 Torch")
+        from pathlib import Path
+        if platform.is_kaggle and any(not Path(path).resolve().is_relative_to(Path("/kaggle/input").resolve())
+                                      for path in checkpoint_inputs):
+            raise CliError("Kaggle checkpoint 输入必须位于 /kaggle/input")
+        if checkpoint_export_dir is not None:
+            checkpoint_export_dir = str(Path(checkpoint_export_dir).resolve())
+            if not Path(checkpoint_export_dir).is_relative_to(Path(platform.resolve_output_root(config)).resolve()):
+                raise CliError("checkpoint 导出目录必须位于 output-root")
     validate_training_start(config, platform, args.experiment, resume=resume,
                             execution_policy=execution_policy, emit_contract=args.preflight_only,
                             use_alist=use_alist)
@@ -203,6 +222,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
     layout = RunLayout(run_dir)
     status = "succeeded"
     services = None
+    args._secondary_errors = []
     try:
         layout.ensure()
         # OSR-005：任何写入前拒绝已完成 run（暂停 run 可 resume）
@@ -216,10 +236,25 @@ def _cmd_train(args: argparse.Namespace) -> int:
             "platform": platform.kind,
             "resume": resume,
             "use_alist": use_alist,
+            "checkpoint_inputs": checkpoint_inputs,
+            "checkpoint_export_dir": checkpoint_export_dir or layout.path("checkpoint-archives"),
             "max_minutes": execution_policy.max_minutes,
             "shutdown_grace_minutes": execution_policy.shutdown_grace_minutes,
         }, ensure_ascii=False, sort_keys=True))
         args._run_dir = layout.run_dir  # 布局后确认受控 run_dir（与预检前一致）
+
+        single_torch = (config.backend.type == "torch"
+                        and platform.resolve_torch_resources(config, None).num_processes == 1)
+        if single_torch and resume in (RESUME_AUTO, "required"):
+            from pathlib import Path
+            from .checkpoint_archive import select_checkpoint_source, restore_checkpoint_source
+            # 包括本地完整 ZIP：保存期间中断时它可能领先于 raw latest。
+            inputs = [*checkpoint_inputs, checkpoint_export_dir or layout.path("checkpoint-archives")]
+            candidate = select_checkpoint_source(inputs, Path(layout.run_dir), config)
+            if candidate is not None:
+                restore_checkpoint_source(candidate, Path(layout.run_dir),
+                                          Path(layout.path("config.resolved.yaml")), config)
+                layout.log(f"自动恢复来源={candidate.path}, checkpoint={candidate.manifest['checkpoint_id']}")
 
         services = _build_services(config, platform, layout)
         # OSR-003：记录同一 SecretResolver 与启用服务的 Secret key，供失败证据全链路脱敏
@@ -238,6 +273,12 @@ def _cmd_train(args: argparse.Namespace) -> int:
             if (read_latest(layout.path("checkpoints")) is None
                     and config.remote.type == "alist" and services is not None):
                 services.restore_latest_checkpoint(run_id)
+                if single_torch and read_latest(layout.path("checkpoints")) is not None:
+                    from pathlib import Path
+                    from .checkpoint_archive import select_checkpoint_source, restore_checkpoint_source
+                    candidate = select_checkpoint_source([], Path(layout.run_dir), config)
+                    restore_checkpoint_source(candidate, Path(layout.run_dir),
+                                              Path(layout.path("config.resolved.yaml")), config)
         if config.backend.type == "sklearn":
             from .backends.sklearn_backend import build_sklearn_experiment, run_sklearn_worker_experiment
             experiment = build_sklearn_experiment(args.experiment, config.experiment)
@@ -249,7 +290,8 @@ def _cmd_train(args: argparse.Namespace) -> int:
             num_procs = platform.resolve_torch_resources(config, None).num_processes
             if num_procs == 1:
                 result = run_worker(args.experiment, config, layout, 0, 1, resume,
-                                    execution_policy=execution_policy, services=services)
+                                    execution_policy=execution_policy, services=services,
+                                    checkpoint_export_dir=checkpoint_export_dir)
                 status = result.status
             else:
                 # 多进程：CLI 父进程处理服务与唯一终态（OSR-002）

@@ -19,7 +19,13 @@ def test_parser_exposes_four_commands_without_doctor():
     assert "doctor" not in sub.choices
 
 
-def test_train_success(tmp_path):
+def test_train_success(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from dl_helper.training.platform import Platform
+    resolve = Platform.resolve_torch_resources
+    monkeypatch.setattr(Platform, "resolve_torch_resources",
+                        lambda self, config, batch: replace(resolve(self, config, batch), num_workers=0,
+                                                            persistent_workers=False, prefetch_factor=None))
     schema = default_schema()
     schema["training"]["max_epochs"] = 1
     schema["selection"] = {"metric": "val/loss", "mode": "min", "patience": 10, "min_delta": 0.0}
@@ -162,3 +168,66 @@ def test_train_omitted_resume_resolves_to_internal_auto(tmp_path, monkeypatch):
                  "--experiment", "experiments.toy_multiclass:build_experiment"])
     assert code == 0
     assert seen["resume"] == "auto"
+
+
+def test_checkpoint_paths_parser_and_preflight(tmp_path):
+    from dl_helper.training.cli import CliError
+    parser = build_parser()
+    args = parser.parse_args(["train", "--config", "x.yaml", "--experiment", "x:build",
+                              "--checkpoint-input", "first", "--checkpoint-input", "second"])
+    assert args.checkpoint_input == ["first", "second"]
+    cfg_path = _boundary_cfg(tmp_path)
+    with pytest.raises(CliError, match="output-root"):
+        main(["train", "--config", cfg_path, "--experiment", "experiments.toy_multiclass:build_experiment",
+              "--checkpoint-export-dir", str(tmp_path.parent / "outside"), "--preflight-only"])
+
+
+@pytest.mark.parametrize("dataset_available", [False, True])
+def test_dataset_resume_keeps_alist_fallback(tmp_path, monkeypatch, dataset_available):
+    """有 Dataset 用 Dataset；无 Dataset 仍查询原 AList 恢复入口。"""
+    import dl_helper.training.cli as cli
+    import dl_helper.training.doctor as doctor
+    import dl_helper.training.backends.torch_backend as backend
+    from dl_helper.training.backends.base import BackendResult
+    from dl_helper.training.config import parse_config
+    from dl_helper.training.checkpoint_archive import export_checkpoint_archive
+    from test_checkpoint_archive import make_checkpoint
+
+    schema = default_schema()
+    schema["run"].update(id="archive-test", source_revision="source-v1", output_root=str(tmp_path))
+    schema["distributed"]["num_processes"] = 1
+    schema["remote"] = {"type": "alist", "host": "https://alist.example", "base_path": "/runs",
+                        "user_secret_key": "USER", "password_secret_key": "PASSWORD",
+                        "connect_timeout_seconds": 1, "read_timeout_seconds": 1, "max_attempts": 1,
+                        "async_upload": False, "failure_policy": "required"}
+    cfg = parse_config(schema)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(schema), encoding="utf-8")
+    inputs = tmp_path / "dataset"
+    if dataset_available:
+        source = tmp_path / "source"
+        checkpoint = make_checkpoint(source, cfg)
+        export_checkpoint_archive(source, checkpoint, inputs, cfg)
+
+    calls = []
+
+    class Services:
+        def restore_latest_checkpoint(self, run_id):
+            calls.append(run_id)
+            # 服务本身的 TAR/GZIP 恢复由 test_alist_store 覆盖。
+            return None
+
+    monkeypatch.setattr(doctor, "validate_training_start", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "_build_services", lambda *a: Services())
+    seen = []
+
+    def worker(experiment, config, layout, *a, **k):
+        from dl_helper.training.checkpoint import read_latest
+        seen.append(read_latest(layout.path("checkpoints")) is not None)
+        return BackendResult(status="succeeded", epoch=1, batch_in_epoch=0, global_step=1)
+
+    monkeypatch.setattr(backend, "run_worker", worker)
+    assert cli.main(["train", "--config", str(cfg_path), "--experiment", "experiments.toy_multiclass:build_experiment",
+                     "--checkpoint-input", str(inputs)]) == 0
+    assert calls == ([] if dataset_available else ["archive-test"])
+    assert seen == [dataset_available]

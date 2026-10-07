@@ -449,7 +449,7 @@ class AListArtifactStore:
             raise ArtifactStoreError("发布 run bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/runs/{run_id}"
         result = self._publish_zip(remote_dir, local_dir, "run-bundle",
-                                   exclude_prefixes=("checkpoints",))
+                                   exclude_prefixes=("checkpoints", "checkpoint-archives"))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 
@@ -459,7 +459,7 @@ class AListArtifactStore:
             raise ArtifactStoreError("发布 sweep bundle 前缺少最终 service-manifest.json")
         remote_dir = f"{self._base_path}/sweeps/{sweep_id}"
         result = self._publish_zip(remote_dir, local_dir, "sweep-bundle",
-                                   exclude_prefixes=("checkpoints",))
+                                   exclude_prefixes=("checkpoints", "checkpoint-archives"))
         result["service_manifest_sha256"] = sha256_file(service_manifest)
         return result
 

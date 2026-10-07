@@ -182,11 +182,13 @@ def run_worker(
     services=None,
     publish_terminal=True,
     execution_policy=None,
+    checkpoint_export_dir=None,
 ) -> BackendResult:
     """在 worker 内执行完整 torch 训练并返回 BackendResult。"""
     import time
 
     worker_started = time.monotonic()
+    layout.checkpoint_export_dir = checkpoint_export_dir or layout.path("checkpoint-archives")
     # strict 确定性需 CuBLAS workspace 配置，必须在 torch 导入/CUDA 初始化前设置
     if config.backend.torch is not None and config.backend.torch.deterministic == "strict":
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
@@ -288,6 +290,9 @@ def run_worker(
             )
             resumed_position = loaded
             best_model_state = loaded["best_model_state"]  # OSR-007：恢复检查点中 best 权重
+            if accelerator.num_processes == 1:
+                # 早停/最终位置恢复后可能不再发生保存，也必须提供本 Session 的下载包。
+                _export_checkpoint(layout, layout.path("checkpoints", latest["path"]), config)
 
     # train loader 每 epoch 重建（DataModule 按 epoch 确定性种子，保证连续/恢复 shuffle 一致；
     # OSR-004）；val/test 只构造一次（确定性、非按 epoch 分片）。
@@ -484,6 +489,20 @@ def run_worker(
         except BaseException:
             pass  # OSR-003：位置记录失败不得替换原训练异常
         raise
+
+    # 单机正常结束须保存完整 train/val/selection 位置，再进入 test。
+    if accelerator.num_processes == 1 and not budget_hit and epoch >= config.training.max_epochs:
+        latest = read_latest(layout.path("checkpoints"))
+        complete_position = {"epoch": engine_state.epoch, "global_step": engine_state.global_step,
+                             "batch_in_epoch": engine_state.batch_in_epoch}
+        latest_manifest = None
+        if latest is not None:
+            from ..artifacts import read_json
+            latest_manifest = read_json(layout.path("checkpoints", latest["path"], "checkpoint-manifest.json"))
+        if latest_manifest is None or any(latest_manifest[key] != value for key, value in complete_position.items()):
+            _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric_states,
+                                   config, model_sig, data_fp, best_model_state=best_model_state,
+                                   services=services, current_lr=current_lr, checkpoint_kind="final")
 
     # test
     if test_loader is not None:
@@ -804,14 +823,26 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
         best_model_state=best_model_state,
         progress_snapshot=snapshot, run_dir=layout.run_dir,
         checkpoint_kind=checkpoint_kind,
+        archive_callback=(
+            lambda checkpoint_dir: _export_checkpoint(layout, checkpoint_dir, config)
+        ) if accelerator.num_processes == 1 else None,
     )
     # OSR-002：主 rank 提交 checkpoint 到有界异步同步器
     if services is not None and accelerator.is_main_process:
         services.submit_checkpoint(engine_state.run_id, ckpt_id)
     if accelerator.is_main_process:
         apply_retention(layout.path("checkpoints"), config.checkpoint.keep_last)
+        if accelerator.num_processes == 1:
+            from ..checkpoint_archive import apply_archive_retention
+            apply_archive_retention(layout.checkpoint_export_dir, layout.path("checkpoints"),
+                                    config.checkpoint.keep_last, engine_state.run_id)
         layout.log(f"checkpoint saved {ckpt_id} (step={engine_state.global_step})")
     return ckpt_id
+
+
+def _export_checkpoint(layout, checkpoint_dir, config):
+    from ..checkpoint_archive import export_checkpoint_archive
+    return export_checkpoint_archive(layout.run_dir, checkpoint_dir, layout.checkpoint_export_dir, config)
 
 
 def _evaluate(accelerator, model, task, loader, stage, layout, config, target_state=None):

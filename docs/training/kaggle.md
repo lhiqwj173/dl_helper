@@ -2,6 +2,36 @@
 
 `train` 默认开启 `--use-alist`。添加 `--no-use-alist` 仅跳过 AList 凭证读取、远程恢复、同步和上传。企业微信独立按 YAML 配置执行，允许设置 `notifications: {type: none}`。本地恢复独立按 `--resume` 执行，支持省略时的自动恢复及显式 `required`，`none` 从头训练。本地产物与 Kaggle 预算保护保留；退出 `75` 后须保留或手动迁移完整本地 run 目录，并使用相同 RUN_ID 恢复，新 Session 不会自动保留旧工作目录。最小模板中的 `USE_ALIST = False` 对应此参数。
 
+## 单机即时 ZIP 与 checkpoint Dataset 自动恢复
+
+单进程 Torch 每次保存检查点都会同步生成真正压缩的 `checkpoint-<id>.zip`、固定下载别名
+`last-checkpoint.zip` 和 `latest-archive.json`。默认位置为 `<run_dir>/checkpoint-archives/`；
+`--checkpoint-export-dir` 可指定 output-root 下其他目录。ZIP 含完整模型、优化器、调度器、
+随机状态、数据位置、指标、选模状态和配置；文件逐项 SHA256 校验，封包失败直接停止训练。
+正常结束也会保存最终训练位置；不依赖 Notebook 后续单元，测试或通知失败不破坏已完成 ZIP。
+归档与原始检查点遵循相同的 `checkpoint.keep_last`，null 保留全部。
+
+下一 Session 下载并上传 `last-checkpoint.zip` 为 Dataset，然后向原训练命令添加：
+
+```python
+checkpoint_dataset = "/kaggle/input/datasets/your-account/your-checkpoint-dataset"
+params += ["--checkpoint-input", checkpoint_dataset]
+params += ["--checkpoint-export-dir", "/kaggle/working/dl-helper-runs/downloads/my-run"]
+run_train(params)  # 省略 --resume，使用内部自动恢复。
+```
+
+保持原 RUN_ID、source_revision 和实验配置。`--checkpoint-input` 可重复，接受 ZIP、展开的
+恢复目录、包含多个检查点包的 Dataset 根目录，以及旧完整工作目录中的 run。
+输入只读，恢复写入 working。本地和 Dataset 共同按训练进度选择，同一步完成验证的早停点
+优先于周期点；损坏或同 run 不兼容立即报错，不回退旧进度。支持旧08的v1恢复包。
+可选固定 Dataset 未挂载或有效空目录时，没有其他检查点才开始新训练；`--resume required`
+则必须有可用检查点，`--resume none` 完全不读取恢复输入。新路径参数仅支持单进程 Torch。
+
+**AList 功能保留**：默认仍开启 AList，仍使用原远程检查点 TAR/GZIP 协议、异步同步与成果发布。
+本地或 Dataset 已有兼容检查点时使用它；均没有时继续查询 AList。`--no-use-alist` 只禁用 AList，
+不会禁用 Dataset 恢复、即时 ZIP 或企业微信。自动恢复读取本 Session 已挂载的 Dataset 版本，
+不会自动发布 Dataset，也不会更新正在运行的 Session 输入。
+
 本库只提供训练引擎和生命周期服务，不包含你的训练项目。Kaggle Notebook 中应准备三个独立路径：
 
 - `project_dir`：你的模型/数据代码，必须包含 `build_experiment(config)`；

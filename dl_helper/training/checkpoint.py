@@ -10,7 +10,7 @@ import os
 import shutil
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .artifacts import (
     ArtifactError,
@@ -46,7 +46,7 @@ def _utc_now() -> str:
 
 
 def checkpoint_id(epoch: int, global_step: int, checkpoint_kind: str | None = None) -> str:
-    if checkpoint_kind not in (None, "early-stop"):
+    if checkpoint_kind not in (None, "early-stop", "final"):
         raise ValueError(f"不支持的 checkpoint_kind: {checkpoint_kind!r}")
     checkpoint = f"epoch-{epoch:06d}-step-{global_step:08d}"
     if checkpoint_kind is None:
@@ -284,6 +284,7 @@ def write_torch_checkpoint(
     progress_snapshot: Mapping[str, Any] | None = None,
     run_dir: str | None = None,
     checkpoint_kind: str | None = None,
+    archive_callback: Callable[[str], None] | None = None,
 ) -> str:
     """保存 torch 不可变检查点并返回 checkpoint_id。
 
@@ -354,6 +355,14 @@ def write_torch_checkpoint(
                 for name in filenames:
                     _fsync_file(os.path.join(dirpath, name))
             _stage_and_finalize(staging, final_dir)
+            if archive_callback is not None:
+                try:
+                    archive_callback(final_dir)
+                except BaseException:
+                    # latest 尚未提交：撤销本次目录，避免重试同一训练位置发生 ID 冲突。
+                    # 若 ZIP 已提交，它仍是完整恢复来源，下一启动会自动发现。
+                    remove_tree(final_dir)
+                    raise
             update_latest(checkpoints_dir, ckpt_id, ckpt_id)
         except Exception:
             remove_tree(staging)

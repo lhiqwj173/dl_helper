@@ -7,6 +7,7 @@ import os
 import tarfile
 import io
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -201,6 +202,9 @@ def test_publish_run_bundle(tmp_path):
     session = _FakeSession()
     store = _alist(tmp_path, session)
     run_dir = _make_run_dir(tmp_path)
+    archives = Path(run_dir) / "checkpoint-archives"
+    archives.mkdir()
+    (archives / "last-checkpoint.zip").write_bytes(b"local checkpoint ZIP")
     result = store.publish_run_bundle(run_dir, "run-1")
     # bundle 排除了 checkpoints
     bundle_path = "/dlh/runs/run-1/run-bundle.zip"
@@ -210,6 +214,7 @@ def test_publish_run_bundle(tmp_path):
     with zipfile.ZipFile(io.BytesIO(session.remote[bundle_path])) as archive:
         assert "run-manifest.json" in archive.namelist()
         assert "checkpoints/c" not in archive.namelist()
+        assert "checkpoint-archives/last-checkpoint.zip" not in archive.namelist()
     assert not any("checkpoints" in p and "tar" not in p for p in session.remote)
 
 

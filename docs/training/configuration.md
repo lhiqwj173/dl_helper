@@ -36,6 +36,15 @@ notifications: {type: none}
 - Kaggle：输出必须位于 `/kaggle/working`；`source_revision` 只要是无空白版本标识即可（tag、分支、短 SHA 均可）。
 - Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 关闭 AList。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。平台执行策略固定 660 分钟训练 + 10 分钟收尾（截止 650 分钟）：系统在每个成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 后按平均 epoch 耗时预测下一轮，预测不足时在边界保存 checkpoint 后以 `75` 暂停，AList 开启时上传。要求开启预算时 DataModule 支持中途恢复。`runtime`/`checkpoint.resume` 写入即按未知字段失败。
 
+## 单机检查点路径
+
+单进程 Torch 每次检查点保存还会同步生成 ZIP（默认 `<run_dir>/checkpoint-archives`）。
+新增 CLI 参数 `--checkpoint-input PATH`（可重复）支持只读 Dataset、ZIP、展开恢复包及旧 run；
+`--checkpoint-export-dir PATH` 指定 output-root 下下载目录。两者仅属于执行策略，
+不增加 YAML 字段，不改变恢复指纹。省略 `--resume` 时比较本地与 Dataset 进度，
+均无检查点再查询原 AList；AList 上传和远程恢复协议保持原样。
+ZIP 与原始目录遵循 `checkpoint.keep_last`，null 保留全部，有限值保留最近对应数量。
+
 ## variant
 
 variant 是不含 `schema_version` 的严格 YAML，mapping 递归合并、scalar/list/null 整体替换；禁止覆盖 run.id/seed、backend type、output root、source revision、Secret key、host 或 distributed process count。
