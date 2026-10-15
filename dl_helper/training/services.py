@@ -285,6 +285,10 @@ class LifecycleServices:
             prepare_terminal()
         for store in self._stores:
             if type(store).__name__ == "LocalArtifactStore":
+                if status == "succeeded":
+                    # 本地归档失败必须直接抛出，不能被远端 record 策略吞掉。
+                    self._final_service_manifest("run", run_id, status)
+                    store.publish_run_bundle(self._layout.run_dir, run_id)
                 continue
             try:
                 self._final_service_manifest("run", run_id, status)
@@ -374,7 +378,7 @@ class LifecycleServices:
             raise ServiceDeliveryError("bundle-published.json 缺少 immutable entry")
         expected_manifest = self._final_service_manifest(kind, scope_id, status)
         expected_bundle = bundle_checksum_for_directory(
-            self._layout.run_dir, ("checkpoints",)
+            self._layout.run_dir, ("checkpoints", "checkpoint-archives")
         )
         if entry.get("status") != status:
             raise ServiceDeliveryError("bundle marker status 漂移")
@@ -409,7 +413,8 @@ class LifecycleServices:
             raise ServiceDeliveryError("发布成功后缺少 service-manifest.json")
         data["entries"][f"{kind}:{scope_id}"] = {
             "status": status,
-            "bundle_checksum": bundle_checksum_for_directory(self._layout.run_dir, ("checkpoints",)),
+            "bundle_checksum": bundle_checksum_for_directory(
+                self._layout.run_dir, ("checkpoints", "checkpoint-archives")),
             "service_manifest_sha256": sha256_file(service_manifest),
             "audit_sha256": sha256_file(audit_path) if os.path.exists(audit_path) else None,
         }

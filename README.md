@@ -20,6 +20,10 @@ python -m dl_helper.training.cli train \
 
 ## Kaggle
 
+成功训练会独立生成本地成果 ZIP，不依赖 AList。业务后处理完成后，可调用
+`dl_helper.training.cli bundle --run RUN_DIR --out OUTPUT.zip` 重新打包，
+纳入新导出的模型和评价文件；详见[本地成果包](docs/training/artifacts.md#本地成果包)。
+
 Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 跳过 AList 要求。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。启用服务的凭证从 Kaggle Secrets（本地调试时也可用同名环境变量）读取；任何所需 Secret 缺失或配置字段错误都会在训练前终止。Kaggle 的运行预算由库的平台执行策略自动固定为 **660 分钟训练 + 10 分钟收尾窗口**（run 目录下 `execution-policy.json` 可审计），用户配置不再包含 `runtime`。训练会在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；预测无法在截止前完成时，于当前 epoch 边界保存 checkpoint，再以 `75` 暂停，AList 开启时同步推送。
 
 ```bash

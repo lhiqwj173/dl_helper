@@ -54,6 +54,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--run", required=True)
     p_report.add_argument("--out")
 
+    p_bundle = sub.add_parser("bundle", help="本地导出成功运行的成果 ZIP（可在业务后处理后调用）")
+    p_bundle.add_argument("--run", required=True)
+    p_bundle.add_argument("--out", help="ZIP 输出路径，必须位于 run 目录之外")
+
     p_sweep = sub.add_parser("sweep", help="顺序运行多 variant sweep")
     p_sweep.add_argument("--sweep", required=True)
     p_sweep.add_argument("--project-dir", help="外部训练项目根目录（默认当前目录）")
@@ -94,6 +98,12 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _cmd_train(args)
     if cmd == "report":
         return _cmd_report(args)
+    if cmd == "bundle":
+        from .bundles import export_run_bundle
+        output = export_run_bundle(args.run, args.out)
+        print(json.dumps({"bundle": str(output), "sha256": str(output) + ".sha256"},
+                         ensure_ascii=False))
+        return EXIT_OK
     if cmd == "sweep":
         return _cmd_sweep(args)
     if cmd == "sweep-report":
@@ -435,15 +445,12 @@ def _configured_secret_keys(config: Config) -> list[str]:
 
 
 def _build_services(config: Config, platform: Platform, layout) -> Any:
-    """构造启用服务的 LifecycleServices；全部禁用时返回 None。"""
+    """始终构造本地成果生命周期；远端和通知按各自配置启用。"""
     from .notifications import WecomClient
     from .platform import SecretResolver
     from .remote import build_artifact_stores
     from .services import LifecycleServices, ServiceAudit
 
-    enabled = config.remote.type == "alist" or config.notifications.type == "wecom"
-    if not enabled:
-        return None
     resolver = SecretResolver(platform)
     stores, async_sync = build_artifact_stores(config, platform, resolver, layout)
     wecom = None

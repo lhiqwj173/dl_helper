@@ -376,19 +376,22 @@ def _run_batch(estimator, task, datamodule, config, layout, engine_state, data_f
                                      data_fp, metric_states=metric_states)
     # OSR-002：核心 Artifact（eval contract/report）先于服务 bundle 完成
     report_path = _write_sklearn_core_artifacts(layout, config, task, datamodule, estimator=estimator)
+    def publish_local_terminal() -> None:
+        _publish_sklearn_terminal(layout, "succeeded", config, engine_state, model_sig, data_fp,
+                                  task=task, datamodule=datamodule, services=services,
+                                  report_path=report_path)
     if services is not None:
         services.finalize_run(
             engine_state.run_id, "succeeded",
+            prepare_terminal=publish_local_terminal if publish_terminal else None,
             elapsed=format_duration(time.monotonic() - started),
             metrics=format_metric_summary(
                 summary_payload,
                 config.selection.metric if config.selection is not None else None,
             ),
         )
-    if publish_terminal:
-        _publish_sklearn_terminal(layout, "succeeded", config, engine_state, model_sig, data_fp,
-                                  task=task, datamodule=datamodule, services=services,
-                                  report_path=report_path)
+    elif publish_terminal:
+        publish_local_terminal()
     return BackendResult(status="succeeded", epoch=0, batch_in_epoch=0, global_step=0,
                          model_artifact=model_artifact, environment_stats={})
 

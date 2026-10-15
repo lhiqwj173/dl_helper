@@ -10,12 +10,13 @@ import queue
 import shutil
 import tarfile
 import threading
+import tempfile
 import time
-import zipfile
 from typing import Any, Callable, Mapping
 from urllib.parse import urlparse
 
 from .artifacts import RunLayout, sha256_file
+from .bundles import export_run_bundle, write_directory_bundle
 from .config import Config
 
 RETRY_BACKOFF = (2.0, 4.0, 8.0)
@@ -84,36 +85,19 @@ def _make_tar_gz(root: str, exclude_prefixes: tuple[str, ...]) -> bytes:
 
 
 def _make_zip(root: str, exclude_prefixes: tuple[str, ...]) -> bytes:
-    """构建成员顺序与时间固定的 ZIP；只收录允许的普通文件。"""
-    buffer = io.BytesIO()
-    seen: set[str] = set()
-    rels = sorted(_archive_relative_files(root), key=lambda rel: rel.replace("\\", "/"))
-    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED,
-                         compresslevel=1) as archive:
-        for rel in rels:
-            name = rel.replace("\\", "/")
-            if any(name == prefix or name.startswith(prefix.rstrip("/") + "/")
-                   for prefix in exclude_prefixes):
-                continue
-            if name.startswith("/") or any(part in ("", ".", "..") for part in name.split("/")):
-                raise ArtifactStoreError(f"归档成员路径非法: {rel!r}")
-            if name in seen:
-                raise ArtifactStoreError(f"归档成员重复: {name!r}")
-            seen.add(name)
-            full = os.path.join(root, rel)
-            if os.path.islink(full) or not os.path.isfile(full):
-                raise ArtifactStoreError(f"归档成员不是普通文件: {rel!r}")
-            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info._compresslevel = 1
-            info.external_attr = 0o100644 << 16
-            with open(full, "rb") as source, archive.open(info, "w") as destination:
-                shutil.copyfileobj(source, destination)
-    return buffer.getvalue()
+    """远端发布复用本地归档实现；兼容旧调用方需要的 bytes 接口。"""
+    from .artifacts import ArtifactError
+    try:
+        with tempfile.TemporaryDirectory(prefix="dl-helper-bundle-") as directory:
+            output = write_directory_bundle(root, os.path.join(directory, "bundle.zip"),
+                                            exclude_prefixes=exclude_prefixes)
+            return output.read_bytes()
+    except ArtifactError as exc:
+        raise ArtifactStoreError(str(exc)) from exc
 
 
 class LocalArtifactStore:
-    """本地存储始终启用；文件已就地写入，publish 为验证性 no-op。"""
+    """本地存储始终启用；成功运行独立导出成果 ZIP，不依赖远端服务。"""
 
     def __init__(self) -> None:
         self.sync_error: Exception | None = None
@@ -122,7 +106,12 @@ class LocalArtifactStore:
         return None
 
     def publish_run_bundle(self, local_dir: str, run_id: str) -> dict[str, str]:
-        return None
+        from .artifacts import read_json
+        manifest = read_json(os.path.join(local_dir, "run-manifest.json"))
+        if manifest["run_id"] != run_id:
+            raise ArtifactStoreError("本地成果包 run_id 与运行清单不一致")
+        output = export_run_bundle(local_dir)
+        return {"path": str(output), "archive_sha256": sha256_file(str(output))}
 
     def publish_sweep_bundle(self, local_dir: str, sweep_id: str) -> None:
         return None

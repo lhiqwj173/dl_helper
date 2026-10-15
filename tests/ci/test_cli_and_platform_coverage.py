@@ -135,12 +135,15 @@ def _svc_layout(tmp_path):
     return layout
 
 
-def test_build_services_disabled_returns_none(tmp_path):
+def test_build_services_without_remote_keeps_local_store(tmp_path):
     import dl_helper.training.cli as cli
     from dl_helper.training.platform import Platform
     svc = cli._build_services(parse_config(default_schema()), Platform("local"),
                               _svc_layout(tmp_path))
-    assert svc is None
+    assert svc is not None
+    assert [type(store).__name__ for store in svc._stores] == ["LocalArtifactStore"]
+    assert svc._wecom is None
+    assert svc._async_sync is None
 
 
 def test_build_services_alist_record(tmp_path):

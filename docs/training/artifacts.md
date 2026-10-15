@@ -16,3 +16,27 @@ runs/<run-id>/report/index.html
 - 恢复先校验 config/backend/data/model fingerprint 与 runtime 精确版本，再加载。
 - Torch 从早停终点检查点恢复时，保留已完成的 train/val 指标和 selection 状态，直接进入 test、模型导出和报告收尾；不再执行本轮验证或提交同名检查点。已有检查点无需迁移。
 - 终态最后发布且互斥；resume 先移除旧 pause manifest。
+
+## 本地成果包
+
+成功运行会生成 `runs/<run-id>.run-bundle.zip` 和同名 `.sha256`，
+与 AList 是否启用无关；本地打包失败会直接抛出异常。
+成果包不含 `checkpoints/`、`checkpoint-archives/` 和远端发布标记。
+恢复训练继续使用 `checkpoint-archives/last-checkpoint.zip`，成果包不是续训包。
+
+项目如需在训练后导出 TorchScript、业务评价或其他文件，应先将它们写入 run 目录，
+完成项目自己的完整性校验，再重新调用公共接口：
+
+```python
+from dl_helper.training.bundles import export_run_bundle
+
+output = export_run_bundle(run_dir, "/kaggle/working/run-bundle.zip")
+```
+
+也可调用 `dl_helper.training.cli bundle --run RUN_DIR --out OUTPUT.zip`。
+输出必须位于 run 目录之外，防止将旧成果包再次打入新包。
+该接口只接受成功终态，核验原清单已登记的文件，并自动纳入后处理新增的普通文件。
+ZIP 保留原始 `run-manifest.json`，独立的 `bundle-manifest.json` 登记实际包内文件、
+大小、SHA-256 及排除规则；原清单中的检查点引用不表示这些文件属于成果包。
+文件顺序、时间戳及权限固定，逐文件流式写入并从 ZIP 回读验证后原子替换目标。
+本地与 AList 发布共用同一归档实现，AList 只增加上传、回读和远端校验。

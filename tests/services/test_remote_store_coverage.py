@@ -28,7 +28,10 @@ from dl_helper.training.remote import (
 def test_local_store_methods(tmp_path):
     store = LocalArtifactStore()
     store.publish_checkpoint(str(tmp_path), "r", "c")
-    store.publish_run_bundle(str(tmp_path), "r")
+    (tmp_path / "run-manifest.json").write_text(
+        json.dumps({"run_id": "r", "status": "succeeded", "artifacts": {}}), encoding="utf-8")
+    result = store.publish_run_bundle(str(tmp_path), "r")
+    assert Path(result["path"]).is_file()
     store.publish_sweep_bundle(str(tmp_path), "s")
     assert store.fetch_latest_checkpoint("r", str(tmp_path)) is None
     store.flush()
@@ -74,7 +77,7 @@ def test_make_zip_is_deterministic_and_excludes_checkpoints(tmp_path):
     second = _make_zip(str(root), exclude_prefixes=("checkpoints",))
     assert first == second
     with zipfile.ZipFile(io.BytesIO(first)) as archive:
-        assert archive.namelist() == ["a.txt", "sub/b.txt"]
+        assert archive.namelist() == ["a.txt", "bundle-manifest.json", "sub/b.txt"]
         assert archive.read("a.txt") == b"hello"
         assert archive.read("sub/b.txt") == "世界".encode("utf-8")
         assert all(info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist())
