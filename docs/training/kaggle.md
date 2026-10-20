@@ -38,6 +38,14 @@ run_train(params)  # 省略 --resume，使用内部自动恢复。
 - `config_path`：你的 YAML 配置；
 - `output_root`：`/kaggle/working` 下的产物目录（默认 `/kaggle/working/dl-helper-runs`）。
 
+## 临时跳过恢复指纹比较
+
+确认数据包相同时，可显式添加 `--resume-allow-fingerprint-mismatch`，允许当前配置和数据
+指纹与旧检查点不同。此选项仅支持 `--no-use-alist --resume required`、一个检查点归档来源
+和单进程 Torch；默认关闭。仍校验归档逐文件 SHA256、内部清单、RUN_ID、source_revision、
+模型签名及完整状态加载。旧归档按原配置保留，新保存的检查点记录当前配置/数据指纹。
+执行策略文件记录开关状态；原始输入归档只读。
+
 ## 实际输入路径与逻辑身份路径
 
 `experiment` 中以 `path` 结尾的实际输入字段必须指向已挂载的 `/kaggle/input/...` 路径。

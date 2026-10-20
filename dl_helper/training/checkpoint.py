@@ -424,6 +424,7 @@ def load_torch_checkpoint(
     config_fingerprint: str,
     data_fingerprint: str,
     model_signature: Mapping[str, Any],
+    *, allow_fingerprint_mismatch: bool = False,
 ) -> dict[str, Any]:
     """从 latest 恢复 torch 检查点；返回恢复位置。metric_states_builder 返回 {stage: StageMetricState}。"""
     latest = read_latest(checkpoints_dir)
@@ -434,9 +435,9 @@ def load_torch_checkpoint(
     validate_manifest_complete(manifest, ckpt_dir)
     if manifest["run_id"] != engine_state.run_id:
         raise CheckpointError("checkpoint run_id 不匹配")
-    if manifest["config_fingerprint"] != config_fingerprint:
+    if not allow_fingerprint_mismatch and manifest["config_fingerprint"] != config_fingerprint:
         raise CheckpointError("checkpoint 配置指纹不匹配，拒绝恢复")
-    if manifest["data_fingerprint"] != data_fingerprint:
+    if not allow_fingerprint_mismatch and manifest["data_fingerprint"] != data_fingerprint:
         raise CheckpointError("checkpoint 数据指纹不匹配")
     if manifest["model_signature"] != model_signature:
         raise CheckpointError("checkpoint 模型签名不匹配")
@@ -460,7 +461,8 @@ def load_torch_checkpoint(
     else:
         rank_accel = os.path.join(shared_accel, f"rank-{accelerator.process_index}")
         accelerator.load_state(rank_accel if os.path.isdir(rank_accel) else shared_accel)
-    engine_state.load_state_dict(read_json(os.path.join(ckpt_dir, "engine-state.json")))
+    engine_state.load_state_dict(read_json(os.path.join(ckpt_dir, "engine-state.json")),
+                                 **({"allow_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
     datamodule.load_state_dict(read_json(os.path.join(ckpt_dir, "datamodule-state.json")))
     metric_states = metric_states_builder()
     metric_payload = read_json(os.path.join(ckpt_dir, "metric-states.json"))

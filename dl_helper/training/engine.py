@@ -178,7 +178,7 @@ class EngineState:
             "partial_metric_states": self.partial_metric_states,
         }
 
-    def load_state_dict(self, state: Mapping[str, Any]) -> None:
+    def load_state_dict(self, state: Mapping[str, Any], *, allow_fingerprint_mismatch: bool = False) -> None:
         if int(state["schema_version"]) != self.schema_version:
             raise EngineStateError(f"EngineState schema 版本不兼容: {state['schema_version']}")
         if state["backend"] != self.backend:
@@ -187,7 +187,7 @@ class EngineState:
             )
         if state["run_id"] != self.run_id:
             raise EngineStateError(f"EngineState run_id 漂移: {state['run_id']} != {self.run_id}")
-        if state["config_fingerprint"] != self.config_fingerprint:
+        if not allow_fingerprint_mismatch and state["config_fingerprint"] != self.config_fingerprint:
             raise EngineStateError("EngineState 配置指纹漂移，拒绝恢复")
         self.stage_machine = StageMachine(str(state["stage"]))
         self.epoch = int(state["epoch"])
