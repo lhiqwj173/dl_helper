@@ -72,6 +72,44 @@ def test_kaggle_input_validation(monkeypatch):
     # 不触发错误（路径存在性检查在 doctor 层面做，避免破坏单测）
 
 
+def test_kaggle_identity_path_is_not_a_physical_input(monkeypatch):
+    from dl_helper.training.config import config_fingerprint
+
+    physical_path = "/kaggle/input/datasets/lhiiqwj/weekday-dataset/data"
+    logical_path = "/kaggle/input/datasets/qtz173/weekday-dataset/data"
+    cfg = _cfg(experiment={"data_path": physical_path,
+                           "comparison_data_identity_path": logical_path,
+                           "comparison_data_fingerprint": "fixed-snapshot"})
+    fingerprint = config_fingerprint(cfg, resume=True)
+    checked = []
+
+    def exists(path):
+        checked.append(path)
+        return path == physical_path
+
+    monkeypatch.setattr("dl_helper.training.platform.os.path.exists", exists)
+    Platform("kaggle").validate_kaggle_inputs(cfg)
+    assert checked == [physical_path]
+    assert cfg.experiment["comparison_data_identity_path"] == logical_path
+    assert config_fingerprint(cfg, resume=True) == fingerprint
+
+
+@pytest.mark.parametrize("physical_path", ["/kaggle/input/missing/data", "/tmp/data"])
+def test_identity_path_does_not_bypass_physical_input_checks(monkeypatch, physical_path):
+    cfg = _cfg(experiment={"comparison_data_identity_path": "historical-dataset",
+                           "data_path": physical_path})
+    monkeypatch.setattr("dl_helper.training.platform.os.path.exists", lambda path: False)
+    with pytest.raises(PlatformError, match="Kaggle 输入路径"):
+        Platform("kaggle").validate_kaggle_inputs(cfg)
+
+
+@pytest.mark.parametrize("identity_path", ["", " ", None, 1, []])
+def test_invalid_logical_identity_path_is_rejected(identity_path):
+    cfg = _cfg(experiment={"comparison_data_identity_path": identity_path})
+    with pytest.raises(PlatformError, match="逻辑身份路径必须是非空字符串"):
+        Platform("kaggle").validate_kaggle_inputs(cfg)
+
+
 def test_runtime_budget_basic():
     class FakeClock:
         def __init__(self):

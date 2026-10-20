@@ -122,11 +122,17 @@ class Platform:
         return os.getcwd()
 
     def validate_kaggle_inputs(self, config: Config) -> None:
-        """Kaggle 输入必须是显式 /kaggle/input/... 路径，禁止首目录选择。"""
+        """校验实际输入路径；*_identity_path 是指纹命名空间，不代表磁盘位置。"""
         if not self.is_kaggle:
             return
         # 输入路径在 Experiment 的 model_config 中显式声明；此处校验其格式
         for key, value in config.experiment.items():
+            if key.endswith("_identity_path"):
+                # 历史路径可作为数据指纹的固定前缀；挂载位置变化不应要求旧路径存在。
+                # 保留配置原值，避免改变配置/数据指纹而使旧检查点失效。
+                if not isinstance(value, str) or not value.strip():
+                    raise PlatformError(f"逻辑身份路径必须是非空字符串: {key}={value!r}")
+                continue
             if key.endswith("path") and isinstance(value, str):
                 if not value.startswith("/kaggle/input/"):
                     raise PlatformError(f"Kaggle 输入路径必须是 /kaggle/input/...: {value!r}")

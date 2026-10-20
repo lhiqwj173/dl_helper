@@ -38,6 +38,14 @@ run_train(params)  # 省略 --resume，使用内部自动恢复。
 - `config_path`：你的 YAML 配置；
 - `output_root`：`/kaggle/working` 下的产物目录（默认 `/kaggle/working/dl-helper-runs`）。
 
+## 实际输入路径与逻辑身份路径
+
+`experiment` 中以 `path` 结尾的实际输入字段必须指向已挂载的 `/kaggle/input/...` 路径。
+以 `_identity_path` 结尾的字段用于固定数据指纹的逻辑命名空间，只要求非空字符串，
+不检查对应目录是否存在。保留历史身份路径可以维持对照数据指纹；不要因 Dataset
+换了挂载位置而修改它。实际读取位置仍由实验的数据路径字段及数据加载器严格检查。
+此约定不重写配置，也不放宽检查点配置指纹、数据指纹或文件校验。
+
 ## Notebook 参考
 
 | Notebook | 适用场景 |
