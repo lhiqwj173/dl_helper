@@ -209,6 +209,7 @@ def test_cli_multiprocess_preempt_publishes_latest_before_finalize(tmp_path, mon
             notify_fields.append(kwargs)
 
     def fake_launch(experiment_ref, config, run_dir, num_procs, resume, **kwargs):
+        kwargs["on_started"](None)
         checkpoint_id = "epoch-000001-step-00000010"
         os.makedirs(os.path.join(run_dir, "checkpoints", checkpoint_id))
         write_json(os.path.join(run_dir, "checkpoints", "latest.json"), {

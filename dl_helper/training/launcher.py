@@ -23,6 +23,7 @@ def _spawn_entry(
     publish_terminal: bool = True,
     budget_monotonic=None,
     execution_policy_dict: dict[str, Any] | None = None,
+    startup_connection=None,
 ) -> None:
     """spawn 子进程入口；由 launcher 注入 worker_fn 保持模块级可导入。"""
     import sys as _sys
@@ -43,9 +44,16 @@ def _spawn_entry(
         if execution_policy_dict is not None
         else None
     )
+    startup_kwargs = {}
+    if startup_connection is not None:
+        def acknowledge_start(fields):
+            startup_connection.send(fields)
+            if startup_connection.recv() is not True:
+                raise RuntimeError("父进程未确认训练启动通知")
+        startup_kwargs["startup_callback"] = acknowledge_start
     result = worker_fn(experiment_ref, config, layout, local_rank, world_size, resume,
                        publish_terminal=publish_terminal, budget_monotonic=budget_monotonic,
-                       execution_policy=execution_policy)
+                       execution_policy=execution_policy, **startup_kwargs)
     # OSR-004：多进程 preempted 状态经退出码 75 传播给父进程
     if getattr(result, "status", "succeeded") == "preempted":
         _sys.exit(75)
@@ -61,6 +69,7 @@ def launch_torch(
     publish_terminal: bool = True,
     budget_monotonic=None,
     execution_policy: ExecutionPolicy | None = None,
+    on_started: Callable | None = None,
 ) -> int:
     """启动 torch 训练。返回进程退出码。"""
     from .backends.torch_backend import run_worker
@@ -72,12 +81,14 @@ def launch_torch(
         layout = RunLayout(run_dir)
         result = worker_fn(experiment_ref, config, layout, 0, 1, resume,
                            publish_terminal=publish_terminal, budget_monotonic=budget_monotonic,
-                           execution_policy=execution_policy)
+                           execution_policy=execution_policy,
+                           **({"startup_callback": on_started} if on_started is not None else {}))
         if getattr(result, "status", "succeeded") == "preempted":
             return 75
         return 0
 
     ctx = multiprocessing.get_context("spawn")
+    parent_connection, child_connection = ctx.Pipe() if on_started is not None else (None, None)
     processes = []
     config_dict = _config_to_dict(config)
     execution_policy_dict = (
@@ -87,15 +98,41 @@ def launch_torch(
         p = ctx.Process(
             target=_spawn_entry,
             args=(experiment_ref, config_dict, run_dir, rank, num_processes, resume, worker_fn,
-                  publish_terminal, budget_monotonic, execution_policy_dict),
+                  publish_terminal, budget_monotonic, execution_policy_dict)
+                 + ((child_connection if rank == 0 else None,) if on_started is not None else ()),
         )
         processes.append(p)
-    for p in processes:
-        p.start()
+    try:
+        for p in processes:
+            p.start()
+        if child_connection is not None:
+            child_connection.close()
+        return _monitor_processes(processes, parent_connection, on_started)
+    finally:
+        _terminate_and_join([p for p in processes if p.pid is not None])
+        if parent_connection is not None:
+            parent_connection.close()
+        if child_connection is not None:
+            child_connection.close()
+
+
+def _monitor_processes(processes, startup_connection=None, on_started=None) -> int:
+    notified = False
     # OSR-004：健康训练不受固定总时限限制；仅在 rank 异常时联动回收。
     while True:
         codes = [p.exitcode for p in processes]
+        unexpected = next((code for code in codes if code not in (None, 0, 75)), None)
+        if unexpected is not None:
+            _terminate_and_join(processes)
+            return int(unexpected)
+        if startup_connection is not None and not notified and startup_connection.poll():
+            fields = startup_connection.recv()
+            on_started(fields)
+            startup_connection.send(True)
+            notified = True
         if all(code is not None for code in codes):
+            if on_started is not None and not notified:
+                raise RuntimeError("worker 未确认准备/恢复成功，拒绝发布训练启动通知")
             if all(code == 0 for code in codes):
                 return 0
             if all(code == 75 for code in codes):
@@ -103,10 +140,6 @@ def launch_torch(
             failure = next((code for code in codes if code not in (0, 75)), None)
             return int(failure) if failure is not None else 1
 
-        unexpected = next((code for code in codes if code not in (None, 0, 75)), None)
-        if unexpected is not None:
-            _terminate_and_join(processes)
-            return int(unexpected)
         for process in processes:
             process.join(timeout=0.05)
 

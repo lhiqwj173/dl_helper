@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -9,6 +10,39 @@ import torch
 from dl_helper.training.artifacts import RunLayout
 from dl_helper.training.config import default_schema, parse_config
 from dl_helper.training.launcher import launch_torch
+
+
+def _startup_worker(experiment_ref, config, layout, local_rank, world_size, resume,
+                    startup_callback=None, **kwargs):
+    if startup_callback is not None:
+        fields = ({"checkpoint": "ck-1", "epoch": 2, "step": 10}
+                  if resume == "required" else None)
+        startup_callback(fields)
+    return SimpleNamespace(status="succeeded")
+
+
+@pytest.mark.parametrize("resume", ["none", "required"])
+def test_spawn_startup_handshake_notifies_parent_once(tmp_path, resume):
+    layout = RunLayout(str(tmp_path / "startup"))
+    layout.ensure()
+    received = []
+    code = launch_torch("unused", _cfg(2), layout.run_dir, 2, resume,
+                        worker_fn=_startup_worker, on_started=received.append)
+    assert code == 0
+    assert received == ([{"checkpoint": "ck-1", "epoch": 2, "step": 10}]
+                        if resume == "required" else [None])
+
+
+def test_spawn_notification_failure_reaps_waiting_workers(tmp_path):
+    layout = RunLayout(str(tmp_path / "startup-fail"))
+    layout.ensure()
+
+    def fail_notification(fields):
+        raise ConnectionError("通知失败")
+
+    with pytest.raises(ConnectionError, match="通知失败"):
+        launch_torch("unused", _cfg(2), layout.run_dir, 2, "required",
+                     worker_fn=_startup_worker, on_started=fail_notification)
 
 
 def _cfg(num_processes, max_epochs=1):

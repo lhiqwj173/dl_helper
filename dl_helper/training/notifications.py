@@ -229,6 +229,7 @@ def _format_number(value: Any) -> str:
 
 _EVENT_TEMPLATES: dict[str, str] = {
     "RUN_STARTED": "[训练开始] run={run_id}",
+    "RUN_RESUMED": "[恢复训练] run={run_id} 检查点={checkpoint} epoch={epoch} step={step}",
     "RUN_SUCCEEDED": "[训练成功] run={run_id} {metrics} 耗时={elapsed}",
     "RUN_PREEMPTED": "[训练暂停] run={run_id} {metrics} 耗时={elapsed} 恢复检查点={checkpoint}",
     "RUN_FAILED": "[训练失败] run={run_id} epoch={epoch} step={step} 异常={error_type} 详情={message}",
@@ -275,6 +276,8 @@ def render_event_template(event: str, **fields: Any) -> str:
 
 
 def _required_fields(event: str) -> list[str]:
+    if event == "RUN_RESUMED":
+        return ["run_id", "checkpoint", "epoch", "step"]
     if event.startswith("RUN_"):
         return ["run_id"]
     if event.startswith("TRIAL_"):

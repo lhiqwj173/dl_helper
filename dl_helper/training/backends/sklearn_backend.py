@@ -293,9 +293,9 @@ def run_sklearn_worker_experiment(
     if not os.path.exists(layout.path("config.resolved.yaml")):
         layout.write_text("config.resolved.yaml",
                           yaml.safe_dump(config_to_dict(config), allow_unicode=True, sort_keys=False))
-    if services is not None:
-        services.start_run(engine_state.run_id)
     if fit_mode == "batch":
+        if services is not None:
+            services.start_run(engine_state.run_id)
         result = _run_batch(estimator, task, datamodule, config, layout, engine_state, data_fp, model_sig,
                             services=services, publish_terminal=publish_terminal)
     else:
@@ -405,6 +405,7 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
                      execution_policy=None) -> BackendResult:
     started = time.monotonic()
     source = datamodule.incremental_train_data()
+    restored_checkpoint = None
     if source.supports_mid_fit_resume and resume in ("auto", "required"):
         latest = _read_latest_ckpt(layout)
         if latest is None:
@@ -416,6 +417,14 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
                 _config_fingerprint(config), data_fp, model_sig,
             )
             _load_sklearn_checkpoint(ckpt_dir, estimator, source, engine_state, task, layout, config)
+            restored_checkpoint = latest["checkpoint_id"]
+
+    if services is not None:
+        if restored_checkpoint is None:
+            services.start_run(engine_state.run_id)
+        else:
+            services.resume_run(engine_state.run_id, checkpoint=restored_checkpoint,
+                                epoch=engine_state.epoch, step=engine_state.global_step)
 
     classes = None
     global_step = engine_state.global_step

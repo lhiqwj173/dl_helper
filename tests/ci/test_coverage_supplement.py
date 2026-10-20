@@ -119,6 +119,10 @@ def test_launcher_multiprocess_success(tmp_path, monkeypatch):
 
     class _FakeProc:
         exitcode = 0
+        pid = 1
+
+        def is_alive(self):
+            return False
 
         def __init__(self, target, args):
             spawned.append(args)
@@ -126,7 +130,7 @@ def test_launcher_multiprocess_success(tmp_path, monkeypatch):
         def start(self):
             pass
 
-        def join(self):
+        def join(self, timeout=None):
             pass
 
     class _FakeCtx:
@@ -155,6 +159,10 @@ def test_launcher_multiprocess_returns_nonzero(tmp_path, monkeypatch):
 
     class _FakeProc:
         exitcode = 7
+        pid = 1
+
+        def is_alive(self):
+            return False
 
         def __init__(self, target, args):
             pass
@@ -162,7 +170,7 @@ def test_launcher_multiprocess_returns_nonzero(tmp_path, monkeypatch):
         def start(self):
             pass
 
-        def join(self):
+        def join(self, timeout=None):
             pass
 
     class _FakeCtx:

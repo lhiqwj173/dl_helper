@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+import uuid
 from typing import Any, Mapping
 
 from .artifacts import append_jsonl, write_json
@@ -146,6 +147,7 @@ class LifecycleServices:
         self._wecom_policy = ServiceErrorPolicy(wecom_policy if wecom_policy is not None else failure_policy)
         self.result = ServiceResult()
         self._started_events: set[str] = set()
+        self._resume_scopes: dict[str, str] = {}
         # OSR-002：从持久 service audit 恢复已成功 event_id，避免重启后重复通知
         self._restore_seen_events()
         self._restore_degraded()
@@ -250,13 +252,30 @@ class LifecycleServices:
     # ---- run ----
 
     def start_run(self, run_id: str) -> None:
+        self._preflight_secrets()
         scope = f"run/{run_id}"
         if self._wecom is not None and not self._event_seen(scope, "RUN_STARTED"):
             if self._audit_and_notify(scope, "RUN_STARTED", self._wecom_policy.policy,
                                       {"run_id": run_id}):
                 self._mark_event_seen(scope, "RUN_STARTED")
-        # OSR-002：启用服务的全部 Secret 在首个拟合 step 前解析（含 WeCom，非空操作）
+
+    def resume_run(self, run_id: str, *, checkpoint: str, epoch: int, step: int) -> None:
+        """仅在后端成功加载状态后调用；每次恢复独立去重，允许同一检查点多次恢复。"""
+        for name, value in (("run_id", run_id), ("checkpoint", checkpoint)):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{name} 必须是非空字符串")
+        for name, value in (("epoch", epoch), ("step", step)):
+            if type(value) is not int or value < 0:
+                raise ValueError(f"{name} 必须是非负整数")
         self._preflight_secrets()
+        if run_id not in self._resume_scopes:
+            self._resume_scopes[run_id] = f"run/{run_id}/session/{uuid.uuid4().hex}"
+        scope = self._resume_scopes[run_id]
+        if self._wecom is not None and not self._event_seen(scope, "RUN_RESUMED"):
+            if self._audit_and_notify(scope, "RUN_RESUMED", self._wecom_policy.policy,
+                                      {"run_id": run_id, "checkpoint": checkpoint,
+                                       "epoch": epoch, "step": step}):
+                self._mark_event_seen(scope, "RUN_RESUMED")
 
     def _preflight_secrets(self) -> None:
         """解析启用 store 与 WeCom 声明的全部 Secret；缺失立即失败。"""
@@ -270,7 +289,7 @@ class LifecycleServices:
 
     def finalize_run(self, run_id: str, status: str, *, prepare_terminal=None, **fields: Any) -> None:
         """终态 finalization：通知+audit → service manifest → bundle。可重入（bundle 幂等）。"""
-        scope = f"run/{run_id}"
+        scope = self._resume_scopes.get(run_id, f"run/{run_id}")
         if self._async_sync is not None:
             self._async_sync.flush(terminal=True)
         event = f"RUN_{status.upper()}"

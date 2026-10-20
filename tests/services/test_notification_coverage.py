@@ -14,6 +14,7 @@ from dl_helper.training.notifications import (
 def test_all_event_templates_render():
     events = {
         "RUN_STARTED": {"run_id": "r", "platform": "local", "utc": "t"},
+        "RUN_RESUMED": {"run_id": "r", "checkpoint": "ck-1", "epoch": 1, "step": 10},
         "RUN_SUCCEEDED": {"run_id": "r", "utc": "t", "elapsed": "1m", "summary": "a", "report": "x"},
         "RUN_PREEMPTED": {"run_id": "r", "utc": "t", "checkpoint": "c1"},
         "RUN_FAILED": {"run_id": "r", "utc": "t", "error_type": "E", "message": "m"},

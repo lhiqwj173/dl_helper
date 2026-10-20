@@ -83,6 +83,8 @@ def test_fingerprint_drift_fails(tmp_path):
 def test_required_with_no_checkpoint_fails(tmp_path):
     layout = RunLayout(str(tmp_path / "runs" / "required-none"))
     layout.ensure()
+    callbacks = []
     with pytest.raises(CheckpointError):
         run_worker("experiments.toy_multiclass_resumable:build_experiment", _cfg("required-none"),
-                   layout, 0, 1, "required")
+                   layout, 0, 1, "required", startup_callback=callbacks.append)
+    assert callbacks == []

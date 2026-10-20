@@ -108,7 +108,11 @@ def test_zip_resume_matches_continuous_training(tmp_path):
     cfg_path.write_text(yaml.safe_dump(config_to_dict(cfg)), encoding="utf-8")
     candidate = select_checkpoint_source([archive], Path(resumed.run_dir), cfg)
     restore_checkpoint_source(candidate, Path(resumed.run_dir), cfg_path, cfg)
-    result = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg, resumed, resume="required")
+    callbacks = []
+    result = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg, resumed,
+                        resume="required", startup_callback=callbacks.append)
+    assert callbacks == [{"checkpoint": candidate.manifest["checkpoint_id"],
+                           "epoch": partial.epoch, "step": partial.global_step}]
     assert result.global_step == 16 and result.epoch == 2
     assert Path(resumed.path("checkpoint-archives", "last-checkpoint.zip")).is_file()
 

@@ -76,6 +76,44 @@ def test_run_lifecycle_events(tmp_path):
     assert len(lines) >= 2
 
 
+def test_each_resume_notifies_once_and_repeated_pause_is_not_suppressed(tmp_path):
+    wecom = _FakeWecom()
+    svc = _services(tmp_path, wecom)
+    svc._stores = []
+    svc.start_run("run-1")
+    svc.finalize_run("run-1", "preempted")
+    for _ in range(2):
+        svc = _services(tmp_path, wecom)
+        svc._stores = []
+        for _ in range(2):
+            svc.resume_run("run-1", checkpoint="ck-1", epoch=1442, step=1124017)
+        svc.finalize_run("run-1", "preempted")
+        svc.finalize_run("run-1", "preempted")
+    assert sum("[训练开始]" in s for s in wecom.sent) == 1
+    assert sum("[恢复训练]" in s for s in wecom.sent) == 2
+    assert sum("[训练暂停]" in s for s in wecom.sent) == 3
+
+
+def test_required_resume_notification_failure_can_retry(tmp_path):
+    wecom = _FakeWecom(fail_content=("[恢复训练]",))
+    svc = _services(tmp_path, wecom, policy="required")
+    with pytest.raises(ServiceDeliveryError):
+        svc.resume_run("run-1", checkpoint="ck-1", epoch=0, step=0)
+    wecom._fail = ()
+    svc.resume_run("run-1", checkpoint="ck-1", epoch=0, step=0)
+    assert len(wecom.sent) == 1
+
+
+@pytest.mark.parametrize("field,value", [("checkpoint", ""), ("epoch", -1), ("step", True)])
+def test_invalid_resume_position_fails_before_notification(tmp_path, field, value):
+    wecom = _FakeWecom()
+    svc = _services(tmp_path, wecom)
+    fields = {"checkpoint": "ck-1", "epoch": 0, "step": 0, field: value}
+    with pytest.raises(ValueError):
+        svc.resume_run("run-1", **fields)
+    assert wecom.sent == []
+
+
 def test_sync_checkpoint_upload_when_async_disabled(tmp_path):
     layout = RunLayout(str(tmp_path / "runs" / "sync-checkpoint"))
     layout.ensure()

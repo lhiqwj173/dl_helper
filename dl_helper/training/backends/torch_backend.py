@@ -184,6 +184,7 @@ def run_worker(
     execution_policy=None,
     checkpoint_export_dir=None,
     checkpoint_validator=None,
+    startup_callback=None,
 ) -> BackendResult:
     """在 worker 内执行完整 torch 训练并返回 BackendResult。"""
     import time
@@ -261,10 +262,6 @@ def run_worker(
     if existing_terminal(layout.run_dir) == "run-manifest.json":
         raise TorchBackendError(f"run 已成功完成，禁止重跑改写: {engine_state.run_id}")
 
-    # 服务启动（OSR-002）：Secret 预检 + RUN_STARTED 通知
-    if services is not None and accelerator.is_main_process:
-        services.start_run(engine_state.run_id)
-
     # 先 prepare model/optimizer，恢复后再创建 loader（OSR-004：恢复状态须在 loader 前生效）
     model, optimizer = accelerator.prepare(model, optimizer)
 
@@ -295,6 +292,22 @@ def run_worker(
             if accelerator.num_processes == 1:
                 # 早停/最终位置恢复后可能不再发生保存，也必须提供本 Session 的下载包。
                 _export_checkpoint(layout, layout.path("checkpoints", latest["path"]), config)
+
+    # 所有 rank 成功准备/恢复后再通知；恢复失败不得误发训练开始或恢复成功。
+    accelerator.wait_for_everyone()
+    startup_fields = None
+    if resumed_position is not None:
+        startup_fields = {"checkpoint": latest["checkpoint_id"],
+                          "epoch": engine_state.epoch, "step": engine_state.global_step}
+    if accelerator.is_main_process:
+        if services is not None:
+            if startup_fields is None:
+                services.start_run(engine_state.run_id)
+            else:
+                services.resume_run(engine_state.run_id, **startup_fields)
+        if startup_callback is not None:
+            startup_callback(startup_fields)
+    accelerator.wait_for_everyone()
 
     # train loader 每 epoch 重建（DataModule 按 epoch 确定性种子，保证连续/恢复 shuffle 一致；
     # OSR-004）；val/test 只构造一次（确定性、非按 epoch 分片）。

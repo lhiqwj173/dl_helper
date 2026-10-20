@@ -18,6 +18,18 @@ def test_run_started_keeps_identity_only():
     assert render_event_template("RUN_STARTED", run_id="r1") == "[训练开始] run=r1"
 
 
+def test_resume_requires_verified_checkpoint_and_position():
+    fields = {"run_id": "r1", "checkpoint": "epoch-001442-step-01124017",
+              "epoch": 1442, "step": 1124017}
+    assert render_event_template("RUN_RESUMED", **fields) == (
+        "[恢复训练] run=r1 检查点=epoch-001442-step-01124017 epoch=1442 step=1124017")
+    for key in fields:
+        with pytest.raises(WecomError):
+            render_event_template("RUN_RESUMED", **{k: v for k, v in fields.items() if k != key})
+    assert "epoch=0 step=0" in render_event_template(
+        "RUN_RESUMED", run_id="r1", checkpoint="initial", epoch=0, step=0)
+
+
 def test_run_succeeded_surfaces_result_and_duration():
     msg = render_event_template("RUN_SUCCEEDED", run_id="r1", elapsed="10m",
                                 metrics="val/acc=0.931@epoch=5")

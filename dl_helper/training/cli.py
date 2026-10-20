@@ -327,12 +327,17 @@ def _cmd_train(args: argparse.Namespace) -> int:
             else:
                 # 多进程：CLI 父进程处理服务与唯一终态（OSR-002）
                 from .launcher import launch_torch
-                if services is not None:
-                    services.start_run(run_id)
+                def notify_started(fields):
+                    if services is not None:
+                        if fields is None:
+                            services.start_run(run_id)
+                        else:
+                            services.resume_run(run_id, **fields)
                 import time
                 train_started = time.monotonic()
                 code = launch_torch(args.experiment, config, layout.run_dir, num_procs, resume,
-                                    execution_policy=execution_policy, publish_terminal=False)
+                                    execution_policy=execution_policy, publish_terminal=False,
+                                    **({"on_started": notify_started} if services is not None else {}))
                 latest = None
                 if code in (EXIT_OK, EXIT_PREEMPTED) and services is not None:
                     from .checkpoint import read_latest
