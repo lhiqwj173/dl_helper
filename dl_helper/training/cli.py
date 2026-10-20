@@ -49,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--checkpoint-export-dir", metavar="PATH",
                          help="单机 Torch 每次检查点 ZIP 的导出目录，须位于 output-root；默认 run/checkpoint-archives")
     p_train.add_argument("--checkpoint-validator", help=argparse.SUPPRESS)
+    p_train.add_argument("--dataset-file-list", metavar="PATH",
+                         help="数据集相对文件及训练/验证划分清单；恢复时比较清单，新检查点自动携带")
     # sweep 的零拟合合同使用；隐藏以免形成公共命令面。
     p_train.add_argument("--preflight-only", action="store_true", help=argparse.SUPPRESS)
 
@@ -262,6 +264,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
         from .artifacts import existing_terminal
         if existing_terminal(layout.run_dir) == "run-manifest.json":
             raise CliError(f"run {run_id} 已成功完成，禁止重跑改写")
+        if args.dataset_file_list is not None:
+            from pathlib import Path
+            from .dataset_files import DATASET_FILES, read_dataset_files
+            data_files = read_dataset_files(Path(args.dataset_file_list))
+            layout.write_text(DATASET_FILES, json.dumps(data_files, ensure_ascii=False, indent=2) + "\n")
         layout.write_text("config.resolved.yaml", _yaml_dump(config_to_dict(config)))
         # D-003：独立执行策略 Artifact 记录平台、resume policy、预算与收尾窗口
         layout.write_text("execution-policy.json", json.dumps({

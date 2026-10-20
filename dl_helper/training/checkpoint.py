@@ -30,7 +30,7 @@ CHECKPOINT_MANIFEST = "checkpoint-manifest.json"
 LATEST_FILE = "latest.json"
 HISTORY_MANIFEST = "run-history-manifest.json"
 HISTORY_DIR = "run-history"
-HISTORY_FILES = ("metrics/metrics.jsonl", "logs/train.log")
+HISTORY_FILES = ("metrics/metrics.jsonl", "logs/train.log", "dataset-files.json")
 
 
 class CheckpointError(Exception):
@@ -256,7 +256,7 @@ def _restore_run_history(ckpt_dir: str, run_dir: str, *, position_epoch: int,
             if os.path.isfile(staged):
                 os.makedirs(os.path.dirname(destination), exist_ok=True)
                 os.replace(staged, destination)
-            elif os.path.exists(destination):
+            elif rel != "dataset-files.json" and os.path.exists(destination):
                 os.remove(destination)
         destination = ensure_within(run_dir, os.path.join(run_dir, "predictions"), "预测历史")
         staged = os.path.join(staging, "predictions")

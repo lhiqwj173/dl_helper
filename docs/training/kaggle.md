@@ -38,6 +38,14 @@ run_train(params)  # 省略 --resume，使用内部自动恢复。
 - `config_path`：你的 YAML 配置；
 - `output_root`：`/kaggle/working` 下的产物目录（默认 `/kaggle/working/dl-helper-runs`）。
 
+## 轻量数据文件清单
+
+`--dataset-file-list PATH` 接收 UTF-8 JSON：`schema_version=1`，以及已排序且不重复的
+`files`、`train_files`、`validation_files` 相对路径列表。不读取样本内容，挂载根路径不参与比较。
+文件清单随新检查点保存；恢复时名称、类别目录或划分发生变化会列出新增和缺失项。
+旧检查点缺少清单时明确提示，并按用户确认继续，新保存的检查点自动补记清单。
+同名文件的内容替换不会被此检查检测。归档文件完整性与模型状态检查仍执行。
+
 ## 临时跳过恢复指纹比较
 
 确认数据包相同时，可显式添加 `--resume-allow-fingerprint-mismatch`，允许当前配置和数据

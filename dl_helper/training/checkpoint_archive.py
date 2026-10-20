@@ -176,7 +176,7 @@ def _validate_resume_manifest(manifest: dict) -> tuple[dict, list[str]]:
     prefix = f"run/checkpoints/{checkpoint_id}/"
     required = {"run/config.resolved.yaml", "run/checkpoints/latest.json",
                 prefix + "checkpoint-manifest.json"}
-    allowed = required | {"run/recovery/terminal-history.json"}
+    allowed = required | {"run/recovery/terminal-history.json", "run/dataset-files.json"}
     if any(name not in allowed and not name.startswith((prefix, "run/models/")) for name in names):
         raise ValueError("恢复包含非检查点文件或活动终态")
     if not required <= set(names):
@@ -446,6 +446,11 @@ def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: P
     source_files = {f"run/checkpoints/{identifier}/{name.replace(chr(92), '/')}":
                     checkpoint_dir.joinpath(*name.replace("\\", "/").split("/"))
                     for name in ["checkpoint-manifest.json", *inner["files"]]}
+    dataset_files = checkpoint_dir / "run-history" / "dataset-files.json"
+    if dataset_files.is_file():
+        from .dataset_files import read_dataset_files
+        read_dataset_files(dataset_files)
+        source_files["run/dataset-files.json"] = dataset_files
     # 优先使用不可变历史中的辅助权重；旧检查点则封装已恢复到当前 run 的辅助权重。
     model_root = checkpoint_dir / "run-history" / "models"
     if model_root.exists():
@@ -679,6 +684,16 @@ def restore_checkpoint_source(candidate: CheckpointSource, run_dir: Path, config
         else:
             restore_legacy_run(candidate.path, staged, config.run.id,
                                config.run.source_revision, config_path)
+        from .dataset_files import DATASET_FILES, read_dataset_files, compare_dataset_files
+        current_files = run_dir / DATASET_FILES
+        previous_files = staged / DATASET_FILES
+        if current_files.is_file():
+            current_manifest = read_dataset_files(current_files)
+            if previous_files.is_file():
+                compare_dataset_files(read_dataset_files(previous_files), current_manifest)
+                print("数据文件清单匹配（仅比较相对文件名和训练/验证划分）", flush=True)
+            else:
+                print("旧检查点未记录数据文件清单；按用户确认继续恢复，新检查点将记录清单", flush=True)
         if allow_fingerprint_mismatch:
             recovery = run_dir / "recovery"
             recovery.mkdir(parents=True, exist_ok=True)

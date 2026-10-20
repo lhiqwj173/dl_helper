@@ -33,7 +33,7 @@ def single_threaded_loaders(monkeypatch):
 
 
 @pytest.fixture
-def archive_case(tmp_path):
+def archive_case(tmp_path, request):
     config = _cfg("override-resume", 2)
     config = replace(config, run=replace(config.run, source_revision="stable-source",
                                         output_root=str(tmp_path / "output")))
@@ -42,6 +42,10 @@ def archive_case(tmp_path):
     torch_backend.run_worker("experiments.toy_multiclass_resumable:build_experiment", config, reference)
     partial = RunLayout(str(tmp_path / "partial"))
     partial.ensure()
+    if getattr(request, "param", True):
+        partial.write_text("dataset-files.json", json.dumps({
+            "schema_version": 1, "files": ["1/a.png", "2/b.png"],
+            "train_files": ["1/a.png"], "validation_files": ["2/b.png"]}) + "\n")
     result = torch_backend.run_worker("experiments.toy_multiclass_resumable:build_experiment", config,
                                       partial, budget_monotonic=_AdvancingClock(), execution_policy=_BUDGET)
     assert result.status == "preempted"
@@ -114,3 +118,40 @@ def test_override_requires_explicit_required_resume(archive_case):
     with pytest.raises(ValueError, match="不兼容"):
         select_checkpoint_source([archive], Path(current.run.output_root) / "absent", changed_revision,
                                  allow_fingerprint_mismatch=True)
+
+
+def test_dataset_files_roundtrip_and_changed_names_fail(archive_case, tmp_path):
+    from zipfile import ZipFile
+
+    old, current, reference, archive, argv = archive_case
+    manifest = {"schema_version": 1, "files": ["1/c.png", "2/b.png"],
+                "train_files": ["1/c.png"], "validation_files": ["2/b.png"]}
+    names_path = tmp_path / "dataset-files.json"
+    names_path.write_text(json.dumps(manifest), encoding="utf-8")
+    command = [*argv, "--resume-allow-fingerprint-mismatch", "--dataset-file-list", str(names_path)]
+    with pytest.raises(ValueError, match="数据文件清单与检查点不同"):
+        main(command)
+    manifest["files"] = ["1/a.png", "2/b.png"]
+    manifest["train_files"] = ["1/a.png"]
+    names_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert main(command) == 0
+    exported = Path(current.run.output_root) / "runs" / current.run.id / "checkpoint-archives/last-checkpoint.zip"
+    with ZipFile(exported) as saved:
+        assert json.loads(saved.read("run/dataset-files.json").decode("utf-8")) == manifest
+
+
+@pytest.mark.parametrize("archive_case", [False], indirect=True)
+def test_legacy_checkpoint_without_file_list_adds_it_on_next_save(archive_case, tmp_path):
+    from zipfile import ZipFile
+
+    old, current, reference, archive, argv = archive_case
+    with ZipFile(archive) as original:
+        assert "run/dataset-files.json" not in original.namelist()
+    manifest = {"schema_version": 1, "files": ["1/a.png", "2/b.png"],
+                "train_files": ["1/a.png"], "validation_files": ["2/b.png"]}
+    names = tmp_path / "dataset-files.json"
+    names.write_text(json.dumps(manifest), encoding="utf-8")
+    assert main([*argv, "--resume-allow-fingerprint-mismatch", "--dataset-file-list", str(names)]) == 0
+    exported = Path(current.run.output_root) / "runs" / current.run.id / "checkpoint-archives/last-checkpoint.zip"
+    with ZipFile(exported) as saved:
+        assert json.loads(saved.read("run/dataset-files.json").decode("utf-8")) == manifest
