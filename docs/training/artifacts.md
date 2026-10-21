@@ -13,7 +13,7 @@ runs/<run-id>/report/index.html
 - 所有文本 UTF-8；原子写入同目录 tmp+flush+fsync+replace。
 - 检查点不可变：staging → manifest（全部文件 SHA256）→ 原子 rename → latest 最后发布。
 - 预算预测暂停发生在完整 epoch 边界：先确保该边界存在最新 checkpoint，再提交配置的 AList 服务；终态服务刷新完成后才写入 `pause-manifest.json`。硬截止触发时同样保存可恢复的 batch/optimizer 位置。
-- 恢复先校验 config/backend/data/model fingerprint 与 runtime 精确版本，再加载。
+- 恢复校验归档完整性、RUN_ID、backend、模型参数结构及状态格式；不比较当前配置、数据指纹或 source_revision。运行时版本漂移会提示，实际状态加载失败直接终止。
 - Torch 从早停终点检查点恢复时，保留已完成的 train/val 指标和 selection 状态，直接进入 test、模型导出和报告收尾；不再执行本轮验证或提交同名检查点。已有检查点无需迁移。
 - 终态最后发布且互斥；resume 先移除旧 pause manifest。
 

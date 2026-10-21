@@ -121,17 +121,6 @@ def _validate_latest(run_root: Path, expected_run_id: str) -> tuple[dict, Path, 
     return latest, checkpoint_dir, checkpoint_manifest
 
 
-def _config_fingerprint(config_path: Path, expected_run_id: str, expected_source_revision: str) -> str:
-    from dl_helper.training.config import config_fingerprint, load_config_file
-
-    config = load_config_file(str(config_path))
-    if config.run.source_revision != expected_source_revision:
-        raise ValueError("config source_revision 与当前数据包不匹配")
-    if config.run.id not in (None, expected_run_id):
-        raise ValueError("config run.id 与当前 RUN_ID 不匹配")
-    return config_fingerprint(config, resume=True)
-
-
 def _load_resume_manifest(source: Path) -> tuple[dict, list[str]]:
     manifest_path = source / "resume-manifest.json"
     if manifest_path.is_symlink() or not manifest_path.is_file():
@@ -260,14 +249,8 @@ def restore_checkpoint_archive(source: Path, destination: Path, expected_run_id:
     files = manifest["files"]
     if set(expected_names) != set(files):
         raise ValueError("恢复包文件清单内部不一致")
-    if (manifest.get("run_id") != expected_run_id
-            or manifest.get("source_revision") != expected_source_revision):
-        raise ValueError("恢复包与当前 RUN_ID 或数据版本不匹配")
-    expected_config_fingerprint = _config_fingerprint(
-        config_path, expected_run_id, expected_source_revision
-    )
-    if not allow_fingerprint_mismatch and manifest.get("config_fingerprint") != expected_config_fingerprint:
-        raise ValueError("恢复包配置指纹与当前实验配置不匹配")
+    if manifest.get("run_id") != expected_run_id:
+        raise ValueError("恢复包与当前 RUN_ID 不匹配")
 
     _check_space(destination.parent, sum(item["size"] for item in files.values()))
 
@@ -304,10 +287,7 @@ def restore_checkpoint_archive(source: Path, destination: Path, expected_run_id:
         _model_files(staged_run / "models", prefix="")
         if (latest["checkpoint_id"] != manifest.get("checkpoint_id")
                 or checkpoint_manifest["config_fingerprint"] != manifest["config_fingerprint"]):
-            raise ValueError("恢复包 latest checkpoint 与恢复清单或当前配置不匹配")
-        if _config_fingerprint(staged_run / "config.resolved.yaml", expected_run_id,
-                               expected_source_revision) != manifest["config_fingerprint"]:
-            raise ValueError("恢复包内部配置与其指纹不一致")
+            raise ValueError("恢复包 latest checkpoint 与恢复清单不匹配")
         history_path = staged_run / "recovery" / "terminal-history.json"
         if history_path.exists():
             history = _read_json(history_path)
@@ -414,7 +394,7 @@ def _inspect_archive(source: Path) -> tuple[dict, dict]:
 
 def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: Path, config) -> Path:
     """在 latest 推进前同步提交 ZIP、独立下载别名及索引。"""
-    from .config import config_fingerprint, config_to_dict
+    from .config import config_to_dict
     import yaml
 
     run_dir, checkpoint_dir, output_dir = map(Path, (run_dir, checkpoint_dir, output_dir))
@@ -423,8 +403,7 @@ def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: P
     inner = _read_json(checkpoint_dir / "checkpoint-manifest.json")
     _validate_file_inventory(checkpoint_dir, inner["files"], excluded={"checkpoint-manifest.json"})
     if (inner.get("complete") is not True or inner.get("backend") != "torch"
-            or inner.get("run_id") != (config.run.id or "unknown")
-            or inner.get("config_fingerprint") != config_fingerprint(config, resume=True)):
+            or inner.get("run_id") != (config.run.id or "unknown")):
         raise ValueError("导出检查点与当前配置不匹配")
     output_dir.mkdir(parents=True, exist_ok=True)
     index_path = output_dir / "latest-archive.json"
@@ -467,9 +446,8 @@ def export_checkpoint_archive(run_dir: Path, checkpoint_dir: Path, output_dir: P
              "data_fingerprint": inner["data_fingerprint"], "position": _position(inner),
              "phase": _phase(inner), "created_utc": inner["created_utc"], "files": inventory}
     if target.exists():
-        previous, previous_inner = _inspect_archive(target)
-        if previous_inner != inner or any(previous[key] != outer[key]
-                                          for key in ("run_id", "source_revision", "config_fingerprint", "phase", "position")):
+        _, previous_inner = _inspect_archive(target)
+        if previous_inner != inner:
             raise ValueError(f"不可变检查点 ZIP 内容冲突：{target}")
     else:
         descriptor, temporary_name = tempfile.mkstemp(prefix=".checkpoint-", suffix=".tmp", dir=output_dir)
@@ -617,7 +595,7 @@ def _discover(root: Path):
 
 def select_checkpoint_source(inputs, run_dir: Path, config, *,
                              allow_fingerprint_mismatch: bool = False) -> CheckpointSource | None:
-    from .config import config_fingerprint, load_config_file
+    from .config import load_config_file
     run_dir = Path(run_dir)
     paths = [(run_dir, "local")] if (run_dir / "checkpoints" / "latest.json").exists() else []
     seen_paths = set()
@@ -644,17 +622,8 @@ def select_checkpoint_source(inputs, run_dir: Path, config, *,
             completed = (path / "run-manifest.json").exists()
         if inner.get("run_id") != config.run.id:
             continue
-        if revision != config.run.source_revision or (
-            not allow_fingerprint_mismatch
-            and inner.get("config_fingerprint") != config_fingerprint(config, resume=True)
-        ):
-            raise ValueError(f"同 run 检查点配置或 source_revision 不兼容：{path}")
-        if allow_fingerprint_mismatch and kind != "archive":
-            raise ValueError("临时指纹跳过仅接受 ZIP 或包含 resume-manifest.json 的展开归档")
         if kind != "archive":
             _, _, inner = _validate_latest(path, config.run.id)
-            if _config_fingerprint(path / "config.resolved.yaml", config.run.id, revision) != inner["config_fingerprint"]:
-                raise ValueError("run 配置与检查点不一致")
         identity = inner["checkpoint_id"]
         if identity in identities and identities[identity] != inner:
             raise ValueError(f"相同检查点 ID 的内容或位置冲突：{identity}")
@@ -679,8 +648,7 @@ def restore_checkpoint_source(candidate: CheckpointSource, run_dir: Path, config
         staged = Path(temporary) / "run"
         if candidate.kind == "archive":
             restore_checkpoint_archive(candidate.path, staged, config.run.id,
-                                       config.run.source_revision, config_path,
-                                       **({"allow_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
+                                       config.run.source_revision, config_path)
         else:
             restore_legacy_run(candidate.path, staged, config.run.id,
                                config.run.source_revision, config_path)
@@ -694,10 +662,6 @@ def restore_checkpoint_source(candidate: CheckpointSource, run_dir: Path, config
                 print("数据文件清单匹配（仅比较相对文件名和训练/验证划分）", flush=True)
             else:
                 print("旧检查点未记录数据文件清单；按用户确认继续恢复，新检查点将记录清单", flush=True)
-        if allow_fingerprint_mismatch:
-            recovery = run_dir / "recovery"
-            recovery.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(staged / "config.resolved.yaml", recovery / "imported-config.resolved.yaml")
         identifier = candidate.manifest["checkpoint_id"]
         incoming = staged / "checkpoints" / identifier
         target = run_dir / "checkpoints" / identifier
@@ -787,20 +751,9 @@ def restore_legacy_run(source_run: Path, destination: Path, expected_run_id: str
     if not checkpoint_root.is_dir():
         raise NotADirectoryError(checkpoint_root)
 
-    source_fingerprint = _config_fingerprint(
-        source_config, expected_run_id, expected_source_revision
-    )
-    current_fingerprint = _config_fingerprint(
-        config_path, expected_run_id, expected_source_revision
-    )
-    if source_fingerprint != current_fingerprint:
-        raise ValueError("旧 run 配置与当前 Notebook 生成的配置指纹不匹配")
     latest, source_checkpoint, checkpoint_manifest = _validate_latest(
         source_run, expected_run_id
     )
-    if checkpoint_manifest.get("config_fingerprint") != current_fingerprint:
-        raise ValueError("旧 checkpoint 配置指纹与当前实验配置不匹配")
-
     history: list[dict] = []
     previous_history = source_run / "recovery" / "terminal-history.json"
     if previous_history.parent.is_symlink():
@@ -871,14 +824,10 @@ def restore_legacy_run(source_run: Path, destination: Path, expected_run_id: str
             _copy_verified(path, staged_run / relative,
                            {"size": path.stat().st_size, "sha256": _sha256_file(path)}, relative)
 
-        staged_fingerprint = _config_fingerprint(
-            staged_run / "config.resolved.yaml", expected_run_id, expected_source_revision
-        )
         staged_latest, _, staged_manifest = _validate_latest(staged_run, expected_run_id)
-        if (staged_fingerprint != current_fingerprint
-                or staged_latest["checkpoint_id"] != latest["checkpoint_id"]
-                or staged_manifest.get("config_fingerprint") != current_fingerprint):
-            raise ValueError("复制后的旧 checkpoint 与当前 run 身份或配置不匹配")
+        if (staged_latest["checkpoint_id"] != latest["checkpoint_id"]
+                or staged_manifest != checkpoint_manifest):
+            raise ValueError("复制后的旧 checkpoint 状态不一致")
         if history:
             history_path = staged_run / "recovery" / "terminal-history.json"
             history_path.parent.mkdir(parents=True)

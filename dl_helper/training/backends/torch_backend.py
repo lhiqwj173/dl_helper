@@ -193,7 +193,6 @@ def run_worker(
     worker_started = time.monotonic()
     layout.checkpoint_export_dir = checkpoint_export_dir or layout.path("checkpoint-archives")
     layout.checkpoint_validator = checkpoint_validator
-    layout.allow_resume_fingerprint_mismatch = allow_resume_fingerprint_mismatch
     # strict 确定性需 CuBLAS workspace 配置，必须在 torch 导入/CUDA 初始化前设置
     if config.backend.torch is not None and config.backend.torch.deterministic == "strict":
         os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
@@ -288,7 +287,6 @@ def run_worker(
             loaded = load_torch_checkpoint(
                 accelerator, layout.path("checkpoints"), engine_state, datamodule,
                 lambda: metric_states, config_fingerprint_resume(config), data_fp, model_sig,
-                **({"allow_fingerprint_mismatch": True} if allow_resume_fingerprint_mismatch else {}),
             )
             resumed_position = loaded
             best_model_state = loaded["best_model_state"]  # OSR-007：恢复检查点中 best 权重
@@ -860,13 +858,6 @@ def _save_torch_checkpoint(accelerator, layout, engine_state, datamodule, metric
 
 def _export_checkpoint(layout, checkpoint_dir, config):
     from ..checkpoint_archive import export_checkpoint_archive
-    if getattr(layout, "allow_resume_fingerprint_mismatch", False):
-        from ..artifacts import read_json
-        from ..config import load_config_file
-        manifest = read_json(os.path.join(checkpoint_dir, "checkpoint-manifest.json"))
-        if manifest["config_fingerprint"] != config_fingerprint_resume(config):
-            # 刚导入的旧检查点须按原配置重新打包；后续新检查点自然使用当前配置。
-            config = load_config_file(layout.path("recovery", "imported-config.resolved.yaml"))
     validator = getattr(layout, "checkpoint_validator", None)
     if validator is not None:
         validator(layout.run_dir, checkpoint_dir)

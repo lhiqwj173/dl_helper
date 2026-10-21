@@ -187,8 +187,6 @@ class EngineState:
             )
         if state["run_id"] != self.run_id:
             raise EngineStateError(f"EngineState run_id 漂移: {state['run_id']} != {self.run_id}")
-        if not allow_fingerprint_mismatch and state["config_fingerprint"] != self.config_fingerprint:
-            raise EngineStateError("EngineState 配置指纹漂移，拒绝恢复")
         self.stage_machine = StageMachine(str(state["stage"]))
         self.epoch = int(state["epoch"])
         self.batch_in_epoch = int(state["batch_in_epoch"])

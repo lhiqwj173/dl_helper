@@ -20,10 +20,10 @@ params += ["--checkpoint-export-dir", "/kaggle/working/dl-helper-runs/downloads/
 run_train(params)  # 省略 --resume，使用内部自动恢复。
 ```
 
-保持原 RUN_ID、source_revision 和实验配置。`--checkpoint-input` 可重复，接受 ZIP、展开的
+恢复时使用原 RUN_ID，建议直接沿用检查点配置并更新实际数据路径。`--checkpoint-input` 可重复，接受 ZIP、展开的
 恢复目录、包含多个检查点包的 Dataset 根目录，以及旧完整工作目录中的 run。
 输入只读，恢复写入 working。本地和 Dataset 共同按训练进度选择，同一步完成验证的早停点
-优先于周期点；损坏或同 run 不兼容立即报错，不回退旧进度。支持旧08的v1恢复包。
+优先于周期点；归档损坏或状态无法加载立即报错，不回退旧进度。支持旧08的v1恢复包。
 可选固定 Dataset 未挂载或有效空目录时，没有其他检查点才开始新训练；`--resume required`
 则必须有可用检查点，`--resume none` 完全不读取恢复输入。新路径参数仅支持单进程 Torch。
 
@@ -46,21 +46,16 @@ run_train(params)  # 省略 --resume，使用内部自动恢复。
 旧检查点缺少清单时明确提示，并按用户确认继续，新保存的检查点自动补记清单。
 同名文件的内容替换不会被此检查检测。归档文件完整性与模型状态检查仍执行。
 
-## 临时跳过恢复指纹比较
+## 恢复的必要校验
 
-确认数据包相同时，可显式添加 `--resume-allow-fingerprint-mismatch`，允许当前配置和数据
-指纹与旧检查点不同。此选项仅支持 `--no-use-alist --resume required`、一个检查点归档来源
-和单进程 Torch；默认关闭。仍校验归档逐文件 SHA256、内部清单、RUN_ID、source_revision、
-模型签名及完整状态加载。旧归档按原配置保留，新保存的检查点记录当前配置/数据指纹。
-执行策略文件记录开关状态；原始输入归档只读。
+恢复默认不比较当前配置、数据内容指纹或 source_revision；更换挂载路径、更新
+dl_helper 不需要跳过开关。旧命令的 `--resume-allow-fingerprint-mismatch` 仍可解析，
+但已无须使用。保留 RUN_ID、归档完整性、模型参数结构和状态格式校验，模型、优化器、
+调度器及采样位置加载失败会直接报错。可选数据清单只比较相对路径及划分。
 
-## 实际输入路径与逻辑身份路径
-
-`experiment` 中以 `path` 结尾的实际输入字段必须指向已挂载的 `/kaggle/input/...` 路径。
-以 `_identity_path` 结尾的字段用于固定数据指纹的逻辑命名空间，只要求非空字符串，
-不检查对应目录是否存在。保留历史身份路径可以维持对照数据指纹；不要因 Dataset
-换了挂载位置而修改它。实际读取位置仍由实验的数据路径字段及数据加载器严格检查。
-此约定不重写配置，也不放宽检查点配置指纹、数据指纹或文件校验。
+库内生成评价合同不再遍历、解码或哈希全部样本；身份字段仅用于记录。
+当前 Notebook 自动克隆默认分支最新 dl_helper，日志记录实际提交号，无须用户设置版本。
+自定义训练项目如需记录更具体的数据身份，可自行提供 `DataIdentity` 和 `split_identity`。
 
 ## Notebook 参考
 
@@ -113,8 +108,8 @@ repo_url = "https://github.com/<you>/dl_helper.git"  # 需替换为你的仓库�
 if os.path.exists(repo_dir):
     raise RuntimeError(f"目录已存在，请新建 Kaggle Session 后重试: {repo_dir}")
 
-# 可选：固定版本 ref（tag/分支/短 SHA）
-os.environ.setdefault("DL_HELPER_GIT_REF", "")
+# 使用默认分支最新代码
+os.environ.pop("DL_HELPER_GIT_REF", None)
 # bootstrap 复用手工 clone 的仓库：必须指向该 Git 工作树根，并提供仓库 URL
 os.environ["DL_HELPER_REPO_DIR"] = repo_dir
 os.environ["DL_HELPER_GIT_REPO"] = repo_url

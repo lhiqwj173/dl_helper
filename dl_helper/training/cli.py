@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--checkpoint-input", action="append", default=[], metavar="PATH",
                          help="只读 checkpoint Dataset、ZIP 或旧 run 目录，可重复；省略 resume 时自动选择最新兼容位置")
     p_train.add_argument("--resume-allow-fingerprint-mismatch", action="store_true",
-                         help="临时跳过当前配置/数据与检查点的指纹比较；仅限单机本地 ZIP/Dataset 的 required 恢复")
+                         help=argparse.SUPPRESS)
     p_train.add_argument("--checkpoint-export-dir", metavar="PATH",
                          help="单机 Torch 每次检查点 ZIP 的导出目录，须位于 output-root；默认 run/checkpoint-archives")
     p_train.add_argument("--checkpoint-validator", help=argparse.SUPPRESS)
@@ -216,13 +216,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
     config = replace(config, run=replace(config.run, id=run_id))
     args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
     checkpoint_inputs = getattr(args, "checkpoint_input", [])
-    allow_fingerprint_mismatch = args.resume_allow_fingerprint_mismatch
-    if allow_fingerprint_mismatch and (
-        resume != "required" or len(checkpoint_inputs) != 1 or use_alist
-        or config.backend.type != "torch"
-        or platform.resolve_torch_resources(config, None).num_processes != 1
-    ):
-        raise CliError("指纹临时跳过开关需要 --resume required、一个 --checkpoint-input、--no-use-alist 和单进程 Torch")
+    # 旧版跳过开关仍可解析；恢复已默认不比较配置或数据指纹。
     checkpoint_export_dir = getattr(args, "checkpoint_export_dir", None)
     validator_ref = getattr(args, "checkpoint_validator", None)
     checkpoint_validator = None
@@ -275,7 +269,6 @@ def _cmd_train(args: argparse.Namespace) -> int:
             "schema_version": 1,
             "platform": platform.kind,
             "resume": resume,
-            "resume_allow_fingerprint_mismatch": allow_fingerprint_mismatch,
             "use_alist": use_alist,
             "checkpoint_inputs": checkpoint_inputs,
             "checkpoint_export_dir": checkpoint_export_dir or layout.path("checkpoint-archives"),
@@ -293,15 +286,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
             # 包括本地完整 ZIP：保存期间中断时它可能领先于 raw latest。
             inputs = [*checkpoint_inputs, checkpoint_export_dir or layout.path("checkpoint-archives")]
             candidate = select_checkpoint_source(
-                inputs, Path(layout.run_dir), config,
-                **({"allow_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
+                inputs, Path(layout.run_dir), config)
             if candidate is not None:
                 restore_checkpoint_source(candidate, Path(layout.run_dir),
-                                          Path(layout.path("config.resolved.yaml")), config,
-                                          **({"allow_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
+                                          Path(layout.path("config.resolved.yaml")), config)
                 layout.log(f"自动恢复来源={candidate.path}, checkpoint={candidate.manifest['checkpoint_id']}")
-                if allow_fingerprint_mismatch:
-                    layout.log("已显式启用临时指纹跳过：配置/数据指纹允许变化；文件完整性、RUN_ID、source_revision 和模型签名仍须匹配")
 
         services = _build_services(config, platform, layout)
         # OSR-003：记录同一 SecretResolver 与启用服务的 Secret key，供失败证据全链路脱敏
@@ -344,8 +333,7 @@ def _cmd_train(args: argparse.Namespace) -> int:
                 result = run_worker(args.experiment, config, layout, 0, 1, resume,
                                     execution_policy=execution_policy, services=services,
                                     checkpoint_export_dir=checkpoint_export_dir,
-                                    checkpoint_validator=checkpoint_validator,
-                                    **({"allow_resume_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
+                                    checkpoint_validator=checkpoint_validator)
                 status = result.status
             else:
                 # 多进程：CLI 父进程处理服务与唯一终态（OSR-002）

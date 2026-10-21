@@ -435,10 +435,6 @@ def load_torch_checkpoint(
     validate_manifest_complete(manifest, ckpt_dir)
     if manifest["run_id"] != engine_state.run_id:
         raise CheckpointError("checkpoint run_id 不匹配")
-    if not allow_fingerprint_mismatch and manifest["config_fingerprint"] != config_fingerprint:
-        raise CheckpointError("checkpoint 配置指纹不匹配，拒绝恢复")
-    if not allow_fingerprint_mismatch and manifest["data_fingerprint"] != data_fingerprint:
-        raise CheckpointError("checkpoint 数据指纹不匹配")
     if manifest["model_signature"] != model_signature:
         raise CheckpointError("checkpoint 模型签名不匹配")
     verify_runtime_versions("torch", manifest["runtime_versions"])
@@ -461,8 +457,7 @@ def load_torch_checkpoint(
     else:
         rank_accel = os.path.join(shared_accel, f"rank-{accelerator.process_index}")
         accelerator.load_state(rank_accel if os.path.isdir(rank_accel) else shared_accel)
-    engine_state.load_state_dict(read_json(os.path.join(ckpt_dir, "engine-state.json")),
-                                 **({"allow_fingerprint_mismatch": True} if allow_fingerprint_mismatch else {}))
+    engine_state.load_state_dict(read_json(os.path.join(ckpt_dir, "engine-state.json")))
     datamodule.load_state_dict(read_json(os.path.join(ckpt_dir, "datamodule-state.json")))
     metric_states = metric_states_builder()
     metric_payload = read_json(os.path.join(ckpt_dir, "metric-states.json"))
@@ -618,10 +613,6 @@ def validate_sklearn_checkpoint_source(
         validate_manifest_complete(manifest, ckpt_dir)
         if manifest["run_id"] != run_id:
             raise CheckpointError("joblib 来源 run_id 不匹配（只加载当前 run 自产模型）")
-        if manifest["config_fingerprint"] != config_fingerprint:
-            raise CheckpointError("joblib 配置指纹不匹配")
-        if manifest["data_fingerprint"] != data_fingerprint:
-            raise CheckpointError("joblib 数据指纹不匹配")
         if manifest["model_signature"] != model_signature:
             raise CheckpointError("joblib 模型签名不匹配")
         verify_runtime_versions("sklearn", manifest["runtime_versions"])

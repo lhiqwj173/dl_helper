@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import math
@@ -453,14 +452,14 @@ def validate_data_identity(identity: Any) -> None:
 
 
 def contract_splits(datamodule: Any, identity: DataIdentity) -> dict[str, dict[str, str]]:
-    """按实际 split 内容生成合同；缺少可复核声明时直接失败。"""
+    """记录声明的数据身份；不为生成合同遍历或解码训练样本。"""
     splits: dict[str, dict[str, str]] = {}
     for split in ("train", "val", "test", "predict"):
         if split == "train" and hasattr(datamodule, "incremental_train_data"):
             source = datamodule.incremental_train_data()
             if source is None:
                 raise ValueError("incremental_train_data() 不得返回 None")
-            fp = _fingerprint_incremental_source(source, split)
+            fp = _declared_split_fingerprint(identity, split)
             splits[split] = {"fingerprint": fp, "name": identity.name, "version": identity.version}
             continue
         if not _split_available(datamodule, split):
@@ -473,10 +472,10 @@ def contract_splits(datamodule: Any, identity: DataIdentity) -> dict[str, dict[s
             validate_data_identity(split_data_identity)
             fp = split_data_identity.fingerprint
         else:
-            fp = _fingerprint_split(datamodule, split)
+            fp = _declared_split_fingerprint(identity, split)
         splits[split] = {"fingerprint": fp, "name": identity.name, "version": identity.version}
     if "train" not in splits:
-        raise ValueError("evaluation contract 缺少 train split 的真实指纹")
+        raise ValueError("evaluation contract 缺少 train split")
     return splits
 
 
@@ -488,86 +487,21 @@ def _split_available(datamodule: Any, split: str) -> bool:
     return False
 
 
-def _hash_value(hasher: Any, value: Any) -> None:
-    """稳定编码 tensor/ndarray/容器，避免只依据样本数构造 fingerprint。"""
-    import torch
-
-    if isinstance(value, torch.Tensor):
-        _hash_value(hasher, value.detach().cpu().contiguous().numpy())
-        return
-    if isinstance(value, np.ndarray):
-        hasher.update(b"ndarray:")
-        hasher.update(str(value.dtype).encode("utf-8"))
-        hasher.update(json.dumps(list(value.shape)).encode("utf-8"))
-        hasher.update(value.tobytes(order="C"))
-        return
-    if isinstance(value, Mapping):
-        hasher.update(b"mapping:")
-        for key in sorted(value):
-            _hash_value(hasher, key)
-            _hash_value(hasher, value[key])
-        return
-    if isinstance(value, (list, tuple)):
-        hasher.update(type(value).__name__.encode("utf-8"))
-        for item in value:
-            _hash_value(hasher, item)
-        return
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        hasher.update(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8"))
-        return
-    hasher.update(repr(value).encode("utf-8"))
+def _declared_split_fingerprint(identity: DataIdentity, split: str) -> str:
+    payload = f"{identity.name}:{identity.version}:{identity.fingerprint}:{split}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _fingerprint_dataset(dataset: Any, split: str) -> str:
-    if not hasattr(dataset, "__len__") or not hasattr(dataset, "__getitem__"):
-        raise ValueError(f"{split} dataset 必须提供可复核的 __len__/__getitem__")
-    hasher = hashlib.sha256(f"split:{split}".encode("utf-8"))
+    """仅记录 split 与样本数；文件清单由训练项目显式提供。"""
     count = len(dataset)
-    hasher.update(str(count).encode("utf-8"))
-    for index in range(count):
-        _hash_value(hasher, dataset[index])
-    return hasher.hexdigest()
+    if count <= 0:
+        raise ValueError(f"{split} dataset 为空")
+    return hashlib.sha256(f"{split}:{count}".encode("utf-8")).hexdigest()
 
 
 def _fingerprint_loader(loader: DataLoader, split: str) -> str:
-    dataset = getattr(loader, "dataset", None)
-    if dataset is None:
-        raise ValueError(f"{split} DataLoader 缺少 dataset，无法构造真实指纹")
-    return _fingerprint_dataset(dataset, split)
-
-
-def _fingerprint_split(datamodule: Any, split: str) -> str:
-    return _fingerprint_batches(datamodule.evaluation_batches(split), split)
-
-
-def _fingerprint_incremental_source(source: Any, split: str) -> str:
-    """指纹化增量训练源，并保证合同生成不永久推进 source 状态。"""
-    for member in ("iter_epoch", "state_dict", "load_state_dict"):
-        if not callable(getattr(source, member, None)):
-            raise TypeError(f"增量训练源缺少可恢复成员 {member!r}")
-    state = copy.deepcopy(source.state_dict())
-    try:
-        return _fingerprint_batches(source.iter_epoch(0), split)
-    finally:
-        source.load_state_dict(state)
-
-
-def _fingerprint_batches(batches: Iterable[Any], split: str) -> str:
-    hasher = hashlib.sha256(f"split:{split}".encode("utf-8"))
-    count = 0
-    for batch in batches:
-        sample_count = getattr(batch, "sample_count", None)
-        if not isinstance(sample_count, int) or sample_count <= 0:
-            raise ValueError(f"{split} batch.sample_count 必须为正整数: {sample_count!r}")
-        _hash_value(hasher, getattr(batch, "features", None))
-        _hash_value(hasher, getattr(batch, "targets", None))
-        _hash_value(hasher, getattr(batch, "sample_weight", None))
-        _hash_value(hasher, getattr(batch, "sample_ids", None))
-        count += sample_count
-    if count <= 0:
-        raise ValueError(f"{split} split 为空，无法构造评价合同")
-    hasher.update(str(count).encode("utf-8"))
-    return hasher.hexdigest()
+    return _fingerprint_dataset(loader.dataset, split)
 
 
 def contract_label_schema(task: Any) -> dict[str, Any] | None:
