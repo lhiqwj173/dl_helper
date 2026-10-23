@@ -87,7 +87,7 @@ def test_zip_resume_matches_continuous_training(tmp_path):
     import yaml
     from safetensors.torch import load_file
     from dl_helper.training.config import config_to_dict
-    from dl_helper.training.checkpoint_archive import select_checkpoint_source, restore_checkpoint_source
+    from dl_helper.training.checkpoint_archive import discover_checkpoint_input, restore_checkpoint_source
 
     cfg = _cfg("zip-numeric", max_epochs=2)
     reference = RunLayout(str(tmp_path / "continuous"))
@@ -106,7 +106,13 @@ def test_zip_resume_matches_continuous_training(tmp_path):
     resumed.ensure()
     cfg_path = Path(resumed.path("config.resolved.yaml"))
     cfg_path.write_text(yaml.safe_dump(config_to_dict(cfg)), encoding="utf-8")
-    candidate = select_checkpoint_source([archive], Path(resumed.run_dir), cfg)
+    import shutil
+    inputs = tmp_path / "kaggle-input"
+    inputs.mkdir()
+    shutil.copyfile(archive, inputs / "uploaded-checkpoint.zip")
+    incoming = discover_checkpoint_input(inputs)
+    assert incoming.run_id == cfg.run.id
+    candidate = incoming.source
     restore_checkpoint_source(candidate, Path(resumed.run_dir), cfg_path, cfg)
     callbacks = []
     result = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg, resumed,

@@ -554,8 +554,12 @@ class CheckpointSource:
         return p["global_step"], p["epoch"], phase_rank, p["batch_in_epoch"]
 
 
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
 def _discover(root: Path):
-    """仅遍历用户声明的根，不把任意训练/成果 ZIP 当检查点。"""
+    """识别恢复清单、旧 run 和检查点 ZIP，普通数据 ZIP 不参与恢复。"""
     if root.is_symlink():
         raise ValueError(f"检查点输入不能是符号链接：{root}")
     if not root.exists():
@@ -567,7 +571,7 @@ def _discover(root: Path):
         return
     if not root.is_dir():
         raise ValueError(f"检查点输入类型非法：{root}")
-    for directory, subdirectories, filenames in os.walk(root, followlinks=False):
+    for directory, subdirectories, filenames in os.walk(root, followlinks=False, onerror=_raise_walk_error):
         base = Path(directory)
         for name in subdirectories:
             if (base / name).is_symlink():
@@ -591,6 +595,92 @@ def _discover(root: Path):
         for name in filenames:
             if name == "last-checkpoint.zip" or (name.startswith("checkpoint-") and name.endswith(".zip")):
                 yield base / name, "archive"
+            elif name.lower().endswith(".zip"):
+                # Dataset 上传时可能重命名；只读中央目录，不解压普通训练数据包。
+                with ZipFile(base / name) as archive:
+                    if "resume-manifest.json" in archive.namelist():
+                        yield base / name, "archive"
+
+
+@dataclass(frozen=True)
+class CheckpointInput:
+    """已完整校验的输入，用于 Notebook 沿用配置并更新本 Session 数据路径。"""
+
+    source: CheckpointSource
+    config_text: str
+    dataset_files: dict | None
+
+    @property
+    def run_id(self) -> str:
+        return self.source.manifest["run_id"]
+
+    @property
+    def source_revision(self) -> str | None:
+        return self.source.source_revision
+
+
+def discover_checkpoint_input(root: Path = Path("/kaggle/input")) -> CheckpointInput | None:
+    """无输入返回 None；同一运行选最新，不同运行混挂或损坏输入立即失败。
+
+    不按当前新建的 run ID 过滤，防止把用户挂载的恢复输入误判为首次训练。
+    支持 ZIP、展开目录和旧 run；不加载模型，不读取训练图片。
+    """
+    from .config import parse_config_text
+    from .dataset_files import validate_dataset_files
+
+    candidates = []
+    identities = {}
+    run_ids = set()
+    seen = set()
+    for path, kind in _discover(Path(root)):
+        resolved = path.resolve(strict=True)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if kind == "archive":
+            outer, inner = _inspect_archive(path)
+            revision = outer.get("source_revision")
+            completed = outer.get("training_returncode") == 0
+            prefix = "run/"
+        else:
+            config_text = (path / "config.resolved.yaml").read_text(encoding="utf-8")
+            saved = parse_config_text(config_text)
+            _, _, inner = _validate_latest(path, saved.run.id)
+            revision = saved.run.source_revision
+            completed = (path / "run-manifest.json").exists()
+            prefix = ""
+        if path.is_file():
+            with ZipFile(path) as archive:
+                config_text = archive.read(prefix + "config.resolved.yaml").decode("utf-8")
+                name = prefix + "dataset-files.json"
+                files = _read_json_bytes(archive.read(name), name) if name in archive.namelist() else None
+        else:
+            config_text = (path / prefix / "config.resolved.yaml").read_text(encoding="utf-8")
+            files_path = path / prefix / "dataset-files.json"
+            files = _read_json(files_path) if files_path.is_file() else None
+        saved = parse_config_text(config_text)
+        if saved.run.id != inner["run_id"] or saved.run.source_revision != revision:
+            raise ValueError(f"检查点配置与恢复清单的运行身份不一致：{path}")
+        if files is not None:
+            files = validate_dataset_files(files)
+        key = (inner["run_id"], inner["checkpoint_id"])
+        # 同一检查点的 YAML 缩进和键顺序不影响身份（旧 run 与 ZIP 的序列化方式可能不同）。
+        signature = (inner, saved, files)
+        if key in identities and identities[key] != signature:
+            raise ValueError(f"相同检查点 ID 的内容或配置冲突：{key}")
+        identities[key] = signature
+        run_ids.add(inner["run_id"])
+        candidates.append(CheckpointInput(CheckpointSource(path, kind, inner, revision, completed),
+                                          config_text, files))
+    if len(run_ids) > 1:
+        raise ValueError(f"输入包含多个不同运行的检查点，请只挂载要恢复的运行：{sorted(run_ids)}")
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda item: item.source.order)
+    if any(item.source.order == latest.source.order and item.source.manifest != latest.source.manifest
+           for item in candidates):
+        raise ValueError("同一运行在最新训练位置存在不同检查点，无法确定恢复来源，请清理冲突输入")
+    return latest
 
 
 def select_checkpoint_source(inputs, run_dir: Path, config, *,

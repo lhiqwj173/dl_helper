@@ -1,6 +1,6 @@
 # Kaggle 使用指南
 
-`train` 默认开启 `--use-alist`。添加 `--no-use-alist` 仅跳过 AList 凭证读取、远程恢复、同步和上传。企业微信独立按 YAML 配置执行，允许设置 `notifications: {type: none}`。本地恢复独立按 `--resume` 执行，支持省略时的自动恢复及显式 `required`，`none` 从头训练。本地产物与 Kaggle 预算保护保留；退出 `75` 后须保留或手动迁移完整本地 run 目录，并使用相同 RUN_ID 恢复，新 Session 不会自动保留旧工作目录。最小模板中的 `USE_ALIST = False` 对应此参数。
+`train` 默认开启 `--use-alist`。添加 `--no-use-alist` 仅跳过 AList 凭证读取、远程恢复、同步和上传。企业微信独立按 YAML 配置执行，允许设置 `notifications: {type: none}`。恢复支持省略 `--resume` 时自动发现及显式 `required`；`none` 从头训练。本地产物与 Kaggle 预算保护保留；退出 `75` 后下载检查点 ZIP，在下一 Session 挂载后重跑即可，新 Session 不会自动保留旧工作目录。最小模板中的 `USE_ALIST = False` 对应 AList 开关。
 
 ## 单机即时 ZIP 与 checkpoint Dataset 自动恢复
 
@@ -11,16 +11,31 @@
 正常结束也会保存最终训练位置；不依赖 Notebook 后续单元，测试或通知失败不破坏已完成 ZIP。
 归档与原始检查点遵循相同的 `checkpoint.keep_last`，null 保留全部。
 
-下一 Session 下载并上传 `last-checkpoint.zip` 为 Dataset，然后向原训练命令添加：
+下一 Session 将 `last-checkpoint.zip` 上传为 Dataset 并挂载，原训练命令直接重跑即可。
+Kaggle 单进程 Torch 默认扫描 `/kaggle/input`，识别 ZIP、展开目录和旧 run，
+沿用检查点的 RUN_ID 与 source_revision；同一运行多个检查点选最新进度。
+发现损坏检查点或多个不同运行会直接失败，请移除无关挂载；不会悄悄从头训练。
+普通训练数据 ZIP 不作为检查点。显式 `--checkpoint-input` 可覆盖默认搜索范围。
 
 ```python
-checkpoint_dataset = "/kaggle/input/datasets/your-account/your-checkpoint-dataset"
-params += ["--checkpoint-input", checkpoint_dataset]
-params += ["--checkpoint-export-dir", "/kaggle/working/dl-helper-runs/downloads/my-run"]
-run_train(params)  # 省略 --resume，使用内部自动恢复。
+run_train(params)  # 无需检查点路径和恢复开关。
 ```
 
-恢复时使用原 RUN_ID，建议直接沿用检查点配置并更新实际数据路径。`--checkpoint-input` 可重复，接受 ZIP、展开的
+Notebook 如需沿用原训练配置与数据划分，可在安装框架后调用统一接口，免去重复扫描和解析：
+
+```python
+from dl_helper.training.checkpoint_archive import discover_checkpoint_input
+checkpoint = discover_checkpoint_input()  # 默认 /kaggle/input；没有检查点返回 None。
+if checkpoint is not None:
+    previous_config_text = checkpoint.config_text
+    previous_dataset_files = checkpoint.dataset_files
+    run_id = checkpoint.run_id
+    source_revision = checkpoint.source_revision
+```
+
+CLI 沿用调用方提供的训练配置，Notebook 应从上述已校验的配置更新本 Session 的实际数据路径，
+并写入当前配置文件。显式 `--run-id` 与自动发现的检查点冲突时会拒绝运行。
+`--checkpoint-input` 可重复，接受 ZIP、展开的
 恢复目录、包含多个检查点包的 Dataset 根目录，以及旧完整工作目录中的 run。
 输入只读，恢复写入 working。本地和 Dataset 共同按训练进度选择，同一步完成验证的早停点
 优先于周期点；归档损坏或状态无法加载立即报错，不回退旧进度。支持旧08的v1恢复包。

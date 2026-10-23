@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from dl_helper.training.checkpoint_archive import (
-    _inspect_archive, apply_archive_retention, export_checkpoint_archive,
+    _inspect_archive, apply_archive_retention, discover_checkpoint_input, export_checkpoint_archive,
     restore_checkpoint_source, select_checkpoint_source,
 )
 from dl_helper.training.config import config_fingerprint, config_to_dict, default_schema, parse_config
@@ -24,7 +24,7 @@ def config():
     return parse_config(schema)
 
 
-def make_checkpoint(root, config, *, epoch=0, step=2, batch=2, suffix=""):
+def make_checkpoint(root, config, *, epoch=0, step=2, batch=2, suffix="", dataset_files=None):
     identifier = f"epoch-{epoch:06d}-step-{step:08d}{suffix}"
     directory = root / "checkpoints" / identifier
     directory.mkdir(parents=True)
@@ -34,6 +34,12 @@ def make_checkpoint(root, config, *, epoch=0, step=2, batch=2, suffix=""):
     (directory / "engine-state.json").write_bytes(engine)
     files = {name: {"sha256": hashlib.sha256(raw).hexdigest(), "size": len(raw)}
              for name, raw in (("weights.bin", payload), ("engine-state.json", engine))}
+    if dataset_files is not None:
+        history = directory / "run-history"
+        history.mkdir()
+        raw = json.dumps(dataset_files).encode("utf-8")
+        (history / "dataset-files.json").write_bytes(raw)
+        files["run-history/dataset-files.json"] = {"sha256": hashlib.sha256(raw).hexdigest(), "size": len(raw)}
     manifest = {"schema_version": 1, "complete": True, "backend": "torch",
                 "run_id": config.run.id, "checkpoint_id": identifier,
                 "epoch": epoch, "global_step": step, "batch_in_epoch": batch,
@@ -156,6 +162,86 @@ def test_optional_dataset_absent_or_empty(tmp_path, config):
     empty = tmp_path / "empty"
     empty.mkdir()
     assert select_checkpoint_source([empty, tmp_path / "not-mounted"], tmp_path / "working", config) is None
+
+
+def test_discovery_without_checkpoint_ignores_training_zip(tmp_path):
+    with ZipFile(tmp_path / "training.zip", "w") as archive:
+        archive.writestr("package_manifest.json", "{}")
+    assert discover_checkpoint_input(tmp_path) is None
+    assert discover_checkpoint_input(tmp_path / "not-mounted") is None
+
+
+def test_discovery_selects_latest_with_alias_and_renamed_zip(tmp_path, config):
+    source = tmp_path / "source"
+    first = make_checkpoint(source, config, step=2)
+    inputs = tmp_path / "input"
+    export_checkpoint_archive(source, first, inputs, config)
+    newest = make_checkpoint(source, config, step=9)
+    exported = export_checkpoint_archive(source, newest, tmp_path / "newest", config)
+    exported.rename(inputs / "renamed-upload.zip")
+    incoming = discover_checkpoint_input(inputs)
+    assert incoming.run_id == config.run.id
+    assert incoming.source_revision == config.run.source_revision
+    assert incoming.source.manifest["global_step"] == 9
+    assert parse_config(yaml.safe_load(incoming.config_text)) == config
+
+
+def test_discovery_rejects_mixed_runs_instead_of_starting_fresh(tmp_path, config):
+    from dataclasses import replace
+    inputs = tmp_path / "input"
+    for index in range(2):
+        cfg = replace(config, run=replace(config.run, id=f"run-{index}"))
+        source = tmp_path / f"source-{index}"
+        cp = make_checkpoint(source, cfg)
+        export_checkpoint_archive(source, cp, inputs / str(index), cfg)
+    with pytest.raises(ValueError, match="多个不同运行"):
+        discover_checkpoint_input(inputs)
+
+
+def test_discovery_does_not_fall_back_from_corrupt_latest(tmp_path, config):
+    source = tmp_path / "source"
+    cp = make_checkpoint(source, config)
+    inputs = tmp_path / "input"
+    export_checkpoint_archive(source, cp, inputs, config)
+    (inputs / "last-checkpoint.zip").write_bytes(b"broken")
+    with pytest.raises(Exception):
+        discover_checkpoint_input(inputs)
+
+
+def test_discovery_expanded_and_legacy_run(tmp_path, config):
+    source = tmp_path / "source"
+    cp = make_checkpoint(source, config)
+    archive = export_checkpoint_archive(source, cp, tmp_path / "zip", config)
+    expanded = tmp_path / "expanded"
+    with ZipFile(archive) as stream:
+        stream.extractall(expanded)
+    assert discover_checkpoint_input(expanded).run_id == config.run.id
+    assert discover_checkpoint_input(source).source.kind == "run"
+
+
+def test_discovery_deduplicates_legacy_and_zip_with_different_yaml_format(tmp_path, config):
+    source = tmp_path / "input" / "legacy"
+    cp = make_checkpoint(source, config)
+    export_checkpoint_archive(source, cp, tmp_path / "input" / "archives", config)
+    assert discover_checkpoint_input(tmp_path / "input").run_id == config.run.id
+
+
+def test_discovery_preserves_saved_dataset_split(tmp_path, config):
+    source = tmp_path / "source"
+    files = {"schema_version": 1, "files": ["train/a.png", "val/b.png"],
+             "train_files": ["train/a.png"], "validation_files": ["val/b.png"]}
+    cp = make_checkpoint(source, config, dataset_files=files)
+    export_checkpoint_archive(source, cp, tmp_path / "input", config)
+    assert discover_checkpoint_input(tmp_path / "input").dataset_files == files
+
+
+def test_discovery_rejects_different_checkpoints_at_same_latest_position(tmp_path, config):
+    for name in ("first", "second"):
+        source = tmp_path / name
+        cp = make_checkpoint(source, config, suffix="-" + name)
+        export_checkpoint_archive(source, cp, tmp_path / "input" / name, config)
+    with pytest.raises(ValueError, match="最新训练位置存在不同检查点"):
+        discover_checkpoint_input(tmp_path / "input")
 
 
 def test_archive_retention_follows_raw_directories(tmp_path, config):

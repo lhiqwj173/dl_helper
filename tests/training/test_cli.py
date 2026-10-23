@@ -187,6 +187,71 @@ def test_checkpoint_paths_parser_and_preflight(tmp_path):
               "--checkpoint-export-dir", str(tmp_path.parent / "outside"), "--preflight-only"])
 
 
+@pytest.mark.parametrize("mode", ["auto", "none", "explicit"])
+def test_kaggle_default_discovery_adopts_identity_before_worker(tmp_path, monkeypatch, mode):
+    from pathlib import Path
+    from types import SimpleNamespace
+    import dl_helper.training.cli as cli
+    import dl_helper.training.doctor as doctor
+    import dl_helper.training.platform as platform_module
+    import dl_helper.training.checkpoint_archive as archives
+    import dl_helper.training.backends.torch_backend as backend
+    from dl_helper.training.backends.base import BackendResult
+
+    schema = default_schema()
+    schema["run"].update(id=None, source_revision="new-source", output_root=str(tmp_path))
+    schema["distributed"]["num_processes"] = 1
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(schema), encoding="utf-8")
+    source = SimpleNamespace(path=Path("/kaggle/input/old-checkpoint"),
+                             manifest={"checkpoint_id": "original-checkpoint"})
+    incoming = SimpleNamespace(run_id="original-run", source_revision="original-source", source=source)
+    calls = []
+
+    def discover():
+        calls.append("discover")
+        return incoming
+
+    monkeypatch.setattr(archives, "discover_checkpoint_input", discover)
+    monkeypatch.setattr(platform_module, "detect_platform", lambda: "kaggle")
+    monkeypatch.setattr(platform_module.Platform, "resolve_output_root", lambda self, config: str(tmp_path))
+    # 在 Windows 临时目录验证 Kaggle 编排；平台路径边界另有独立测试。
+    monkeypatch.setattr(cli, "_compute_run_dir", lambda config, platform: (
+        config.run.id or "fresh-run", str(tmp_path / "runs" / (config.run.id or "fresh-run"))))
+    monkeypatch.setattr(platform_module.Platform, "resolve_torch_resources",
+                        lambda *a: SimpleNamespace(num_processes=1))
+    monkeypatch.setattr(doctor, "validate_training_start", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "_build_services", lambda *a: None)
+
+    def select(inputs, run_dir, config):
+        if mode == "auto":
+            assert str(source.path) in inputs
+            assert config.run.id == "original-run"
+            return source
+        return None
+
+    monkeypatch.setattr(archives, "select_checkpoint_source", select)
+    monkeypatch.setattr(archives, "restore_checkpoint_source", lambda *a: calls.append("restore"))
+
+    def worker(experiment, config, layout, rank, processes, resume, **kwargs):
+        if mode == "auto":
+            assert config.run.id == "original-run"
+            assert config.run.source_revision == "original-source"
+            assert resume == "required"
+        calls.append("worker")
+        return BackendResult(status="succeeded", epoch=1, batch_in_epoch=0, global_step=1)
+
+    monkeypatch.setattr(backend, "run_worker", worker)
+    argv = ["train", "--config", str(cfg_path), "--experiment", "experiments.toy_multiclass:build_experiment",
+            "--no-use-alist"]
+    if mode == "none":
+        argv += ["--resume", "none"]
+    elif mode == "explicit":
+        argv += ["--checkpoint-input", "/kaggle/input/user-selected"]
+    assert cli.main(argv) == 0
+    assert calls == (["discover", "restore", "worker"] if mode == "auto" else ["worker"])
+
+
 @pytest.mark.parametrize("dataset_available", [False, True])
 def test_dataset_resume_keeps_alist_fallback(tmp_path, monkeypatch, dataset_available):
     """有 Dataset 用 Dataset；无 Dataset 仍查询原 AList 恢复入口。"""

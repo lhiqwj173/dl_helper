@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
                          help="显式恢复策略：none 禁止恢复；required 无兼容 checkpoint 即失败；省略时内部自动恢复")
     p_train.add_argument("--run-id")
     p_train.add_argument("--checkpoint-input", action="append", default=[], metavar="PATH",
-                         help="只读 checkpoint Dataset、ZIP 或旧 run 目录，可重复；省略 resume 时自动选择最新兼容位置")
+                         help="覆盖检查点搜索目录，可重复；Kaggle 单机 Torch 默认扫描 /kaggle/input 并自动恢复")
     p_train.add_argument("--resume-allow-fingerprint-mismatch", action="store_true",
                          help=argparse.SUPPRESS)
     p_train.add_argument("--checkpoint-export-dir", metavar="PATH",
@@ -195,6 +195,24 @@ def _cmd_train(args: argparse.Namespace) -> int:
     use_alist = args.use_alist
     if not use_alist:
         config = replace(config, remote=NoRemoteConfig(type="none"))
+    platform = Platform()
+    resume = args.resume if args.resume is not None else RESUME_AUTO
+    checkpoint_inputs = list(getattr(args, "checkpoint_input", []))
+    if platform.is_kaggle and not checkpoint_inputs and resume != "none":
+        from .checkpoint_archive import discover_checkpoint_input
+        incoming = discover_checkpoint_input()
+        if incoming is not None:
+            if (config.backend.type != "torch"
+                    or platform.resolve_torch_resources(config, None).num_processes != 1):
+                raise CliError("已挂载便携检查点，自动恢复仅支持单机 Torch；请使用原训练执行配置")
+            if args.run_id is not None and args.run_id != incoming.run_id:
+                raise CliError("指定的 run-id 与挂载检查点不一致，请移除无关检查点或使用原运行身份")
+            config = replace(config, run=replace(config.run, id=incoming.run_id,
+                                                 source_revision=incoming.source_revision))
+            checkpoint_inputs = [str(incoming.source.path)]
+            # 挂载恢复输入意味着必须恢复，禁止后续静默转为首次训练。
+            resume = "required"
+            print(f"发现恢复输入：{incoming.source.path}，沿用 run_id={incoming.run_id}", flush=True)
     if config.run.source_revision is None:
         from .platform import resolve_source_revision
         config = replace(
@@ -205,17 +223,14 @@ def _cmd_train(args: argparse.Namespace) -> int:
         config = replace(config, run=replace(config.run, output_root=os.path.abspath(args.output_root)))
     if getattr(args, "run_id", None):
         config = replace(config, run=replace(config.run, id=args.run_id))
-    platform = Platform()
     # D-001：库模块边界校验必须在导入 Experiment 或创建任何产物前完成
     _check_library_boundaries(args, config, platform)
     execution_policy = execution_policy_for(platform)
-    resume = args.resume if args.resume is not None else RESUME_AUTO
     # 预检前先确定 run 目录（不创建产物）：预检/导入失败也必须落 failure.json 失败证据
     run_id, run_dir = _compute_run_dir(config, platform)
     # 为自动生成的 run ID 也保存可复现的配置身份。
     config = replace(config, run=replace(config.run, id=run_id))
     args._run_dir = run_dir  # OSR-003：受控 run_dir 在预检前即确定
-    checkpoint_inputs = getattr(args, "checkpoint_input", [])
     # 旧版跳过开关仍可解析；恢复已默认不比较配置或数据指纹。
     checkpoint_export_dir = getattr(args, "checkpoint_export_dir", None)
     validator_ref = getattr(args, "checkpoint_validator", None)
