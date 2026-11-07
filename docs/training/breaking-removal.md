@@ -5,7 +5,7 @@
 ## 已删除的公共配置面
 
 - `checkpoint.resume`：恢复策略不再由 YAML 配置。省略 `--resume` 为内部自动恢复；只能显式 `--resume none|required`。
-- 根级 `runtime`（`runtime.max_minutes` / `runtime.shutdown_grace_minutes`）：运行预算改由平台执行策略提供，Kaggle 恒为 660 分钟训练 + 10 分钟收尾（run 目录 `execution-policy.json` 审计），Local 不启用预算。
+- 根级 `runtime`（`runtime.max_minutes` / `runtime.shutdown_grace_minutes`）：运行预算由平台执行策略提供，Kaggle 恒为 720 分钟总预算，预留 15 分钟收尾（run 目录 `execution-policy.json` 审计），Local 不启用预算。
 - 显式 `--resume auto`：`auto` 不再是可选 CLI 值；省略参数即自动恢复。
 - `doctor` 命令：预检并入 `train` 启动路径，不再有独立命令；sweep 可比性预检使用隐藏的 `--preflight-only`。
 

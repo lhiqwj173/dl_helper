@@ -360,7 +360,7 @@ notifications:             # 企业微信通知
 - 任意环境变量以 `KAGGLE` 开头即自动识别为 Kaggle 环境。
 - 数据**必须**显式挂在 `/kaggle/input/...`；输出默认 `/kaggle/working/dl-helper-runs`。
 - `distributed.num_processes: auto` 会用满所有可见 GPU（CPU 环境 = 1）。
-- **预算训练**：Kaggle 由平台执行策略固定为 **660 分钟训练 + 10 分钟收尾**。系统在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；若下一轮无法在 650 分钟截止前完成，则当前边界执行“存检查点 → 推送 AList → 刷新通知/服务 → 写 pause manifest”，退出码为 `75`。新 session 里用同样的命令 + **同一个 `--run-id`**（省略 `--resume` 即自动恢复）继续训。预测只是估算，硬截止仍可能提前触发。预算值记录在 run 目录 `execution-policy.json`，用户配置不包含 `runtime`。
+- **预算训练**：Kaggle 平台执行策略固定为 **720 分钟总预算，预留 15 分钟收尾**。dl_helper 自动通过进程祖先链识别 Notebook 内核起点，准备和恢复耗时均计入，Notebook 无需计时代码；同一内核重新调用不会重置预算，直接 CLI 使用入口进程启动时间。子进程继承同一起点。读取失败显式报错。手动重启内核会产生新起点，无法等同于平台容器寿命。705 分钟后在成功 batch/optimizer step 的安全边界保存检查点，以 `75` 暂停，按配置完成 AList、通知和报告。剩余时间不足整轮时仍继续训练。新 Session 使用同一个运行身份恢复，预算重新计算。预算值记录在 `execution-policy.json`，用户配置不包含 `runtime`。收尾窗口是预留时间，不会强制中断正在保存的检查点或运行中的评估。
 - Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 仅关闭 AList。企业微信独立按 `notifications` 配置执行，启用服务的 Secret 缺失时训练预检会终止。本地恢复仍按 `--resume` 执行。
 
 Kaggle Notebook 参考见 [kaggle.md](kaggle.md#notebook-参考)。其中

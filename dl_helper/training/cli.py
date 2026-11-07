@@ -187,15 +187,16 @@ def _generate_run_id(config: Config) -> str:
 
 
 def _cmd_train(args: argparse.Namespace) -> int:
-    from .platform import Platform, execution_policy_for
+    from .platform import Platform, execution_policy_for, start_kaggle_session_clock
     from .doctor import validate_training_start
 
+    platform = Platform()
+    session_started_at = start_kaggle_session_clock() if platform.is_kaggle else None
     project_dir = _prepare_project_dir(args.project_dir)
     config = _load_config(args)
     use_alist = args.use_alist
     if not use_alist:
         config = replace(config, remote=NoRemoteConfig(type="none"))
-    platform = Platform()
     resume = args.resume if args.resume is not None else RESUME_AUTO
     checkpoint_inputs = list(getattr(args, "checkpoint_input", []))
     if platform.is_kaggle and not checkpoint_inputs and resume != "none":
@@ -290,6 +291,11 @@ def _cmd_train(args: argparse.Namespace) -> int:
             "checkpoint_validator": validator_ref,
             "max_minutes": execution_policy.max_minutes,
             "shutdown_grace_minutes": execution_policy.shutdown_grace_minutes,
+            "session_started_monotonic": session_started_at,
+            "training_deadline_monotonic": (
+                session_started_at + (execution_policy.max_minutes - execution_policy.shutdown_grace_minutes) * 60
+                if session_started_at is not None else None
+            ),
         }, ensure_ascii=False, sort_keys=True))
         args._run_dir = layout.run_dir  # 布局后确认受控 run_dir（与预检前一致）
 

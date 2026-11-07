@@ -324,9 +324,8 @@ def run_worker(
 
     budget = None
     if execution_policy is not None and execution_policy.max_minutes is not None:
-        from ..platform import RuntimeBudget
-        budget = RuntimeBudget(execution_policy.max_minutes, execution_policy.shutdown_grace_minutes,
-                               monotonic=budget_monotonic)
+        from ..platform import runtime_budget_for
+        budget = runtime_budget_for(execution_policy, monotonic=budget_monotonic)
 
     layout.log(f"worker rank={local_rank}/{world_size} started, model={model_sig['class']}")
 

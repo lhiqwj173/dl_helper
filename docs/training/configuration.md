@@ -22,7 +22,7 @@ notifications: {type: none}
 ```
 
 > 配置**不含** `runtime` 与 `checkpoint.resume`（D-002/D-003）。恢复策略由 CLI 内部自动决定或显式
-> `--resume none|required` 覆盖；运行预算由平台执行策略提供（Kaggle 恒为 660 分钟训练 + 10 分钟收尾，
+> `--resume none|required` 覆盖；运行预算由平台执行策略提供（Kaggle 恒为 720 分钟总预算，预留 15 分钟收尾，
 > 记录在 run 目录 `execution-policy.json`，Local 不启用预算）。
 
 ## 关键约束
@@ -34,7 +34,7 @@ notifications: {type: none}
 - sklearn `fit_mode=batch` 要求 `max_epochs=1`，且不支持恢复（显式 `--resume required` 在预检阶段失败）。
 - `selection` 有验证集时必须存在，无验证集时必须为 `null`；`mode` 必须等于 `MetricDefinition.direction`。
 - Kaggle：输出必须位于 `/kaggle/working`；`source_revision` 只要是无空白版本标识即可（tag、分支、短 SHA 均可）。
-- Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 关闭 AList。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。平台执行策略固定 660 分钟训练 + 10 分钟收尾（截止 650 分钟）：系统在每个成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 后按平均 epoch 耗时预测下一轮，预测不足时在边界保存 checkpoint 后以 `75` 暂停，AList 开启时上传。要求开启预算时 DataModule 支持中途恢复。`runtime`/`checkpoint.resume` 写入即按未知字段失败。
+- Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 关闭 AList。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。平台执行策略固定 720 分钟总预算，预留 15 分钟收尾：Session 起点后 705 分钟，在成功 batch/optimizer step 的安全边界保存 checkpoint，以 `75` 暂停，AList 开启时上传。剩余时间不足整轮时继续训练。dl_helper 自动识别 Notebook 内核起点，Notebook 无需计时代码；直接 CLI 使用入口进程启动时间。子进程继承起点，同一内核重跑不重置预算。要求 DataModule 支持中途恢复。`runtime`/`checkpoint.resume` 写入即按未知字段失败。
 
 ## 单机检查点路径
 

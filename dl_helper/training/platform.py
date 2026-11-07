@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import os
+import math
 import platform as _platform
 import socket
 import time
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
@@ -392,9 +394,10 @@ class ExecutionPolicy:
     shutdown_grace_minutes: float
 
 
-# 唯一 Kaggle 策略：660 分钟训练预算 + 10 分钟收尾窗口（720 平台上限内留约 60 分钟缓冲）
-KAGGLE_TRAINING_BUDGET_MINUTES = 660.0
-KAGGLE_SHUTDOWN_GRACE_MINUTES = 10.0
+# 总预算包含准备和收尾；库自动识别内核起点，705 分钟停止训练。
+KAGGLE_TRAINING_BUDGET_MINUTES = 720.0
+KAGGLE_SHUTDOWN_GRACE_MINUTES = 15.0
+KAGGLE_SESSION_START_ENV = "DL_HELPER_KAGGLE_SESSION_STARTED_MONOTONIC"
 LOCAL_SHUTDOWN_GRACE_MINUTES = 10.0
 
 
@@ -415,7 +418,7 @@ def local_execution_policy() -> ExecutionPolicy:
 
 
 def execution_policy_for(platform: Platform) -> ExecutionPolicy:
-    """当前平台的唯一执行策略；Kaggle 恒为 660/10，Local 不启用预算。"""
+    """当前平台的唯一执行策略；Kaggle 恒为 720/15，Local 不启用预算。"""
     return kaggle_execution_policy() if platform.is_kaggle else local_execution_policy()
 
 
@@ -461,14 +464,85 @@ def execution_policy_from_dict(data: Mapping[str, Any]) -> ExecutionPolicy:
 # 运行预算（任务 7.3）
 # --------------------------------------------------------------------------
 
-class RuntimeBudget:
-    """monotonic 预算：硬截止检查 + 完整 epoch 均值预测。"""
+def _kaggle_process_elapsed(proc_root: Path = Path("/proc"), *, pid: int | None = None,
+                            ticks_per_second: int | None = None) -> float:
+    """从 Linux procfs 识别当前内核；纯 CLI 使用训练入口进程的启动时间。"""
+    current_pid = os.getpid() if pid is None else pid
+    ticks = os.sysconf("SC_CLK_TCK") if ticks_per_second is None else ticks_per_second
+    if ticks <= 0:
+        raise PlatformError("进程时钟频率必须为正")
+    selected_start = None
+    visited = set()
+    while current_pid > 0:
+        if current_pid in visited:
+            raise PlatformError("进程祖先链出现循环")
+        visited.add(current_pid)
+        directory = proc_root / str(current_pid)
+        stat = (directory / "stat").read_text(encoding="utf-8")
+        # comm 可以包含空格和右括号；最后一个右括号之后从字段 3 开始。
+        fields = stat[stat.rindex(")") + 2:].split()
+        parent_pid, start_ticks = int(fields[1]), int(fields[19])
+        if start_ticks < 0 or parent_pid < 0:
+            raise PlatformError("进程启动时间或父进程 ID 非法")
+        if selected_start is None:
+            selected_start = start_ticks
+        argv = (directory / "cmdline").read_text(encoding="utf-8").split("\0")
+        kernel = any(
+            Path(arg).name in ("ipykernel_launcher", "ipykernel_launcher.py", "ipykernel", "ipykernel.py")
+            for arg in argv
+        )
+        if kernel:
+            selected_start = start_ticks
+            break
+        current_pid = parent_pid
+    if selected_start is None:
+        raise PlatformError("无法确定训练进程起点")
+    uptime = float((proc_root / "uptime").read_text(encoding="utf-8").split()[0])
+    elapsed = uptime - selected_start / ticks
+    if not math.isfinite(elapsed) or elapsed < 0:
+        raise PlatformError("进程运行时间非法")
+    return elapsed
 
-    def __init__(self, max_minutes: float, grace_minutes: float, monotonic=None) -> None:
-        if max_minutes <= 0 or grace_minutes < 0 or grace_minutes >= max_minutes:
+
+def start_kaggle_session_clock(monotonic=None) -> float:
+    """库内识别内核起点，子进程继承预算；Notebook 无需维护计时状态。"""
+    now = (monotonic or time.monotonic)()
+    raw = os.environ.get(KAGGLE_SESSION_START_ENV)
+    if raw is None:
+        origin = now - _kaggle_process_elapsed()
+        raw = os.environ.setdefault(KAGGLE_SESSION_START_ENV, repr(origin))
+    started_at = float(raw)
+    if not math.isfinite(started_at) or started_at < 0 or started_at > now:
+        raise PlatformError(f"Kaggle Session 计时起点非法: {raw!r}")
+    return started_at
+
+
+def runtime_budget_for(policy: ExecutionPolicy, monotonic=None) -> RuntimeBudget:
+    """Kaggle worker 共用 Session 起点；本地预算保留独立时钟和整轮预测。"""
+    if policy.max_minutes is None:
+        raise PlatformError("未启用预算的执行策略不能创建 RuntimeBudget")
+    return RuntimeBudget(
+        policy.max_minutes, policy.shutdown_grace_minutes, monotonic=monotonic,
+        started_at=start_kaggle_session_clock(monotonic) if policy.platform == "kaggle" else None,
+        preempt_on_epoch_forecast=policy.platform != "kaggle",
+    )
+
+
+class RuntimeBudget:
+    """monotonic 预算：共享 Session 起点、硬截止与可选的整轮均值预测。"""
+
+    def __init__(self, max_minutes: float, grace_minutes: float, monotonic=None,
+                 *, started_at: float | None = None, preempt_on_epoch_forecast: bool = True) -> None:
+        if (not math.isfinite(max_minutes) or not math.isfinite(grace_minutes)
+                or max_minutes <= 0 or grace_minutes < 0 or grace_minutes >= max_minutes):
             raise PlatformError("预算要求 grace < max 且均为正")
         self._now = monotonic or time.monotonic
-        self._deadline = self._now() + (max_minutes - grace_minutes) * 60.0
+        now = self._now()
+        origin = now if started_at is None else started_at
+        if not math.isfinite(now) or not math.isfinite(origin) or origin < 0 or origin > now:
+            raise PlatformError("预算起点必须为不晚于当前时刻的有限非负数")
+        self._deadline = origin + (max_minutes - grace_minutes) * 60.0
+        self._preempt_on_epoch_forecast = preempt_on_epoch_forecast
         self._epoch_durations: list[float] = []
         self.max_minutes = max_minutes
         self.grace_minutes = grace_minutes
@@ -481,7 +555,7 @@ class RuntimeBudget:
         return self._now()
 
     def complete_epoch(self, started_at: float) -> EpochBudgetForecast:
-        """记录完整 epoch，并判断剩余时间能否容纳下一个平均 epoch。"""
+        """记录完整 epoch；允许轮中恢复时仅按截止暂停，不浪费不足整轮的余量。"""
         finished_at = self._now()
         duration = finished_at - started_at
         if duration < 0:
@@ -493,5 +567,5 @@ class RuntimeBudget:
             epoch_seconds=duration,
             average_epoch_seconds=average,
             remaining_training_seconds=remaining,
-            should_preempt=average > remaining,
+            should_preempt=(remaining <= 0 or (self._preempt_on_epoch_forecast and average > remaining)),
         )

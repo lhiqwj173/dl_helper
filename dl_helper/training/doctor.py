@@ -76,7 +76,7 @@ def _check_kaggle_requirements(config: Config, platform: Platform, execution_pol
     errors: list[str] = []
     expected = execution_policy_for(platform)
     if execution_policy is None:
-        errors.append("Kaggle 必须应用独立 ExecutionPolicy（660 分钟预算 + 10 分钟收尾，720 上限内）")
+        errors.append("Kaggle 必须应用独立 ExecutionPolicy（720 分钟总预算，预留 15 分钟收尾）")
     elif execution_policy != expected:
         errors.append(
             f"Kaggle ExecutionPolicy 必须为 "

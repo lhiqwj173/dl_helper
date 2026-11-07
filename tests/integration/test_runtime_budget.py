@@ -68,6 +68,38 @@ def test_torch_budget_preempts_and_resumes(tmp_path):
     assert existing_terminal(run_dir) == "run-manifest.json"
 
 
+def test_kaggle_uses_remaining_time_then_resumes_mid_epoch(tmp_path, monkeypatch):
+    from dl_helper.training.platform import KAGGLE_SESSION_START_ENV, kaggle_execution_policy
+
+    class SessionClock:
+        calls = 0
+
+        def __call__(self):
+            self.calls += 1
+            if self.calls <= 3:
+                return 0.0
+            if self.calls <= 11:
+                return (self.calls - 3) * 60.0
+            if self.calls <= 13:
+                return 700 * 60.0
+            return 705 * 60.0
+
+    monkeypatch.setenv(KAGGLE_SESSION_START_ENV, "0.0")
+    layout = RunLayout(str(tmp_path / "runs" / "kaggle-partial"))
+    layout.ensure()
+    cfg = _torch_cfg("kaggle-partial", max_epochs=2)
+    paused = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg,
+                        layout, 0, 1, "auto", budget_monotonic=SessionClock(),
+                        execution_policy=kaggle_execution_policy())
+    # 第 1 轮结束只剩 5 分钟，仍完成第 2 轮的第一个 step，再按截止保存。
+    assert paused.status == "preempted"
+    assert paused.global_step == 9
+    resumed = run_worker("experiments.toy_multiclass_resumable:build_experiment", cfg,
+                         layout, 0, 1, "auto")
+    assert resumed.status == "succeeded"
+    assert resumed.global_step == 16
+
+
 def _skl_cfg(run_id, max_epochs=5):
     schema = default_schema()
     schema["backend"] = {"type": "sklearn", "torch": None,

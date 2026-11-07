@@ -168,12 +168,114 @@ def test_runtime_budget_invalid():
         RuntimeBudget(max_minutes=5, grace_minutes=10)
 
 
+def test_kaggle_budget_includes_preparation_and_uses_partial_epoch(monkeypatch):
+    from dl_helper.training.platform import KAGGLE_SESSION_START_ENV, runtime_budget_for
+
+    class Clock:
+        t = 0.0
+
+        def __call__(self):
+            return self.t
+
+    clock = Clock()
+    monkeypatch.setenv(KAGGLE_SESSION_START_ENV, "0.0")
+    # 安装/加载已用 20 分钟；worker 初始化不能重置 Session 的 705 分钟截止点。
+    clock.t = 20 * 60
+    budget = runtime_budget_for(kaggle_execution_policy(), monotonic=clock)
+    started = budget.begin_epoch()
+    clock.t = 700 * 60
+    forecast = budget.complete_epoch(started)
+    assert forecast.remaining_training_seconds == 5 * 60
+    assert not forecast.should_preempt  # 不够整轮仍可利用剩余时间。
+    assert not budget.hit()
+    clock.t = 705 * 60
+    assert budget.hit()
+
+
+def test_kaggle_session_clock_is_inherited_and_never_reset(monkeypatch):
+    from dl_helper.training.platform import KAGGLE_SESSION_START_ENV, start_kaggle_session_clock
+
+    monkeypatch.delenv(KAGGLE_SESSION_START_ENV, raising=False)
+    monkeypatch.setattr("dl_helper.training.platform._kaggle_process_elapsed", lambda: 5.0)
+    assert start_kaggle_session_clock(lambda: 10.0) == 5.0
+    assert start_kaggle_session_clock(lambda: 1000.0) == 5.0
+
+
+def test_kaggle_detects_kernel_without_notebook_setup(tmp_path):
+    from dl_helper.training.platform import _kaggle_process_elapsed
+
+    def process(pid, parent, start, argv):
+        directory = tmp_path / str(pid)
+        directory.mkdir()
+        fields = ["S", str(parent), *(["0"] * 17), str(start)]
+        (directory / "stat").write_text(f"{pid} (name ) with spaces) " + " ".join(fields), encoding="utf-8")
+        (directory / "cmdline").write_text("\0".join(argv), encoding="utf-8")
+
+    process(30, 20, 90000, ["python", "-m", "dl_helper.training.cli"])
+    process(20, 10, 80000, ["sh", "-c", "train"])
+    process(10, 1, 10000, ["python", "-m", "ipykernel_launcher", "-f", "connection.json"])
+    (tmp_path / "uptime").write_text("1000.00 2000.00", encoding="utf-8")
+    assert _kaggle_process_elapsed(tmp_path, pid=30, ticks_per_second=100) == 900.0
+    # 同一内核下重启 CLI，不应重置准备阶段消耗的预算。
+    process(40, 10, 99000, ["python", "-m", "dl_helper.training.cli"])
+    assert _kaggle_process_elapsed(tmp_path, pid=40, ticks_per_second=100) == 900.0
+
+
+def test_kaggle_direct_cli_uses_own_process_start(tmp_path):
+    from dl_helper.training.platform import _kaggle_process_elapsed
+
+    directory = tmp_path / "30"
+    directory.mkdir()
+    fields = ["S", "0", *(["0"] * 17), "90000"]
+    (directory / "stat").write_text("30 (python) " + " ".join(fields), encoding="utf-8")
+    (directory / "cmdline").write_text("python\0-m\0dl_helper.training.cli", encoding="utf-8")
+    (tmp_path / "uptime").write_text("1000.00 2000.00", encoding="utf-8")
+    assert _kaggle_process_elapsed(tmp_path, pid=30, ticks_per_second=100) == 100.0
+
+
+def test_kaggle_missing_proc_fails_explicitly(tmp_path):
+    from dl_helper.training.platform import _kaggle_process_elapsed
+
+    with pytest.raises(FileNotFoundError):
+        _kaggle_process_elapsed(tmp_path, pid=30, ticks_per_second=100)
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-1", "101", "broken"])
+def test_kaggle_session_clock_rejects_invalid_origin(monkeypatch, value):
+    from dl_helper.training.platform import KAGGLE_SESSION_START_ENV, start_kaggle_session_clock
+
+    monkeypatch.setenv(KAGGLE_SESSION_START_ENV, value)
+    with pytest.raises((PlatformError, ValueError)):
+        start_kaggle_session_clock(lambda: 100.0)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1.0, 101.0])
+def test_runtime_budget_rejects_invalid_origin(value):
+    with pytest.raises(PlatformError):
+        RuntimeBudget(720, 15, monotonic=lambda: 100.0, started_at=value)
+
+
+def test_expired_session_budget_preempts_immediately():
+    budget = RuntimeBudget(720, 15, monotonic=lambda: 710 * 60.0, started_at=0.0,
+                           preempt_on_epoch_forecast=False)
+    assert budget.hit()
+
+
+def test_local_budget_ignores_kaggle_session_origin(monkeypatch):
+    from dl_helper.training.platform import KAGGLE_SESSION_START_ENV, runtime_budget_for
+
+    monkeypatch.setenv(KAGGLE_SESSION_START_ENV, "broken")
+    policy = ExecutionPolicy(platform="local", max_minutes=10.0, shutdown_grace_minutes=2.0)
+    budget = runtime_budget_for(policy, monotonic=lambda: 100.0)
+    assert not budget.hit()
+
+
 # ---------- D-003：独立 ExecutionPolicy ----------
-def test_execution_policy_kaggle_is_660_10():
+def test_execution_policy_kaggle_is_720_15():
     p = kaggle_execution_policy()
     assert p.platform == "kaggle"
-    assert p.max_minutes == 660.0
-    assert p.shutdown_grace_minutes == 10.0
+    assert p.max_minutes == 720.0
+    assert p.shutdown_grace_minutes == 15.0
 
 
 def test_execution_policy_local_has_no_budget():
@@ -199,7 +301,7 @@ def test_execution_policy_roundtrip_and_strict_rebuild():
         execution_policy_from_dict({**execution_policy_to_dict(kaggle), "max_minutes": 500.0})
     # 缺字段必须拒绝
     with pytest.raises(PlatformError):
-        execution_policy_from_dict({"schema_version": 1, "platform": "kaggle", "max_minutes": 660.0})
+        execution_policy_from_dict({"schema_version": 1, "platform": "kaggle", "max_minutes": 720.0})
     # 未知字段必须拒绝
     with pytest.raises(PlatformError):
         execution_policy_from_dict({**execution_policy_to_dict(policy), "budget": 5})
@@ -207,4 +309,4 @@ def test_execution_policy_roundtrip_and_strict_rebuild():
 
 def test_execution_policy_is_frozen_platform():
     with pytest.raises(Exception):
-        ExecutionPolicy(platform="kaggle", max_minutes=660.0, shutdown_grace_minutes=10.0).max_minutes = 1
+        ExecutionPolicy(platform="kaggle", max_minutes=720.0, shutdown_grace_minutes=15.0).max_minutes = 1

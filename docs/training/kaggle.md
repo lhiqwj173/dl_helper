@@ -270,7 +270,7 @@ print("配置已写入:", config_path)
 ```
 
 > 配置**不含** `runtime` 与 `checkpoint.resume`：Kaggle 的运行预算由平台执行策略固定为
-> **660 分钟训练 + 10 分钟收尾**（文档/审计见 run 目录 `execution-policy.json`），恢复策略由 CLI
+> **720 分钟总预算，预留 15 分钟收尾**（审计见 run 目录 `execution-policy.json`），恢复策略由 CLI
 > 内部自动决定或显式 `--resume none|required` 覆盖。上一版本的根级 `runtime` 与 `checkpoint.resume`
 > 字段已被删除，写入即报未知字段失败。
 
@@ -368,5 +368,5 @@ print("sweep report written")
 ## 7. 本地调试
 
 本地只用于调试时把 `project_dir`、`config`、`output_root` 指向本地路径；AList/企业微信可按配置
-关闭（`type: none`）。Local profile 不启用运行预算，不受 Kaggle 660/10 限制；Kaggle 专属的服务
+关闭（`type: none`）。Local profile 不启用运行预算，不受 Kaggle 720/15 限制；Kaggle 专属的服务
 强制与预算策略只在 Kaggle 平台检测到时生效。

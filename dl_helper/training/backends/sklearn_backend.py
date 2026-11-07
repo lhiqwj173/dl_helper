@@ -433,10 +433,9 @@ def _run_incremental(estimator, task, datamodule, config, layout, engine_state, 
     budget_hit = False
     metric_states: dict[str, StageMetricState] = {}
 
-    from ..platform import RuntimeBudget
+    from ..platform import runtime_budget_for
     budget = (
-        RuntimeBudget(execution_policy.max_minutes, execution_policy.shutdown_grace_minutes,
-                      monotonic=budget_monotonic)
+        runtime_budget_for(execution_policy, monotonic=budget_monotonic)
         if execution_policy is not None and execution_policy.max_minutes is not None
         else None
     )

@@ -26,7 +26,7 @@ def test_kaggle_policy_mismatch_rejected():
 
     errors = _check_kaggle_requirements(parse_config(default_schema()), Platform("kaggle"),
                                         execution_policy=local_execution_policy())
-    assert any("660" in error for error in errors)
+    assert any("720" in error for error in errors)
 
 
 def test_kaggle_required_services_accept_environment_secrets(monkeypatch):

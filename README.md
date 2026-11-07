@@ -24,7 +24,7 @@ python -m dl_helper.training.cli train \
 `dl_helper.training.cli bundle --run RUN_DIR --out OUTPUT.zip` 重新打包，
 纳入新导出的模型和评价文件；详见[本地成果包](docs/training/artifacts.md#本地成果包)。
 
-Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 跳过 AList 要求。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。启用服务的凭证从 Kaggle Secrets（本地调试时也可用同名环境变量）读取；任何所需 Secret 缺失或配置字段错误都会在训练前终止。Kaggle 的运行预算由库的平台执行策略自动固定为 **660 分钟训练 + 10 分钟收尾窗口**（run 目录下 `execution-policy.json` 可审计），用户配置不再包含 `runtime`。训练会在成功 batch/optimizer step 后做硬截止保护，并在每个完整 epoch 结束时按完整 epoch 平均耗时预测下一轮；预测无法在截止前完成时，于当前 epoch 边界保存 checkpoint，再以 `75` 暂停，AList 开启时同步推送。
+Kaggle 默认要求启用 AList 且其 `failure_policy=required`；`--no-use-alist` 跳过 AList 要求。企业微信独立按配置启用或关闭，使用配置中的 `required`/`record` 策略。启用服务的凭证从 Kaggle Secrets（本地调试时也可用同名环境变量）读取；任何所需 Secret 缺失或配置字段错误都会在训练前终止。Kaggle 的平台执行策略固定为 **720 分钟总预算，预留 15 分钟收尾**（run 目录下 `execution-policy.json` 可审计），用户配置不包含 `runtime`。训练在 Session 起点后 705 分钟，于成功 batch/optimizer step 后保存可恢复检查点，以 `75` 暂停；剩余时间不足整轮时仍继续训练，AList 开启时同步推送。计时由 dl_helper 内部自动处理，Notebook 无需添加代码：通过 Linux 进程祖先链识别 IPython 内核启动时间，依赖安装、解压和恢复均计入预算；同一内核重复调用训练命令不会重置预算。直接 CLI 使用入口进程启动时间。子进程继承同一起点。无法读取进程信息时显式报错，不从零重新计时。内核启动时间不是平台容器创建时间；手动重启内核不会保留旧内核起点。
 
 ```bash
 python -m dl_helper.training.cli train \
